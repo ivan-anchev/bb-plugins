@@ -2,7 +2,7 @@
 // parent that agents spawn without: a turn that ended with no handoff, a failure, a question for
 // the user. Each handler skips threads another plugin made before it touches SQLite.
 import type { PluginLogger } from "@get-bb/plugin-sdk";
-import type { Agent } from "../../model/agent.ts";
+import type { Agent } from "../../model/agent/agent.ts";
 import { questionOf, type InteractionPayload } from "../../model/interaction.ts";
 import { ifCurrent, type TurnsBb } from "../agents/threads.ts";
 import type { Store } from "../store/store.ts";

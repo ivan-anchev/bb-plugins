@@ -5,11 +5,11 @@ import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import type { Execution } from "./execution.ts";
 import type { HandoffId } from "./handoff.ts";
-import type { IssueId } from "./issue/issue.ts";
-import { shipsCode, type Kind } from "./issue/kind.ts";
-import type { CoordinatorId } from "./role.ts";
-import type { CheckoutRead } from "./verdict/checkout.ts";
-import type { PrRead } from "./verdict/pr.ts";
+import type { IssueId } from "../issue/issue.ts";
+import { shipsCode, type Kind } from "../issue/kind.ts";
+import type { CoordinatorId } from "../role.ts";
+import type { CheckoutRead } from "../verdict/checkout.ts";
+import type { PrRead } from "../verdict/pr.ts";
 
 type EnvironmentArgs = NewThreadRequest["environment"];
 

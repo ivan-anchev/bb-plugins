@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
-import { agentIdSchema } from "../../model/agent.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
@@ -415,16 +415,21 @@ test("an issue opened on the board links each ended agent's thread while bb has 
   const archived = threadIn(textOf(await start()));
   await kit.call("agent_stop", { agent: "a2", archive: true }, threadId);
   await settled();
-  const heldBy = async () => (await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") })).record.map(({ agent }) => agent);
-  assert.deepEqual(await heldBy(), [
-    { id: "a1", threadId: stopped, ended: "stopped" },
-    { id: "a2", threadId: archived, ended: "stopped" },
+  const feed = () => kit.rpc.issueFeed({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") });
+  const ended = async () => (await feed()).entries.flatMap((entry) => (entry.kind === "agent-ended" ? [[entry.agentId, entry.how]] : []));
+  assert.deepEqual((await feed()).agents, [
+    { id: "a1", threadId: stopped },
+    { id: "a2", threadId: archived },
+  ]);
+  assert.deepEqual(await ended(), [
+    ["a1", "stopped"],
+    ["a2", "stopped"],
   ]);
 
   for (const id of [stopped, archived]) kit.thread(id).deletedAt = Date.now();
-  assert.deepEqual(await heldBy(), [
-    { id: "a1", threadId: null, ended: "stopped" },
-    { id: "a2", threadId: null, ended: "stopped" },
+  assert.deepEqual((await feed()).agents, [
+    { id: "a1", threadId: null },
+    { id: "a2", threadId: null },
   ]);
 });
 

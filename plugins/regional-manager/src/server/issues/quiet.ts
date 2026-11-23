@@ -7,7 +7,7 @@
 // each keeps its own outcome: a start refused, a check left queued, a reminder left for the next
 // look, findings left owed, a message refused.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { holderOf, type AgentId } from "../../model/agent.ts";
+import { holderOf, type AgentId } from "../../model/agent/agent.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import { stopThreads, threadsById, type StopBb } from "../agents/threads.ts";

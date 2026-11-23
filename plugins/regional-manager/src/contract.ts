@@ -3,19 +3,19 @@
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
-import { agentIdSchema, endedHowSchema } from "./model/agent.ts";
+import { agentIdSchema } from "./model/agent/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
-import { answerSchema, decisionIdSchema, decisionSchema, issueDecisionSchema } from "./model/decision.ts";
-import { shownHandoffSchema } from "./model/handoff.ts";
-import { executionSchema } from "./model/execution.ts";
-import { descriptionSchema, doneCriteriaSchema, issueIdSchema } from "./model/issue/issue.ts";
+import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
+import { executionSchema } from "./model/agent/execution.ts";
+import { entrySchema } from "./model/feed/entry.ts";
+import { roundBodySchema, roundKeySchema, type RoundKey } from "./model/feed/round.ts";
+import { descriptionSchema, doneCriteriaSchema, issueIdSchema, type IssueId } from "./model/issue/issue.ts";
 import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
 import { prSnapshotSchema } from "./model/verdict/pr.ts";
 import { newProfileSchema, profileSchema } from "./model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
-import { shownVerdictSchema } from "./model/verdict/verdict.ts";
 
 /**
  * A started regional manager: its memory is keyed by `id`, its conversation is `threadId`, which
@@ -50,6 +50,34 @@ export const boardTag = (id: CoordinatorId): string => `board:${id}`;
 /** An agent as the board names it, with the thread it opens (null: none to open). */
 const shownAgentSchema = z.object({ id: agentIdSchema, threadId: z.string().nullable() });
 
+/** Every read of one issue's feed or of its rounds' bodies carries it; a write counted for the issue (issue-tags.ts) invalidates it. */
+export const issueTag = (coordinatorId: CoordinatorId, issueId: IssueId): string => `issue:${coordinatorId}/${issueId}`;
+
+/**
+ * An issue in its tab, beyond its board row (which the tab reads with the board): what it is about,
+ * its done-criteria, what it depends on and what depends on it, every agent that held it with its
+ * thread while bb still has it (null: none to open), and its feed, oldest first (entry.ts).
+ */
+const issueFeedSchema = z.object({
+  description: descriptionSchema,
+  doneCriteria: doneCriteriaSchema,
+  dependsOn: z.array(issueIdSchema),
+  blocks: z.array(issueIdSchema),
+  agents: z.array(shownAgentSchema),
+  entries: z.array(entrySchema),
+});
+export type IssueFeed = z.infer<typeof issueFeedSchema>;
+
+/** A round's address for roundBodies: its regional manager, its issue and its round. why one string: a keyed read is keyed by strings. */
+export const roundBodyKey = (coordinatorId: CoordinatorId, issueId: IssueId, round: RoundKey): string => `${coordinatorId}/${issueId}/${round}`;
+const roundBodyKeySchema = z
+  .string()
+  .transform((key) => key.split("/"))
+  .pipe(z.tuple([coordinatorIdSchema, issueIdSchema, roundKeySchema]))
+  .transform(([coordinatorId, issueId, round]) => ({ coordinatorId, issueId, round }));
+/** The round a roundBodies key names; null for a key no roundBodyKey made. */
+export const parseRoundBodyKey = (key: string) => roundBodyKeySchema.safeParse(key).data ?? null;
+
 /**
  * One issue on the board, as its view reads now: its kind, its parent (null: none), how many of its
  * sub-issues are Done of how many (null: it has none), the open issues it or its parent depends on
@@ -57,7 +85,7 @@ const shownAgentSchema = z.object({ id: agentIdSchema, threadId: z.string().null
  * blocks nothing), its status, why it waits on the user (null: it doesn't; the board then shows
  * it under Needs you, with this reason under its title), its latest agent
  * (null: none started) with that agent's thread while bb runs it (null: archived or deleted), and
- * its pull request as last read (null: none seen). Its verdicts are in its detail (`issue`).
+ * its pull request as last read (null: none seen). Its rounds are in its feed (`issueFeed`).
  */
 const issueRowSchema = z.object({
   id: issueIdSchema,
@@ -81,7 +109,7 @@ export type IssueRow = z.infer<typeof issueRowSchema>;
  * was clean again since), why the latest read of an issue's pull request failed (null: none did),
  * every decision put to the user in the order asked, then every issue in the order filed. The board
  * draws only the open decisions; the answered ones are carried so the browser drops what was typed to
- * them, and each stays among its issue's decisions in the issue's detail.
+ * them, and each stays among its issue's decisions in the issue's feed.
  */
 const boardSchema = z.object({
   verify: z.boolean(),
@@ -91,35 +119,6 @@ const boardSchema = z.object({
   issues: z.array(issueRowSchema),
 });
 export type Board = z.infer<typeof boardSchema>;
-
-/** A build parent's final check as its detail shows it: when it was made, the default branch it judges, and its verdict. */
-const shownFinalCheckSchema = z.object({ at: z.number(), defaultBranch: z.string().min(1), verdict: shownVerdictSchema });
-export type ShownFinalCheck = z.infer<typeof shownFinalCheckSchema>;
-
-/**
- * An issue in its tab: what it is about, its done-criteria, its decisions (decision.ts
- * issueDecisions: oldest first, the questions put to the user about it and the decisions recorded on it), the issues it depends on and
- * the issues that depend on it (each with its title and status on its own row), its record: every agent
- * that held it, oldest first, with its thread (null: none to open) and how it ended (null: it holds
- * the issue now), and each handoff it made, oldest first, with the verdict on it (null: none was
- * asked for, as for a blocked handoff); and a build parent's final checks, oldest first (none for
- * any other issue). No brief: that is the agent's.
- */
-const issueDetailSchema = z.object({
-  description: descriptionSchema,
-  doneCriteria: doneCriteriaSchema,
-  decisions: z.array(issueDecisionSchema),
-  dependsOn: z.array(issueIdSchema),
-  blocks: z.array(issueIdSchema),
-  record: z.array(
-    z.object({
-      agent: shownAgentSchema.extend({ ended: endedHowSchema.nullable() }),
-      handoffs: z.array(shownHandoffSchema.extend({ verdict: shownVerdictSchema.nullable() })),
-    }),
-  ),
-  finalChecks: z.array(shownFinalCheckSchema),
-});
-export type IssueDetail = z.infer<typeof issueDetailSchema>;
 
 type ComposedPart = NewThreadRequest["input"][number];
 // why only a part's type, and a text part's text, checked: bb validates the rest at the spawn, and the plugin reads nothing else of it.
@@ -197,11 +196,20 @@ export const coordinatorContract = defineRpcContract({
     output: boardSchema,
     tags: ({ coordinatorId }) => [boardTag(coordinatorId)],
   },
-  /** One issue of a regional manager, opened on its board; it reads again whenever the board does. */
-  issue: {
+  /** One issue's feed, read again whenever that issue's facts change, and only then. */
+  issueFeed: {
     input: z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema }),
-    output: issueDetailSchema,
-    tags: ({ coordinatorId }) => [boardTag(coordinatorId)],
+    output: issueFeedSchema,
+    tags: ({ coordinatorId, issueId }) => [issueTag(coordinatorId, issueId)],
+  },
+  /** The bodies of the rounds a reader opened, each read alone and again when its issue changes; null for a key that names no round. */
+  roundBodies: {
+    input: z.object({ keys: z.array(z.string()) }),
+    output: z.record(z.string(), roundBodySchema.nullable()),
+    keyTags: (key) => {
+      const named = parseRoundBodyKey(key);
+      return named === null ? [] : [issueTag(named.coordinatorId, named.issueId)];
+    },
   },
   /**
    * Turns verification of the regional manager's done handoffs on or off. It applies to handoffs

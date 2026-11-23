@@ -3,7 +3,7 @@
 // issue_verdict takes them. Only the regional
 // manager's words, commit ids and bb's read are in it, never an agent's report, so the verifier
 // checks the work rather than an agent's account of it.
-import type { AgentId } from "../../model/agent.ts";
+import type { AgentId } from "../../model/agent/agent.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";

@@ -2,7 +2,7 @@
 // routing (an environment, a machine, or neither for bb's primary machine). One read per question,
 // so a refusal and a verifier's choice see the same catalog.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import { executionOf, runnableText, type CatalogModel, type CatalogRouting, type Execution, type ExecutionFacts, type RequestedExecution } from "../../model/execution.ts";
+import { executionOf, runnableText, type CatalogModel, type CatalogRouting, type Execution, type ExecutionFacts, type RequestedExecution } from "../../model/agent/execution.ts";
 
 type Providers = BbPluginApi["sdk"]["providers"];
 type Catalog = Awaited<ReturnType<Providers["models"]>>;

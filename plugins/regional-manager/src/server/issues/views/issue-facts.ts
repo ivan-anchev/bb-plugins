@@ -2,7 +2,7 @@
 // verifiers' threads, and a turn read only for a holder that is idle with a handoff to judge. The
 // board, crew_catch_up, issue_read, issue_update and the unblocked announcement all view issues
 // here, so a status has one derivation.
-import { issueBranch, type Agent } from "../../../model/agent.ts";
+import { issueBranch, type Agent } from "../../../model/agent/agent.ts";
 import type { Issue } from "../../../model/issue/issue.ts";
 import { issueViews, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";

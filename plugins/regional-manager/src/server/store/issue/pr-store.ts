@@ -2,8 +2,8 @@
 // why by branch: the pull request belongs to the branch, so every agent that works on it shares
 // one snapshot, one CI history and one "opened".
 import { z } from "zod";
-import type { AgentId } from "../../../model/agent.ts";
-import { handoffIdSchema, type HandoffId } from "../../../model/handoff.ts";
+import type { AgentId } from "../../../model/agent/agent.ts";
+import { handoffIdSchema, type HandoffId } from "../../../model/agent/handoff.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import { meaningfulChanges, prSnapshotSchema, prUnavailableSchema, type PrSnapshot, type PrStatus, type PrUnavailable } from "../../../model/verdict/pr.ts";

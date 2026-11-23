@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema, type IssueId } from "./issue.ts";
-import { handoffIdSchema } from "../handoff.ts";
+import { handoffIdSchema } from "../agent/handoff.ts";
 import { blockedBy, closesOf, knownClose, relationProblem, statusIn, unblockedSince, type CloseKey } from "./relations.ts";
 import type { Closure, IssueStatus } from "./status.ts";
 

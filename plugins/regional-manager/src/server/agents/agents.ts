@@ -26,10 +26,10 @@ import {
   type Previous,
   type RequestedPlacement,
   type StartFrom,
-} from "../../model/agent.ts";
+} from "../../model/agent/agent.ts";
 import type { Kind } from "../../model/issue/kind.ts";
-import { catalogRouting, sameModel, type Execution, type RequestedExecution } from "../../model/execution.ts";
-import { handoffIsCurrent, type HandoffId } from "../../model/handoff.ts";
+import { catalogRouting, sameModel, type Execution, type RequestedExecution } from "../../model/agent/execution.ts";
+import { handoffIsCurrent, type HandoffId } from "../../model/agent/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import type { Related } from "../../model/issue/relations.ts";
 import { headlineText, keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts";

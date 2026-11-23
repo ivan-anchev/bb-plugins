@@ -19,14 +19,14 @@
 // (lookAgain), and the tick looks again for anything missed. A final check's verifier has a worktree of its own and
 // checks no agent's handoff, so nothing waits for it.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../model/agent.ts";
-import { sameModel, type Execution } from "../../model/execution.ts";
-import { handoffIsCurrent, type GivenHandoff, type Handoff } from "../../model/handoff.ts";
+import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../model/agent/agent.ts";
+import { sameModel, type Execution } from "../../model/agent/execution.ts";
+import { handoffIsCurrent, type GivenHandoff, type Handoff } from "../../model/agent/handoff.ts";
 import type { Coordinator } from "../../contract.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { checkedAgents, type Check, type CheckId, type HandoffCheck } from "../../model/verdict/check.ts";
-import { isReviewing } from "../../model/verdict/review.ts";
+import { isReviewing, reviewPending } from "../../model/verdict/review.ts";
 import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
@@ -235,7 +235,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       await spawner.checker(request);
     } catch (error) {
       // why only from queued: bb may have made the thread and bound it through thread.created, with only its answer lost.
-      inbox.giveUpCheck(id, { state: "queued" }, { state: "could-not-run", verifierThreadId: null, reason: `bb did not start a verifier: ${messageOf(error)}` });
+      inbox.giveUpCheck(id, { state: "queued" }, { verifierThreadId: null, reason: `bb did not start a verifier: ${messageOf(error)}` }, now());
     }
   }
 
@@ -252,7 +252,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
     if (verdict.state !== "running") return;
     const { verifierThreadId } = verdict;
     const from = { state: "running", verifierThreadId } as const;
-    const giveUp = (reason: string) => inbox.giveUpCheck(checkId, from, { state: "could-not-run", verifierThreadId, reason });
+    const giveUp = (reason: string) => inbox.giveUpCheck(checkId, from, { verifierThreadId, reason }, now());
     const thread = (await listedThreads(bb, [verifierThreadId])).get(verifierThreadId) ?? null;
     if (thread === null) return void giveUp("its verifier thread was archived or deleted before it returned a verdict");
     if (isRunning(thread)) return watchRunning(checkId, verdict, thread, giveUp);
@@ -478,7 +478,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
   async function tend(checkId: CheckId): Promise<void> {
     const check = checkOf(checkId);
     const { subject } = check;
-    if (check.verdict.state === "queued" && isReviewing(check.review) && subject.kind === "handoff") return reviewInTurn({ ...check, subject });
+    if (reviewPending(check) && subject.kind === "handoff") return reviewInTurn({ ...check, subject });
     if (check.verdict.state === "queued") return startInTurn(check);
     if (check.verdict.state === "running") return followInTurn(checkId);
     return settleInTurn(checkId, "look");
@@ -526,7 +526,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
         const judged = await judgedOf({ ...check, verdict: check.verdict });
         if ("unread" in judged) {
           const reason = `bb's git plugin couldn't read the verifier's worktree as it returned its verdict (${judged.unread})`;
-          return inbox.giveUpCheck(checkId, { state: "running", verifierThreadId }, { state: "could-not-run", verifierThreadId, reason }) === null ? "not-running" : judged;
+          return inbox.giveUpCheck(checkId, { state: "running", verifierThreadId }, { verifierThreadId, reason }, now()) === null ? "not-running" : judged;
         }
         const ran = await threadExecution(bb, verifierThreadId);
         // why throw: the verifier calls issue_verdict from inside a turn, so bb has its model on record.
@@ -534,7 +534,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
         const model = { providerId: ran.providerId, model: ran.model };
         const onTheirs = checkedAgents(check, store.agents(coordinatorId)).some(({ execution }) => sameModel(model, execution));
         const findings = [...check.verdict.declined.map(declinedFinding), ...report.findings];
-        if (!store.receiveVerdict(checkId, { state: "returned", verifierThreadId, ...judged, ...report, findings, model, sameModel: onTheirs })) return "not-running";
+        if (!store.receiveVerdict(checkId, { state: "returned", verifierThreadId, ...judged, ...report, findings, model, sameModel: onTheirs }, now())) return "not-running";
         // why not fail the verdict: it is stored, and the tick settles it.
         await settleInTurn(checkId, "verdict-tool").catch((error: unknown) => bb.log.warn(`Could not settle the verdict of check ${checkId} yet; the next tick tries again: ${messageOf(error)}`));
         return "recorded";

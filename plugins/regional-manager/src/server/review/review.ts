@@ -8,7 +8,7 @@
 // its verdict saying no review was had. The verify step calls start and follow in the issue's turn
 // (verify.ts reviewInTurn), which owns when the environment changes hands.
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
-import { sameModel, type Execution } from "../../model/execution.ts";
+import { sameModel, type Execution } from "../../model/agent/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
 import type { ReviewFinding } from "../../model/verdict/review.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
@@ -60,7 +60,7 @@ export type Review = ReturnType<typeof createReview>;
 export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
   /** Ends the review as missed, from where it is, and stops its reviewer, if it had one: it holds the agent's environment, still on what held it. */
   async function miss(check: HandoffCheck, from: ReviewFrom, reason: string): Promise<void> {
-    if (!store.missReview(check.id, from, reason) || from.state !== "running") return;
+    if (!store.missReview(check.id, from, reason, now()) || from.state !== "running") return;
     const { unstopped } = await stopThreads(bb, [from.reviewerThreadId]);
     for (const { why } of unstopped) bb.log.warn(`The reviewer ${from.reviewerThreadId} of check ${check.id}, whose review was missed, ${why}; nothing waits on it.`);
   }
@@ -140,7 +140,7 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
         const ran = await threadExecution(bb, reviewerThreadId);
         // why throw: the reviewer calls issue_review from inside a turn, so bb has its model on record.
         if (ran === null) throw new Error(`bb has no model on record for ${reviewerThreadId}.`);
-        return store.receiveReview(checkId, reviewerThreadId, findings, { providerId: ran.providerId, model: ran.model }) ? "recorded" : "not-running";
+        return store.receiveReview(checkId, reviewerThreadId, findings, { providerId: ran.providerId, model: ran.model }, now()) ? "recorded" : "not-running";
       });
     },
   };

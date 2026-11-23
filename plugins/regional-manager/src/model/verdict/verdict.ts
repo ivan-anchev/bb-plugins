@@ -3,7 +3,8 @@
 // done-criterion, and what it found. Pass or fail is never stored: `judge` derives it, so the
 // board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
-import { modelRefSchema } from "../execution.ts";
+import { modelRefSchema } from "../agent/execution.ts";
+import type { Check } from "./check.ts";
 import { triageSchema } from "./review.ts";
 import { checkoutProblems, checkoutSchema, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
@@ -64,6 +65,8 @@ const settlementSchema = z.discriminatedUnion("kind", [
  */
 const returnedSchema = z.object({
   state: z.literal("returned"),
+  /** When it returned. why required: the migration gave every one stored before a time (its announcing event's, else its check's). */
+  at: z.number(),
   verifierThreadId: verifierThreadIdSchema,
   headSha: z.string(),
   checkout: checkoutSchema,
@@ -93,8 +96,8 @@ const runningSchema = z.object({
   declined: z.array(z.string()).default([]),
   checkout: pendingCheckoutSchema,
 });
-/** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one. Its thread, if it had one. */
-const couldNotRunSchema = z.object({ state: z.literal("could-not-run"), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() });
+/** No verdict will come: bb's git plugin couldn't read the agent's environment, or the verifier never started or stopped without one; since `at`. Its thread, if it had one. */
+const couldNotRunSchema = z.object({ state: z.literal("could-not-run"), at: z.number(), verifierThreadId: verifierThreadIdSchema.nullable(), reason: z.string() });
 /** A newer done handoff from the same agent, or a handover, replaced this one before its verdict. */
 const supersededSchema = z.object({ state: z.literal("superseded") });
 /** Verification was off when the agent handed off. */
@@ -141,19 +144,20 @@ export const shownVerdict = (verdict: Verdict): ShownVerdict => shownVerdictSche
  * `waiting-for-ci`: it passed every criterion, and waits for CI on its commit. `unverified`: nobody
  * checks it.
  */
-type Outcome = "pending" | "waiting-for-ci" | "pass" | "fail" | "could-not-run" | "superseded" | "unverified";
+export const outcomeSchema = z.enum(["pending", "waiting-for-ci", "pass", "fail", "could-not-run", "superseded", "unverified"]);
+export type Outcome = z.infer<typeof outcomeSchema>;
 
 /**
  * The verdict a check starts with: waived while verification is off, else queued for a verifier. A
  * done handoff's is queued on the checkout read as it handed off (`read`); a checkout bb's git
  * plugin couldn't read can't be verified, and never counts as the agent's failure, so it goes to
- * the coordinating thread as it is, without a verifier or a fix round. A final check's (`read`
+ * the coordinating thread as it is, at `at`, without a verifier or a fix round. A final check's (`read`
  * null) is never refused here: its verifier's worktree is read when it returns.
  */
-export function firstVerdict(verifies: boolean, read: CheckoutRead | null): Verdict {
+export function firstVerdict(verifies: boolean, read: CheckoutRead | null, at: number): Verdict {
   if (!verifies) return { state: "waived" };
   if (read === null) return { state: "queued", checkout: null };
-  if (read.kind === "unread") return { state: "could-not-run", verifierThreadId: null, reason: `bb's git plugin couldn't read the agent's commit and working tree as it handed off (${read.reason})` };
+  if (read.kind === "unread") return { state: "could-not-run", at, verifierThreadId: null, reason: `bb's git plugin couldn't read the agent's commit and working tree as it handed off (${read.reason})` };
   return { state: "queued", checkout: read.checkout };
 }
 
@@ -180,6 +184,17 @@ export function outcome(verdict: ShownVerdict): Outcome {
   }
 }
 
+/**
+ * Whether the check is in flight: its verdict is still to come (its review first, while it is
+ * queued; then a verifier, or returned and nobody told), or it waits for CI. why by the verdict
+ * alone: a review is to come only while its verdict is queued, and a check superseded mid-review
+ * keeps that review as it was. A round reads it.
+ */
+export function checkInFlight({ verdict }: Pick<Check, "verdict">): boolean {
+  const result = outcome(verdict);
+  return result === "pending" || result === "waiting-for-ci";
+}
+
 /** A returned verdict, the model it ran on aside: what pass or fail is judged on. */
 type Returned = Extract<ShownVerdict, { state: "returned" }>;
 
@@ -201,6 +216,17 @@ export const allPassed = (verdict: Returned): boolean => failedCheckout(verdict)
 export function failedCheckout(verdict: Returned): Checkout | null {
   const { headSha, checkout } = verdict;
   return checkoutProblems(headSha, checkout).length > 0 ? checkout : null;
+}
+
+/**
+ * What failed a returned verdict: its checkout (not the claimed commit on a clean tree), else a
+ * criterion, else CI on its commit once settled; null when nothing did. The one order for every
+ * place that names why: the issue's headline and its round.
+ */
+export function failureOf(verdict: Returned): "checkout" | "criteria" | "ci" | null {
+  if (failedCheckout(verdict) !== null) return "checkout";
+  if (verdict.criteria.some(({ result }) => result !== "pass")) return "criteria";
+  return ciVerdictOf(verdict)?.kind === "fail" ? "ci" : null;
 }
 
 /** What CI said about a settled verdict's commit; null while it is not settled, or when it was superseded before CI was judged. */

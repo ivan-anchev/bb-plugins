@@ -247,18 +247,19 @@ test("issue_read shows a research issue's questions, that nothing verifies it, a
   assert.doesNotMatch(read, /### Done when/);
 });
 
-test("an issue opened on the board sends its questions and a research handoff's report with its file, and no verdict; a blocked handoff sends no report", async () => {
+test("an issue opened on the board sends its questions and, in its rounds, a research handoff's report with its file, and no verdict; a blocked handoff sends no report", async () => {
   const { kit, coordinatorId, call, handOff } = await researching();
   await handOff({ status: "blocked", ...FIELDS, summary: "Needs the PCI auditor's scope" });
   assert.equal(textOf(await call("agent_message", { agent: "a1", text: "The scope is cards only." })), "Sent to a1.");
   await handOff({ ...DONE, headSha: HEAD });
-  const detail = await kit.rpc.issue({ coordinatorId, issueId: I1 });
+  const { feed, rounds } = await kit.opened(coordinatorId, I1);
 
-  assert.deepEqual(detail.doneCriteria, RESEARCH.doneCriteria);
-  const [blocked, done] = detail.record[0]?.handoffs ?? assert.fail("no handoffs");
-  assert.deepEqual(Object.keys(done ?? assert.fail("no done handoff")).sort(), ["at", "concerns", "deviations", "did", "evidence", "findings", "id", "report", "status", "summary", "verdict"]);
-  assert.deepEqual([done.report, done.verdict], [{ report: REPORT, file: I1_REPORT }, null]);
-  assert.deepEqual([blocked?.status, blocked?.report], ["blocked", null]);
+  assert.deepEqual(feed.doneCriteria, RESEARCH.doneCriteria);
+  const [blocked, done] = rounds;
+  assert.deepEqual([done?.round.verdict, done?.round.review], [null, { state: "none" }], "nothing checks a research handoff");
+  assert.deepEqual(Object.keys(done?.body.handoff ?? assert.fail("no done handoff")).sort(), ["concerns", "deviations", "did", "evidence", "findings", "report"]);
+  assert.deepEqual([done?.body.handoff?.report, done?.body.verdict], [{ report: REPORT, file: I1_REPORT }, null]);
+  assert.deepEqual([blocked?.round.by, blocked?.body.handoff?.report], [{ kind: "agent", agentId: "a1", status: "blocked", summary: "Needs the PCI auditor's scope" }, null]);
 });
 
 /** The reports/ files in the manager's memory, each with what it holds. */

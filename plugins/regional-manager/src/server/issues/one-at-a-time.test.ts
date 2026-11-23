@@ -3,7 +3,7 @@
 // that nothing the plugin starts or wakes on the issue runs beside another thread of it.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema } from "../../model/agent.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 

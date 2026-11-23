@@ -5,7 +5,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, within } from "@testing-library/react";
 import { createElement, type ComponentProps } from "react";
 import type { IssueRow } from "../../../contract.ts";
-import { agentIdSchema } from "../../../model/agent.ts";
+import { agentIdSchema } from "../../../model/agent/agent.ts";
 import { decisionIdSchema, type Decision, type OpenDecision } from "../../../model/decision.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { agentIdSchema } from "../model/agent.ts";
+import { agentIdSchema } from "../model/agent/agent.ts";
 import { issueIdSchema } from "../model/issue/issue.ts";
 import { DISPLAY_NAME } from "../name.ts";
 import { coordinating, harness, HEAD, isRefusal, startedAgent, textOf } from "./test-harness.ts";

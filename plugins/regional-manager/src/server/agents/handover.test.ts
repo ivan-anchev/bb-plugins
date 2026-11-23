@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
-import { agentIdSchema } from "../../model/agent.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");

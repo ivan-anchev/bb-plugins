@@ -1,0 +1,244 @@
+// A round: one attempt at an issue, from a handoff (or a build parent's final check) through its
+// review and verdict to what became of it. Folded, it is a line and a score (Round, in the feed's
+// spine); opened, it is the texts behind them (RoundBody, read per round with roundBodies). The two
+// share no field: the split is where the wire divides what folds from what opens.
+import { z } from "zod";
+import { agentIdSchema } from "../agent/agent.ts";
+import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
+import type { Handed } from "../issue/status.ts";
+import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
+import { reviewFindingSchema, reviewPending, triaged, triageSchema, type Review } from "../verdict/review.ts";
+import { checkInFlight, criterionResultSchema, failureOf, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
+
+/**
+ * A round's address within its issue: `h-` and its handoff's id, or `f-` and its final check's. why
+ * the id checked as the uuid it is: roundTarget parses it so, and a key that would fail there must
+ * fail here, at the boundary, where one bad key of a batch reads null alone.
+ */
+export const roundKeySchema = z
+  .string()
+  .refine((key) => /^[hf]-/.test(key) && z.uuid().safeParse(key.slice(2)).success, "A round key is h- or f- and an id")
+  .brand<"roundKey">();
+export type RoundKey = z.infer<typeof roundKeySchema>;
+
+/** What a round's key names: its handoff, or its final check. */
+export function roundTarget(key: RoundKey): { kind: "handoff"; handoffId: HandoffId } | { kind: "final"; checkId: CheckId } {
+  const id = key.slice(2);
+  return key.startsWith("h-") ? { kind: "handoff", handoffId: handoffIdSchema.parse(id) } : { kind: "final", checkId: checkIdSchema.parse(id) };
+}
+
+export const roundSchema = z.object({
+  key: roundKeySchema,
+  number: z.number().int().min(1),
+  /** When it began: its handoff, or its final check. */
+  at: z.number(),
+  by: z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("agent"), agentId: agentIdSchema, status: handoffStatusSchema, summary: z.string() }),
+    z.object({ kind: z.literal("final"), defaultBranch: z.string() }),
+  ]),
+  /** Its review: none (no review stage), still to come, missed (why is the body's), or reported with how many findings and, once the verdict triaged them, how many it confirmed. */
+  review: z.discriminatedUnion("state", [
+    z.object({ state: z.literal("none") }),
+    z.object({ state: z.literal("pending") }),
+    z.object({ state: z.literal("missed"), at: z.number() }),
+    z.object({ state: z.literal("reported"), at: z.number(), findings: z.number().int(), confirmed: z.number().int().nullable() }),
+  ]),
+  /**
+   * Its verdict (null: nothing checks this round, as a blocked or research handoff): what it says,
+   * and, when it failed, what failed it: a criterion, its checkout (not the claimed commit on a
+   * clean tree) or CI; each criterion's result in the check's order ([] until it returned), and the
+   * fix round its findings went back to its agent as once settled (null: none):
+   * reached it, or may have (the plugin can't tell, so the verdict is its manager's). When it
+   * returned is the body's.
+   */
+  verdict: z
+    .object({
+      outcome: z.discriminatedUnion("kind", [z.object({ kind: z.literal("fail"), by: z.enum(["criteria", "checkout", "ci"]) }), z.object({ kind: outcomeSchema.exclude(["fail"]) })]),
+      results: z.array(criterionResultSchema),
+      fixRound: z.object({ round: z.number().int(), delivery: z.enum(["sent", "maybe"]) }).nullable(),
+    })
+    .nullable(),
+  /** When its verdict was sent back or made final, from the inbox event that said so (null: not yet). */
+  outcomeAt: z.number().nullable(),
+  /** Its check is in flight: its review, its verdict or CI is still to come. */
+  inFlight: z.boolean(),
+});
+export type Round = z.infer<typeof roundSchema>;
+
+export const roundBodySchema = z.object({
+  /** The handoff's account (null: a final check's round, which has none). */
+  handoff: handoffBodySchema.nullable(),
+  verdict: shownVerdictSchema.nullable(),
+  /** The reviewer's findings, each with the verifier's triage once its verdict returned (null triage before). */
+  findings: z.array(reviewFindingSchema.extend({ triage: triageSchema.nullable() })),
+  /** Why no review was had (null: one was, or none was asked for). */
+  reviewMissed: z.string().nullable(),
+});
+export type RoundBody = z.infer<typeof roundBodySchema>;
+
+/** The round a handoff and its check make, numbered `number`, its outcome announced at `outcomeAt` (null: not yet). */
+export function roundOf({ handoff, check }: Handed, number: number, outcomeAt: number | null): Round {
+  return {
+    key: roundKeySchema.parse(`h-${handoff.id}`),
+    number,
+    at: handoff.at,
+    by: { kind: "agent", agentId: handoff.agentId, status: handoff.status, summary: handoff.summary },
+    review: check === null ? { state: "none" } : reviewOf(check),
+    verdict: check === null ? null : verdictOf(check.verdict),
+    outcomeAt,
+    inFlight: check !== null && checkInFlight(check),
+  };
+}
+
+/** A build parent's final check as a round. */
+export function finalRoundOf(check: FinalCheck, number: number, outcomeAt: number | null): Round {
+  return {
+    key: roundKeySchema.parse(`f-${check.id}`),
+    number,
+    at: check.at,
+    by: { kind: "final", defaultBranch: check.subject.defaultBranch },
+    review: { state: "none" },
+    verdict: verdictOf(check.verdict),
+    outcomeAt,
+    inFlight: checkInFlight(check),
+  };
+}
+
+/** What a round opens to: its handoff (null: a final check's round), and its check's verdict and the review's findings (null, none: nothing checks it). */
+export function bodyOf(handoff: Handoff | null, check: Check | null): RoundBody {
+  return {
+    handoff: handoff === null ? null : handoffBody(handoff),
+    verdict: check === null ? null : shownVerdict(check.verdict),
+    findings: check === null ? [] : findingsOf(check),
+    reviewMissed: check?.review.state === "missed" ? check.review.reason : null,
+  };
+}
+
+/**
+ * What a folded round says of its check: its criteria passed of how many, passed and settled; what
+ * failed it, its criteria (with how many passed), its checkout or CI; the stage it is at while its
+ * review, its verdict's settling or CI is to come; or why it has no verdict. null: nothing checks it.
+ */
+type Score =
+  | { kind: "judged"; passed: number; of: number }
+  | { kind: "failed"; by: "criteria"; passed: number; of: number }
+  | { kind: "failed"; by: "checkout" | "ci" }
+  | { kind: "pending"; stage: "reviewing" | "verifying" | "ci" }
+  | { kind: "unjudged"; outcome: "could-not-run" | "superseded" | "unverified" }
+  | null;
+
+export function scoreOf({ review, verdict }: Pick<Round, "review" | "verdict">): Score {
+  if (verdict === null) return null;
+  if (review.state === "pending") return { kind: "pending", stage: "reviewing" };
+  const { outcome, results } = verdict;
+  const passed = results.filter((result) => result === "pass").length;
+  // why its reason first: a checkout or CI that failed it is why, however many criteria passed (verdict.ts failureOf).
+  if (outcome.kind === "fail" && outcome.by !== "criteria") return { kind: "failed", by: outcome.by };
+  // why a failed criterion next: it has failed, however the verdict settles.
+  if (passed < results.length) return { kind: "failed", by: "criteria", passed, of: results.length };
+  switch (outcome.kind) {
+    case "fail":
+      return { kind: "failed", by: "criteria", passed, of: results.length };
+    case "pass":
+      return { kind: "judged", passed, of: results.length };
+    case "could-not-run":
+    case "superseded":
+    case "unverified":
+      return { kind: "unjudged", outcome: outcome.kind };
+    // why not a pass yet: every criterion passed, but nobody has been told, or CI is still to come.
+    case "pending":
+      return { kind: "pending", stage: "verifying" };
+    case "waiting-for-ci":
+      return { kind: "pending", stage: "ci" };
+    default:
+      // why no score: the server may be newer than this bundle for a moment after an update.
+      outcome satisfies never;
+      return null;
+  }
+}
+
+/** One criterion's row of the grid: its wording now, and each judged round's result on it (null: that round's check had no criterion at its place). */
+type GridRow = { criterion: string; cells: { round: number; result: CriterionResult | null }[] };
+
+/**
+ * The criteria × rounds grid: per criterion, by position, each round with a verdict's result. why
+ * by position: a check copies its criteria, and a reworded one keeps its row; the round's body has
+ * the wording that round judged.
+ */
+export function criteriaGrid(criteria: readonly string[], rounds: readonly Round[]): GridRow[] {
+  const judged = rounds.flatMap(({ number, verdict }) => (verdict !== null && verdict.results.length > 0 ? [{ number, results: verdict.results }] : []));
+  return criteria.map((criterion, i) => ({ criterion, cells: judged.map(({ number, results }) => ({ round: number, result: results[i] ?? null })) }));
+}
+
+function reviewOf({ review, verdict }: Check): Round["review"] {
+  switch (review.state) {
+    case "none":
+      return { state: "none" };
+    // why none once its verdict left queued: a check superseded mid-review keeps that review as it was, and none will come.
+    case "queued":
+    case "running":
+      return reviewPending({ review, verdict }) ? { state: "pending" } : { state: "none" };
+    case "missed":
+      return { state: "missed", at: review.at };
+    case "reported":
+      return { state: "reported", at: review.at, findings: review.findings.length, confirmed: confirmedOf(review, verdict) };
+    default:
+      return review satisfies never;
+  }
+}
+
+/** How many of the review's findings the verifier confirmed; null until its verdict triaged them. */
+function confirmedOf(review: Review, verdict: Verdict): number | null {
+  if (verdict.state !== "returned") return null;
+  return triaged(review, verdict.triage).filter(({ result }) => result === "confirmed").length;
+}
+
+function verdictOf(verdict: Verdict): Round["verdict"] {
+  switch (verdict.state) {
+    case "returned":
+      return { outcome: outcomeOf(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict) };
+    case "could-not-run":
+    case "queued":
+    case "running":
+    case "superseded":
+    case "waived":
+      return { outcome: outcomeOf(verdict), results: [], fixRound: null };
+    default:
+      return verdict satisfies never;
+  }
+}
+
+/** What the verdict says, and what failed it when it failed (verdict.ts failureOf). */
+function outcomeOf(verdict: Verdict): NonNullable<Round["verdict"]>["outcome"] {
+  const result = outcome(verdict);
+  if (result !== "fail") return { kind: result };
+  return { kind: "fail", by: verdict.state === "returned" ? (failureOf(verdict) ?? "criteria") : "criteria" };
+}
+
+/**
+ * The fix round a returned verdict's findings went back to its agent as, and whether they reached
+ * it; null when they went to nobody, or are still on their way (the round is in flight then).
+ */
+function fixRoundOf({ settlement }: Extract<Verdict, { state: "returned" }>): NonNullable<Round["verdict"]>["fixRound"] {
+  switch (settlement.kind) {
+    case "sent-back":
+      return { round: settlement.round, delivery: "sent" };
+    case "maybe-sent-back":
+      return { round: settlement.round, delivery: "maybe" };
+    case "sending-back":
+    case "pending":
+    case "waiting-for-ci":
+    case "checked":
+    case "superseded":
+      return null;
+    default:
+      return settlement satisfies never;
+  }
+}
+
+/** Each finding with its triage once the verdict returned; before, none yet. */
+function findingsOf({ review, verdict }: Check): RoundBody["findings"] {
+  if (review.state !== "reported") return [];
+  if (verdict.state !== "returned") return review.findings.map((finding) => ({ ...finding, triage: null }));
+  return triaged(review, verdict.triage).map(({ result, reason, ...finding }) => ({ ...finding, triage: { result, reason } }));
+}

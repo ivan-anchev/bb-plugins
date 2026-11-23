@@ -9,10 +9,10 @@ import type { NewProfile, Profile } from "../../model/profile/profile.ts";
 import { memoryRevisionSchema, type MemoryFile, type MemoryRevision, type MemoryVersion } from "../../model/memory-file.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import { inboxStore } from "./inbox/inbox-store.ts";
-import type { Agent, AgentId } from "../../model/agent.ts";
-import type { HandoffId } from "../../model/handoff.ts";
+import type { Agent, AgentId } from "../../model/agent/agent.ts";
+import type { HandoffId } from "../../model/agent/handoff.ts";
 import { issueDecisions, type IssueDecision } from "../../model/decision.ts";
-import type { IssueId } from "../../model/issue/issue.ts";
+import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import type { IssueKey } from "../../model/issue/key/issue-key.ts";
 import { agentsStore, bindRole, endAgent, insertAgent, insertTicket, type NewAgent } from "./issue/agents-store.ts";
 import { checksStore, startCheck, startReview, supersedeChecks } from "./issue/checks-store.ts";
@@ -199,11 +199,11 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      * Removes a regional manager whose thread bb deleted, or one not started yet the user deleted, and everything it owns, together. bb
      * deletes its agents and verifiers with it, so nothing it holds can be acted on, and a doorbell
      * to it would fail on every tick. why children first: the handle enforces foreign keys. why
-     * fact_writes after the rest: deleting them counts writes there.
+     * fact_writes and issue_writes after the rest: deleting them counts writes there.
      */
     removeCoordinator(id: CoordinatorId): void {
       db().transaction(() => {
-        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issue_decisions", "issues", "memory_revisions", "fact_writes"]) {
+        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issue_decisions", "issues", "memory_revisions", "fact_writes", "issue_writes"]) {
           db().prepare(`DELETE FROM ${table} WHERE coordinator_id = ?`).run(id);
         }
         db().prepare("DELETE FROM coordinators WHERE id = ?").run(id);
@@ -215,6 +215,12 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     factWrites(id: CoordinatorId): number {
       const row = db().prepare("SELECT writes FROM fact_writes WHERE coordinator_id = ?").get(id);
       return row === undefined ? 0 : z.object({ writes: z.number().int() }).parse(row).writes;
+    },
+
+    /** How many times each of the regional manager's issues' feed facts were written (migrations.ts issue_writes), by issue; an issue never written is absent. */
+    issueWrites(id: CoordinatorId): Map<IssueId, number> {
+      const rows = db().prepare("SELECT issue_id AS issueId, writes FROM issue_writes WHERE coordinator_id = ?").all(id);
+      return new Map(rows.map((row) => issueWritesRowSchema.parse(row)).map(({ issueId, writes }) => [issueId, writes]));
     },
 
     /**
@@ -238,5 +244,6 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
 
 const toCoordinator = (row: unknown): Coordinator => withAvatar(coordinatorSchema.extend({ avatar: z.string() }).parse(row));
 const notStartedRowSchema = notStartedSchema.extend({ avatar: z.string() });
+const issueWritesRowSchema = z.object({ issueId: issueIdSchema, writes: z.number().int() });
 const startRowSchema = z.object({ ticket: z.string(), name: z.string().nullable(), threadId: z.string().nullable() });
 const candidateRowSchema = z.object({ id: coordinatorSchema.shape.id, ticket: z.string(), threadId: z.string().nullable(), flagged: z.number().transform((flag) => flag === 1) });

@@ -2,7 +2,7 @@
 // what CI says about the commit a done handoff claims. Pure: the watch writes the reading, and
 // settling a verdict, the board and the texts read it.
 import { z } from "zod";
-import { commitSchema, type HandoffId } from "../handoff.ts";
+import { commitSchema, type HandoffId } from "../agent/handoff.ts";
 
 /** A pull request's checks on its head commit, rolled up as GitHub's merge box rolls them. `none`: it reports no checks. */
 const ciSchema = z.enum(["none", "pending", "pass", "fail"]);
@@ -46,7 +46,7 @@ export type PrStatus = ({ snapshot: null } | PrFound) & { unavailable: PrUnavail
 
 /** A change in a branch's pull request worth waking its coordinating thread for. */
 export const prChangeSchema = z.enum(["opened", "reopened", "merged", "closed", "ci-passed", "ci-failed", "approved", "changes-requested"]);
-type PrChange = z.infer<typeof prChangeSchema>;
+export type PrChange = z.infer<typeof prChangeSchema>;
 
 /** Each change in words, as the doorbell and the catch-up say it. */
 export const PR_CHANGE_WORDS: Record<PrChange, string> = {

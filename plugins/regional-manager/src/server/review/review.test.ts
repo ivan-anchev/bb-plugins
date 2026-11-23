@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { laneOf } from "../../model/board/board-groups.ts";
-import { agentIdSchema } from "../../model/agent.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
@@ -10,6 +10,7 @@ import type { Review } from "../../model/verdict/review.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { MIGRATIONS } from "../store/migrations.ts";
 import { coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { z } from "zod";
 
 const a1 = agentIdSchema.parse("a1");
 const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
@@ -148,7 +149,7 @@ test("with only the agent's own model to run, no reviewer starts: the review is 
   const spawned = kit.spawned();
   await handOff();
   const reason = "no independent reviewer model: bb can run none there but a1's own";
-  assert.deepEqual(review(), { state: "missed", reviewerThreadId: null, reason });
+  assert.deepEqual(review(), { state: "missed", at: kit.clock.now, reviewerThreadId: null, reason });
   assert.deepEqual(
     kit.store.issueThreads(coordinatorId, check().issueId).map(({ kind }) => kind),
     ["agent", "verifier"],
@@ -218,7 +219,7 @@ test("a reviewer silent for 30 minutes never holds the issue in Reviewing: it is
   await kit.tick();
   await settled();
   const reason = "its reviewer showed no activity for 30 minutes";
-  assert.deepEqual(review(), { state: "missed", reviewerThreadId, reason });
+  assert.deepEqual(review(), { state: "missed", at: kit.clock.now, reviewerThreadId, reason });
   assert.equal(kit.thread(reviewerThreadId).status, "idle", "the reviewer no longer holds the agent's environment");
   assert.deepEqual(await row(), ["verifying", "Verifying: Retries land with backoff"]);
   assert.match(kit.thread(verifier()).spawnedWith.prompt ?? "", new RegExp(`## The review\n\nNo review was had: ${reason}\\. There is nothing to triage: pass triage as \\[\\]\\.`));
@@ -232,7 +233,7 @@ test("a reviewer that ends its turn without reporting, or that bb won't start, n
   const silent = await withAgent();
   await silent.handOff();
   await silent.kit.idle(silent.reviewer(), "I looked around.");
-  assert.deepEqual(silent.review(), { state: "missed", reviewerThreadId: silent.kit.store.issueThreads(silent.coordinatorId, silent.check().issueId).at(-2)?.threadId ?? assert.fail(), reason: "its reviewer ended its turn without reporting" });
+  assert.deepEqual(silent.review(), { state: "missed", at: silent.kit.clock.now, reviewerThreadId: silent.kit.store.issueThreads(silent.coordinatorId, silent.check().issueId).at(-2)?.threadId ?? assert.fail(), reason: "its reviewer ended its turn without reporting" });
   assert.match(silent.kit.thread(silent.verifier()).spawnedWith.prompt ?? "", /No review was had: its reviewer ended its turn without reporting\./);
 
   const refused = await withAgent();
@@ -240,7 +241,7 @@ test("a reviewer that ends its turn without reporting, or that bb won't start, n
   // why one refusal: bb refuses the reviewer's spawn and takes the verifier's after it.
   Object.defineProperty(refused.kit.spawns, "answer", { get: () => (refusals-- > 0 ? "refused" : "thread") });
   await refused.handOff();
-  assert.deepEqual(refused.review(), { state: "missed", reviewerThreadId: null, reason: "bb did not start a reviewer: HTTP 400: Invalid environment" });
+  assert.deepEqual(refused.review(), { state: "missed", at: refused.kit.clock.now, reviewerThreadId: null, reason: "bb did not start a reviewer: HTTP 400: Invalid environment" });
   assert.deepEqual(await refused.row(), ["verifying", "Verifying: Retries land with backoff"]);
   refused.verifier();
 });
@@ -264,7 +265,7 @@ test("whatever a reviewer asks a person is declined, as nobody answers a reviewe
   refused.kit.askAnswers.refusal = new Error("bb is restarting");
   await refused.kit.ask(stuck, RECONNECT);
   await settled();
-  assert.deepEqual(refused.review(), { state: "missed", reviewerThreadId: stuck, reason: 'its reviewer asked a person "Reconnect GitHub on ChatGPT", and bb refused the plugin\'s decline: bb is restarting' });
+  assert.deepEqual(refused.review(), { state: "missed", at: refused.kit.clock.now, reviewerThreadId: stuck, reason: 'its reviewer asked a person "Reconnect GitHub on ChatGPT", and bb refused the plugin\'s decline: bb is restarting' });
   assert.equal(refused.kit.thread(stuck).status, "idle", "the reviewer no longer holds the agent's environment");
   assert.deepEqual(await refused.row(), ["verifying", "Verifying: Retries land with backoff"]);
   assert.match(refused.kit.thread(refused.verifier()).spawnedWith.prompt ?? "", /No review was had: its reviewer asked a person "Reconnect GitHub on ChatGPT"/);
@@ -343,10 +344,14 @@ test("issues stored before reviews, in every status, load with the same status, 
     ["WEB-8", "in-progress"],
   ]);
 
-  // As the release before reviews left it: no review column, no triage on a verdict, and its last migration still to run.
+  // As the release before reviews left it: no review column, no triage or time on a verdict, none of the
+  // issue feed's tables, and every migration from the review column on still to run.
+  for (const { name } of z.array(z.object({ name: z.string() })).parse(db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%issue_writes%'").all())) db.exec(`DROP TRIGGER ${name}`);
+  db.exec("DROP TABLE issue_writes");
+  db.exec("DROP INDEX events_of_issue");
   db.exec("ALTER TABLE checks DROP COLUMN review");
-  db.exec("UPDATE checks SET verdict = json_remove(verdict, '$.triage')");
-  migrated.applied = MIGRATIONS.length - 1;
+  db.exec("UPDATE checks SET verdict = json_remove(verdict, '$.triage', '$.at')");
+  migrated.applied = MIGRATIONS.findIndex((statement) => statement.includes("ADD COLUMN review"));
   kit.reload();
 
   assert.deepEqual(await statuses(), before);

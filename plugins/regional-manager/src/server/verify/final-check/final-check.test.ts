@@ -323,19 +323,18 @@ test("8: the final check runs on the parent's named verifier unless an agent of 
   assert.deepEqual(runsOn(renamed.kit, renamed.verifier()), ["claude-code", "sonnet"]);
 });
 
-test("an opened parent sends its final checks, each with only what its detail shows; its row only its headline", async () => {
+test("an opened parent sends its final checks as rounds, each with only what its tab shows; its row only its headline", async () => {
   const { kit, coordinatorId, mergeAll, returns } = await withParent();
   await mergeAll();
   await returns(FAILS);
-  const { finalChecks } = await kit.rpc.issue({ coordinatorId, issueId: i1 });
-  assert.equal(finalChecks.length, 1);
-  const [shown = assert.fail("no final check")] = finalChecks;
-  assert.deepEqual(Object.keys(shown).sort(), ["at", "defaultBranch", "verdict"]);
-  assert.equal(shown.defaultBranch, "main");
-  assert.deepEqual(Object.keys(shown.verdict).sort(), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"], "no model");
+  const { rounds } = await kit.opened(coordinatorId, i1);
+  assert.equal(rounds.length, 1);
+  const [{ round, body } = assert.fail("no final check")] = rounds;
+  assert.deepEqual([round.by, round.review, body.handoff, body.findings], [{ kind: "final", defaultBranch: "main" }, { state: "none" }, null, []]);
+  assert.deepEqual(Object.keys(body.verdict ?? assert.fail("no verdict")).sort(), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"], "no model");
   const row = (await kit.rpc.board({ coordinatorId })).issues[0] ?? assert.fail("no row");
   assert.deepEqual(Object.keys(row).sort(), ["agent", "blockedBy", "blocks", "headline", "id", "kind", "needsYou", "parentId", "pr", "status", "subIssues", "title"]);
-  assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-2") })).finalChecks, [], "a sub-issue has none");
+  assert.deepEqual((await kit.opened(coordinatorId, issueIdSchema.parse("WEB-2"))).rounds, [], "a sub-issue has none");
 });
 
 test("a verdict that arrives after a sub-issue was filed under the parent is kept, and closes nothing while that sub-issue is open; its merge makes the next check", async () => {

@@ -5,7 +5,7 @@
 // winning. On an issue that had agents before, where it works and every earlier handoff with its
 // verdict come next, quoted as context and never as instructions. CREW.md and MEMORY.md are copied as they are at the start: the rules every agent follows, and the index of
 // the manager's memory, which is the manager's context and never the agent's instructions.
-import { refOf, type AgentId, type Base } from "../../model/agent.ts";
+import { refOf, type AgentId, type Base } from "../../model/agent/agent.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES, type Kind } from "../../model/issue/kind.ts";

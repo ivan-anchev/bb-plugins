@@ -4,13 +4,13 @@
 // kind's stages (walk); everything that reads an IssueStatus never sees a kind.
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import type { Agent, EndedHow } from "../agent.ts";
-import type { Handoff, HandoffId } from "../handoff.ts";
+import type { Agent, EndedHow } from "../agent/agent.ts";
+import type { Handoff, HandoffId } from "../agent/handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { NOT_CLEAN } from "../verdict/checkout.ts";
-import { isReviewing } from "../verdict/review.ts";
-import { allPassed, ciVerdictOf, failedCheckout, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
+import { reviewPending } from "../verdict/review.ts";
+import { ciVerdictOf, failureOf, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
 import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
@@ -346,7 +346,7 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
   // Left once its review reported or none could be had, or its verdict moved on without one; at once for a check with no review stage.
   reviewing({ summary, check }) {
     const { verdict, review } = checked(check);
-    return verdict.state === "queued" && isReviewing(review) ? { status: "reviewing", headline: `Reviewing: ${summary}`, needsYou: null } : "left";
+    return reviewPending({ review, verdict }) ? { status: "reviewing", headline: `Reviewing: ${summary}`, needsYou: null } : "left";
   },
   // Left once the check passed, or nobody checks it. A failure stays In progress.
   verifying({ summary, check, fixRounds, pr, verifierAsks }) {
@@ -421,7 +421,18 @@ const ciOfReturned = (verdict: Verdict): CiVerdict | null => (verdict.state === 
 
 /** How a failure reads: by the plugin's checkout read when it failed it; as CI's, when every criterion passed and CI failed on the commit. */
 function failedAs(verdict: Verdict): string {
-  if (verdict.state === "returned" && failedCheckout(verdict) !== null) return `✗ ${NOT_CLEAN}`;
-  const ci = ciOfReturned(verdict);
-  return ci?.kind === "fail" && verdict.state === "returned" && allPassed(verdict) ? `✗ CI failed on #${ci.number}` : "✗ Failed verification";
+  if (verdict.state !== "returned") return "✗ Failed verification";
+  const ci = ciVerdictOf(verdict);
+  const failure = failureOf(verdict);
+  switch (failure) {
+    case "checkout":
+      return `✗ ${NOT_CLEAN}`;
+    case "ci":
+      return ci?.kind === "fail" ? `✗ CI failed on #${ci.number}` : "✗ Failed verification";
+    case "criteria":
+    case null:
+      return "✗ Failed verification";
+    default:
+      return failure satisfies never;
+  }
 }

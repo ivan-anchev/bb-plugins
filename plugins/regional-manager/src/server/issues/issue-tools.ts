@@ -4,7 +4,7 @@
 import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { decisionTextSchema } from "../../model/decision.ts";
-import { requestedExecutionSchema } from "../../model/execution.ts";
+import { requestedExecutionSchema } from "../../model/agent/execution.ts";
 import { briefSchema, descriptionSchema, doneCriteriaSchema, issueIdSchema, managerStatusSchema, restSchema, titleSchema, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import { kindSchema } from "../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../model/role.ts";

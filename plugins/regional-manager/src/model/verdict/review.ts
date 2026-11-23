@@ -5,14 +5,14 @@
 // what the reviewer runs is CREW.md's. A review is stored on its check, beside the verdict; while
 // the verdict is queued and the review is to come, the issue is Reviewing.
 import { z } from "zod";
-import { modelRefSchema } from "../execution.ts";
+import { modelRefSchema } from "../agent/execution.ts";
 import type { Verdict } from "./verdict.ts";
 
 /** How much a finding matters, by the reviewer's judgement: must-fix, should-fix, or a nit. */
 export const severitySchema = z.enum(["must-fix", "should-fix", "nit"]);
 
 /** One thing the reviewer found: where in the diff (its file, and its line, null when it names none), how much it matters, and what it claims is wrong. */
-const reviewFindingSchema = z.object({
+export const reviewFindingSchema = z.object({
   file: z.string().min(1),
   line: z.number().int().min(1).nullable(),
   severity: severitySchema,
@@ -28,14 +28,15 @@ const reviewerThreadIdSchema = z.string().min(1);
  * reviews existed. `queued`: its reviewer starts once the agent's thread is idle. `running`: a
  * reviewer thread reviews.
  * `reported`: it returned its findings ([] for none), on the model bb ran it on. `missed`: no
- * review was had, and why; its thread, if it had one. Verification goes ahead either way.
+ * review was had, and why; its thread, if it had one. Verification goes ahead either way. Each of
+ * the two keeps `at`, when it came (the migration gave every one stored before a time).
  */
 export const reviewSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("none") }),
   z.object({ state: z.literal("queued") }),
   z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema }),
-  z.object({ state: z.literal("reported"), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), model: modelRefSchema }),
-  z.object({ state: z.literal("missed"), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
+  z.object({ state: z.literal("reported"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), model: modelRefSchema }),
+  z.object({ state: z.literal("missed"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
 ]);
 export type Review = z.infer<typeof reviewSchema>;
 
@@ -51,6 +52,13 @@ export const firstReview = (verdict: Verdict): Review => (verdict.state === "que
 
 /** Whether the review is still to come: its reviewer hasn't started, or hasn't reported. */
 export const isReviewing = (review: Review): boolean => review.state === "queued" || review.state === "running";
+
+/**
+ * Whether the check waits on its review: its verdict is still queued and its review still to come.
+ * why the verdict too: a check superseded mid-review keeps that review as it was, and none comes.
+ * The one rule for an issue's Reviewing status and a round's Reviewing… score.
+ */
+export const reviewPending = ({ review, verdict }: { review: Review; verdict: Pick<Verdict, "state"> }): boolean => verdict.state === "queued" && isReviewing(review);
 
 /**
  * Each finding the reviewer reported, with the verifier's triage of it (`triage`, in the

@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
-import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
-import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
+import { handoffIdSchema, type Handoff } from "../../model/agent/handoff.ts";
+import { issueKeyOf, issueKeySchema } from "../../model/issue/key/issue-key.ts";
+import { checkIdSchema } from "../../model/verdict/check.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { Avatar } from "../../model/profile/avatar.ts";
@@ -22,15 +23,21 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
       .prepare("SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all(type)
       .map((row) => z.object({ name: z.string() }).parse(row).name);
-  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_relations", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_relations", "issue_writes", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
   const facts = ["agents", "checks", "decisions", "handoffs", "issue_relations", "issues", "pr_snapshots"];
-  assert.deepEqual(names("trigger"), [...facts.flatMap((table) => ["deleted", "inserted", "updated"].map((write) => `${table}_${write}`)), "roles_bound"]);
+  const feeds = ["agents_issue_id", "checks_issue_id", "handoffs_issue_id", "issue_decisions_issue_id", "issue_relations_depends_on", "issue_relations_issue_id", "issues_id"];
+  const writes = (tables: string[]) => tables.flatMap((table) => ["deleted", "inserted", "updated"].map((write) => `${table}_${write}`));
+  assert.deepEqual(
+    names("trigger"),
+    [...writes(facts), "roles_bound", ...writes(feeds), "decisions_issue_inserted", "decisions_issue_updated", "events_issue_inserted", "roles_issue_bound"].sort(),
+  );
   assert.deepEqual(names("index"), [
     "agents_holding",
     "checks_of_issue",
     "checks_open",
     "checks_unsettled",
     "decisions_of_coordinator",
+    "events_of_issue",
     "events_own_tree",
     "events_unread",
     "handoffs_of_agent",
@@ -230,6 +237,7 @@ test("removing a regional manager removes everything it owns, and nothing of ano
   assert.equal(store.hasDependencies(OTHER_MANAGER), true);
   assert.equal(store.roleOfThread("thr_manager_2")?.kind, "coordinator");
   assert.deepEqual([store.factWrites(MANAGER), store.factWrites(OTHER_MANAGER) > 0], [0, true]);
+  assert.deepEqual([store.issueWrites(MANAGER).size, store.issueWrites(OTHER_MANAGER).size], [0, 2]);
 });
 
 test("every write to what an issue's view is read from counts for its regional manager as it commits; a write rolled back, another manager's, and one the views never read count nothing", () => {
@@ -352,4 +360,73 @@ test("a regional manager's stored name changes before its start only: once start
 
   store.setProfile(MANAGER, { description: "Finds work", avatar: AVATAR });
   assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Scout 2", description: "Finds work", avatar: AVATAR }]);
+});
+
+test("every write to what an issue's feed reads counts for that issue as it commits, and only for it; a dependency counts for both its issues; a write rolled back counts nothing", () => {
+  const { db, store } = freshStore();
+  store.startsOn(MANAGER, "prj_1", issueKeySchema.parse("BBP"));
+  const issues = Array.from({ length: 19 }, (_, i) => filedIssue(store, MANAGER, newIssue({ title: `Issue ${i + 1}` }), 2_000).id);
+  const [bbp7, bbp19] = [issues[6] ?? assert.fail(), issues[18] ?? assert.fail()];
+  assert.deepEqual([bbp7, bbp19], ["BBP-7", "BBP-19"]);
+  /** The issues whose count `write` moved. */
+  const moved = (write: () => unknown): string[] => {
+    const before = store.issueWrites(MANAGER);
+    write();
+    return [...store.issueWrites(MANAGER)].filter(([id, writes]) => before.get(id) !== writes).map(([id]) => id);
+  };
+  const agentId = startAgent(store, bbp19, "agent-1");
+  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+  const done = (at: number): Handoff => ({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: bbp19, agentId, at, turnSeq: at, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } });
+  const unheld = { requireUnheld: false, closes: new Map() };
+
+  assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" })), [bbp19], "a handoff");
+  assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { dependsOn: { add: [bbp7], remove: [] } }, unheld)).sort(), [bbp19, bbp7].sort(), "a dependency");
+  assert.deepEqual(moved(() => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: bbp7 }, 3_100)), [bbp7], "a question about it");
+  assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { decision: { text: "SQS", at: 3_200 } }, unheld)), [bbp19], "a decision recorded on it");
+  assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "unblocked", issueId: bbp19, by: bbp7, closedAs: "done" }, 3_300)), [bbp19], "an inbox event naming it");
+  assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "verification-toggled", verify: false }, 3_400)), [], "an event naming no issue");
+  assert.deepEqual(moved(() => store.insertReminder(MANAGER, { note: "Look again", dueAt: 9_000, everyMs: null })), [], "a reminder");
+  assert.deepEqual(moved(() => filedIssue(store, OTHER_MANAGER, newIssue(), 3_500)), [], "another manager's issue");
+
+  const allow = failWrites(db, "INSERT", "checks");
+  assert.deepEqual(moved(() => assert.throws(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" }), /forced failure/)), [], "a handoff whose check failed to write");
+  allow();
+  assert.deepEqual(moved(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" })), [bbp19], "the same handoff, retried");
+});
+
+test("a verdict and a review stored before they kept their time take their check's announcement's time as the plugin upgrades, else the check's own", () => {
+  const { db, storage } = memoryStorage();
+  const times = MIGRATIONS.findIndex((statement) => statement.includes("json_set(verdict, '$.at'"));
+  storage.migrate(db, MIGRATIONS.slice(0, times));
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
+  db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at, issue_key) VALUES (?, 'ticket-1', 'prj_1', 1, 1000, 'WEB')").run(MANAGER);
+  db.prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, done_criteria, rest, created_at) VALUES (?, 'WEB-1', 'build', 'Retries', 'Lost deliveries.', '[\"npm test passes\"]', 'todo', 1000)").run(MANAGER);
+  const returned = {
+    state: "returned",
+    verifierThreadId: "thr_verifier",
+    headSha: "a".repeat(40),
+    checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 },
+    criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }],
+    findings: [],
+    triage: [{ result: "confirmed", reason: "Seen." }],
+    model: { providerId: "claude-code", model: "sonnet" },
+    sameModel: false,
+    settlement: { kind: "sent-back", round: 1, ci: { kind: "none" } },
+  };
+  const reported = { state: "reported", reviewerThreadId: "thr_reviewer", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], model: { providerId: "codex", model: "gpt-5.4" } };
+  const subject = { kind: "final", defaultBranch: "main", merged: [] };
+  const check = (id: string, verdict: object, review: object, at: number) =>
+    db.prepare("INSERT INTO checks (id, coordinator_id, issue_id, subject, criteria, verdict, review, at) VALUES (?, ?, 'WEB-1', ?, '[\"npm test passes\"]', ?, ?, ?)").run(id, MANAGER, JSON.stringify(subject), JSON.stringify(verdict), JSON.stringify(review), at);
+  const announced = "4f1e2d3c-1b2a-4c9d-8e7f-6a5b4c3d2e1f";
+  const unannounced = "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d";
+  check(announced, returned, reported, 2_000);
+  check(unannounced, { state: "could-not-run", verifierThreadId: null, reason: "bb did not start a verifier" }, { state: "missed", reviewerThreadId: null, reason: "bb did not start a reviewer" }, 2_500);
+  const event = (event: object, at: number) => db.prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, ?)").run(MANAGER, JSON.stringify(event), at);
+  event({ kind: "sent-back", issueId: "WEB-1", agentId: "a1", checkId: announced, round: 1 }, 7_000);
+  event({ kind: "checked", issueId: "WEB-1", checkId: announced }, 9_000);
+
+  const store = openStore(storage);
+  const [first, second] = [store.check(checkIdSchema.parse(announced)), store.check(checkIdSchema.parse(unannounced))];
+  assert.deepEqual([first?.verdict.state === "returned" && first.verdict.at, first?.review.state === "reported" && first.review.at], [7_000, 7_000], "the sent-back event's time, the earliest naming its check");
+  assert.deepEqual([second?.verdict.state === "could-not-run" && second.verdict.at, second?.review.state === "missed" && second.review.at], [2_500, 2_500], "none announced it: the check's own time");
 });

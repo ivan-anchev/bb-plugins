@@ -2,9 +2,9 @@
 // a concurrent one could invalidate (numbering, "no agent holds it", the plan as a whole: plan.ts)
 // decides and writes in one transaction. Rows are parsed into Issue here and nowhere else.
 import { z } from "zod";
-import { agentIdSchema } from "../../../model/agent.ts";
+import { agentIdSchema } from "../../../model/agent/agent.ts";
 import type { RecordedDecision } from "../../../model/decision.ts";
-import { executionSchema } from "../../../model/execution.ts";
+import { executionSchema } from "../../../model/agent/execution.ts";
 import { issueKeySchema } from "../../../model/issue/key/issue-key.ts";
 import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";

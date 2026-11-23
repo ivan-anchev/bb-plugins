@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { handoffIdSchema } from "../handoff.ts";
+import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, meaningfulChanges, type PrSnapshot, type PrStatus, type PrUnavailable } from "./pr.ts";
 
 const HEAD = "a".repeat(40);

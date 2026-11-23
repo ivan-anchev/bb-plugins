@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import type Database from "better-sqlite3";
-import { handoffIdSchema } from "../../../../model/handoff.ts";
+import { handoffIdSchema } from "../../../../model/agent/handoff.ts";
 import { issueKeySchema } from "../../../../model/issue/key/issue-key.ts";
 import { issueIdSchema } from "../../../../model/issue/issue.ts";
 import type { CheckoutRead } from "../../../../model/verdict/checkout.ts";
@@ -46,9 +46,11 @@ function asBefore(db: Database.Database): void {
     for (const { name: table } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '_bb_migrations'").all() as { name: string }[]) {
       const columns = (db.pragma(`table_info(${table})`) as { name: string }[]).map(({ name }) => name);
       const mine = columns.includes("coordinator_id") ? "coordinator_id = @id" : table === "roles" ? "json_extract(role, '$.coordinatorId') = @id" : null;
-      if (mine === null) continue;
+      // why skipped: issue_writes came after issue keys, and the renames above count their writes under the i-style ids already.
+      if (mine === null || table === "issue_writes") continue;
       for (const column of columns) db.prepare(`UPDATE ${table} SET ${column} = replace(${column}, 'WEB-', 'i') WHERE ${mine} AND typeof(${column}) = 'text'`).run({ id: MANAGER });
     }
+    db.prepare("DELETE FROM issue_writes WHERE coordinator_id = ? AND issue_id GLOB 'WEB-*'").run(MANAGER);
     db.prepare("UPDATE coordinators SET issue_key = NULL WHERE id = ?").run(MANAGER);
   })();
 }
@@ -89,6 +91,7 @@ test("keying a regional manager renames every issue id it stores to KEY-N, the n
     "questions put to the user and decisions recorded",
   );
   assert.deepEqual(store.unannounced(MANAGER).map(({ event }) => event), [{ kind: "unblocked", issueId: "BBP-3", by: "BBP-2", closedAs: "done" }], "inbox events");
+  assert.deepEqual([...store.issueWrites(MANAGER).keys()].sort(), ["BBP-1", "BBP-2", "BBP-3"], "each issue's write count");
   assert.deepEqual(store.unkeyedManagers(), []);
 
   assert.equal(filedIssue(store, MANAGER, newIssue(), 6_000).id, "BBP-4", "the next issue is numbered after them");

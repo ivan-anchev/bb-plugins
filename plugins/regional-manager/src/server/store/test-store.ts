@@ -3,7 +3,7 @@
 import type Database from "better-sqlite3";
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { memoryStorage } from "../memory-storage.ts";
-import type { AgentId } from "../../model/agent.ts";
+import type { AgentId } from "../../model/agent/agent.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import type { Avatar } from "../../model/profile/avatar.ts";

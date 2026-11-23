@@ -4,9 +4,9 @@
 // newer handoff or final check can't overwrite one another.
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { agentIdSchema, type AgentId } from "../../../model/agent.ts";
-import { executionSchema } from "../../../model/execution.ts";
-import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/handoff.ts";
+import { agentIdSchema, type AgentId } from "../../../model/agent/agent.ts";
+import { executionSchema } from "../../../model/agent/execution.ts";
+import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/agent/handoff.ts";
 import { doneCriteriaSchema, issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
 import type { Handed } from "../../../model/issue/status.ts";
@@ -16,7 +16,7 @@ import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../../model/verdict/pr.ts";
 import { firstReview, reviewSchema, type Review, type ReviewFinding } from "../../../model/verdict/review.ts";
 import { firstVerdict, isSettled, verdictSchema, type Verdict } from "../../../model/verdict/verdict.ts";
-import type { ModelRef } from "../../../model/execution.ts";
+import type { ModelRef } from "../../../model/agent/execution.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 import { countFixRound } from "./agents-store.ts";
@@ -28,6 +28,9 @@ export type VerdictFrom = { state: "queued" } | { state: "running"; verifierThre
 export type ReviewFrom = { state: "queued" } | { state: "running"; reviewerThreadId: string };
 
 type Returned = Extract<Verdict, { state: "returned" }>;
+
+/** Why no verdict will come of a check given up on: its verifier's thread, if it had one, and the reason. */
+export type GivenUp = Omit<Extract<Verdict, { state: "could-not-run" }>, "state" | "at">;
 
 /**
  * How a returned verdict ends, or that it waits: `waiting-for-ci`, it passed every criterion and
@@ -201,7 +204,7 @@ export function checksStore(db: Db) {
         // why throw: a verified kind delivers a commit (kind.ts Pipeline), and reportOf made this delivery by its kind.
         if (stored.delivery.kind !== "commit") throw new Error(`A done handoff of ${issueId}, a ${kind} issue, delivers no commit to check.`);
         const { headSha, prUrl } = stored.delivery;
-        const verdict = firstVerdict(verifies(coordinatorId), checkout);
+        const verdict = firstVerdict(verifies(coordinatorId), checkout, at);
         const made: Check = {
           id: checkIdSchema.parse(randomUUID()),
           coordinatorId,
@@ -241,7 +244,7 @@ export function checksStore(db: Db) {
           verifier,
           subject: { kind: "final", ...subject },
           review: { state: "none" },
-          verdict: firstVerdict(verifies(coordinatorId), null),
+          verdict: firstVerdict(verifies(coordinatorId), null, at),
         };
         insertCheck(made, null);
         if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id }, at);
@@ -304,33 +307,33 @@ export function checksStore(db: Db) {
       })();
     },
 
-    /** Stores a running reviewer's findings, on the model bb ran it on, if it is still the review's running reviewer and the check still waits for it; says whether it was. */
-    receiveReview(checkId: CheckId, reviewerThreadId: string, findings: readonly ReviewFinding[], model: ModelRef): boolean {
-      return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "reported", reviewerThreadId, findings: [...findings], model }))();
+    /** Stores a running reviewer's findings, on the model bb ran it on, reported at `at`, if it is still the review's running reviewer and the check still waits for it; says whether it was. */
+    receiveReview(checkId: CheckId, reviewerThreadId: string, findings: readonly ReviewFinding[], model: ModelRef, at: number): boolean {
+      return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "reported", at, reviewerThreadId, findings: [...findings], model }))();
     },
 
-    /** Records that no review will be had, and why, if the review is still where `from` says and the check still waits for it; says whether it was. Its verifier starts next. */
-    missReview(checkId: CheckId, from: ReviewFrom, reason: string): boolean {
+    /** Records that no review will be had, and why, as of `at`, if the review is still where `from` says and the check still waits for it; says whether it was. Its verifier starts next. */
+    missReview(checkId: CheckId, from: ReviewFrom, reason: string, at: number): boolean {
       const reviewerThreadId = from.state === "running" ? from.reviewerThreadId : null;
-      return db().transaction(() => moveReview(db, checkId, from, { state: "missed", reviewerThreadId, reason }))();
+      return db().transaction(() => moveReview(db, checkId, from, { state: "missed", at, reviewerThreadId, reason }))();
     },
 
-    /** Gives up on a waiting check and records it checked for its regional manager, together, if it is still where `from` says; returns whose it was, or null when it had moved on. */
-    giveUpCheck(checkId: CheckId, from: VerdictFrom, verdict: Extract<Verdict, { state: "could-not-run" }>, at: number): CoordinatorId | null {
+    /** Gives up on a waiting check at `at`, with why, and records it checked for its regional manager, together, if it is still where `from` says; returns whose it was, or null when it had moved on. */
+    giveUpCheck(checkId: CheckId, from: VerdictFrom, why: GivenUp, at: number): CoordinatorId | null {
       return db().transaction(() => {
-        if (!moveVerdict(checkId, from, verdict)) return null;
+        if (!moveVerdict(checkId, from, { state: "could-not-run", at, ...why })) return null;
         const { coordinatorId, issueId } = ownerOf(checkId);
         insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId }, at);
         return coordinatorId;
       })();
     },
 
-    /** Stores a verifier's verdict, not yet settled, if its verifier is still the check's running one; says whether it was. Nobody is told until it is settled. */
-    receiveVerdict(checkId: CheckId, verdict: Omit<Returned, "settlement">): boolean {
+    /** Stores a verifier's verdict, returned at `at` and not yet settled, if its verifier is still the check's running one; says whether it was. Nobody is told until it is settled. */
+    receiveVerdict(checkId: CheckId, verdict: Omit<Returned, "settlement" | "at">, at: number): boolean {
       return db().transaction(() => {
         const running = verdictOf(db, checkId);
         if (running?.state !== "running" || running.verifierThreadId !== verdict.verifierThreadId) return false;
-        writeVerdict(db, checkId, { ...verdict, settlement: { kind: "pending" } });
+        writeVerdict(db, checkId, { ...verdict, at, settlement: { kind: "pending" } });
         return true;
       })();
     },

@@ -3,8 +3,8 @@
 // The caller's role comes from the plugin's database by its thread id, never from its metadata; the
 // agent's id is its generation token, so an agent that no longer holds its issue can't write to it.
 import { randomUUID } from "node:crypto";
-import type { Agent, AgentCheckout, EndedHow } from "../../model/agent.ts";
-import { handoffFieldsSchema, handoffIdSchema, reportOf } from "../../model/handoff.ts";
+import type { Agent, AgentCheckout, EndedHow } from "../../model/agent/agent.ts";
+import { handoffFieldsSchema, handoffIdSchema, reportOf } from "../../model/agent/handoff.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { PIPELINES, shipsCode } from "../../model/issue/kind.ts";
 import type { Role } from "../../model/role.ts";

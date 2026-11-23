@@ -1,7 +1,7 @@
 // Composition root. Owns no logic: opens the store and the memory folder, and wires each module
 // to bb, through the SDK and the store bound to this instance of the plugin (lifetime.ts).
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { boardTag, COORDINATORS_TAG, coordinatorContract, memoryTag } from "./src/contract.ts";
+import { boardTag, COORDINATORS_TAG, coordinatorContract, issueTag, memoryTag } from "./src/contract.ts";
 import type { CoordinatorId, Role } from "./src/model/role.ts";
 import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
@@ -9,6 +9,9 @@ import { defaultBranchReader, placementFactsReader } from "./src/server/agents/e
 import { forwardThreadEvents } from "./src/server/agents/events/thread-events.ts";
 import { boardHandlers } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
+import { createFeedReader } from "./src/server/feed/feed-reader.ts";
+import { feedHandlers } from "./src/server/feed/feed-rpc.ts";
+import { issueTagPublisher } from "./src/server/feed/issue-tags.ts";
 import { createInbox } from "./src/server/inbox/inbox.ts";
 import { upgradeFrom030 } from "./src/server/manager/held-managers.ts";
 import { keyIssuesOfEarlierManagers } from "./src/server/manager/issue-keys.ts";
@@ -44,7 +47,11 @@ export default function plugin(host: BbPluginApi): void {
   const memory = openMemoryRoot(bb.storage.database().name, store, (id) => bb.rpc.experimental_invalidate([memoryTag(id)]));
   bb.log.info(`Memory files are in ${memory.dir}`);
   upgradeMemoryFrom040(memory, store.coordinators().map(({ id }) => id));
-  const refreshBoard = (id: CoordinatorId) => bb.rpc.experimental_invalidate([boardTag(id)]);
+  // why the issues' tags with the board's: whatever refreshes a board may have written to its issues, as a crew tool asking about one, and publishing reads only counts that moved.
+  const refreshBoard = (id: CoordinatorId) => {
+    bb.rpc.experimental_invalidate([boardTag(id)]);
+    issueTags.publish(id);
+  };
   const refreshCoordinators = () => bb.rpc.experimental_invalidate([COORDINATORS_TAG]);
   // why one hook: whatever changes what a regional manager's views are derived from changes its board, makes a read begun before it stale, and may unblock an issue.
   // A store write is counted by the store as it commits (current-views.ts); views.changed is for what bb moved, a message starting an agent's turn or bb saying a thread moved.
@@ -56,10 +63,12 @@ export default function plugin(host: BbPluginApi): void {
   // why one hook: deletion and the tick's reconcile both remove a regional manager through it.
   const onRemoved = (id: CoordinatorId) => {
     threadEvents.forget(id);
+    issueTags.forget(id);
     refreshCoordinators();
   };
   const spawner = createSpawner(bb, store, memory, (role: Role) => (role.kind === "coordinator" ? refreshCoordinators() : onChange(role.coordinatorId)));
   const board = createBoard(bb, store);
+  const issueTags = issueTagPublisher({ store, invalidate: (tags) => bb.rpc.experimental_invalidate(tags) });
   const inbox = createInbox({ bb, store, memory, onChange });
   const views = currentViews({ bb, store });
   const unblocked = watchUnblocked({ bb, store, views, inbox });
@@ -85,7 +94,7 @@ export default function plugin(host: BbPluginApi): void {
   registerHandoffTool(bb, { store, verify });
   registerReviewTool(bb, { store, review });
   registerVerdictTool(bb, { store, verify });
-  const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
+  const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard, refreshIssue: (id, issueId) => bb.rpc.experimental_invalidate([issueTag(id, issueId)]) });
   watchAgentThreads({ bb, store, inbox });
   watchOwnTree({ bb, store, inbox });
   bb.background.schedule("watch", "* * * * *", async () => {
@@ -103,6 +112,8 @@ export default function plugin(host: BbPluginApi): void {
     await finalChecks.tick().catch((error: unknown) => bb.log.warn(`Could not read which final checks are due; the next tick tries again: ${messageOf(error)}`));
     await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
     await unblocked.tick();
+    // why every manager: a write no onChange followed is still published within a minute.
+    for (const { id } of store.coordinators()) issueTags.publish(id);
     await inbox.tick(Date.now());
   });
 
@@ -111,6 +122,7 @@ export default function plugin(host: BbPluginApi): void {
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
     ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }),
     ...boardHandlers({ store, board, inbox }),
+    ...feedHandlers({ store, reader: createFeedReader(bb, store) }),
     ...memoryHandlers(store, memory, inbox),
   });
 }

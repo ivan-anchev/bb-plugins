@@ -7,10 +7,12 @@ import { join } from "node:path";
 import type { BbPluginApi, PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgentToolResult, PluginStorage, PluginThreadEventPayloads } from "@get-bb/plugin-sdk";
 import { createFakePluginHost, type FakePluginHarness } from "@get-bb/plugin-sdk/testing";
 import { z } from "zod";
-import type { EnvironmentProvider } from "../model/agent.ts";
+import type { EnvironmentProvider } from "../model/agent/agent.ts";
 import type { HolderThread } from "../model/issue/status.ts";
-import type { ComposerRequest } from "../contract.ts";
+import { issueTag, roundBodyKey, type ComposerRequest } from "../contract.ts";
 import type { Profile } from "../model/profile/profile.ts";
+import { roundKeySchema } from "../model/feed/round.ts";
+import type { IssueId } from "../model/issue/issue.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
 import type { CheckId } from "../model/verdict/check.ts";
 import { DISPLAY_NAME } from "../name.ts";
@@ -20,6 +22,9 @@ import { defaultBranchReader, placementFactsReader } from "./agents/environments
 import { forwardThreadEvents } from "./agents/events/thread-events.ts";
 import type { TurnsBb } from "./agents/threads.ts";
 import { boardHandlers } from "./board/board-rpc.ts";
+import { createFeedReader } from "./feed/feed-reader.ts";
+import { feedHandlers } from "./feed/feed-rpc.ts";
+import { issueTagPublisher } from "./feed/issue-tags.ts";
 import { createBoard } from "./board/board.ts";
 import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
@@ -761,13 +766,19 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const { bb } = instance;
     // why shadowed: the modules act through the store bound to their instance; the tests read the store as it is.
     const store = instance.bind(openedStore);
-    const onChange = (id: CoordinatorId) => {
+    // why the issues' tags with the board's, as server.ts does: whatever refreshes a board may have written to its issues.
+    const refreshIssues = (id: CoordinatorId) => {
       refreshBoard(id);
+      issueTags.publish(id);
+    };
+    const onChange = (id: CoordinatorId) => {
+      refreshIssues(id);
       views.changed(id);
       unblocked.changed(id);
     };
     const onRemoved = (id: CoordinatorId) => {
       threadEvents.forget(id);
+      issueTags.forget(id);
       refreshCoordinators();
     };
     const spawner = createSpawner(bb, store, memory, (role) => {
@@ -776,6 +787,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (role.kind === "reviewer" && reviewers.reportAtOnce) void reportsNothing(role.checkId);
     });
     const board = createBoard(bb, store);
+    const issueTags = issueTagPublisher({ store, invalidate: (tags) => invalidated.push(...tags) });
     const inbox = createInbox({ bb, store, memory, onChange });
     const views = currentViews({ bb, store });
     const unblocked = watchUnblocked({ bb, store, views, inbox });
@@ -787,16 +799,16 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const verify = createVerify({ bb, store, spawner, review, inbox, turns, now: () => clock.now });
     const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: () => clock.now });
     registerRoles(bb, store);
-    registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
+    registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshIssues });
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
-    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard });
+    const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   let plugin = wire();
 
@@ -932,6 +944,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       await plugin.finalChecks.tick().catch(warned("read which final checks are due"));
       await plugin.verify.reconcile().catch(warned("reconcile the verifiers"));
       await plugin.unblocked.tick();
+      for (const { id } of openedStore.coordinators()) plugin.issueTags.publish(id);
       await plugin.inbox.tick(clock.now);
       // why: the issues' turns the pass started run on, unwaited for, as on the server; this fake answers them at once unless a test holds bb.
       await settled();
@@ -972,6 +985,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     doorbellsSent: (threadId: string) => sent.filter((args) => args.threadId === threadId).map(textOfInput),
     /** The thread of every send the plugin attempted, refused ones included, in order. */
     sendAttempts: () => [...attempted],
+    /** An issue as its tab reads it: its feed, and each of its rounds with the body opening it reads. */
+    async opened(coordinatorId: CoordinatorId, issueId: IssueId) {
+      const feed = await plugin.rpc.issueFeed({ coordinatorId, issueId });
+      const rounds = feed.entries.flatMap((entry) => (entry.kind === "round" ? [entry.round] : []));
+      const keys = rounds.map(({ key }) => roundBodyKey(coordinatorId, issueId, roundKeySchema.parse(key)));
+      const bodies = await plugin.rpc.roundBodies({ keys });
+      return { feed, rounds: rounds.map((round, i) => ({ round, body: bodies[keys[i] ?? ""] ?? assert.fail(`no body of round ${round.number}`) })) };
+    },
     /** Every RPC tag invalidated, in order. */
     invalidated: () => [...invalidated],
     /** Every warning the plugin logged, in order. */

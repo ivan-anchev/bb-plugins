@@ -2,7 +2,7 @@
 // gone; the project's default branch as bb records it on the regional manager's environment, which
 // a final check is made on; and, read when agent_start names an environment provider, where a
 // regional manager's agents can run: bb's providers, and that default branch.
-import type { EnvironmentProvider, PlacementFacts } from "../../model/agent.ts";
+import type { EnvironmentProvider, PlacementFacts } from "../../model/agent/agent.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 import { listedThreads } from "./threads.ts";

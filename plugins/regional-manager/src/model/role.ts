@@ -1,7 +1,7 @@
 // What a thread is to this plugin. A role is fixed before the thread's first session, because
 // bb applies tools and instructions only when it constructs a provider session.
 import { z } from "zod";
-import { agentIdSchema } from "./agent.ts";
+import { agentIdSchema } from "./agent/agent.ts";
 import { issueIdSchema } from "./issue/issue.ts";
 import { checkIdSchema } from "./verdict/check.ts";
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { needsYouBadge } from "../../app/needs-you-label.ts";
-import { boardTag, coordinatorContract } from "../../contract.ts";
+import { boardTag, coordinatorContract, issueTag } from "../../contract.ts";
 import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
@@ -123,8 +123,9 @@ test("a question about an issue flags it Needs you until the user answers, and t
 
   const read = textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId));
   assert.match(read, /### Decisions\n\n[^#]*- \S+: asked the user \(d1\): Start WEB-1 now\? They answered at \S+: Yes$/m, "answered, it stays among the issue's decisions");
-  const detail = await kit.rpc.issue({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") });
-  assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "asked" ? [entry.id, entry.question, entry.answer?.text] : entry)), [["d1", "Start WEB-1 now?", "Yes"]]);
+  const feed = await kit.rpc.issueFeed({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") });
+  const asked = feed.entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" ? [entry.decision] : []));
+  assert.deepEqual(asked.map(({ id, question, answer }) => [id, question, answer?.text]), [["d1", "Start WEB-1 now?", "Yes"]], "and in its feed");
 
   const unknown = await kit.call("crew_ask_user", { question: "Start WEB-9?", issue: "WEB-9" }, threadId);
   assert.ok(isRefusal(unknown));
@@ -178,4 +179,14 @@ test("crew_ask_user refuses more than five options, two alike or a question on t
     await assert.rejects(kit.call("crew_ask_user", input, threadId));
   }
   assert.deepEqual(kit.store.decisions(coordinatorId), []);
+});
+
+test("a question about an issue reads that issue's open tab again at once, and no other issue's", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
+  await kit.call("issue_create", { ...ISSUE, title: "Dead letters", status: "backlog" }, threadId);
+  const before = kit.invalidated().length;
+  await kit.call("crew_ask_user", { question: "Start WEB-1 now?", options: ["Yes", "Not yet"], issue: "WEB-1" }, threadId);
+  const tags = kit.invalidated().slice(before).filter((tag) => tag.startsWith("issue:"));
+  assert.deepEqual(tags, [issueTag(coordinatorId, issueIdSchema.parse("WEB-1"))]);
 });

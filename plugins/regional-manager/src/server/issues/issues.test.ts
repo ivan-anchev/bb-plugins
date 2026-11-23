@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
+import type { CoordinatorId } from "../../model/role.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../test-harness.ts";
 
 const ISSUE_ID = issueIdSchema.parse("WEB-1");
@@ -95,18 +96,23 @@ test("issue_update with only a decision records it on the issue, changing nothin
 
   const read = textOf(await call("issue_read", { id: "WEB-1" }));
   assert.match(read, /### Decisions\n\nOldest first; where two disagree, the later one wins\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA is tighter than the provider's limit\./);
-  const detail = await kit.rpc.issue({ coordinatorId, issueId: ISSUE_ID });
-  assert.deepEqual(detail.decisions.map((entry) => (entry.kind === "recorded" ? entry.text : entry)), [first, second]);
+  assert.deepEqual(await recorded(kit, coordinatorId), [first, second]);
 
   const prompt = kit.thread(threadIn(textOf(await call("agent_start", { issue: "WEB-1" })))).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
   assert.match(prompt, /## Decisions on WEB-1\n\n[^\n]*part of your work, as your brief is\.\n\nOldest first; where two disagree, the later one wins\.\n\n- \S+: Retries cap at 5: the provider rate-limits beyond that\.\n- \S+: Cap at 3 instead\.\n  The user's SLA/);
 });
 
+/** The decisions recorded on WEB-1, as its feed sends them. */
+async function recorded(kit: Awaited<ReturnType<typeof managing>>["kit"], coordinatorId: CoordinatorId): Promise<string[]> {
+  const { entries } = await kit.rpc.issueFeed({ coordinatorId, issueId: ISSUE_ID });
+  return entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "recorded" ? [entry.decision.text] : []));
+}
+
 test("issue_update refuses a blank decision, and records nothing", async () => {
   const { coordinatorId, call, kit } = await managing();
   await call("issue_create", ISSUE);
   await assert.rejects(call("issue_update", { id: "WEB-1", decision: "  " }));
-  assert.deepEqual((await kit.rpc.issue({ coordinatorId, issueId: ISSUE_ID })).decisions, []);
+  assert.deepEqual(await recorded(kit, coordinatorId), []);
 });
 
 test("while an agent holds an issue it can't be canceled or rested, and Done is accepted only from In review", async () => {

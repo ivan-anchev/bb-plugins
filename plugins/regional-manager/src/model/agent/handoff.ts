@@ -3,10 +3,10 @@
 // bb threads carry no last-activity time.
 import { z } from "zod";
 import type { AgentId } from "./agent.ts";
-import type { IssueId } from "./issue/issue.ts";
-import { PIPELINES, type Kind } from "./issue/kind.ts";
-import { memoryFileSchema } from "./memory-file.ts";
-import type { CoordinatorId } from "./role.ts";
+import type { IssueId } from "../issue/issue.ts";
+import { PIPELINES, type Kind } from "../issue/kind.ts";
+import { memoryFileSchema } from "../memory-file.ts";
+import type { CoordinatorId } from "../role.ts";
 
 export const handoffIdSchema = z.uuid().brand<"handoffId">();
 export type HandoffId = z.infer<typeof handoffIdSchema>;
@@ -72,11 +72,39 @@ const reportDeliverySchema = givenReportSchema.extend({ file: memoryFileSchema }
 const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, reportDeliverySchema]);
 
 /**
- * What the board shows of a handoff: when it was made, how the work ended, the agent's account of it,
- * and the report it delivered with its file (null: none, as a build or a blocked handoff delivers none).
- * why not a commit: the issue's row shows its pull request, and its verdict the commit checked.
+ * What an open round shows of its handoff: the agent's account of it, and the report it delivered
+ * with its file (null: none, as a build or a blocked handoff delivers none). why not its id, time,
+ * status or summary: the folded round carries those; nor a commit: the verdict names the one checked.
  */
-export const shownHandoffSchema = z.object({ id: handoffIdSchema, at: z.number(), status: handoffStatusSchema, ...reportFields, report: reportDeliverySchema.omit({ kind: true }).nullable() });
+export const handoffBodySchema = z.object({
+  did: reportFields.did,
+  evidence: reportFields.evidence,
+  concerns: reportFields.concerns,
+  deviations: reportFields.deviations,
+  findings: reportFields.findings,
+  report: reportDeliverySchema.omit({ kind: true }).nullable(),
+});
+export type HandoffBody = z.infer<typeof handoffBodySchema>;
+
+/** What an open round shows of the handoff. */
+export const handoffBody = (handoff: Handoff): HandoffBody => {
+  const { did, evidence, concerns, deviations, findings } = handoff;
+  return { did, evidence, concerns, deviations, findings, report: reportIn(handoff) };
+};
+
+/** The report a done handoff delivered, and the file it was saved to; null for any other handoff. */
+function reportIn(handoff: HandoffReport): HandoffBody["report"] {
+  if (handoff.status !== "done") return null;
+  const { delivery } = handoff;
+  switch (delivery.kind) {
+    case "commit":
+      return null;
+    case "report":
+      return { report: delivery.report, file: delivery.file };
+    default:
+      return delivery satisfies never;
+  }
+}
 
 /** A handoff as an agent wrote it, stored whole. */
 export const handoffReportSchema = z.discriminatedUnion("status", [

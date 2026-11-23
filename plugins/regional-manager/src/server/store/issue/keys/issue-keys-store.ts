@@ -60,4 +60,9 @@ const RENAMES: readonly string[] = [
   // why json(): a subquery's result loses its JSON subtype, and json_set would store the array as a string.
   `UPDATE checks SET subject = json_set(subject, '$.merged', json((SELECT json_group_array(${keyed("value")}) FROM json_each(subject, '$.merged'))))
      WHERE coordinator_id = @id AND json_extract(subject, '$.kind') = 'final'`,
+  // why merged into the new id's count: the renames above count writes under the new ids as they go.
+  `INSERT INTO issue_writes (coordinator_id, issue_id, writes)
+     SELECT coordinator_id, ${keyed("issue_id")}, writes FROM issue_writes WHERE coordinator_id = @id AND issue_id GLOB 'i[1-9]*'
+     ON CONFLICT (coordinator_id, issue_id) DO UPDATE SET writes = writes + excluded.writes`,
+  `DELETE FROM issue_writes WHERE coordinator_id = @id AND issue_id GLOB 'i[1-9]*'`,
 ];

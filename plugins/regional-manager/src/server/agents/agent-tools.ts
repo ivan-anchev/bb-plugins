@@ -2,8 +2,8 @@
 // child thread holding one issue for its whole life.
 import type { PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { agentIdSchema, requestedPlacementSchema, startFromSchema, type Agent, type AgentId } from "../../model/agent.ts";
-import { requestedExecutionSchema } from "../../model/execution.ts";
+import { agentIdSchema, requestedPlacementSchema, startFromSchema, type Agent, type AgentId } from "../../model/agent/agent.ts";
+import { requestedExecutionSchema } from "../../model/agent/execution.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { startText, stopText } from "../issues/issue-text.ts";
 import { unquietText } from "../issues/quiet.ts";

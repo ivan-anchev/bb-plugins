@@ -161,7 +161,63 @@ export const MIGRATIONS: readonly string[] = [
   // its reviewer found, as JSON read and written whole. A check made before reviews existed has no
   // review stage, so its verifier starts as before. why the literal: a statement never changes.
   `ALTER TABLE checks ADD COLUMN review TEXT NOT NULL DEFAULT '{"state":"none"}'`,
+
+  // A returned verdict and one that could not run, and a reported or missed review, keep when they
+  // came (verdict.ts, review.ts). One stored before: the time of the inbox event that announced its
+  // check (checked, sent-back), else the check's own.
+  `UPDATE checks SET verdict = json_set(verdict, '$.at', COALESCE(
+       (SELECT min(e.at) FROM events e WHERE e.coordinator_id = checks.coordinator_id AND json_extract(e.event, '$.checkId') = checks.id), checks.at))
+     WHERE json_extract(verdict, '$.state') IN ('returned', 'could-not-run')`,
+  `UPDATE checks SET review = json_set(review, '$.at', COALESCE(
+       (SELECT min(e.at) FROM events e WHERE e.coordinator_id = checks.coordinator_id AND json_extract(e.event, '$.checkId') = checks.id), checks.at))
+     WHERE json_extract(review, '$.state') IN ('reported', 'missed')`,
+
+  // An issue's feed reads the inbox events naming it (feed.ts).
+  `CREATE INDEX events_of_issue ON events (coordinator_id, json_extract(event, '$.issueId')) WHERE json_extract(event, '$.issueId') IS NOT NULL`,
+
+  // How many times each issue's feed facts were written: a row added to, changed in or removed from
+  // any table its feed is read from (feed-reader.ts), an inbox event naming it, or one of its agents'
+  // threads bound. An open tab of the issue is current while this stays (issue-tags.ts). why
+  // triggers, as fact_writes: the count moves in the statement that writes, so no writer can forget
+  // it, and a table the feed comes to read later gets its triggers appended after this. A relation
+  // counts for both its issues: the one that depends, and the one it blocks.
+  [
+    `CREATE TABLE issue_writes (coordinator_id TEXT NOT NULL, issue_id TEXT NOT NULL, writes INTEGER NOT NULL, PRIMARY KEY (coordinator_id, issue_id))`,
+    ...[
+      ["issues", "id"],
+      ["issue_relations", "issue_id"],
+      ["issue_relations", "depends_on"],
+      ["agents", "issue_id"],
+      ["handoffs", "issue_id"],
+      ["checks", "issue_id"],
+      ["issue_decisions", "issue_id"],
+    ].flatMap(([table, column]) => [
+      countIssueWrites(`${table}_${column}_inserted`, `INSERT ON ${table}`, "NEW.coordinator_id", `NEW.${column}`),
+      countIssueWrites(`${table}_${column}_updated`, `UPDATE ON ${table}`, "NEW.coordinator_id", `NEW.${column}`),
+      countIssueWrites(`${table}_${column}_deleted`, `DELETE ON ${table}`, "OLD.coordinator_id", `OLD.${column}`),
+    ]),
+    // A question put to the user names its issue, or none.
+    countIssueWrites("decisions_issue_inserted", "INSERT ON decisions WHEN NEW.issue_id IS NOT NULL", "NEW.coordinator_id", "NEW.issue_id"),
+    countIssueWrites("decisions_issue_updated", "UPDATE ON decisions WHEN NEW.issue_id IS NOT NULL", "NEW.coordinator_id", "NEW.issue_id"),
+    // An inbox event naming an issue: the feed shows some, and times its rounds by others.
+    countIssueWrites("events_issue_inserted", "INSERT ON events WHEN json_extract(NEW.event, '$.issueId') IS NOT NULL", "NEW.coordinator_id", "json_extract(NEW.event, '$.issueId')"),
+    // An agent's thread bound: the feed links it. why EXISTS: a ticket is minted before its agent's row.
+    countIssueWrites(
+      "roles_issue_bound",
+      "UPDATE OF thread_id ON roles WHEN EXISTS (SELECT 1 FROM agents WHERE ticket = NEW.ticket)",
+      "json_extract(NEW.role, '$.coordinatorId')",
+      "(SELECT issue_id FROM agents WHERE ticket = NEW.ticket)",
+    ),
+  ].join(";\n"),
 ];
+
+/** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */
+function countIssueWrites(name: string, on: string, manager: string, issue: string): string {
+  return `CREATE TRIGGER ${name} AFTER ${on} BEGIN
+     INSERT INTO issue_writes (coordinator_id, issue_id, writes) VALUES (${manager}, ${issue}, 1)
+       ON CONFLICT (coordinator_id, issue_id) DO UPDATE SET writes = writes + 1;
+   END`;
+}
 
 /** The trigger `name`: after each row `on` names, one more write of the regional manager `manager` names. */
 function countWrites(name: string, on: string, manager: string): string {

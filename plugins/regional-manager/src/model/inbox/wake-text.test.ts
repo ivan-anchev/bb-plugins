@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { agentIdSchema } from "../agent.ts";
+import { agentIdSchema } from "../agent/agent.ts";
 import { decisionIdSchema, type Decision } from "../decision.ts";
-import { handoffIdSchema } from "../handoff.ts";
+import { handoffIdSchema } from "../agent/handoff.ts";
 import { issueIdSchema } from "../issue/issue.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { coordinatorIdSchema } from "../role.ts";
@@ -43,7 +43,7 @@ function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: Check
 }
 
 const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
-  state: "returned",
+  state: "returned", at: 5_000,
   verifierThreadId: "thr_v",
   headSha: "0123456789abcdef0123456789abcdef01234567",
   checkout: { headSha: "0123456789abcdef0123456789abcdef01234567", changedFiles: [], changedFileCount: 0 },
@@ -105,7 +105,7 @@ test("a checked done handoff is announced with what its verdict found, derived f
     [returned(["pass", "pass"]), "verified"],
     [returned(["pass", "fail"]), "failed verification"],
     [returned(["pass", "unverifiable"]), "failed verification"],
-    [{ state: "could-not-run", verifierThreadId: null, reason: WRITTEN }, "could not be verified"],
+    [{ state: "could-not-run", at: 5_000, verifierThreadId: null, reason: WRITTEN }, "could not be verified"],
     [{ state: "waived" }, "unverified"],
   ];
   for (const [verdict, found] of cases) {

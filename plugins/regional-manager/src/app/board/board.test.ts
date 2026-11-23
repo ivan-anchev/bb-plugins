@@ -4,7 +4,7 @@ import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { coordinatorContract, type Board as BoardData, type IssueRow } from "../../contract.ts";
-import { agentIdSchema } from "../../model/agent.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { decisionIdSchema, type Decision } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
