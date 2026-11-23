@@ -14,7 +14,7 @@ const { CoordinatorPanel } = await import("../panel/coordinator-panel.tsx");
 
 afterEach(cleanup);
 
-const COORDINATOR: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_manager", projectId: "prj_1", description: null, avatar: { kind: "icon", icon: "Workflow" } };
+const COORDINATOR: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_manager", projectId: "prj_1", description: null, avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } };
 
 const land = (coordinators: Coordinator[]) =>
   renderSlot({ component: CoordinatorPanel }, { subPath: `issue/${COORDINATOR.id}/BBP-24` }, { experimental_rpcContract: contract, rpc: { coordinators: () => ({ coordinators, notStarted: [] }) } });
