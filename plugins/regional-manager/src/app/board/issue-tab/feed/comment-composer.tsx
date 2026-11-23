@@ -1,8 +1,8 @@
 // The foot of an issue's Activity: a field to comment on the issue, which goes to its regional
 // manager. ⌘↵ or Ctrl+↵ sends, Enter breaks the line; focus stays in the field through a send, and
 // bb's Esc is held while it has text. The browser keeps what was typed, by issue, until the server
-// took it, and a send that failed keeps it beside its error. A sent comment shows as a quieter card
-// until the feed reads it.
+// took it, and a send that failed keeps it beside its error. A sent comment shows as a card saying
+// so until the feed reads it.
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useId, useState, type KeyboardEvent } from "react";
 import { coordinatorContract as contract } from "../../../../contract.ts";
@@ -21,8 +21,8 @@ import { managerName, SendingCard } from "./comment-card.tsx";
 type CommentComposerProps = {
   coordinatorId: CoordinatorId;
   issueId: IssueId;
-  /** The comments the feed has read, which end a sent comment's quieter card. */
-  posted: ReadonlySet<CommentId>;
+  /** The comments the feed has read, by id, which end a sent comment's card. */
+  posted: ReadonlyMap<CommentId, unknown>;
 };
 
 export function CommentComposer({ coordinatorId, issueId, posted }: CommentComposerProps) {

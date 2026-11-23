@@ -2,10 +2,10 @@
 // (entry.ts actorOf), what happened, the status it moved the issue to, and when; or a status move no
 // moment explains, alone.
 import type { ReactNode } from "react";
-import { actorOf, type Actor, type Entry } from "../../../../model/feed/entry.ts";
+import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
-import { AgentName, MovedTo, Status, When, type FeedAgents } from "./byline.tsx";
+import { AgentName, MovedTo, Status, When, Who, type FeedAgents } from "./byline.tsx";
 
 /** The entries drawn as lines with a who and a what: everything but rounds, decisions and comments, which are cards, and a status move alone. */
 type LineEntry = Exclude<Entry, { kind: "round" | "decision" | "comment" | "moved" }>;
@@ -27,32 +27,6 @@ export function MovedLine({ entry }: { entry: Extract<Entry, { kind: "moved" }> 
       <Status status={entry.status} /> <When at={entry.at} />
     </p>
   );
-}
-
-/** Who did it, named where the entry names someone; a line by GitHub, bb or the plugin itself names no one. */
-function Who({ actor, agents }: { actor: Actor; agents: FeedAgents }) {
-  switch (actor.kind) {
-    case "user":
-      return <span className="rmi-actor">You </span>;
-    case "manager":
-      return <span className="rmi-actor">Regional manager </span>;
-    case "agent":
-      return (
-        <>
-          <AgentName agentId={actor.agentId} agents={agents} />{" "}
-        </>
-      );
-    case "verifier":
-      return <span className="rmi-actor">Verifier </span>;
-    case "github":
-    case "bb":
-    case "plugin":
-      return null;
-    default:
-      // why nothing: the server may be newer than this bundle for a moment after an update.
-      actor satisfies never;
-      return null;
-  }
 }
 
 function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {

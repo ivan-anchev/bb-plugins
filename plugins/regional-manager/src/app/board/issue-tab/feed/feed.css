@@ -245,10 +245,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* A comment of the user's on its way: quieter until the feed reads it. */
-.rmi-comment-sending {
-  opacity: 0.6;
-}
 
 /* --- The composer, at the foot of Activity ------------------------------------------------------ */
 .rmi-composer {

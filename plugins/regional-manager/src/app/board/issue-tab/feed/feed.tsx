@@ -67,7 +67,7 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
             ))}
           </ol>
         )}
-        <CommentComposer coordinatorId={coordinatorId} issueId={issue.id} posted={new Set(comments.keys())} />
+        <CommentComposer coordinatorId={coordinatorId} issueId={issue.id} posted={comments} />
       </section>
     </>
   );
@@ -83,8 +83,8 @@ function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onTo
     case "decision":
       return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} />;
     case "comment": {
-      const { comment } = entry;
-      return <CommentCard coordinatorId={coordinatorId} comment={comment} answered={comment.replyTo === null ? null : (comments.get(comment.replyTo) ?? null)} agents={agents} />;
+      const { replyTo } = entry.comment;
+      return <CommentCard coordinatorId={coordinatorId} entry={entry} answered={replyTo === null ? null : (comments.get(replyTo) ?? null)} agents={agents} />;
     }
     case "moved":
       return <MovedLine entry={entry} />;
