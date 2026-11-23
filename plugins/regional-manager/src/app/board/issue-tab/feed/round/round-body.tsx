@@ -14,7 +14,7 @@ import { ReadFailure } from "../../../../ui/read-failure.tsx";
 import { ThreadLink } from "../../../issue/thread-link.tsx";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { AgentName, MovedTo, When, type FeedAgents } from "../byline.tsx";
-import { Findings } from "./findings.tsx";
+import { Findings, findingsText } from "./findings.tsx";
 import { Score } from "./score.tsx";
 import { VerdictStep } from "./verdict-step.tsx";
 
@@ -122,17 +122,17 @@ function handedText(status: Extract<Round["by"], { kind: "agent" }>["status"]): 
   }
 }
 
-/** The review's step: its lines from the round, its findings, or why none was had, from the body once read. */
+/** The review's step: its line from the round, then its findings with their triage, or why none was had, from the body once read. */
 function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state: "none" }>; body: Body | null }) {
   switch (review.state) {
     case "pending":
-      return <Step title="Reviewer is reviewing…" />;
+      return <Step title="Reviewer…" />;
     case "missed":
       return (
         <Step
           title={
             <>
-              No review{body?.reviewMissed != null && `: ${body.reviewMissed}`}
+              Review missed{body?.reviewMissed != null && `: ${body.reviewMissed}`}
               <StepTime step={review.step} />
             </>
           }
@@ -143,7 +143,7 @@ function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state
         <Step
           title={
             <>
-              {reviewedText(review)}
+              Reviewer · {findingsText(review)}
               <StepTime step={review.step} />
             </>
           }
@@ -158,13 +158,6 @@ function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state
   }
 }
 
-/** What the reviewer found, and how many of it the verifier confirmed once its verdict triaged them. */
-function reviewedText({ findings, confirmed }: Extract<Round["review"], { state: "reported" }>): string {
-  if (findings === 0) return "Reviewer found nothing";
-  const found = `Reviewer found ${findings === 1 ? "1 issue" : `${findings} issues`}`;
-  return confirmed === null ? found : `${found}, ${confirmed} confirmed`;
-}
-
 /**
  * What became of a returned verdict once it went back to its agent or was made final. why only a
  * returned one: a verdict that never came (could not run, replaced, waived) says so in the verifier's
@@ -175,26 +168,34 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   if (verdict === null || verdict.results.length === 0 || round.inFlight) return null;
   return (
     <p className="rmi-outcome" data-result={verdict.outcome.kind}>
-      {by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} {...verdict.fixRound} /> : outcomeText(verdict)}
+      {/* why one span: a sentence long enough to wrap wraps within itself, not as whole flex items. */}
+      <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} confirmed={confirmedOf(round.review)} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
       {round.outcome !== null && <StepTime step={round.outcome} />}
     </p>
   );
 }
 
-/** Where a failed verdict's findings went: to its agent as a fix round, or maybe, when the plugin can't tell whether they reached it. */
-function SentBack({ agent, round, delivery }: { agent: ReactNode } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
+/**
+ * Where a failed verdict's findings went: to its agent as a fix round, with the review's findings
+ * the verifier confirmed (only those reach the agent: src/server/verify/findings.ts), or maybe, when the plugin can't
+ * tell whether they reached it.
+ */
+function SentBack({ agent, round, delivery, confirmed }: { agent: ReactNode; confirmed: number } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
+  const withConfirmed = confirmed === 0 ? "" : `, with the ${confirmed === 1 ? "1 confirmed finding" : `${confirmed} confirmed findings`}`;
   switch (delivery) {
     case "sent":
       return (
         <>
           Sent back to {agent} as fix round {round}
+          {withConfirmed}
         </>
       );
     // why the manager's: the plugin stopped mid-send, or bb's answer didn't say, so nothing shows whether the agent has them.
     case "maybe":
       return (
         <>
-          Maybe sent back to {agent} as fix round {round}: the regional manager decides
+          Maybe sent back to {agent} as fix round {round}
+          {withConfirmed}: the regional manager decides
         </>
       );
     default:
@@ -203,6 +204,9 @@ function SentBack({ agent, round, delivery }: { agent: ReactNode } & NonNullable
       return null;
   }
 }
+
+/** How many of the review's findings the verifier confirmed; 0 when it had no review, or none was confirmed. */
+const confirmedOf = (review: Round["review"]): number => (review.state === "reported" ? (review.confirmed ?? 0) : 0);
 
 /** What became of a verdict nothing went back to an agent from. why the results: one superseded after it returned waited for CI, so it was replaced before CI, not before its verdict. */
 function outcomeText({ outcome, results }: NonNullable<Round["verdict"]>): string {

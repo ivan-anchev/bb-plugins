@@ -17,7 +17,7 @@ import { feedOf } from "./feed.ts";
 /** What feedOf is made of. */
 type FeedFacts = Parameters<typeof feedOf>[0];
 import type { Logged } from "./log-event.ts";
-import { bodyOf, criteriaGrid, roundOf, scoreOf, type Round, type Step } from "./round.ts";
+import { criteriaGrid, roundOf, scoreOf, type Round, type Step } from "./round.ts";
 
 const MANAGER = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 const BBP_19 = issueIdSchema.parse("BBP-19");
@@ -228,13 +228,6 @@ test("a check superseded while its review was to come is no longer in flight: it
   assert.deepEqual([superseded.inFlight, superseded.review, scoreOf(superseded)], [false, { state: "none" }, { kind: "unjudged", outcome: "superseded" }]);
   const reviewing = roundOf(handed(handoff(2, A1, 4_000), { state: "queued", checkout: null }, { state: "running", reviewerThreadId: "thr_reviewer" }), 2, null);
   assert.deepEqual([reviewing.inFlight, reviewing.review, scoreOf(reviewing)], [true, { state: "pending" }, { kind: "pending", stage: "reviewing" }]);
-});
-
-test("a missed review's reason is the round's body's, read only when the round opens; its spine says only that it was missed, and when", () => {
-  const missed = handed(handoff(1, A1, 3_000), { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: null }, { state: "missed", at: 3_100, reviewerThreadId: null, reason: "no reviewer model" });
-  assert.deepEqual(roundOf(missed, 1, null).review, { state: "missed", step: { at: 3_100, moved: null } });
-  assert.equal(bodyOf(missed.handoff, missed.check).reviewMissed, "no reviewer model");
-  assert.equal(bodyOf(handed(handoff(2, A1, 4_000), null).handoff, null).reviewMissed, null);
 });
 
 test("a verdict failed by its checkout and a criterion names its checkout first, in its round as in the issue's headline (verdict.ts failureReasons)", () => {

@@ -40,7 +40,7 @@ export const roundSchema = z.object({
     z.object({ kind: z.literal("agent"), agentId: agentIdSchema, status: handoffStatusSchema, summary: z.string() }),
     z.object({ kind: z.literal("final"), defaultBranch: z.string() }),
   ]),
-  /** Its review: none (no review stage), still to come, missed (why is the body's), or reported with how many findings and, once the verdict triaged them, how many it confirmed. */
+  /** Its review: none (no review stage), still to come, missed (why is the body's), or reported with how many findings and, once the verdict triaged them, how many it confirmed; each that came, its step. */
   review: z.discriminatedUnion("state", [
     z.object({ state: z.literal("none") }),
     z.object({ state: z.literal("pending") }),
