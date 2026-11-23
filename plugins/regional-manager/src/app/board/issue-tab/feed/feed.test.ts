@@ -190,7 +190,7 @@ test("⌘↵ or Ctrl+↵ sends the comment and Enter breaks the line; the field 
   assert.deepEqual(comments, [], "Enter alone breaks the line");
 
   fireEvent.keyDown(field, { key: "Enter", metaKey: true });
-  await waitFor(() => assert.deepEqual(comments, [{ coordinatorId: COORDINATOR.id, issueId: "WEB-1", text: "Cap retries at five." }]));
+  await waitFor(() => assert.deepEqual(comments, [{ coordinatorId: COORDINATOR.id, issueId: "WEB-1", text: "Cap retries at five.", replyTo: null }]));
   const sending = () => activity(tab()).section.queryByRole("article", { name: "Your comment" });
   assert.equal(within(sending() ?? assert.fail("no card")).getByRole("status").textContent, "Sending…");
   assert.equal(field.readOnly, true, "read-only, never disabled, while it sends");
@@ -220,4 +220,23 @@ test("a draft the browser kept fills the field, and a send that fails keeps it, 
   await waitFor(() => assert.match(composer(tab()).form.getByRole("alert").textContent ?? "", /^Could not post your comment: .*bb is unreachable/));
   assert.equal(comments.length, 1);
   assert.equal(composer(tab()).field.value, "Cap retries at five.", "the draft stays to send again");
+});
+
+test("a send the server takes drops only the draft it sent: one typed since, after a remount, stays", async () => {
+  const key = `coordinator-issue-comment:${COORDINATOR.id}:WEB-1`;
+  localStorage.setItem(key, JSON.stringify("Cap retries at five."));
+  let release: () => void = () => {};
+  const first = await opened("WEB-1", WEB_1, { comment: () => new Promise((resolve) => (release = () => resolve({ commentId: "m1" }))) });
+  fireEvent.click(composer(first.tab()).send);
+  await waitFor(() => assert.equal(first.comments.length, 1));
+  first.view.unmount();
+
+  // As the remounted tab finds it once the user typed another draft there.
+  localStorage.setItem(key, JSON.stringify("A different draft."));
+  const second = await opened("WEB-1", WEB_1);
+  assert.equal(composer(second.tab()).field.value, "A different draft.");
+  await act(async () => release());
+
+  assert.equal(localStorage.getItem(key), JSON.stringify("A different draft."), "the newer draft is kept");
+  assert.equal(composer(second.tab()).field.value, "A different draft.");
 });

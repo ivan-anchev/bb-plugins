@@ -213,11 +213,12 @@ export const coordinatorContract = defineRpcContract({
     },
   },
   /**
-   * Posts the user's comment on an issue, from its tab, and wakes its regional manager, whose every
-   * comment of theirs it is: it replies, records a decision, or tells the issue's agent.
+   * Posts the user's comment on an issue, from its tab, answering `replyTo`, a comment of the same
+   * issue (null: none), and wakes its regional manager, whose every comment of theirs it is: it
+   * replies, records a decision, or tells the issue's agent.
    */
   commentIssue: {
-    input: z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema, text: commentTextSchema }),
+    input: z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema, text: commentTextSchema, replyTo: commentIdSchema.nullable() }),
     output: z.object({ commentId: commentIdSchema }),
   },
   /**

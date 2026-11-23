@@ -31,7 +31,8 @@ export function CommentComposer({ coordinatorId, issueId, posted }: CommentCompo
   // why an answer's draft schema: a comment's bounds are an answer's (comment.ts).
   const typed = useStored(localStorage, commentDraftKeyOf(coordinatorId, issueId), answerDraftSchema);
   const draft = typed.value ?? "";
-  const { sent, send, error } = usePost(coordinatorId, issueId, () => typed.store(null));
+  // why only the draft sent: the field may hold a newer one by then, typed after a remount or in another tab.
+  const { sent, send, error } = usePost(coordinatorId, issueId, (sentDraft) => typed.update((current) => (current === sentDraft ? null : current)));
   useHoldEscape(draft !== "");
 
   const sending = sent !== null && sent.commentId === null;
@@ -94,10 +95,10 @@ const SEND_KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘↵" : "Ctrl
 
 /**
  * Posts one comment at a time: `sent` is the comment sent, from Send, with its id once the server
- * took it (null: none sent, or the send failed, whose error is `error`). `taken` runs as the server
- * takes it, to drop the draft.
+ * took it (null: none sent, or the send failed, whose error is `error`). `taken` runs with the draft
+ * sent as the server takes it.
  */
-function usePost(coordinatorId: CoordinatorId, issueId: IssueId, taken: () => void) {
+function usePost(coordinatorId: CoordinatorId, issueId: IssueId, taken: (draft: string) => void) {
   const save = experimental_useRpcMutation({ contract, method: "commentIssue" });
   const [sent, setSent] = useState<{ text: string; commentId: CommentId | null } | null>(null);
 
@@ -105,10 +106,10 @@ function usePost(coordinatorId: CoordinatorId, issueId: IssueId, taken: () => vo
     const text = draft.trim();
     if ((sent !== null && sent.commentId === null) || text === "") return;
     setSent({ text, commentId: null });
-    save.mutate({ coordinatorId, issueId, text }).then(
+    save.mutate({ coordinatorId, issueId, text, replyTo: null }).then(
       ({ commentId }) => {
         setSent({ text, commentId });
-        taken();
+        taken(draft);
       },
       // why nothing more: the hook's error shows beside the draft, which is kept.
       () => setSent(null),

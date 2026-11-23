@@ -97,7 +97,7 @@ export default function plugin(host: BbPluginApi): void {
   registerIssueTools(bb, { store, issues });
   registerAgentTools(bb, { store, agents });
   registerHandoffTool(bb, { store, verify });
-  registerCommentTool(bb, { store, inbox });
+  registerCommentTool(bb, { store, inbox, turns });
   registerReviewTool(bb, { store, review });
   registerVerdictTool(bb, { store, verify });
   const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard, refreshIssue: (id, issueId) => bb.rpc.experimental_invalidate([issueTag(id, issueId)]) });

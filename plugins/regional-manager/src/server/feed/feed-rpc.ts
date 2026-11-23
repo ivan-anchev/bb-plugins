@@ -33,12 +33,11 @@ export function feedHandlers({ store, reader, inbox }: Deps): PluginRpcHandlers<
         }),
       ),
 
-    commentIssue: ({ coordinatorId, issueId, text }) => {
+    commentIssue: ({ coordinatorId, issueId, text, replyTo }) => {
       if (!started(coordinatorId)) throw new Refusal({ code: "not_found", message: `There is no started regional manager ${coordinatorId}.` });
       if (store.issue(coordinatorId, issueId) === null) throw new Refusal({ code: "not_found", message: `This regional manager has no issue ${issueId}.` });
-      const commentId = inbox.commentIssue(coordinatorId, { issueId, author: { kind: "user" }, text, replyTo: null });
-      // why throw: a comment that answers none is never refused.
-      if (commentId === null) throw new Error(`The comment on ${issueId} was refused.`);
+      const commentId = inbox.commentIssue(coordinatorId, { issueId, author: { kind: "user" }, text, replyTo });
+      if (commentId === null) throw new Refusal({ code: "not_found", message: `${replyTo} is no comment on ${issueId}, so nothing was posted.` });
       return { commentId };
     },
   };

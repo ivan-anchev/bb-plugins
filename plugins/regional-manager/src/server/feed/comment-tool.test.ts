@@ -13,18 +13,19 @@ async function asked() {
   const { issue, agentThreadId } = await startedAgent(kit, threadId);
   const issueId = issueIdSchema.parse(issue);
   kit.thread(threadId).status = "idle";
-  const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId, text: "Cap retries at five?" });
+  const sendsBefore = kit.sendAttempts().length;
+  const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId, text: "Cap retries at five?", replyTo: null });
   await settled();
-  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  // why: every comment of the user's goes to the regional manager; nothing reaches the agent's thread.
+  assert.ok(!kit.sendAttempts().slice(sendsBefore).includes(agentThreadId), "the user's comment sent nothing to the agent's thread");
+  await kit.call("crew_catch_up", {}, threadId);
   const comments = () => kit.store.commentsOf(coordinatorId, issueId).map(({ id, text, replyTo, author }) => ({ id, text, replyTo, author }));
-  return { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, caughtUp, doorbells: () => kit.doorbellsSent(threadId) };
+  return { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, doorbells: () => kit.doorbellsSent(threadId) };
 }
 
 test("the regional manager's issue_comment posts its reply on the issue and tells it nothing; the holding agent's posts one and a comment event that wakes no one", async () => {
-  const { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, caughtUp: told, doorbells } = await asked();
+  const { kit, threadId, coordinatorId, issueId, agentThreadId, commentId, comments, doorbells } = await asked();
   assert.equal(doorbells().length, 1, "the user's comment woke the regional manager");
-  assert.ok(told.includes(`Nothing reaches a1 on its own: the user's comments come to you.`), told);
-  assert.ok(told.includes(`or, when it concerns a1's work, relay it with agent_message, quoting their words and naming ${commentId}, so it can answer on the issue. Never relay while ${issueId} is Reviewing or Verifying`), told);
 
   const managers = textOf(await kit.call("issue_comment", { issue: issueId, text: "Yes, five.", replyTo: commentId }, threadId));
   assert.equal(managers, `Posted m2 on ${issueId}. The user reads it on the issue's tab.`);
@@ -96,4 +97,23 @@ test("an agent on another issue, a thread with no role, a reviewer, a verifier, 
   // The refusal's way forward: the same comment with replyTo left out posts.
   assert.equal(textOf(await kit.call("issue_comment", comment, threadId)), `Posted m2 on ${issueId}. The user reads it on the issue's tab.`);
   assert.deepEqual(comments(), [...before, { id: "m2", text: "Done here.", replyTo: null, author: { kind: "manager" } }]);
+});
+
+test("an agent's comment waits for a stop that holds its issue, and is refused once the stop has ended it", async () => {
+  const { kit, threadId, issueId, agentThreadId, comments } = await asked();
+  const before = comments();
+  let answer = (): void => assert.fail("bb never received the stop");
+  kit.stopRequests.pending = new Promise((resolve) => (answer = resolve));
+  const stopping = kit.call("agent_stop", { agent: "a1" }, threadId);
+  await settled();
+  const commenting = kit.call("issue_comment", { issue: issueId, text: "Still on it." }, agentThreadId);
+  await settled();
+  assert.deepEqual(comments(), before, "nothing posted while the stop holds the issue");
+
+  answer();
+  assert.match(textOf(await stopping), /^a1 is stopped; it no longer holds WEB-1\./);
+  const result = await commenting;
+  assert.ok(isRefusal(result));
+  assert.equal(textOf(result), `issue_comment is refused, and nothing was posted: you no longer hold ${issueId} (you were stopped). Only an issue's regional manager, and the agent holding it now, comment on it.`);
+  assert.deepEqual(comments(), before);
 });

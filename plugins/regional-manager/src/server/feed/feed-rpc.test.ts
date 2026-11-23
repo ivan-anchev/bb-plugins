@@ -12,7 +12,7 @@ import type { Store } from "../store/store.ts";
 import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../store/test-store.ts";
 import type { ListBb } from "../agents/threads.ts";
 import { createFeedReader } from "./feed-reader.ts";
-import { coordinating, doorbellOf, isRefusal, ISSUE, issueIn, settled, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, ISSUE, issueIn, settled, textOf } from "../test-harness.ts";
 import { feedHandlers } from "./feed-rpc.ts";
 
 const SHA = "a".repeat(40);
@@ -185,17 +185,17 @@ test("the user's comment, posted through commentIssue, answers only its id, wake
   kit.thread(threadId).status = "idle";
   const text = "Cap retries at five.\n\nAnd log each one.";
 
-  const posted = coordinatorContract.commentIssue.output.parse(await kit.rpc.commentIssue({ coordinatorId, issueId, text }));
+  // why the raw answer: the contract's parse would drop a key the handler added.
+  const raw = await kit.rpc.commentIssue({ coordinatorId, issueId, text, replyTo: null });
+  assert.deepStrictEqual(keysOf(raw), ["commentId"]);
+  const posted = coordinatorContract.commentIssue.output.parse(raw);
   await settled();
 
-  assert.deepStrictEqual(keysOf(posted), ["commentId"]);
   assert.deepStrictEqual(kit.doorbellsSent(threadId), [doorbellOf(`The user commented on ${issueId} "Add retries": ${posted.commentId}`)]);
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
   assert.match(update, new RegExp(`^### The user commented on ${issueId} "Add retries": ${posted.commentId}\n\nAt [^\n]+ In their own words:\n\n${text.replaceAll("\n", "\\n")}\n\n`));
   assert.ok(update.includes(`Reply on the issue with issue_comment (issue "${issueId}", replyTo "${posted.commentId}")`), update);
-  assert.ok(update.includes(`or put it in the brief of the agent you start on it. ${issueId} is Todo now, and no agent holds it.`), update);
-  assert.ok(!update.includes("agent_message"), "no relay to an agent the issue doesn't have");
 
   const feed = coordinatorContract.issueFeed.output.parse(await kit.rpc.issueFeed({ coordinatorId, issueId }));
   const entry = feed.entries.find((one) => one.kind === "comment") ?? assert.fail("no comment entry");
@@ -208,42 +208,21 @@ test("the user's comment, posted through commentIssue, answers only its id, wake
 test("a comment on an issue the manager doesn't have, or one of a manager not started, is refused, and nothing wakes it", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   kit.thread(threadId).status = "idle";
-  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse("WEB-9"), text: "Hello?" }), /has no issue WEB-9/);
-  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId: OTHER_MANAGER, issueId: issueIdSchema.parse("WEB-1"), text: "Hello?" }), /no started regional manager/);
+  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse("WEB-9"), text: "Hello?", replyTo: null }), /has no issue WEB-9/);
+  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId: OTHER_MANAGER, issueId: issueIdSchema.parse("WEB-1"), text: "Hello?", replyTo: null }), /no started regional manager/);
   await settled();
   assert.deepStrictEqual(kit.doorbellsSent(threadId), []);
 });
 
-test("a comment on a parent issue points the regional manager at the sub-issue it concerns, never at an agent of the parent", async () => {
+test("the user's comment can answer a comment of the same issue; one naming no comment of it is refused, and nothing is posted", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
-  const parent = issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", { ...ISSUE, title: "Webhook delivery" }, threadId))));
-  const sub = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, parent }, threadId)));
-  await kit.call("crew_catch_up", {}, threadId);
+  const [one, two] = [issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", ISSUE, threadId)))), issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", ISSUE, threadId))))];
+  const asked = coordinatorContract.commentIssue.output.parse(await kit.rpc.commentIssue({ coordinatorId, issueId: one, text: "Cap retries?", replyTo: null }));
+  await kit.call("issue_comment", { issue: one, text: "At five?", replyTo: asked.commentId }, threadId);
+  const answered = kit.store.commentsOf(coordinatorId, one).at(-1) ?? assert.fail("no reply");
 
-  const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId: parent, text: "Retries first, then dead letters." });
-  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
-
-  assert.ok(update.includes(`Reply on the issue with issue_comment (issue "${parent}", replyTo "${commentId}")`), update);
-  assert.ok(update.includes("or put it in the brief of the sub-issue it concerns."), update);
-  assert.ok(update.includes("a parent has no agent of its own."), update);
-  assert.ok(!update.includes("agent_message") && !update.includes("the agent you start on it"), update);
-  // The way forward it gives works: the sub-issue's brief takes the comment.
-  assert.ok(!isRefusal(await kit.call("issue_update", { id: sub, brief: "Retries first, then dead letters (the user's comment)." }, threadId)));
-});
-
-test("a comment on a closed issue points the regional manager at a new issue, never at an agent of it", async () => {
-  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
-  const issueId = issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", ISSUE, threadId))));
-  await kit.call("issue_update", { id: issueId, status: "canceled" }, threadId);
-  await kit.call("crew_catch_up", {}, threadId);
-
-  await kit.rpc.commentIssue({ coordinatorId, issueId, text: "We still need retries, just later." });
-  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
-
-  assert.ok(update.includes(`or file what it asks for as a new issue with issue_create. ${issueId} is Canceled now, so no agent can start on it.`), update);
-  assert.ok(!update.includes("agent_message") && !update.includes("the agent you start on it"), update);
-  // The way forward it gives works.
-  assert.match(textOf(await kit.call("issue_create", { ...ISSUE, title: "Retries, later" }, threadId)), /^Filed /);
+  const reply = coordinatorContract.commentIssue.output.parse(await kit.rpc.commentIssue({ coordinatorId, issueId: one, text: "Yes, five.", replyTo: answered.id }));
+  assert.equal(kit.store.comment(reply.commentId)?.replyTo, answered.id);
+  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: two, text: "Elsewhere.", replyTo: answered.id }), new RegExp(`${answered.id} is no comment on ${two}, so nothing was posted`));
+  assert.deepStrictEqual(kit.store.commentsOf(coordinatorId, two), []);
 });

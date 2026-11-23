@@ -816,7 +816,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
-    registerCommentTool(bb, { store, inbox });
+    registerCommentTool(bb, { store, inbox, turns });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });

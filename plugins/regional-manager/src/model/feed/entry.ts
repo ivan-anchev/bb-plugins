@@ -71,7 +71,7 @@ export function timeOf(entry: Entry): number {
 }
 
 /** Who an entry is by, as the feed names them: someone it names, or something no one did by hand. */
-export type Actor = { kind: "user" } | { kind: "manager" } | { kind: "agent"; agentId: AgentId } | { kind: "verifier" } | { kind: "github" } | { kind: "bb" } | { kind: "plugin" };
+export type Actor = CommentAuthor | { kind: "verifier" } | { kind: "github" } | { kind: "bb" } | { kind: "plugin" };
 
 /**
  * Who did it, derived from what it is. why never stored: only the manager's tools file an issue,
@@ -93,7 +93,7 @@ export function actorOf(entry: Entry): Actor {
     case "round":
       return entry.round.by.kind === "agent" ? { kind: "agent", agentId: entry.round.by.agentId } : { kind: "verifier" };
     case "comment":
-      return authorActor(entry.comment.author);
+      return entry.comment.author;
     case "pr":
       return { kind: "github" };
     case "thread":
@@ -119,18 +119,6 @@ export function shownIn(filter: Filter, entry: Entry): boolean {
       return entry.kind === "decision" || entry.kind === "comment";
     default:
       return filter satisfies never;
-  }
-}
-
-function authorActor(author: CommentAuthor): Actor {
-  switch (author.kind) {
-    case "user":
-    case "manager":
-      return { kind: author.kind };
-    case "agent":
-      return { kind: "agent", agentId: author.agentId };
-    default:
-      return author satisfies never;
   }
 }
 
