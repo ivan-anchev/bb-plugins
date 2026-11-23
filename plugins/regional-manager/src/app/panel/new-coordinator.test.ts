@@ -50,7 +50,7 @@ function mount(read: { failing: boolean; others?: NotStarted[] } = { failing: fa
     async create() {
       await act(async () => fireEvent.click(view.getByRole("button", { name: "Create" })));
     },
-    /** Shuffle, once the first read of the other managers has answered, which enables it; the preview is then the one from that list. */
+    /** Shuffle, once the first read of the other managers' looks has answered, which enables it. */
     async listed() {
       const shuffle = await view.findByRole("button", { name: "Shuffle" });
       await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
@@ -193,22 +193,21 @@ test("a later read of the managers that fails keeps their last list, but Shuffle
 });
 
 test("a later read that fails keeps a new manager's fields and its preview, and Shuffle waits", async (t) => {
-  // why 0: the preview then starts from the look Scout has, so the one from the list read differs from the one before it.
+  // why 0: the preview then starts from the look Scout has, and the list read moves it to the next, pebble in violet.
   t.mock.method(Math, "random", () => 0);
   const read = { failing: false };
   const page = mount(read);
-  await page.listed();
-  const given = page.chosen();
+  await page.named("Webhooks");
+  await waitFor(() => assert.deepEqual(page.chosen(), ["Pebble", "Violet"], "the preview steps past Scout's look"));
 
   read.failing = true;
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
 
   assert.match((await page.view.findByRole("alert")).textContent ?? "", /so Shuffle waits: .*bb is restarting/);
   assert.equal(page.view.getByRole("button", { name: "Shuffle" }).getAttribute("aria-disabled"), "true");
-  assert.deepEqual(page.chosen(), given, "the preview stays the one from the last list read");
-  await page.named("Webhooks");
+  assert.deepEqual(page.chosen(), ["Pebble", "Violet"], "the preview stays the one from the last list read");
   await page.create();
-  assert.deepEqual(page.creates.map(({ avatar }) => avatar), [{ kind: "auto" }]);
+  assert.deepEqual(page.creates, [{ name: "Webhooks", description: null, avatar: { kind: "auto" } }], "the name typed before the failure is sent");
 });
 
 test("a new manager's preview moves on when a later read shows another manager has taken it since", async () => {
