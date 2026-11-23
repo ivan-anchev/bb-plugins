@@ -117,6 +117,7 @@ and no tool can turn verification on or off.
 | `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over: continuing in the previous agent's environment, moving the work to a new one on a branch cut from its branch when a `placement` is named or that environment is gone, or starting clean with `from: "default"`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
+| `issue_comment` | regional manager, agent | Comments on an issue, on its tab: `issue`, `text`, and `replyTo` naming the comment it answers. A regional manager comments on its own issues; an agent only on the issue it holds now. An agent's comment reaches its regional manager in its next catch-up, without waking it. |
 | `agent_handoff` | agent | Ends the agent's work: done (a build issue's with its commit, a research issue's with its report), blocked or gave up, with a summary and its lists. |
 | `issue_verdict` | verifier | Returns each criterion's result and evidence, and findings, for the handoff it checks. |
 
@@ -877,6 +878,27 @@ Rather than wait or poll, a regional manager sets itself a reminder with
   and wake it once bb lists it again, unarchived. A **deleted** regional
   manager's reminders are deleted.
 
+## Comments
+
+At the foot of an issue's **Activity** is a field to comment on the issue.
+⌘↵ (Ctrl+↵ off a Mac) or **Comment** sends it, Enter breaks the line, and Esc
+doesn't leave the page while it has text. Focus stays in the field as it
+sends. A send that fails keeps your text, with the error under it, and text
+you haven't sent stays in the browser, through a reload, until the server
+takes it. Its hint says where it goes: every comment of yours goes to the
+regional manager, never straight to an agent. It wakes the manager, whose
+`crew_catch_up` gives it whole, and the manager replies on the issue,
+records a decision, or relays it to the issue's agent with `agent_message`
+when it concerns the agent's work, never while the issue is Reviewing or
+Verifying, since a message stops the check.
+
+Each comment shows as a card in the order posted, with its id (`m1`, `m2`…):
+yours with "Sent to" and the manager's name, the manager's and the agent's
+replies with a line of the comment they answer. A comment you just sent shows
+as a quieter card, "Sending…", until the tab reads it. The manager and the
+agent holding the issue comment with `issue_comment`; an agent's comment
+reaches the manager in its next catch-up without waking it.
+
 ## Decisions
 
 When only you can decide something, a regional manager asks with
@@ -1036,7 +1058,7 @@ nothing when it has none.
 
 **Activity** lists every moment of the issue in the order it happened, with
 **All**, **Rounds** and **Discussion** to choose what shows: Rounds only the
-rounds, Discussion only the decisions and questions. The choice holds while
+rounds, Discussion only the comments, decisions and questions. The choice holds while
 the tab is open. A **round** is one attempt: an agent's handoff and its
 check, or a build parent's final check. Folded, it is one line: "Round 2",
 what was handed off ("Final check on main" for a parent's) and its score: "✓ 6
@@ -1073,7 +1095,8 @@ when, the option you chose marked; one still open has a button per option
 that answers it, as on the Board (one with no options is answered on the
 Board, in your words); and each decision the manager recorded on it with
 `issue_update`, with when (a later one stands over an earlier one, and every
-agent started on the issue gets them in its first message). Everything else
+agent started on the issue gets them in its first message). So do the
+**comments** (see [Comments](#comments)). Everything else
 is a quiet line: the manager filed the issue, started an agent or handed the
 issue on from one, an agent's thread was archived or deleted, its pull request
 opened, passed or failed CI or merged, an agent ended its turn with no

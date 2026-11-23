@@ -37,6 +37,7 @@ function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
   if (event.kind === "coordinator-tree-clean") return "Your own environment is clean again";
   if (event.kind === "checked") return checkedLine(checkedOf(check(event.checkId)), titles);
   if (event.kind === "unblocked") return `${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}`;
+  if (event.kind === "comment-to-you") return `The user commented on ${titled(event.issueId, titles)}: ${event.commentId}`;
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
     case "handoff":
@@ -53,6 +54,8 @@ function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
       return `${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}`;
     case "returned-to-todo":
       return `${on} returned to Todo: its agent was ${event.how}`;
+    case "comment":
+      return `${on} commented: ${event.commentId}`;
     default:
       return event satisfies never;
   }

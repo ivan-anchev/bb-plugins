@@ -9,6 +9,7 @@ import type { Issue } from "../issue/issue.ts";
 import type { Handed, IssueStatus } from "../issue/status.ts";
 import type { FinalCheck } from "../verdict/check.ts";
 import { timeOf, type Entry } from "./entry.ts";
+import type { Comment } from "./comment.ts";
 import type { Logged } from "./log-event.ts";
 import { finalRoundOf, roundOf, type Round, type Step } from "./round.ts";
 
@@ -23,6 +24,8 @@ type FeedFacts = {
   events: readonly StoredEvent[];
   /** The issue's log, in the order written. */
   log: readonly Logged[];
+  /** The issue's comments, in the order posted. */
+  comments: readonly Comment[];
 };
 
 /** The issue's feed, oldest first; two moments at one millisecond keep the order listed here, the log's rows in the order written. */
@@ -33,6 +36,7 @@ export function feedOf(facts: FeedFacts): Entry[] {
     ...facts.agents.flatMap(agentEntries),
     ...roundsOf(facts).map((round): Entry => ({ kind: "round", round })),
     ...facts.decisions.map((decision): Entry => ({ kind: "decision", decision, moved: null })),
+    ...facts.comments.map((comment): Entry => ({ kind: "comment", comment })),
     ...facts.events.flatMap(({ at, event }) => eventEntries(at, event)),
   ];
   const placed = inOrder([...others.map((entry) => ({ at: timeOf(entry), seq: NOT_LOGGED, entry })), ...lines]);
@@ -110,7 +114,9 @@ function momentsOf({ entry, at, seq }: Placed, index: number): Moment[] {
       const steps: [Moment["step"], Step | null][] = [["handed", handed], ["review", reviewStep(review)], ["verdict", verdict?.step ?? null], ["outcome", outcome]];
       return steps.flatMap(([step, happened]) => (happened === null ? [] : [{ at: happened.at, seq: NOT_LOGGED, entry: index, step }]));
     }
+    // why none: a status is shown on what moved it, and a comment moves none.
     case "moved":
+    case "comment":
       return [];
     case "created":
     case "logged":
@@ -140,6 +146,7 @@ function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus 
       return { kind: "round", round: { ...round, handed: step("handed", round.handed), review, verdict, outcome: round.outcome === null ? null : step("outcome", round.outcome) } };
     }
     case "moved":
+    case "comment":
       return entry;
     case "created":
     case "logged":
@@ -192,6 +199,9 @@ function eventEntries(at: number, event: InboxEvent): Entry[] {
       return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "needs-input", question: event.question }, moved: null }];
     case "unblocked":
       return [{ kind: "unblocked", at, by: event.by, moved: null }];
+    // why none: a comment is an entry from its own table.
+    case "comment-to-you":
+    case "comment":
     case "handoff":
     case "checked":
     case "sent-back":

@@ -24,9 +24,9 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
       .prepare("SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all(type)
       .map((row) => z.object({ name: z.string() }).parse(row).name);
-  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_log", "issue_relations", "issue_writes", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  assert.deepEqual(names("table"), ["agents", "checks", "comments", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_log", "issue_relations", "issue_writes", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
   const facts = ["agents", "checks", "decisions", "handoffs", "issue_relations", "issues", "pr_snapshots"];
-  const feeds = ["agents_issue_id", "checks_issue_id", "handoffs_issue_id", "issue_decisions_issue_id", "issue_log_issue_id", "issue_relations_depends_on", "issue_relations_issue_id", "issues_id"];
+  const feeds = ["agents_issue_id", "checks_issue_id", "comments_issue_id", "handoffs_issue_id", "issue_decisions_issue_id", "issue_log_issue_id", "issue_relations_depends_on", "issue_relations_issue_id", "issues_id"];
   const writes = (tables: string[]) => tables.flatMap((table) => ["deleted", "inserted", "updated"].map((write) => `${table}_${write}`));
   assert.deepEqual(
     names("trigger"),
@@ -37,6 +37,7 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
     "checks_of_issue",
     "checks_open",
     "checks_unsettled",
+    "comments_of_issue",
     "decisions_of_coordinator",
     "events_of_issue",
     "events_own_tree",

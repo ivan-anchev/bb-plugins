@@ -238,6 +238,20 @@ export const MIGRATIONS: readonly string[] = [
     countIssueWrites("issue_log_issue_id_updated", "UPDATE ON issue_log", "NEW.coordinator_id", "NEW.issue_id"),
     countIssueWrites("issue_log_issue_id_deleted", "DELETE ON issue_log", "OLD.coordinator_id", "OLD.issue_id"),
   ].join(";\n"),
+
+  // Comments on issues (comment.ts): the user's, from an issue's tab, and the replies of its regional
+  // manager and of the agent holding it, in the order posted. A reply answers a comment of the same
+  // issue (comments-store.ts commentIssue). why JSON: an author is read and written whole. why
+  // counted per issue: an issue's tab shows its comments.
+  `CREATE TABLE comments (id INTEGER PRIMARY KEY AUTOINCREMENT, coordinator_id TEXT NOT NULL, issue_id TEXT NOT NULL, author TEXT NOT NULL, text TEXT NOT NULL,
+     reply_to INTEGER REFERENCES comments (id), at INTEGER NOT NULL,
+     FOREIGN KEY (coordinator_id, issue_id) REFERENCES issues (coordinator_id, id))`,
+  `CREATE INDEX comments_of_issue ON comments (coordinator_id, issue_id)`,
+  [
+    countIssueWrites("comments_issue_id_inserted", "INSERT ON comments", "NEW.coordinator_id", "NEW.issue_id"),
+    countIssueWrites("comments_issue_id_updated", "UPDATE ON comments", "NEW.coordinator_id", "NEW.issue_id"),
+    countIssueWrites("comments_issue_id_deleted", "DELETE ON comments", "OLD.coordinator_id", "OLD.issue_id"),
+  ].join(";\n"),
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

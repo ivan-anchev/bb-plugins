@@ -7,8 +7,8 @@ import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
 import { AgentName, MovedTo, Status, When, type FeedAgents } from "./byline.tsx";
 
-/** The entries drawn as lines with a who and a what: everything but rounds and decisions, which are cards, and a status move alone. */
-type LineEntry = Exclude<Entry, { kind: "round" | "decision" | "moved" }>;
+/** The entries drawn as lines with a who and a what: everything but rounds, decisions and comments, which are cards, and a status move alone. */
+type LineEntry = Exclude<Entry, { kind: "round" | "decision" | "comment" | "moved" }>;
 
 export function EntryLine({ entry, agents }: { entry: LineEntry; agents: FeedAgents }) {
   return (
@@ -32,6 +32,8 @@ export function MovedLine({ entry }: { entry: Extract<Entry, { kind: "moved" }> 
 /** Who did it, named where the entry names someone; a line by GitHub, bb or the plugin itself names no one. */
 function Who({ actor, agents }: { actor: Actor; agents: FeedAgents }) {
   switch (actor.kind) {
+    case "user":
+      return <span className="rmi-actor">You </span>;
     case "manager":
       return <span className="rmi-actor">Regional manager </span>;
     case "agent":

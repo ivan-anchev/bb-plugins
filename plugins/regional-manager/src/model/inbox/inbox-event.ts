@@ -4,6 +4,7 @@
 // the doorbell that announces it; so does the user's answer to a decision, kept with the decision.
 import { z } from "zod";
 import { agentIdSchema, endedHowSchema } from "../agent/agent.ts";
+import { commentIdSchema } from "../feed/comment.ts";
 import { decisionIdSchema } from "../decision.ts";
 import { handoffIdSchema, handoffStatusSchema } from "../agent/handoff.ts";
 import { issueIdSchema } from "../issue/issue.ts";
@@ -54,6 +55,10 @@ export const inboxEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("returned-to-todo"), ...onAgent, how: endedHowSchema.exclude(["spawn-failed", "replaced"]) }),
   /** The issue `by`, the last of its dependencies still open, closed without the manager closing it (a merge, a report), and stands `closedAs` (relations.ts unblockedSince). */
   z.object({ kind: z.literal("unblocked"), issueId: issueIdSchema, by: issueIdSchema, closedAs: issueStatusSchema.extract(["done", "canceled"]) }),
+  /** The user commented on the issue from its tab: every comment of theirs is the regional manager's to act on. */
+  z.object({ kind: z.literal("comment-to-you"), issueId: issueIdSchema, commentId: commentIdSchema }),
+  /** The agent holding the issue commented on it with issue_comment. */
+  z.object({ kind: z.literal("comment"), ...onAgent, commentId: commentIdSchema }),
   ...managerEvents,
 ]);
 export type InboxEvent = z.infer<typeof inboxEventSchema>;
@@ -81,6 +86,10 @@ const WAKES: Record<InboxEvent["kind"], boolean> = {
   "returned-to-todo": true,
   // why: only the regional manager starts its agent.
   unblocked: true,
+  // why: only the regional manager answers the user, and only it tells the agent.
+  "comment-to-you": true,
+  // why not: an agent's comment answers someone on the issue, and asks nothing of the regional manager that its handoff won't.
+  comment: false,
   "verification-toggled": true,
   "memory-edited": true,
   reminder: true,

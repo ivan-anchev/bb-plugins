@@ -70,7 +70,7 @@ test("what bb injects for a research agent and its manager agrees with its first
   assert.match(prompt, /It names no commit: nothing you commit or push is read, and no verifier checks your work\./);
 
   const agent = kit.configurationFor(agentThreadId, {});
-  assert.deepEqual(agent.tools, ["crew_memory_read", "agent_handoff"]);
+  assert.deepEqual(agent.tools, ["crew_memory_read", "issue_comment", "agent_handoff"]);
   const rules = agent.instructions ?? assert.fail("an agent with no rules");
   assert.match(rules, /its done-criteria \(on a research issue, the questions your report answers\)/);
   assert.match(rules, /A research issue's is a report, which you hand off: nothing you commit is read\./);

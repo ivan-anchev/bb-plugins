@@ -4,6 +4,7 @@
 import { sameModel } from "../../model/agent/execution.ts";
 import type { Agent } from "../../model/agent/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
+import type { Comment, CommentId } from "../../model/feed/comment.ts";
 import type { Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
@@ -28,6 +29,7 @@ export type Lookups = {
   /** Every agent of the regional manager. */
   agents(): readonly Agent[];
   decision(id: DecisionId): Decision | null;
+  comment(id: CommentId): Comment | null;
   /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
   view(id: IssueId): IssueView | null;
 };
@@ -73,8 +75,16 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   if (event.kind === "unblocked") {
     return `### ${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}\n\n${when} ${event.by} was the last open issue blocking ${event.issueId}, as its own dependency or its parent's. Nothing of ${event.by} reaches ${event.issueId} on its own: what its agent needs from it, such as a report's file, goes in its brief or a message to its agent. The board below says where ${event.issueId} stands now.`;
   }
+  if (event.kind === "comment-to-you") {
+    const comment = commentOf(event.commentId, lookups);
+    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId))}`;
+  }
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
+    case "comment": {
+      const comment = commentOf(event.commentId, lookups);
+      return `### ${on} commented: ${comment.id}\n\n${when}${answers(comment, lookups)} In its own words:\n\n${comment.text}`;
+    }
     case "handoff": {
       const handed = handedOf(event.handoffId, lookups);
       return `### ${on} handed off: ${handed.handoff.status}\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}`;
@@ -99,6 +109,50 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     default:
       return event satisfies never;
   }
+}
+
+/** The comment an event names. why throw: its event is inserted with it, in one transaction. */
+function commentOf(id: CommentId, { comment }: Lookups): Comment {
+  const found = comment(id);
+  if (found === null) throw new Error(`The comment ${id} is missing.`);
+  return found;
+}
+
+/** What a comment answers, as " It answers m1, the user's: <its first line>"; nothing when it answers none. */
+function answers({ replyTo }: Comment, lookups: Lookups): string {
+  if (replyTo === null) return "";
+  const { author, text } = commentOf(replyTo, lookups);
+  return ` It answers ${replyTo}, ${whose(author)}: "${firstLine(text)}".`;
+}
+
+function whose(author: Comment["author"]): string {
+  switch (author.kind) {
+    case "user":
+      return "the user's";
+    case "manager":
+      return "yours";
+    case "agent":
+      return `${author.agentId}'s`;
+    default:
+      return author satisfies never;
+  }
+}
+
+/** A comment's first line, cut to a line's length. */
+function firstLine(text: string): string {
+  const line = text.split(/\r?\n|\u2028|\u2029/, 1)[0] ?? "";
+  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
+}
+
+/**
+ * What the regional manager does with the user's comment, and where its issue stands now (`view`,
+ * as the board in the same catch-up places it; null: bb's thread list couldn't be read). why the
+ * status: a message to an agent stops a check in flight, so a relay waits for Reviewing and
+ * Verifying to end.
+ */
+function commentNextStep({ id, issueId }: Comment, view: IssueView | null): string {
+  const now = view === null ? `Where ${issueId} stands now couldn't be read with the board: call crew_catch_up again before you relay it.` : `${issueId} is ${STATUS_LABELS[view.status]} now.`;
+  return `Nothing reaches the issue's agent on its own: the user's comments come to you. Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update's decision, or, when it concerns the agent's work, relay it with agent_message, quoting their words. Never relay while ${issueId} is Reviewing or Verifying: a message stops its check. Relay once the check has settled, and set yourself a reminder with crew_remind if it must wait. ${now}`;
 }
 
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */

@@ -29,7 +29,7 @@ const END_TURN = "crew_end_turn";
 export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER, END_TURN];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision">;
+  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
@@ -41,7 +41,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
-      "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, and the user's memory edits and verification switch), then the board (every issue you filed, under Needs you, In review, Verifying, Reviewing, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, what blocks it and what it blocks) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, NOTES.md, RULES.md, CREW.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
+      "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, the user's comments on issues and your agents' replies there, and the user's memory edits and verification switch), then the board (every issue you filed, under Needs you, In review, Verifying, Reviewing, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, what blocks it and what it blocks) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, NOTES.md, RULES.md, CREW.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
@@ -53,6 +53,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
         check: store.check,
         agents: () => store.agents(id),
         decision: store.decision,
+        comment: store.comment,
         view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
       });
       return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;

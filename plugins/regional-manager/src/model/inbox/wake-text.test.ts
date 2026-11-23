@@ -8,6 +8,7 @@ import { memoryFileSchema } from "../memory-file.ts";
 import { coordinatorIdSchema } from "../role.ts";
 import { checkIdSchema, type Check, type CheckId } from "../verdict/check.ts";
 import type { Verdict } from "../verdict/verdict.ts";
+import { commentIdSchema } from "../feed/comment.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
 import { doorbellText } from "./wake-text.ts";
@@ -65,19 +66,23 @@ test("a doorbell names how many updates there are, then one line of plugin facts
       { kind: "needs-input", issueId: i2, agentId: a2, question: "Anything" },
       { kind: "returned-to-todo", issueId: i2, agentId: a2, how: "archived" },
       { kind: "memory-edited", file: memoryFileSchema.parse("NOTES.md") },
+      { kind: "comment-to-you", issueId: i1, commentId: commentIdSchema.parse("m1") },
+      { kind: "comment", issueId: i1, agentId: a1, commentId: commentIdSchema.parse("m2") },
     ]),
     noChecks,
   );
   assert.equal(
     text,
     [
-      `[${DISPLAY_NAME}] 6 updates. Call crew_catch_up to read them in full.`,
+      `[${DISPLAY_NAME}] 8 updates. Call crew_catch_up to read them in full.`,
       `- WEB-1 "Add retries" (a1) handed off: blocked`,
       `- WEB-2 "Dead letters" (a2) ended its turn without a handoff`,
       `- WEB-1 "Add retries" (a1) failed`,
       `- WEB-2 "Dead letters" (a2) is waiting on the user in its thread`,
       `- WEB-2 "Dead letters" (a2) returned to Todo: its agent was archived`,
       `- The user edited NOTES.md`,
+      `- The user commented on WEB-1 "Add retries": m1`,
+      `- WEB-1 "Add retries" (a1) commented: m2`,
     ].join("\n"),
   );
 });

@@ -49,6 +49,7 @@ import { registerRoles } from "./roles.ts";
 import { createSpawner } from "./spawn.ts";
 import { openStore } from "./store/store.ts";
 import { toldWrites } from "./store/told-writes.ts";
+import { registerCommentTool } from "./feed/comment-tool.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import { registerHandoffTool } from "./tools/handoff-tool.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
@@ -815,12 +816,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
     registerHandoffTool(bb, { store, verify });
+    registerCommentTool(bb, { store, inbox });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   /** `turns`, whose every operation waits, once it holds its issue's turn, while turnsTaken says to hold it. */
   function heldWhileTaken(turns: IssueTurns): IssueTurns {

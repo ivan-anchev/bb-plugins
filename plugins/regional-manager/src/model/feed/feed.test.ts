@@ -12,6 +12,7 @@ import type { PrSnapshot } from "../verdict/pr.ts";
 import type { Review, Triaged } from "../verdict/review.ts";
 import type { CriterionResult, Verdict } from "../verdict/verdict.ts";
 import { actorOf, shownIn, timeOf, type Entry, type Filter } from "./entry.ts";
+import { commentIdSchema, type Comment } from "./comment.ts";
 import { feedOf } from "./feed.ts";
 
 /** What feedOf is made of. */
@@ -102,6 +103,7 @@ function bbp19(): FeedFacts {
       [6_650, { kind: "checked", issueId: BBP_19, checkId: checkIdOf(four) }],
     ]),
     log: [],
+    comments: [],
   };
 }
 
@@ -243,7 +245,7 @@ const observed = (statuses: [number, IssueStatus][]): Logged[] => statuses.map((
 /** Every moment shown with the status it moved the issue to, as [moment, its time, the status]. */
 function glyphsOf(entries: readonly Entry[]): [string, number, IssueStatus][] {
   return entries.flatMap((entry): [string, number, IssueStatus][] => {
-    if (entry.kind === "moved") return [];
+    if (entry.kind === "moved" || entry.kind === "comment") return [];
     if (entry.kind !== "round") return entry.moved === null ? [] : [[entry.kind, timeOf(entry), entry.moved]];
     const { number, handed: began, review, verdict, outcome } = entry.round;
     const steps: [string, Step | null][] = [["handed", began], ["review", review.state === "missed" || review.state === "reported" ? review.step : null], ["verdict", verdict?.step ?? null], ["outcome", outcome]];
@@ -317,7 +319,7 @@ test("an issue filed before the log shows where it began, no status on anything 
 test("a round begun before the log shows no status on a step after the marker: the move it made is a line of its own, below it", () => {
   const spanning = handed(handoff(1, A1, 100), { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: null }, { state: "missed", at: 300, reviewerThreadId: null, reason: "no reviewer model" });
   const log: Logged[] = [{ at: 200, event: { kind: "log-began" } }, ...observed([[400, "verifying"]])];
-  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [spanning], finalChecks: [], decisions: [], events: [], log });
+  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [spanning], finalChecks: [], decisions: [], events: [], log, comments: [] });
   assert.deepEqual(glyphsOf(entries), [], "nothing at or above the marker shows a status, its round's later steps included");
   assert.deepEqual(
     entries.map((entry) => [entry.kind, timeOf(entry)]),
@@ -332,7 +334,7 @@ test("a round begun before the log shows no status on a step after the marker: t
 
 test("rows of the log written in one millisecond keep the order they were written: a status shows only on what came before it", () => {
   const log: Logged[] = [...observed([[2_000, "todo"]]), { at: 2_000, event: { kind: "closed", as: "canceled" } }, ...observed([[2_001, "canceled"]])];
-  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log });
+  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [] });
   assert.deepEqual(entries, [
     { kind: "created", at: 0, moved: "todo" },
     { kind: "logged", at: 2_000, event: { kind: "closed", as: "canceled" }, moved: "canceled" },
@@ -341,7 +343,7 @@ test("rows of the log written in one millisecond keep the order they were writte
 
 test("a row the log kept after its start sits below the marker even when the clock stepped back: as written, with its own time", () => {
   const log: Logged[] = [{ at: 5_000, event: { kind: "log-began" } }, ...observed([[4_500, "todo"]]), { at: 4_600, event: { kind: "edited", fields: ["title"] } }];
-  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log });
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [] });
   assert.deepEqual(entries, [
     { kind: "created", at: 1_000, moved: null },
     { kind: "logged", at: 5_000, event: { kind: "log-began" }, moved: null },
@@ -352,10 +354,38 @@ test("a row the log kept after its start sits below the marker even when the clo
 
 test("a status shows only on what was written before it, even when the clock stepped back between them", () => {
   const log: Logged[] = [...observed([[3_000, "todo"], [5_000, "in-progress"]]), { at: 4_000, event: { kind: "edited", fields: ["title"] } }, ...observed([[4_100, "backlog"]])];
-  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log });
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [] });
   assert.deepEqual(entries, [
     { kind: "created", at: 1_000, moved: "todo" },
     { kind: "moved", at: 5_000, status: "in-progress" },
     { kind: "logged", at: 4_000, event: { kind: "edited", fields: ["title"] }, moved: "backlog" },
   ]);
+});
+
+test("comments show in the order posted among the other moments, under Discussion, each by its author, and never take a status", () => {
+  const comment = (n: number, at: number, author: Comment["author"], replyTo: number | null): Comment => ({
+    id: commentIdSchema.parse(`m${n}`),
+    issueId: BBP_19,
+    at,
+    text: `Comment ${n}`,
+    replyTo: replyTo === null ? null : commentIdSchema.parse(`m${replyTo}`),
+    author,
+  });
+  const comments = [comment(1, 1_500, { kind: "user" }, null), comment(2, 1_600, { kind: "manager" }, 1), comment(3, 2_100, { kind: "agent", agentId: A1 }, 1)];
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [agent(A1, 2_000, null)], handed: [], finalChecks: [], decisions: [], events: [], log: observed([[1_700, "in-progress"]]), comments });
+
+  assert.deepEqual(
+    entries.map((entry) => [entry.kind, timeOf(entry)]),
+    [
+      ["created", 1_000],
+      ["comment", 1_500],
+      ["comment", 1_600],
+      ["agent-started", 2_000],
+      ["comment", 2_100],
+    ],
+  );
+  assert.deepEqual(entries[0], { kind: "created", at: 1_000, moved: "in-progress" }, "the move after a comment shows on the moment before it");
+  assert.deepEqual(entries.filter((entry) => entry.kind === "comment").map(actorOf), [{ kind: "user" }, { kind: "manager" }, { kind: "agent", agentId: A1 }]);
+  assert.deepEqual(entries.filter((entry) => shownIn("discussion", entry)).map((entry) => entry.kind), ["comment", "comment", "comment"]);
+  assert.deepEqual(entries.filter((entry) => shownIn("rounds", entry)), []);
 });

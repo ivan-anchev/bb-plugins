@@ -6,6 +6,7 @@ import { issueDecisionSchema } from "../decision.ts";
 import { issueIdSchema } from "../issue/issue.ts";
 import { issueStatusSchema } from "../issue/status.ts";
 import { prChangeSchema } from "../verdict/pr.ts";
+import { commentSchema, type CommentAuthor } from "./comment.ts";
 import { lineEventSchema } from "./log-event.ts";
 import { roundSchema } from "./round.ts";
 
@@ -23,6 +24,8 @@ export const entrySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("round"), round: roundSchema }),
   /** A question put to the user about the issue, at when it was asked, or a decision the manager recorded on it (its own `at`). */
   z.object({ kind: z.literal("decision"), decision: issueDecisionSchema, moved }),
+  /** A comment on the issue, at when it was posted. why no `moved`: a comment moves no status, so none is shown on it. */
+  z.object({ kind: z.literal("comment"), comment: commentSchema }),
   /** The issue's pull request changed: what changed, on which number. */
   z.object({ kind: z.literal("pr"), at, number: z.number().int(), changes: z.array(prChangeSchema), moved }),
   /** The agent's thread said something the plugin told its manager of: it ended a turn with no handoff, failed, or waits on a person. */
@@ -51,6 +54,8 @@ export function timeOf(entry: Entry): number {
       return entry.round.handed.at;
     case "decision":
       return entry.decision.at;
+    case "comment":
+      return entry.comment.at;
     case "created":
     case "logged":
     case "moved":
@@ -66,7 +71,7 @@ export function timeOf(entry: Entry): number {
 }
 
 /** Who an entry is by, as the feed names them: someone it names, or something no one did by hand. */
-export type Actor = { kind: "manager" } | { kind: "agent"; agentId: AgentId } | { kind: "verifier" } | { kind: "github" } | { kind: "bb" } | { kind: "plugin" };
+export type Actor = { kind: "user" } | { kind: "manager" } | { kind: "agent"; agentId: AgentId } | { kind: "verifier" } | { kind: "github" } | { kind: "bb" } | { kind: "plugin" };
 
 /**
  * Who did it, derived from what it is. why never stored: only the manager's tools file an issue,
@@ -87,6 +92,8 @@ export function actorOf(entry: Entry): Actor {
       return endedBy(entry.how);
     case "round":
       return entry.round.by.kind === "agent" ? { kind: "agent", agentId: entry.round.by.agentId } : { kind: "verifier" };
+    case "comment":
+      return authorActor(entry.comment.author);
     case "pr":
       return { kind: "github" };
     case "thread":
@@ -98,7 +105,7 @@ export function actorOf(entry: Entry): Actor {
   }
 }
 
-/** What the reader picks to see: everything, the work, or the why (decisions and questions). */
+/** What the reader picks to see: everything, the work, or the why (comments, decisions and questions). */
 export type Filter = "all" | "rounds" | "discussion";
 
 /** Whether the filter shows the entry. */
@@ -109,9 +116,21 @@ export function shownIn(filter: Filter, entry: Entry): boolean {
     case "rounds":
       return entry.kind === "round";
     case "discussion":
-      return entry.kind === "decision";
+      return entry.kind === "decision" || entry.kind === "comment";
     default:
       return filter satisfies never;
+  }
+}
+
+function authorActor(author: CommentAuthor): Actor {
+  switch (author.kind) {
+    case "user":
+    case "manager":
+      return { kind: author.kind };
+    case "agent":
+      return { kind: "agent", agentId: author.agentId };
+    default:
+      return author satisfies never;
   }
 }
 

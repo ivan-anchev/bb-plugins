@@ -197,7 +197,7 @@
   overflow: hidden;
 }
 
-/* --- Cards: a round, a decision ---------------------------------------------------------------- */
+/* --- Cards: a round, a decision, a comment ----------------------------------------------------- */
 .rmi-round,
 .rmi-decision {
   margin: 4px 0;
@@ -236,6 +236,60 @@
   font-size: 12px;
   color: var(--destructive-text);
 }
+/* A comment's line of what it answers, quoted. */
+.rmi-comment-quote {
+  padding-left: 8px;
+  border-left: 2px solid var(--border);
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A comment of the user's on its way: quieter until the feed reads it. */
+.rmi-comment-sending {
+  opacity: 0.6;
+}
+
+/* --- The composer, at the foot of Activity ------------------------------------------------------ */
+.rmi-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.rmi-composer form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rmi-composer textarea {
+  min-height: 60px;
+}
+.rmi-composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rmi-composer-hint {
+  min-width: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+/* On touch: 16px text, so iOS doesn't zoom, and a 44px target to send. why the field's sizing copy too: it sets the field's height only while its text metrics match. */
+@media (pointer: coarse) {
+  .rmi-composer textarea,
+  .rmi-composer textarea + span {
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .rmi-composer button[type="submit"] {
+    min-height: 44px;
+    padding-inline: 16px;
+  }
+}
+
 .rmi-options {
   display: flex;
   flex-wrap: wrap;

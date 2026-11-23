@@ -33,6 +33,7 @@ import { registerRoles } from "./src/server/roles.ts";
 import { createSpawner } from "./src/server/spawn.ts";
 import { openStore } from "./src/server/store/store.ts";
 import { toldWrites } from "./src/server/store/told-writes.ts";
+import { registerCommentTool } from "./src/server/feed/comment-tool.ts";
 import { registerCrewTools } from "./src/server/tools/crew-tools.ts";
 import { registerHandoffTool } from "./src/server/tools/handoff-tool.ts";
 import { createFinalChecks } from "./src/server/verify/final-check/final-checks.ts";
@@ -96,6 +97,7 @@ export default function plugin(host: BbPluginApi): void {
   registerIssueTools(bb, { store, issues });
   registerAgentTools(bb, { store, agents });
   registerHandoffTool(bb, { store, verify });
+  registerCommentTool(bb, { store, inbox });
   registerReviewTool(bb, { store, review });
   registerVerdictTool(bb, { store, verify });
   const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard, refreshIssue: (id, issueId) => bb.rpc.experimental_invalidate([issueTag(id, issueId)]) });
@@ -126,7 +128,7 @@ export default function plugin(host: BbPluginApi): void {
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
     ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }),
     ...boardHandlers({ store, board, inbox }),
-    ...feedHandlers({ store, reader: createFeedReader(bb, store) }),
+    ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }),
     ...memoryHandlers(store, memory, inbox),
   });
 }

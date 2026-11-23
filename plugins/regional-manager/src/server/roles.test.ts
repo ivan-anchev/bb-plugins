@@ -8,7 +8,7 @@ import { DISPLAY_NAME } from "../name.ts";
 import { coordinating, harness, HEAD, isRefusal, startedAgent, textOf } from "./test-harness.ts";
 import { finalCheckBrief } from "./verify/verifier-brief.ts";
 
-const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop"];
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "issue_comment"];
 
 test("a regional manager is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();
@@ -124,13 +124,13 @@ test("crew_memory_read rejects a name outside the memory folder or not markdown"
   }
 });
 
-test("an agent thread is offered crew_memory_read, agent_handoff, its skill and its rules, and nothing else", async () => {
+test("an agent thread is offered crew_memory_read, issue_comment, agent_handoff, its skill and its rules, and nothing else", async () => {
   const kit = harness();
   const { threadId } = await kit.startManager("Migrate the webhook service");
   const { agentThreadId } = await startedAgent(kit, threadId);
 
   const configuration = kit.configurationFor(agentThreadId, {});
-  assert.deepEqual(configuration.tools, ["crew_memory_read", "agent_handoff"]);
+  assert.deepEqual(configuration.tools, ["crew_memory_read", "issue_comment", "agent_handoff"]);
   assert.deepEqual(configuration.skills, ["crew-board", "agent-work"]);
   assert.ok(configuration.instructions?.startsWith("You are an agent, started by a regional manager"));
   assert.match(configuration.instructions ?? "", /Your work is your issue's brief and its done-criteria or questions, nothing else\./);
