@@ -230,7 +230,7 @@ test("a long history keeps the criterion's words: its cells wrap, six to a line,
 });
 
 test("a missed review says it was missed in its step, with why once the round's body is read", async () => {
-  const missed: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "missed", at: 5_100 } } } : entry));
+  const missed: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "missed", step: { at: 5_100, moved: null } } } } : entry));
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: missed }), bodies: () => ({ ...bodyOf(3), findings: [], reviewMissed: "no independent reviewer model" }) });
   assert.ok(await rounds(tab()).card(3).findByText(/^No review: no independent reviewer model/));
 });

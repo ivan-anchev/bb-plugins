@@ -76,7 +76,7 @@ test("a done handoff makes a queued check that copies its issue's criteria and v
   const done = handoff(issue.id, agentId, "done");
   const check = checkOf(store.insertHandoff(done, CLEAN));
 
-  store.updateIssue(MANAGER, issue.id, { doneCriteria: ["npm test passes"], verifier: null }, { requireUnheld: false, closes: new Map() });
+  store.updateIssue(MANAGER, issue.id, { doneCriteria: ["npm test passes"], verifier: null }, { requireUnheld: false, closes: new Map(), at: 3_000 });
 
   assert.deepEqual(store.check(check.id), {
     id: check.id,

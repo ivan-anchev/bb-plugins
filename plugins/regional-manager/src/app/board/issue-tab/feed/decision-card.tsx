@@ -3,23 +3,26 @@
 // issue. An open question's options are buttons that answer it here, as on the Board.
 import { useLayoutEffect, useRef } from "react";
 import type { IssueDecision } from "../../../../model/decision.ts";
+import type { IssueStatus } from "../../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { Button } from "../../../ui/button.tsx";
 import { useAnswer } from "../../use-answer.ts";
-import { When } from "./byline.tsx";
+import { MovedTo, When } from "./byline.tsx";
 import { ResultGlyph } from "./round/result-glyph.tsx";
 
 type Asked = Extract<IssueDecision, { kind: "asked" }>;
 
-export function DecisionCard({ coordinatorId, decision }: { coordinatorId: CoordinatorId; decision: IssueDecision }) {
+/** `moved`: the status the issue moved to after it (null: none). */
+export function DecisionCard({ coordinatorId, decision, moved }: { coordinatorId: CoordinatorId; decision: IssueDecision; moved: IssueStatus | null }) {
   switch (decision.kind) {
     case "asked":
-      return <Question coordinatorId={coordinatorId} decision={decision} />;
+      return <Question coordinatorId={coordinatorId} decision={decision} moved={moved} />;
     case "recorded":
       return (
         <article className="rmi-decision" aria-label="Decision">
           <p className="rmi-decision-head">
-            <span className="rmi-actor">Regional manager</span> decided <When at={decision.at} />
+            <span className="rmi-actor">Regional manager</span> decided
+            <MovedTo status={moved} /> <When at={decision.at} />
           </p>
           <p className="rmi-decision-text">{decision.text}</p>
         </article>
@@ -37,7 +40,7 @@ export function DecisionCard({ coordinatorId, decision }: { coordinatorId: Coord
  * lands, and focus on an option, which unmounts then, moves to the card, whoever answered: this
  * card, the Board, or another window.
  */
-function Question({ coordinatorId, decision }: { coordinatorId: CoordinatorId; decision: Asked }) {
+function Question({ coordinatorId, decision, moved }: { coordinatorId: CoordinatorId; decision: Asked; moved: IssueStatus | null }) {
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
   const card = useRef<HTMLElement>(null);
   // Whether focus is on one of the options. why a ref: the answer that unmounts them fires no blur.
@@ -52,7 +55,8 @@ function Question({ coordinatorId, decision }: { coordinatorId: CoordinatorId; d
   return (
     <article ref={card} tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`}>
       <p className="rmi-decision-head">
-        <span className="rmi-actor">Regional manager</span> asked you <When at={decision.at} />
+        <span className="rmi-actor">Regional manager</span> asked you
+        <MovedTo status={moved} /> <When at={decision.at} />
         <span className="rmi-decision-id">{decision.id}</span>
       </p>
       <p className="rmi-decision-text">{decision.question}</p>

@@ -85,9 +85,24 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
 
   // why hold bb's turn reads: the verdict settles in WEB-1's turn, which the tick starts and doesn't
   // wait for, so nothing orders it before the tick's ring. Held, it is still settling as the tick rings.
+  // why release every other: the tick also waits for its read of every issue's view, which reads the
+  // same turn. The pull request read changes WEB-1's view first, so that read is held before the verdict's.
   pr({ rollup: "SUCCESS" });
   kit.turnEvents.holding = true;
-  await minute();
+  let ticked = false;
+  const ticking = minute().then(() => {
+    ticked = true;
+  });
+  await settled();
+  const [viewsRead, verdictRead] = kit.turnEvents.held.splice(0);
+  assert.ok(viewsRead !== undefined && verdictRead !== undefined, "the views' read and the verdict's both held");
+  viewsRead();
+  for (let pass = 0; pass < 20 && !ticked; pass++) {
+    await settled();
+    kit.turnEvents.held.splice(0).forEach((release) => release());
+  }
+  await ticking;
+  kit.turnEvents.held.push(verdictRead);
   assert.equal(kit.turnEvents.held.length, 1, "the verdict's turn read held");
   assert.equal(doorbells().at(-1), doorbellOf('WEB-1 "Add retries" (a1) PR #41: CI passed'));
   assert.deepEqual(events(), [], "the doorbell carried the CI result");

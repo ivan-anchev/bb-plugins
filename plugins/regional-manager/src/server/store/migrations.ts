@@ -218,6 +218,26 @@ export const MIGRATIONS: readonly string[] = [
   `UPDATE checks SET verdict = json_set(verdict, '$.mustFixFails',
      json(CASE WHEN json_extract(verdict, '$.settlement.kind') IN ('pending', 'waiting-for-ci') THEN 'true' ELSE 'false' END))
    WHERE json_extract(verdict, '$.state') = 'returned'`,
+
+  // An issue's log (log-event.ts): what has no other home, in the order written. Its plan's changes,
+  // written with the edit (issues-store.ts updateIssue); each status the plugin observed it move to
+  // (log-store.ts observeStatuses); and a log-began row, written here for every issue filed before
+  // it, as the time of this release. why JSON: an event is read and written whole. why counted per
+  // issue (issue_writes) and not in fact_writes: an open tab reads the issue again when its log
+  // grows, while a status row must never overtake the read it was observed from (current-views.ts).
+  `CREATE TABLE issue_log (seq INTEGER PRIMARY KEY AUTOINCREMENT, coordinator_id TEXT NOT NULL, issue_id TEXT NOT NULL, at INTEGER NOT NULL, event TEXT NOT NULL,
+     FOREIGN KEY (coordinator_id, issue_id) REFERENCES issues (coordinator_id, id))`,
+  `CREATE INDEX issue_log_of_issue ON issue_log (coordinator_id, issue_id)`,
+  // The last status logged for each issue is read after every change.
+  `CREATE INDEX issue_log_statuses ON issue_log (coordinator_id, issue_id, seq) WHERE json_extract(event, '$.kind') = 'status'`,
+  // why julianday: it gives the milliseconds of now on every SQLite bb ships.
+  `INSERT INTO issue_log (coordinator_id, issue_id, at, event)
+     SELECT coordinator_id, id, CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER), '{"kind":"log-began"}' FROM issues ORDER BY rowid`,
+  [
+    countIssueWrites("issue_log_issue_id_inserted", "INSERT ON issue_log", "NEW.coordinator_id", "NEW.issue_id"),
+    countIssueWrites("issue_log_issue_id_updated", "UPDATE ON issue_log", "NEW.coordinator_id", "NEW.issue_id"),
+    countIssueWrites("issue_log_issue_id_deleted", "DELETE ON issue_log", "OLD.coordinator_id", "OLD.issue_id"),
+  ].join(";\n"),
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

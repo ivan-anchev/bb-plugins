@@ -18,6 +18,7 @@ import { agentsStore, bindRole, endAgent, insertAgent, insertTicket, type NewAge
 import { checksStore, startCheck, startReview, supersedeChecks } from "./issue/checks-store.ts";
 import { issueKeysStore } from "./issue/keys/issue-keys-store.ts";
 import { issuesStore } from "./issue/issues-store.ts";
+import { logStore } from "./feed/log-store.ts";
 import { prStore } from "./issue/pr-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
 import { lookFor, pictureIconManagers, withAvatar } from "./avatars.ts";
@@ -52,6 +53,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     ...checksStore(db),
     ...prStore(db),
     ...issueKeysStore(db),
+    ...logStore(db),
 
     /** The issue's decisions, its one list, oldest first: the questions put to the user naming it, answered or not, and the decisions recorded on it. */
     issueDecisions: (coordinatorId: CoordinatorId, id: IssueId): IssueDecision[] => issueDecisions(id, inbox.decisions(coordinatorId), issues.recordedDecisions(coordinatorId, id)),
@@ -203,7 +205,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      */
     removeCoordinator(id: CoordinatorId): void {
       db().transaction(() => {
-        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issue_decisions", "issues", "memory_revisions", "fact_writes", "issue_writes"]) {
+        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issue_decisions", "issue_log", "issues", "memory_revisions", "fact_writes", "issue_writes"]) {
           db().prepare(`DELETE FROM ${table} WHERE coordinator_id = ?`).run(id);
         }
         db().prepare("DELETE FROM coordinators WHERE id = ?").run(id);

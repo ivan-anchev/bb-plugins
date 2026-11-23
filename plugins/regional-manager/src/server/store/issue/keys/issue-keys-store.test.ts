@@ -17,8 +17,8 @@ const CLEAN: CheckoutRead = { kind: "read", branch: null, checkout: { headSha: S
  * A store whose regional manager MANAGER holds what 0.5.0 stored, its issues numbered i1, i2, i3 and
  * no issue key: a parent i1 with a sub-issue i2, which i3 depends on; an agent on i2 whose done
  * handoff ("Retries land on i1") is checked by a verifier, a final check of i1 judging i2's merged
- * work, a question to the user and a recorded decision on i3, and the event announcing i3 unblocked
- * by i2. OTHER_MANAGER keeps its key, WEB, and its issue WEB-1.
+ * work, a question to the user and a recorded decision on i3, i3's log of a dependency on i1 added
+ * and removed and of its status, and the event announcing i3 unblocked by i2. OTHER_MANAGER keeps its key, WEB, and its issue WEB-1.
  */
 function storedBy050() {
   const { db, store } = freshStore();
@@ -32,7 +32,11 @@ function storedBy050() {
   store.bindTicket("verifier-1", "thr_verifier_1");
   store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 4_000);
   store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId: dependent.id }, 4_000);
-  store.updateIssue(MANAGER, dependent.id, { decision: { text: "Retry three times", at: 4_100 } }, { requireUnheld: false, closes: new Map() });
+  store.updateIssue(MANAGER, dependent.id, { decision: { text: "Retry three times", at: 4_100 } }, { requireUnheld: false, closes: new Map(), at: 3_000 });
+  for (const [change, at] of [[{ add: [parent.id], remove: [] }, 4_200], [{ add: [], remove: [parent.id] }, 4_300]] as const) {
+    store.updateIssue(MANAGER, dependent.id, { dependsOn: { add: [...change.add], remove: [...change.remove] } }, { requireUnheld: false, closes: new Map(), at });
+  }
+  store.observeStatuses(MANAGER, [{ issue: dependent, status: "todo" }], 4_400);
   store.insertEvent(MANAGER, { kind: "unblocked", issueId: dependent.id, by: sub.id, closedAs: "done" }, 5_000);
   filedIssue(store, OTHER_MANAGER, newIssue(), 2_000);
   asBefore(db);
@@ -91,6 +95,11 @@ test("keying a regional manager renames every issue id it stores to KEY-N, the n
     "questions put to the user and decisions recorded",
   );
   assert.deepEqual(store.unannounced(MANAGER).map(({ event }) => event), [{ kind: "unblocked", issueId: "BBP-3", by: "BBP-2", closedAs: "done" }], "inbox events");
+  assert.deepEqual(
+    store.logOf(MANAGER, id("BBP-3")).map(({ event }) => event),
+    [{ kind: "dependency-added", on: "BBP-1" }, { kind: "dependency-removed", on: "BBP-1" }, { kind: "status", status: "todo" }],
+    "an issue's log, and the issues it names",
+  );
   assert.deepEqual([...store.issueWrites(MANAGER).keys()].sort(), ["BBP-1", "BBP-2", "BBP-3"], "each issue's write count");
   assert.deepEqual(store.unkeyedManagers(), []);
 

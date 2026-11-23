@@ -247,11 +247,11 @@ async function filedUnderI1While(first: object, meanwhile: (store: Manager["kit"
 const I1 = issueIdSchema.parse("WEB-1");
 
 test("filing a sub-issue is judged on its parent as stored when it is written: canceled while bb was read, refused; reopened meanwhile, filed", async () => {
-  const canceled = await filedUnderI1While({ title: "Add retries" }, (store, id) => store.updateIssue(id, I1, { closed: { as: "canceled", at: 2_000 } }, { requireUnheld: true, closes: new Map() }));
+  const canceled = await filedUnderI1While({ title: "Add retries" }, (store, id) => store.updateIssue(id, I1, { closed: { as: "canceled", at: 2_000 } }, { requireUnheld: true, closes: new Map(), at: 3_000 }));
   assert.deepEqual(canceled.result, { refused: true, text: "No issue filed: WEB-3 can't be a sub-issue of WEB-1: WEB-1 is closed. Give WEB-3 no parent, or an open top-level build issue as its parent." });
   assert.deepEqual(canceled.statuses, { "WEB-1": "canceled", "WEB-2": "in-progress" });
 
-  const reopened = await filedUnderI1While({ status: "canceled" }, (store, id) => store.updateIssue(id, I1, { closed: null }, { requireUnheld: true, closes: new Map() }));
+  const reopened = await filedUnderI1While({ status: "canceled" }, (store, id) => store.updateIssue(id, I1, { closed: null }, { requireUnheld: true, closes: new Map(), at: 3_000 }));
   assert.deepEqual(reopened.result, { refused: false, text: "Filed WEB-3 (build) as a sub-issue of WEB-1 in Todo." });
 });
 

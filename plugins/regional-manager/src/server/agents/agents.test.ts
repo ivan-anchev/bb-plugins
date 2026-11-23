@@ -495,7 +495,10 @@ test("an agent thread's status change refreshes its regional manager's board, an
   await kit.threadNow(agentThreadId);
   await kit.emit("thread.active", { thread: kit.ref(threadId) });
   await kit.threadNow(threadId);
-  assert.deepEqual(kit.invalidated().slice(before), [`board:${coordinatorId}`, `board:${coordinatorId}`]);
+  const refreshed = kit.invalidated().slice(before);
+  assert.deepEqual(refreshed.filter((tag) => tag.startsWith("board:")), [`board:${coordinatorId}`, `board:${coordinatorId}`]);
+  // why an issue's tag too: the watch logs the status the agent's turn moved its issue to, which its open tab shows.
+  assert.ok(refreshed.every((tag) => tag === `board:${coordinatorId}` || tag === `issue:${coordinatorId}/WEB-1`), refreshed.join(", "));
 });
 
 test("an agent whose thread was archived or deleted while the plugin wasn't listening is ended by the tick, and its issue returns to Todo", async () => {

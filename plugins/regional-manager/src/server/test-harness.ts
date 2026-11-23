@@ -37,7 +37,7 @@ import { issueTurns } from "./issues/issue-turns.ts";
 import { createIssues } from "./issues/issues.ts";
 import { currentViews } from "./issues/views/current-views.ts";
 import { pluginInstance } from "./lifetime.ts";
-import { watchUnblocked } from "./issues/views/unblocked.ts";
+import { watchViews } from "./issues/views/view-watch.ts";
 import { openMemoryRoot } from "./memory/memory-files.ts";
 import { memoryHandlers } from "./memory/memory-rpc.ts";
 import { managerHandlers } from "./manager/manager-rpc.ts";
@@ -778,7 +778,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const onChange = (id: CoordinatorId) => {
       refreshIssues(id);
       views.changed(id);
-      unblocked.changed(id);
+      viewWatch.changed(id);
     };
     const onRemoved = (id: CoordinatorId) => {
       threadEvents.forget(id);
@@ -794,7 +794,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const issueTags = issueTagPublisher({ store, invalidate: (tags) => invalidated.push(...tags) });
     const inbox = createInbox({ bb, store, memory, onChange });
     const views = currentViews({ bb, store });
-    const unblocked = watchUnblocked({ bb, store, views, inbox });
+    const viewWatch = watchViews({ bb, store, views, inbox, publish: (id) => issueTags.publish(id), now: () => clock.now });
     const turns = turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs);
     const prWatch = createPrWatch({ bb, store, inbox, gh, now: () => clock.now });
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
@@ -812,7 +812,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, unblocked, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...feedHandlers({ store, reader: createFeedReader(bb, store) }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   let plugin = wire();
 
@@ -947,7 +947,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       await plugin.prWatch.tick(clock.now).catch(warned("read the issues' pull requests"));
       await plugin.finalChecks.tick().catch(warned("read which final checks are due"));
       await plugin.verify.reconcile().catch(warned("reconcile the verifiers"));
-      await plugin.unblocked.tick();
+      await plugin.viewWatch.tick();
       for (const { id } of openedStore.coordinators()) plugin.issueTags.publish(id);
       await plugin.inbox.tick(clock.now);
       // why: the issues' turns the pass started run on, unwaited for, as on the server; this fake answers them at once unless a test holds bb.

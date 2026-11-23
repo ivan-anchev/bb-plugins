@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { agentIdSchema } from "../../../../model/agent/agent.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
-import { COORDINATOR, FEED, issue, opened } from "../test-tab.ts";
+import { COORDINATOR, FEED, id, issue, opened } from "../test-tab.ts";
 
 // An issue's Activity: every entry of its feed in order, each drawn by its kind, under a filter; and
 // an open question answered from its card.
@@ -56,7 +56,7 @@ test("the filter shows All, only Rounds, or only the Discussion, each pressed as
   assert.deepEqual([pressed(), kinds()], [["Rounds"], ["round", "round", "round"]]);
   fireEvent.click(filter("Discussion"));
   assert.deepEqual([pressed(), kinds()], [["Discussion"], ["decision", "decision", "decision"]]);
-  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Ship it Monday.", at: 7_000 } };
+  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Ship it Monday.", at: 7_000 }, moved: null };
   await refeed("WEB-1", () => ({ ...FEED, entries: [...FEED.entries, decided] }));
   await waitFor(() => assert.deepEqual([pressed(), kinds()], [["Discussion"], ["decision", "decision", "decision", "decision"]], "a read keeps the reader's filter"));
   fireEvent.click(filter("All"));
@@ -90,13 +90,13 @@ test("once the answer lands the question shows it answered, and focus on the opt
 });
 
 test("an agent's thread that failed reads as its line, with bb's error", async () => {
-  const failed: Entry = { kind: "thread", at: 6_500, agentId: agentIdSchema.parse("a2"), event: { kind: "failed", error: "The provider stopped responding" } };
+  const failed: Entry = { kind: "thread", at: 6_500, agentId: agentIdSchema.parse("a2"), event: { kind: "failed", error: "The provider stopped responding" }, moved: null };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, failed] }) });
   assert.ok(activity(tab()).texts().some((text) => /^a2 failed: The provider stopped responding/.test(text ?? "")));
 });
 
 test("an agent that waited on a person reads as a moment past, not as waiting now", async () => {
-  const asked: Entry = { kind: "thread", at: 6_600, agentId: agentIdSchema.parse("a2"), event: { kind: "needs-input", question: "Approve the push?" } };
+  const asked: Entry = { kind: "thread", at: 6_600, agentId: agentIdSchema.parse("a2"), event: { kind: "needs-input", question: "Approve the push?" }, moved: null };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, asked] }) });
   assert.ok(activity(tab()).texts().some((text) => /^a2 asked a person: Approve the push\?/.test(text ?? "")));
 });
@@ -114,4 +114,34 @@ test("a question answered elsewhere, on the Board or in another window, while fo
   await waitFor(() => assert.match(card().textContent ?? "", /You answered/));
   assert.deepEqual(answers, [], "this card sent nothing");
   assert.equal(document.activeElement, card());
+});
+
+test("an entry that moved the issue shows the status it moved to, as the Board draws it; plan changes and where the log began are quiet lines; a move nothing explains is a line of its own", async () => {
+  const moved = (entry: Entry): Entry => {
+    if (entry.kind === "round" && entry.round.number === 3) {
+      const { round } = entry;
+      return { kind: "round", round: { ...round, handed: { ...round.handed, moved: "verifying" }, outcome: round.outcome === null ? null : { ...round.outcome, moved: "in-review" } } };
+    }
+    return entry.kind === "pr" ? { ...entry, moved: "done" } : entry;
+  };
+  const logged: Entry[] = [
+    { kind: "logged", at: 900, event: { kind: "log-began" }, moved: null },
+    { kind: "logged", at: 6_400, event: { kind: "edited", fields: ["title", "criteria"] }, moved: null },
+    { kind: "logged", at: 6_410, event: { kind: "dependency-added", on: id("WEB-7") }, moved: null },
+    { kind: "moved", at: 6_450, status: "reviewing" },
+  ];
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [logged[0] as Entry, ...FEED.entries.map(moved), ...logged.slice(1)] }) });
+  const { section, texts } = activity(tab());
+  const lines = texts();
+  assert.match(lines[0] ?? "", /^Edits and status moves are kept from here; verdict times above are as announced or approximate/);
+  assert.ok(lines.some((text) => /^#219 CI passed, merged ·\s+Done/.test(text ?? "")), lines.join("\n"));
+  assert.ok(lines.some((text) => /^Regional manager edited title, criteria Jan/.test(text ?? "")), "an edit names its fields, and moved nothing");
+  assert.ok(lines.some((text) => /^Regional manager made it depend on WEB-7/.test(text ?? "")));
+  assert.ok(lines.some((text) => /^Reviewing Jan/.test(text ?? "")), "a move nothing explains: its glyph and name alone");
+  const card = within(section.getByRole("article", { name: "Round 3" }));
+  assert.match(card.getAllByRole("listitem")[0]?.textContent ?? "", /^a2 handed off ·\s+Verifying/);
+  assert.ok(card.getByRole("img", { name: "Verifying" }), "the glyph is the Board's, labelled with its status");
+  const outcome = section.getByRole("article", { name: "Round 3" }).querySelector(".rmi-outcome");
+  assert.match(outcome?.textContent ?? "", /^Passed ·\s+In review/, "what became of its verdict, and the status that moved it to");
+  assert.equal(section.getAllByRole("img", { name: "Done" }).length, 1);
 });

@@ -69,14 +69,15 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
    * The edit a status asks for, or why the issue as it stands now (`view`, current as the edit is
    * written) can't take it. why the holder read after the view: an agent started meanwhile holds it
    * (updateIssue checks that again). A parent's open sub-issues are the plan's to refuse (plan.ts).
+   * A close is at `at`.
    */
-  function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>): IssueEdit | Refused {
+  function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>, at: number): IssueEdit | Refused {
     const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${headlineText(view)})`;
-    if (status === "done") return view.status === "in-review" ? { closed: { as: "accepted", at: Date.now() } } : { refused: `${now}, so it can't be marked Done: only an issue In review can.` };
+    if (status === "done") return view.status === "in-review" ? { closed: { as: "accepted", at } } : { refused: `${now}, so it can't be marked Done: only an issue In review can.` };
     const holder = holderOf(issue);
     if (holder !== null) return { refused: `${holder.id} holds ${issue.id}, so it can't be ${status === "canceled" ? "canceled" : `moved to ${STATUS_LABELS[status]}`}. Stop ${holder.id} with agent_stop first.` };
     if (view.status === "done") return { refused: `${now}, and Done is final.` };
-    return status === "canceled" ? { closed: { as: "canceled", at: Date.now() } } : { rest: status, closed: null };
+    return status === "canceled" ? { closed: { as: "canceled", at } } : { rest: status, closed: null };
   }
 
   return {
@@ -117,7 +118,9 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
       /** Writes the change judged on `before`: every issue viewed, or null when nothing changed is judged by them. */
       const write = (before: IssueView[] | null): { issue: Issue; before: IssueView[] | null } | Refused => {
-        const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status);
+        // why one moment: a close, a decision and the log of what changed tell one edit.
+        const at = Date.now();
+        const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status, at);
         if ("refused" in statusChange) return statusChange;
         // why the holder read here, with no await before the write: an agent started meanwhile may run on the verifier's model.
         const holder = holderOf(issue);
@@ -131,9 +134,9 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
           ...statusChange,
           ...(dependsOn === undefined ? {} : { dependsOn }),
           ...(verifier === undefined ? {} : { verifier }),
-          ...(decision === undefined ? {} : { decision: { text: decision, at: Date.now() } }),
+          ...(decision === undefined ? {} : { decision: { text: decision, at } }),
         };
-        const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []) });
+        const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []), at });
         return "refused" in updated ? updated : { issue: updated.issue, before };
       };
       // why views current as it is written (current-views.ts), whenever a status, parent or dependency changes: the only changes judged by them.

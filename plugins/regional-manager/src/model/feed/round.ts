@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { agentIdSchema } from "../agent/agent.ts";
 import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
-import type { Handed } from "../issue/status.ts";
+import { issueStatusSchema, type Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
 import { reviewFindingSchema, reviewPending, triageSchema, type Review } from "../verdict/review.ts";
 import { checkInFlight, criterionResultSchema, firstFailure, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
@@ -27,11 +27,15 @@ export function roundTarget(key: RoundKey): { kind: "handoff"; handoffId: Handof
   return key.startsWith("h-") ? { kind: "handoff", handoffId: handoffIdSchema.parse(id) } : { kind: "final", checkId: checkIdSchema.parse(id) };
 }
 
+/** A moment of a round: when it happened, and the status the plugin observed the issue move to after it (feed.ts attachStatuses; null: none). */
+const stepSchema = z.object({ at: z.number(), moved: issueStatusSchema.nullable() });
+export type Step = z.infer<typeof stepSchema>;
+
 export const roundSchema = z.object({
   key: roundKeySchema,
   number: z.number().int().min(1),
   /** When it began: its handoff, or its final check. */
-  at: z.number(),
+  handed: stepSchema,
   by: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("agent"), agentId: agentIdSchema, status: handoffStatusSchema, summary: z.string() }),
     z.object({ kind: z.literal("final"), defaultBranch: z.string() }),
@@ -40,26 +44,27 @@ export const roundSchema = z.object({
   review: z.discriminatedUnion("state", [
     z.object({ state: z.literal("none") }),
     z.object({ state: z.literal("pending") }),
-    z.object({ state: z.literal("missed"), at: z.number() }),
-    z.object({ state: z.literal("reported"), at: z.number(), findings: z.number().int(), confirmed: z.number().int().nullable() }),
+    z.object({ state: z.literal("missed"), step: stepSchema }),
+    z.object({ state: z.literal("reported"), step: stepSchema, findings: z.number().int(), confirmed: z.number().int().nullable() }),
   ]),
   /**
    * Its verdict (null: nothing checks this round, as a blocked or research handoff): what it says,
    * and, when it failed, what failed it first (verdict.ts firstFailure): its checkout (not the
    * claimed commit on a clean tree), a criterion, a must-fix finding the verifier confirmed, or CI; each criterion's result in the check's order ([] until it returned), and the
    * fix round its findings went back to its agent as once settled (null: none):
-   * reached it, or may have (the plugin can't tell, so the verdict is its manager's). When it
-   * returned is the body's.
+   * reached it, or may have (the plugin can't tell, so the verdict is its manager's); and when it
+   * returned or could not run (null: neither yet, or it never will).
    */
   verdict: z
     .object({
       outcome: z.discriminatedUnion("kind", [z.object({ kind: z.literal("fail"), by: z.enum(["checkout", "criteria", "must-fix", "ci"]) }), z.object({ kind: outcomeSchema.exclude(["fail"]) })]),
       results: z.array(criterionResultSchema),
       fixRound: z.object({ round: z.number().int(), delivery: z.enum(["sent", "maybe"]) }).nullable(),
+      step: stepSchema.nullable(),
     })
     .nullable(),
-  /** When its verdict was sent back or made final, from the inbox event that said so (null: not yet). */
-  outcomeAt: z.number().nullable(),
+  /** When its returned verdict was sent back or made final, from the inbox event that said so (null: not yet, or no verdict returned, which its verifier's step tells). */
+  outcome: stepSchema.nullable(),
   /** Its check is in flight: its review, its verdict or CI is still to come. */
   inFlight: z.boolean(),
 });
@@ -81,11 +86,11 @@ export function roundOf({ handoff, check }: Handed, number: number, outcomeAt: n
   return {
     key: roundKeySchema.parse(`h-${handoff.id}`),
     number,
-    at: handoff.at,
+    handed: stepAt(handoff.at),
     by: { kind: "agent", agentId: handoff.agentId, status: handoff.status, summary: handoff.summary },
     review: check === null ? { state: "none" } : reviewOf(check),
     verdict: check === null ? null : verdictOf(check.verdict),
-    outcomeAt,
+    outcome: check === null ? null : outcomeStep(check.verdict, outcomeAt),
     inFlight: check !== null && checkInFlight(check),
   };
 }
@@ -95,11 +100,11 @@ export function finalRoundOf(check: FinalCheck, number: number, outcomeAt: numbe
   return {
     key: roundKeySchema.parse(`f-${check.id}`),
     number,
-    at: check.at,
+    handed: stepAt(check.at),
     by: { kind: "final", defaultBranch: check.subject.defaultBranch },
     review: { state: "none" },
     verdict: verdictOf(check.verdict),
-    outcomeAt,
+    outcome: outcomeStep(check.verdict, outcomeAt),
     inFlight: checkInFlight(check),
   };
 }
@@ -179,9 +184,9 @@ function reviewOf({ review, verdict }: Check): Round["review"] {
     case "running":
       return reviewPending({ review, verdict }) ? { state: "pending" } : { state: "none" };
     case "missed":
-      return { state: "missed", at: review.at };
+      return { state: "missed", step: stepAt(review.at) };
     case "reported":
-      return { state: "reported", at: review.at, findings: review.findings.length, confirmed: confirmedOf(verdict) };
+      return { state: "reported", step: stepAt(review.at), findings: review.findings.length, confirmed: confirmedOf(verdict) };
     default:
       return review satisfies never;
   }
@@ -196,13 +201,14 @@ function confirmedOf(verdict: Verdict): number | null {
 function verdictOf(verdict: Verdict): Round["verdict"] {
   switch (verdict.state) {
     case "returned":
-      return { outcome: outcomeOf(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict) };
+      return { outcome: outcomeOf(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict), step: stepAt(verdict.at) };
     case "could-not-run":
+      return { outcome: outcomeOf(verdict), results: [], fixRound: null, step: stepAt(verdict.at) };
     case "queued":
     case "running":
     case "superseded":
     case "waived":
-      return { outcome: outcomeOf(verdict), results: [], fixRound: null };
+      return { outcome: outcomeOf(verdict), results: [], fixRound: null, step: null };
     default:
       return verdict satisfies never;
   }
@@ -235,6 +241,12 @@ function fixRoundOf({ settlement }: Extract<Verdict, { state: "returned" }>): No
       return settlement satisfies never;
   }
 }
+
+/** What became of a returned verdict, once announced at `at`. why only a returned one: a verdict that never came says so in its verifier's step, which is its last. */
+const outcomeStep = (verdict: Verdict, at: number | null): Step | null => (verdict.state === "returned" && at !== null ? stepAt(at) : null);
+
+/** A step at `at`, before any status is attached to it (feed.ts). */
+const stepAt = (at: number): Step => ({ at, moved: null });
 
 /** Each finding with its triage once the verdict returned (joined as the store read it, verdict.ts withReview); before, none yet. */
 function findingsOf({ review, verdict }: Check): RoundBody["findings"] {

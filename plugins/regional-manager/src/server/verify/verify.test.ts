@@ -467,14 +467,9 @@ test("an issue opened on the board sends of each verdict only what the board sho
   const verifierThreadId = verifier();
   await kit.call("issue_verdict", FAILS, verifierThreadId);
   await kit.idle(verifierThreadId, "Verdict returned.");
-  const at = () => {
-    const stored = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
-    return stored?.state === "returned" ? stored.at : assert.fail("not returned");
-  };
   /** The returned verdict as the board is shown it, settled as `settlement`. */
   const failed = (settlement: object) => ({
     state: "returned",
-    at: at(),
     verifierThreadId,
     headSha: HEAD,
     checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 },
@@ -801,7 +796,9 @@ test("a verifier silent for 30 minutes ends its check Couldn't verify with that 
   assert.deepEqual(verdict(), { state: "could-not-run", at: kit.clock.now, verifierThreadId, reason });
   assert.equal(kit.thread(verifierThreadId).status, "idle", "the verifier no longer holds the agent's environment");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["needs-you", `Couldn't verify, as ${reason}: Retries land with backoff`]);
-  assert.deepEqual((await opened()).rounds.at(-1)?.body.verdict, { state: "could-not-run", at: kit.clock.now, verifierThreadId, reason }, "the opened issue has the reason and the verifier to link");
+  const round = (await opened()).rounds.at(-1);
+  assert.deepEqual(round?.body.verdict, { state: "could-not-run", verifierThreadId, reason }, "the opened issue has the reason and the verifier to link");
+  assert.equal(round?.round.verdict?.step?.at, kit.clock.now, "and its round, when it ended");
   assert.match(doorbells().at(-1) ?? "", /handed off: done, could not be verified$/);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Couldn't verify: its verifier showed no activity for 30 minutes\./);
 });

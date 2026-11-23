@@ -451,6 +451,7 @@ test("issues stored before reviews, in every status, load with the same status, 
   // issue feed's tables, and every migration from the review column on still to run.
   for (const { name } of z.array(z.object({ name: z.string() })).parse(db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%issue_writes%'").all())) db.exec(`DROP TRIGGER ${name}`);
   db.exec("DROP TABLE issue_writes");
+  db.exec("DROP TABLE issue_log");
   db.exec("DROP INDEX events_of_issue");
   db.exec("ALTER TABLE checks DROP COLUMN review");
   db.exec("UPDATE checks SET verdict = json_remove(verdict, '$.triage', '$.at')");

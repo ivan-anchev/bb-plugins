@@ -59,7 +59,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
   return handoff;
 }
 
-/** WEB-2 with an entry of every kind; WEB-1 it depends on, WEB-3 depending on it; and another manager's handoff, the manager then removed. */
+/** WEB-2 with an entry of every kind, the status it was seen in after its edit and one no moment explains; WEB-1 it depends on, WEB-3 depending on it; and another manager's handoff, the manager then removed. */
 function seeded() {
   const { store } = freshStore();
   const dependency = filedIssue(store, MANAGER, newIssue(), 1_000).id;
@@ -68,12 +68,16 @@ function seeded() {
   const handoff = sentBack(store, MANAGER, issueId, "agent-1");
   const agentId = handoff.agentId;
   store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId }, 3_700);
-  store.updateIssue(MANAGER, issueId, { decision: { text: "SQS: it is already deployed.", at: 3_800 } }, { requireUnheld: false, closes: new Map() });
+  store.updateIssue(MANAGER, issueId, { decision: { text: "SQS: it is already deployed.", at: 3_800 } }, { requireUnheld: false, closes: new Map(), at: 3_000 });
   const pr: PrSnapshot = { number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, review: "none", ci: "pending", headSha: SHA, failedChecks: [] };
   store.insertEvent(MANAGER, { kind: "pr", issueId, agentId, pr, changes: ["opened"] }, 3_900);
   store.insertEvent(MANAGER, { kind: "idle-without-handoff", issueId, agentId, lastAnswer: "Still on it." }, 4_000);
   store.insertEvent(MANAGER, { kind: "unblocked", issueId, by: dependency, closedAs: "done" }, 4_100);
   store.endAgent({ coordinatorId: MANAGER, id: agentId, issueId }, "stopped", null, false, 4_200);
+  store.updateIssue(MANAGER, issueId, { title: "Retries, capped" }, { requireUnheld: false, closes: new Map(), at: 4_300 });
+  const issue = store.issue(MANAGER, issueId) ?? assert.fail("no issue");
+  store.observeStatuses(MANAGER, [{ issue, status: "todo" }], 4_400);
+  store.observeStatuses(MANAGER, [{ issue, status: "backlog" }], 4_500);
 
   const elsewhere = sentBack(store, OTHER_MANAGER, filedIssue(store, OTHER_MANAGER, newIssue(), 1_000).id, "agent-2");
   store.removeCoordinator(OTHER_MANAGER);
@@ -94,37 +98,44 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   assert.deepStrictEqual([feed.dependsOn, feed.blocks, feed.agents], [["WEB-1"], ["WEB-3"], [{ id: "a1", threadId: "thr_agent-1" }]]);
   assert.deepStrictEqual(
     feed.entries.map(({ kind }) => kind),
-    ["created", "agent-started", "round", "decision", "decision", "pr", "thread", "unblocked", "agent-ended"],
+    ["created", "agent-started", "round", "decision", "decision", "pr", "thread", "unblocked", "agent-ended", "logged", "moved"],
   );
   const entries = byKind(feed);
   const expected: Record<FedEntry["kind"], string[]> = {
-    created: ["at", "kind"],
-    "agent-started": ["agentId", "at", "kind"],
-    "agent-ended": ["agentId", "at", "how", "kind"],
+    created: ["at", "kind", "moved"],
+    logged: ["at", "event", "kind", "moved"],
+    "agent-started": ["agentId", "at", "kind", "moved"],
+    "agent-ended": ["agentId", "at", "how", "kind", "moved"],
     round: ["kind", "round"],
-    decision: ["decision", "kind"],
-    pr: ["at", "changes", "kind", "number"],
-    thread: ["agentId", "at", "event", "kind"],
-    unblocked: ["at", "by", "kind"],
+    decision: ["decision", "kind", "moved"],
+    pr: ["at", "changes", "kind", "moved", "number"],
+    thread: ["agentId", "at", "event", "kind", "moved"],
+    unblocked: ["at", "by", "kind", "moved"],
+    moved: ["at", "kind", "status"],
   };
   assert.deepStrictEqual([...entries.keys()].sort(), keysOf(expected), "an entry of every kind");
   for (const [kind, entry] of entries) assert.deepStrictEqual(keysOf(entry), expected[kind], kind);
   const round = entries.get("round");
   assert.ok(round?.kind === "round");
-  assert.deepStrictEqual(keysOf(round.round), ["at", "by", "inFlight", "key", "number", "outcomeAt", "review", "verdict"]);
+  assert.deepStrictEqual(keysOf(round.round), ["by", "handed", "inFlight", "key", "number", "outcome", "review", "verdict"]);
   assert.deepStrictEqual(
-    { by: round.round.by, review: round.round.review, verdict: round.round.verdict, outcomeAt: round.round.outcomeAt, inFlight: round.round.inFlight },
+    { by: round.round.by, handed: round.round.handed, review: round.round.review, verdict: round.round.verdict, outcome: round.round.outcome, inFlight: round.round.inFlight },
     {
       by: { kind: "agent", agentId: "a1", status: "done", summary: "Retries land" },
-      review: { state: "reported", at: 3_200, findings: 1, confirmed: 1 },
-      verdict: { outcome: { kind: "fail", by: "criteria" }, results: ["fail"], fixRound: { round: 1, delivery: "sent" } },
-      outcomeAt: 3_600,
+      handed: { at: 3_000, moved: null },
+      review: { state: "reported", step: { at: 3_200, moved: null }, findings: 1, confirmed: 1 },
+      verdict: { outcome: { kind: "fail", by: "criteria" }, results: ["fail"], fixRound: { round: 1, delivery: "sent" }, step: { at: 3_500, moved: null } },
+      outcome: { at: 3_600, moved: null },
       inFlight: false,
     },
   );
   const asked = feed.entries.find((entry) => entry.kind === "decision" && entry.decision.kind === "asked");
   assert.ok(asked?.kind === "decision");
   assert.deepStrictEqual(keysOf(asked.decision), ["answer", "at", "id", "kind", "options", "question"]);
+  assert.deepStrictEqual([entries.get("logged"), entries.get("moved")], [
+    { kind: "logged", at: 4_300, event: { kind: "edited", fields: ["title"] }, moved: "todo" },
+    { kind: "moved", at: 4_500, status: "backlog" },
+  ]);
   const thread = entries.get("thread");
   assert.deepStrictEqual(thread?.kind === "thread" && thread.event, { kind: "reported-back", lastAnswer: "Still on it." });
 });
@@ -143,7 +154,7 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   assert.deepStrictEqual(keysOf(body), ["findings", "handoff", "reviewMissed", "verdict"]);
   assert.equal(body.reviewMissed, null, "a review was had");
   assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
-  assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["at", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepStrictEqual(body.findings, [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", triage: { result: "confirmed", reason: "No cap in retry.ts." } }]);
 });
 

@@ -11,7 +11,7 @@ import { isVerified } from "../../../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import type { FeedAgents } from "./byline.tsx";
 import { DecisionCard } from "./decision-card.tsx";
-import { EntryLine } from "./entry-line.tsx";
+import { EntryLine, MovedLine } from "./entry-line.tsx";
 import { CriteriaGrid } from "./round/criteria-grid.tsx";
 import { RoundCard } from "./round/round-card.tsx";
 
@@ -76,8 +76,11 @@ function EntryView({ coordinatorId, issue, agents, entry, isOpen, onToggle, onEn
     case "round":
       return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} onEngage={() => onEngage(entry.round)} />;
     case "decision":
-      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} />;
+      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} />;
+    case "moved":
+      return <MovedLine entry={entry} />;
     case "created":
+    case "logged":
     case "agent-started":
     case "agent-ended":
     case "pr":

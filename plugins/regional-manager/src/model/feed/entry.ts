@@ -4,21 +4,27 @@ import { z } from "zod";
 import { agentIdSchema, endedHowSchema, type AgentId, type EndedHow } from "../agent/agent.ts";
 import { issueDecisionSchema } from "../decision.ts";
 import { issueIdSchema } from "../issue/issue.ts";
+import { issueStatusSchema } from "../issue/status.ts";
 import { prChangeSchema } from "../verdict/pr.ts";
+import { lineEventSchema } from "./log-event.ts";
 import { roundSchema } from "./round.ts";
 
 const at = z.number();
+/** The status the plugin observed the issue move to after this moment (feed.ts attachStatuses; null: none). A round's steps carry their own. */
+const moved = issueStatusSchema.nullable();
 
 export const entrySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("created"), at }),
-  z.object({ kind: z.literal("agent-started"), at, agentId: agentIdSchema }),
-  z.object({ kind: z.literal("agent-ended"), at, agentId: agentIdSchema, how: endedHowSchema }),
-  /** A round, at when it began (its own `at`). */
+  z.object({ kind: z.literal("created"), at, moved }),
+  /** A change to the issue's plan, or where its log began. */
+  z.object({ kind: z.literal("logged"), at, event: lineEventSchema, moved }),
+  z.object({ kind: z.literal("agent-started"), at, agentId: agentIdSchema, moved }),
+  z.object({ kind: z.literal("agent-ended"), at, agentId: agentIdSchema, how: endedHowSchema, moved }),
+  /** A round, at when it began (its handed step). */
   z.object({ kind: z.literal("round"), round: roundSchema }),
   /** A question put to the user about the issue, at when it was asked, or a decision the manager recorded on it (its own `at`). */
-  z.object({ kind: z.literal("decision"), decision: issueDecisionSchema }),
+  z.object({ kind: z.literal("decision"), decision: issueDecisionSchema, moved }),
   /** The issue's pull request changed: what changed, on which number. */
-  z.object({ kind: z.literal("pr"), at, number: z.number().int(), changes: z.array(prChangeSchema) }),
+  z.object({ kind: z.literal("pr"), at, number: z.number().int(), changes: z.array(prChangeSchema), moved }),
   /** The agent's thread said something the plugin told its manager of: it ended a turn with no handoff, failed, or waits on a person. */
   z.object({
     kind: z.literal("thread"),
@@ -29,9 +35,12 @@ export const entrySchema = z.discriminatedUnion("kind", [
       z.object({ kind: z.literal("failed"), error: z.string().nullable() }),
       z.object({ kind: z.literal("needs-input"), question: z.string() }),
     ]),
+    moved,
   }),
   /** The last of its dependencies still open, `by`, closed. */
-  z.object({ kind: z.literal("unblocked"), at, by: issueIdSchema }),
+  z.object({ kind: z.literal("unblocked"), at, by: issueIdSchema, moved }),
+  /** A status the plugin observed the issue move to that no moment since the one before explains, as a parent rolling up or a turn ending. */
+  z.object({ kind: z.literal("moved"), at, status: issueStatusSchema }),
 ]);
 export type Entry = z.infer<typeof entrySchema>;
 
@@ -39,10 +48,12 @@ export type Entry = z.infer<typeof entrySchema>;
 export function timeOf(entry: Entry): number {
   switch (entry.kind) {
     case "round":
-      return entry.round.at;
+      return entry.round.handed.at;
     case "decision":
       return entry.decision.at;
     case "created":
+    case "logged":
+    case "moved":
     case "agent-started":
     case "agent-ended":
     case "pr":
@@ -59,7 +70,8 @@ export type Actor = { kind: "manager" } | { kind: "agent"; agentId: AgentId } | 
 
 /**
  * Who did it, derived from what it is. why never stored: only the manager's tools file an issue,
- * start an agent and record a decision; an agent's end says who in how it ended.
+ * change its plan, start an agent and record a decision; an agent's end says who in how it ended;
+ * the plugin began the log and observes every status.
  */
 export function actorOf(entry: Entry): Actor {
   switch (entry.kind) {
@@ -67,6 +79,10 @@ export function actorOf(entry: Entry): Actor {
     case "agent-started":
     case "decision":
       return { kind: "manager" };
+    case "logged":
+      return entry.event.kind === "log-began" ? { kind: "plugin" } : { kind: "manager" };
+    case "moved":
+      return { kind: "plugin" };
     case "agent-ended":
       return endedBy(entry.how);
     case "round":

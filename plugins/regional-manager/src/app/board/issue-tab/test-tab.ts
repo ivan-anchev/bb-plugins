@@ -63,11 +63,11 @@ function round(number: number, agentId: typeof A1, at: number, results: Criterio
   return {
     key: roundKey(number),
     number,
-    at,
+    handed: { at, moved: null },
     by: { kind: "agent", agentId, status: "done", summary: `Round ${number}: retries land with backoff` },
-    review: { state: "reported", at: at + 100, findings: 2, confirmed: 1 },
-    verdict: { outcome: failed ? { kind: "fail", by: "criteria" } : { kind: "pass" }, results, fixRound: fixRound === null ? null : { round: fixRound, delivery: "sent" } },
-    outcomeAt: at + 600,
+    review: { state: "reported", step: { at: at + 100, moved: null }, findings: 2, confirmed: 1 },
+    verdict: { outcome: failed ? { kind: "fail", by: "criteria" } : { kind: "pass" }, results, fixRound: fixRound === null ? null : { round: fixRound, delivery: "sent" }, step: { at: at + 500, moved: null } },
+    outcome: { at: at + 600, moved: null },
     inFlight: false,
   };
 }
@@ -82,19 +82,19 @@ export const FEED: IssueFeed = {
   blocks: [],
   agents: [agent("a1"), agent("a2")],
   entries: [
-    { kind: "created", at: 1_000 },
-    { kind: "agent-started", at: 2_000, agentId: A1 },
+    { kind: "created", at: 1_000, moved: null },
+    { kind: "agent-started", at: 2_000, agentId: A1, moved: null },
     roundEntry(round(1, A1, 3_000, ["pass", "fail", "fail"], 1)),
-    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 } } },
+    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 } }, moved: null },
     roundEntry(round(2, A1, 4_000, ["pass", "pass", "fail"], null)),
-    { kind: "decision", decision: { kind: "recorded", text: "a1 loops: hand the issue to a fresh agent.", at: 4_700 } },
-    { kind: "agent-ended", at: 4_800, agentId: A1, how: "replaced" },
-    { kind: "agent-started", at: 4_800, agentId: A2 },
+    { kind: "decision", decision: { kind: "recorded", text: "a1 loops: hand the issue to a fresh agent.", at: 4_700 }, moved: null },
+    { kind: "agent-ended", at: 4_800, agentId: A1, how: "replaced", moved: null },
+    { kind: "agent-started", at: 4_800, agentId: A2, moved: null },
     roundEntry(round(3, A2, 5_000, ["pass", "pass", "pass"], null)),
-    { kind: "pr", at: 6_000, number: 219, changes: ["ci-passed", "merged"] },
-    { kind: "thread", at: 6_100, agentId: A2, event: { kind: "reported-back", lastAnswer: "Merged; nothing left." } },
-    { kind: "unblocked", at: 6_200, by: id("WEB-7") },
-    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], at: 6_300, answer: null } },
+    { kind: "pr", at: 6_000, number: 219, changes: ["ci-passed", "merged"], moved: null },
+    { kind: "thread", at: 6_100, agentId: A2, event: { kind: "reported-back", lastAnswer: "Merged; nothing left." }, moved: null },
+    { kind: "unblocked", at: 6_200, by: id("WEB-7"), moved: null },
+    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], at: 6_300, answer: null }, moved: null },
   ],
 };
 
@@ -102,7 +102,6 @@ export const FEED: IssueFeed = {
 function verdictOf(n: number, results: readonly CriterionResult[]): ShownVerdict {
   return {
     state: "returned",
-    at: 3_500,
     verifierThreadId: `thr_verifier_${n}`,
     headSha: SHA,
     checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },

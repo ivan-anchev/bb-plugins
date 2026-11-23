@@ -75,12 +75,6 @@ export function inboxStore(db: Db) {
       })();
     },
 
-    /** Whether an issue of the regional manager depends on another: whether there is anything to read for what was unblocked. */
-    hasDependencies(coordinatorId: CoordinatorId): boolean {
-      const row = db().prepare("SELECT EXISTS (SELECT 1 FROM issue_relations WHERE coordinator_id = ?) AS any").get(coordinatorId);
-      return z.object({ any: z.number() }).parse(row).any === 1;
-    },
-
     /** The events no doorbell has announced and no catch-up has returned, in the order recorded. */
     unannounced(coordinatorId: CoordinatorId): StoredEvent[] {
       return db().prepare("SELECT id, at, event FROM events WHERE coordinator_id = ? AND announced_at IS NULL AND read_at IS NULL ORDER BY id").all(coordinatorId).map(toEvent);
