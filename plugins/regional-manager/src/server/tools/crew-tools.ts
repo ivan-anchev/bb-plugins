@@ -29,7 +29,7 @@ const END_TURN = "crew_end_turn";
 export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER, END_TURN];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment">;
+  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment" | "checking">;
   inbox: Pick<Inbox, "takeUnread">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
@@ -54,6 +54,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
         agents: () => store.agents(id),
         decision: store.decision,
         comment: store.comment,
+        checking: (issueId) => store.checking(id, issueId),
         view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
       });
       return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;

@@ -2,9 +2,9 @@
 // manager. ⌘↵ or Ctrl+↵ sends, Enter breaks the line; focus stays in the field through a send, and
 // bb's Esc is held while it has text. The browser keeps what was typed, by issue, until the server
 // took it, and a send that failed keeps it beside its error. A sent comment shows as a card saying
-// so until the feed reads it.
+// so until the feed reads it, and while it is on its way no composer of the issue sends again.
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useSyncExternalStore, type KeyboardEvent } from "react";
 import { coordinatorContract as contract } from "../../../../contract.ts";
 import { MAX_ANSWER_CHARS } from "../../../../model/decision.ts";
 import type { CommentId } from "../../../../model/feed/comment.ts";
@@ -29,10 +29,11 @@ export function CommentComposer({ coordinatorId, issueId, posted }: CommentCompo
   const ids = useId();
   const manager = useManagerName(coordinatorId);
   // why an answer's draft schema: a comment's bounds are an answer's (comment.ts).
-  const typed = useStored(localStorage, commentDraftKeyOf(coordinatorId, issueId), answerDraftSchema);
+  const key = commentDraftKeyOf(coordinatorId, issueId);
+  const typed = useStored(localStorage, key, answerDraftSchema);
   const draft = typed.value ?? "";
   // why only the draft sent: the field may hold a newer one by then, typed after a remount or in another tab.
-  const { sent, send, error } = usePost(coordinatorId, issueId, (sentDraft) => typed.update((current) => (current === sentDraft ? null : current)));
+  const { sent, send, error } = usePost(coordinatorId, issueId, key, (sentDraft) => typed.update((current) => (current === sentDraft ? null : current)));
   useHoldEscape(draft !== "");
 
   const sending = sent !== null && sent.commentId === null;
@@ -93,26 +94,49 @@ const commentDraftKeyOf = (coordinatorId: CoordinatorId, issueId: IssueId): stri
 /** The keys that send, as this machine names them. */
 const SEND_KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
 
+/** A comment sent from Send: its id once the server took it (null: on its way). */
+type Sent = { text: string; commentId: CommentId | null };
+
 /**
- * Posts one comment at a time: `sent` is the comment sent, from Send, with its id once the server
- * took it (null: none sent, or the send failed, whose error is `error`). `taken` runs with the draft
- * sent as the server takes it.
+ * The comment last sent on each issue, by its draft's key, kept outside the composer. why: bb
+ * remounts the panel when it redraws it, which drops a component's state, and a composer mounted
+ * while a comment is on its way would otherwise send the same draft again.
  */
-function usePost(coordinatorId: CoordinatorId, issueId: IssueId, taken: (draft: string) => void) {
+const sentByKey = new Map<string, Sent>();
+const sentListeners = new Set<() => void>();
+
+function setSent(key: string, sent: Sent | null): void {
+  if (sent === null) sentByKey.delete(key);
+  else sentByKey.set(key, sent);
+  for (const listener of sentListeners) listener();
+}
+
+function subscribeSent(listener: () => void): () => void {
+  sentListeners.add(listener);
+  return () => sentListeners.delete(listener);
+}
+
+/**
+ * Posts one comment at a time on the issue whose draft is under `key`, across the composer's
+ * mounts: `sent` is the comment sent, with its id once the server took it (null: none sent, or the
+ * send failed, whose error is `error`). `taken` runs with the draft sent as the server takes it.
+ */
+function usePost(coordinatorId: CoordinatorId, issueId: IssueId, key: string, taken: (draft: string) => void) {
   const save = experimental_useRpcMutation({ contract, method: "commentIssue" });
-  const [sent, setSent] = useState<{ text: string; commentId: CommentId | null } | null>(null);
+  const sent = useSyncExternalStore(subscribeSent, () => sentByKey.get(key) ?? null);
 
   function send(draft: string): void {
     const text = draft.trim();
-    if ((sent !== null && sent.commentId === null) || text === "") return;
-    setSent({ text, commentId: null });
+    // why read now, not the render's: a second press, or a composer mounted meanwhile, must see the first send.
+    if (sentByKey.get(key)?.commentId === null || text === "") return;
+    setSent(key, { text, commentId: null });
     save.mutate({ coordinatorId, issueId, text, replyTo: null }).then(
       ({ commentId }) => {
-        setSent({ text, commentId });
+        setSent(key, { text, commentId });
         taken(draft);
       },
       // why nothing more: the hook's error shows beside the draft, which is kept.
-      () => setSent(null),
+      () => setSent(key, null),
     );
   }
 

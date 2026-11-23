@@ -4,7 +4,7 @@
 import { sameModel } from "../../model/agent/execution.ts";
 import type { Agent } from "../../model/agent/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
-import type { Comment, CommentId } from "../../model/feed/comment.ts";
+import { firstLine, type Comment, type CommentId } from "../../model/feed/comment.ts";
 import type { Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
@@ -30,6 +30,8 @@ export type Lookups = {
   agents(): readonly Agent[];
   decision(id: DecisionId): Decision | null;
   comment(id: CommentId): Comment | null;
+  /** Whether the issue has a check queued or running, as stored now: one a message to its agent drops. */
+  checking(id: IssueId): boolean;
   /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
   view(id: IssueId): IssueView | null;
 };
@@ -77,7 +79,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   }
   if (event.kind === "comment-to-you") {
     const comment = commentOf(event.commentId, lookups);
-    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId))}`;
+    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId), lookups.checking(event.issueId))}`;
   }
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
@@ -138,29 +140,31 @@ function whose(author: Comment["author"]): string {
   }
 }
 
-/** A comment's first line, cut to a line's length. */
-function firstLine(text: string): string {
-  const line = text.split(/\r?\n|\u2028|\u2029/, 1)[0] ?? "";
-  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
-}
-
 /**
- * What the regional manager does with the user's comment, and where its issue stands now (`view`,
- * as the board in the same catch-up places it; null: bb's thread list couldn't be read). why the
- * status: a message to an agent stops a check in flight, so a relay waits for Reviewing and
- * Verifying to end.
+ * What the regional manager does with the user's comment, by where its issue stands now (`view`, as
+ * the board in the same catch-up places it; null: bb's thread list couldn't be read) and whether a
+ * check of its is queued or running (`checking`). why the stored check, not only the status: a
+ * message to an agent drops its open check, and a done handoff queues one while the agent's turn
+ * still runs, which the board shows as In progress.
  */
-function commentNextStep({ id, issueId }: Comment, view: IssueView | null): string {
+function commentNextStep({ id, issueId }: Comment, view: IssueView | null, checking: boolean): string {
   const answer = `Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision)`;
   if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board: call crew_catch_up again before you relay it to an agent.`;
   const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
-  // why first: a parent never has an agent, so its work is its sub-issues'.
-  if (view.subIssues !== null) return `${answer}, or put it in the brief of the sub-issue it concerns; an agent already on that sub-issue gets it only as a relay with agent_message, quoting their words and naming ${id}, never while that sub-issue is Reviewing or Verifying. ${now}; a parent has no agent of its own.`;
+  // why first: a parent never has an agent, so its work is its sub-issues'. Their agents can comment only on their own issue, so the answer comes back through the manager.
+  if (view.subIssues !== null) return `${answer}, or put it in the brief of the sub-issue it concerns. An agent already on that sub-issue gets it only as a relay with agent_message, quoting their words. ${RELAY_WAIT} It can't comment on ${issueId}: ask it to answer with issue_comment on its own sub-issue, and once its answer reaches you, reply to the user on ${issueId} with issue_comment (replyTo "${id}"). ${now}; a parent has no agent of its own.`;
   // why: agent_start refuses a closed issue.
   if (view.status === "done" || view.status === "canceled") return `${answer}, or file what it asks for as a new issue with issue_create. ${now}, so no agent can start on it.`;
   if (view.holder === null) return `${answer}, or put it in the brief of the agent you start on it. ${now}, and no agent holds it.`;
-  return `Nothing reaches ${view.holder.id} on its own: the user's comments come to you. ${answer}, or, when it concerns ${view.holder.id}'s work, relay it with agent_message, quoting their words and naming ${id}, so it can answer on the issue. Never relay while ${issueId} is Reviewing or Verifying: a message stops its check. Relay once the check has settled, and set yourself a reminder with crew_remind if it must wait. ${now}.`;
+  const agent = view.holder.id;
+  const relay = `relay it to ${agent} with agent_message, quoting their words and naming ${id}, so it can answer on the issue`;
+  if (checking) return `Nothing reaches ${agent} on its own: the user's comments come to you. ${answer}. Don't relay it to ${agent} now: a check of its done handoff is queued or running, and a message drops it. Once its verdict reaches you, and only if it concerns ${agent}'s work, ${relay}. ${now}, while its check waits.`;
+  return `Nothing reaches ${agent} on its own: the user's comments come to you. ${answer}, or, when it concerns ${agent}'s work, ${relay}. ${RELAY_WAIT} ${now}.`;
 }
+
+/** When a relay must wait, and the fresh read that tells: what this catch-up read may have changed by the time the manager relays. */
+const RELAY_WAIT =
+  `Never relay while a check of its handoff is queued or running (Reviewing or Verifying, or a done handoff its agent made while its turn still runs): a message drops that check. Read the agent's issue with issue_read just before you relay, and wait while a handoff's verdict there reads "Not in yet": the verdict reaches you once it settles.`;
 
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */
 function answeredText({ id, question, options, answer }: Decision, when: string): string {

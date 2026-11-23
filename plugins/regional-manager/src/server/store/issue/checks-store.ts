@@ -111,14 +111,13 @@ export function supersedeChecks(db: Db, coordinatorId: CoordinatorId, issueId: I
   }
 }
 
+/** The issue's checks still waiting for their verifier to start or to return: the ones a message to its agent drops. */
+const OPEN_OF_ISSUE = "coordinator_id = ? AND issue_id = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')";
+
 /** Marks every check of the issue waiting for its verifier to start or to return as superseded, in one statement; says whether there was one. */
 function supersedeOpen(db: Db, coordinatorId: CoordinatorId, issueId: IssueId): boolean {
   const superseded: Verdict = { state: "superseded" };
-  return (
-    db()
-      .prepare("UPDATE checks SET verdict = ? WHERE coordinator_id = ? AND issue_id = ? AND json_extract(verdict, '$.state') IN ('queued', 'running')")
-      .run(JSON.stringify(superseded), coordinatorId, issueId).changes > 0
-  );
+  return db().prepare(`UPDATE checks SET verdict = ? WHERE ${OPEN_OF_ISSUE}`).run(JSON.stringify(superseded), coordinatorId, issueId).changes > 0;
 }
 
 export function checksStore(db: Db) {
@@ -297,6 +296,13 @@ export function checksStore(db: Db) {
      * word. A returned verdict is kept as it is. Says whether there was one.
      */
     supersedeOpenChecks: (coordinatorId: CoordinatorId, issueId: IssueId): boolean => supersedeOpen(db, coordinatorId, issueId),
+
+    /**
+     * Whether the issue has a check still waiting for its verifier to start or to return: one
+     * supersedeOpenChecks would drop. why its own read: a done handoff queues its check while its
+     * agent's turn still runs, and the board shows the issue In progress until that turn ends.
+     */
+    checking: (coordinatorId: CoordinatorId, issueId: IssueId): boolean => db().prepare(`SELECT 1 FROM checks WHERE ${OPEN_OF_ISSUE}`).get(coordinatorId, issueId) !== undefined,
 
     /**
      * Marks a running check's verifier as nudged (`nudged` true), once; or as not, as when its

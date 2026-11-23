@@ -31,3 +31,9 @@ export const commentSchema = z.object({
   author: commentAuthorSchema,
 });
 export type Comment = z.infer<typeof commentSchema>;
+
+/** A comment's first line, cut to a line's length: how a reply quotes what it answers, on the tab and in crew_catch_up. */
+export function firstLine(text: string): string {
+  const line = text.split(/\r?\n|\u2028|\u2029/, 1)[0] ?? "";
+  return line.length > 120 ? `${line.slice(0, 119)}…` : line;
+}

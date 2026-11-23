@@ -679,9 +679,16 @@ one of three things with it:
 - **Relay** it to the issue's agent with `agent_message`, only when it
   concerns the agent's work: quote the user's words and name the comment's id
   (such as `m4`), so the agent can answer it with `replyTo`. Never relay while
-  the issue is Reviewing or Verifying: a message stops its check. Relay once
-  the check has settled, and set yourself a reminder with `crew_remind` if it
-  must wait.
+  the issue is Reviewing or Verifying: a message stops its check. A done
+  handoff queues its check while the agent's turn still runs, and the board
+  shows the issue In progress until that turn ends, so `crew_catch_up` says
+  when a check is queued. Read the issue with `issue_read` just before you
+  relay, and wait while a handoff's verdict there reads "Not in yet". Relay
+  once the check has settled: its verdict reaches you.
+- On a **parent**, put the comment in the brief of the sub-issue it concerns,
+  or relay it to that sub-issue's agent under the same rule. The agent can
+  comment only on its own sub-issue: ask it to answer there, and once its
+  answer reaches you, reply to the user on the parent with `issue_comment`.
 
 The agent holding an issue can comment on it too, as to a comment you relayed.
 Its comments reach you in your next catch-up without waking you.

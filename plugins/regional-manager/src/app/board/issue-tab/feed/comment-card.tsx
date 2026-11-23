@@ -1,6 +1,6 @@
 // A comment in an issue's feed: the user's, posted from the tab and sent to the regional manager, or
 // a reply from the manager or the agent holding the issue, quoting a line of what it answers.
-import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
+import { firstLine, type Comment, type CommentId } from "../../../../model/feed/comment.ts";
 import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { useManagerName } from "../../../profile/use-manager.ts";
@@ -23,7 +23,7 @@ export function CommentCard({ coordinatorId, entry, answered, agents }: CommentC
         {comment.replyTo === null ? "commented" : `replied to ${comment.replyTo}`} <When at={comment.at} />
         <span className="rmi-decision-id">{comment.id}</span>
       </p>
-      {answered !== null && <p className="rmi-comment-quote">{answered.text}</p>}
+      {answered !== null && <p className="rmi-comment-quote">{firstLine(answered.text)}</p>}
       <p className="rmi-decision-text">{comment.text}</p>
       {comment.author.kind === "user" && <SentTo coordinatorId={coordinatorId} />}
     </article>
