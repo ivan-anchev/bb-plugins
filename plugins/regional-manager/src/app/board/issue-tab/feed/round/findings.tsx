@@ -2,6 +2,7 @@
 // then the verifier's triage, Confirmed or Rejected with why; a rejected claim struck through. And
 // how many there were, and how many the verifier confirmed, as the round's rail and fold count them.
 import type { Round, RoundBody } from "../../../../../model/feed/round.ts";
+import { useTip } from "./tip.ts";
 
 type Finding = RoundBody["findings"][number];
 type Reported = Extract<Round["review"], { state: "reported" }>;
@@ -29,23 +30,38 @@ export function findingsText({ findings, confirmed }: Reported): string {
 }
 
 /**
- * Where in the diff a finding is, its path exactly as the reviewer wrote it, whole on hover. why
- * right to left around a left-to-right place: a long path is cut at its start, so its file and line
- * stay in view. why the path in an isolate of its own: a bidi mark or an unclosed override inside it
- * ends there, so it can't reorder the line after it. why white-space pre: a leading or trailing space
- * is part of the path, and shows.
+ * Where in the diff a finding is, cut at its start so its file and line stay in view; hovered or
+ * focused (a tab stop, so the keyboard and a tap reach it), a tooltip shows it whole (tip.ts).
  */
 function Place({ file, line }: Finding) {
-  const place = line === null ? file : `${file}:${line}`;
+  const tip = useTip();
   return (
-    <span className="rmi-finding-place" title={place}>
-      <bdi dir="ltr">
-        <bdi dir="ltr" className="rmi-finding-file">
-          {file}
-        </bdi>
-        {line !== null && `:${line}`}
-      </bdi>
+    <span className="rmi-finding-slot" {...tip.slot}>
+      <span className="rmi-finding-place" tabIndex={0} {...tip.trigger}>
+        <PlaceText file={file} line={line} />
+      </span>
+      {tip.shown && (
+        <span id={tip.id} role="tooltip" className="rmi-tip rmi-finding-tip">
+          <PlaceText file={file} line={line} />
+        </span>
+      )}
     </span>
+  );
+}
+
+/**
+ * A finding's path exactly as the reviewer wrote it, then its line. why the path in an isolate of
+ * its own: a bidi mark or an unclosed override inside it ends there, so it can't reorder the line
+ * after it. why left to right around both: the place reads in a right-to-left box, cut at its start.
+ */
+function PlaceText({ file, line }: Pick<Finding, "file" | "line">) {
+  return (
+    <bdi dir="ltr">
+      <bdi dir="ltr" className="rmi-finding-file">
+        {file}
+      </bdi>
+      {line !== null && `:${line}`}
+    </bdi>
   );
 }
 

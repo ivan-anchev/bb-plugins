@@ -24,11 +24,8 @@ export function RoundCard({ coordinatorId, issueId, round, agents, open, onToggl
         <span className="rmi-round-summary" title={headlineOf(round)}>
           {headlineOf(round)}
         </span>
-        {/* why one wrapping group: at a narrow panel the count and a long failure reason both stay whole, on two lines. */}
-        <span className="rmi-round-tail">
-          <FoundCount review={round.review} />
-          <Score round={round} />
-        </span>
+        <FoundCount review={round.review} />
+        <Score round={round} />
       </button>
       <div id={bodyId} hidden={!open} onFocusCapture={onEngage} onPointerDownCapture={onEngage}>
         {open && <RoundBody coordinatorId={coordinatorId} issueId={issueId} round={round} agents={agents} />}

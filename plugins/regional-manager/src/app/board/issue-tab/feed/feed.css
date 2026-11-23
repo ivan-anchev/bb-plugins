@@ -45,6 +45,7 @@
 .rmi-decision:focus-visible,
 .rmi-filter button:focus-visible,
 .rmi-grid-cell:focus-visible,
+.rmi-finding-place:focus-visible,
 .rmi-round-head:focus-visible,
 .rmi-passes > summary:focus-visible,
 .rmi-report-fold > summary:focus-visible,
@@ -125,8 +126,9 @@
     background: var(--state-hover);
   }
 }
-/* why touching the cell: the pointer moves onto the tooltip with no gap, and stays on the slot. */
-.rmi-grid-tip {
+/* A tooltip (round/tip.ts) above what it names. why touching it: the pointer moves onto the tooltip
+   with no gap, and stays on the slot. */
+.rmi-tip {
   position: absolute;
   right: 0;
   bottom: 100%;
@@ -249,15 +251,13 @@
   color: var(--foreground);
 }
 
-/* A round: its head a button, its number, its summary, its findings and its score; one line, or two
-   when the findings and the score don't fit beside the number, so neither is cut. */
+/* A round: its head a button, one line, its number, its summary, its findings and its score. */
 .rmi-round-head {
   all: unset;
   box-sizing: border-box;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
+  gap: 8px;
   width: 100%;
   min-height: 36px;
   padding: 6px 10px;
@@ -297,19 +297,9 @@
 .rmi-round[data-open] .rmi-round-found {
   display: none;
 }
-/* The findings and the score, as one group: on a line of its own when it doesn't fit beside the
-   number, and the score under the findings when it doesn't fit beside them. */
-.rmi-round-tail {
-  flex: 0 1 auto;
-  min-width: 0;
-  margin-left: auto;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  align-items: center;
-  column-gap: 8px;
-}
+/* why it never shrinks: the summary gives way first, then the score's reason; the count stays whole. */
 .rmi-round-found {
+  flex: none;
   white-space: nowrap;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
@@ -547,18 +537,34 @@
 }
 .rmi-severity[data-severity="must-fix"] { color: var(--destructive-text); }
 .rmi-severity[data-severity="should-fix"] { color: var(--warning-text); }
-/* why right to left with an ellipsis: a long path is cut at its start, keeping its file and line. */
-.rmi-finding-place {
+/* A finding's place and, hovered or focused, its tooltip. */
+.rmi-finding-slot {
+  position: relative;
   display: inline-block;
   max-width: 100%;
+  vertical-align: bottom;
+}
+/* why right to left with an ellipsis: a long path is cut at its start, keeping its file and line.
+   why white-space pre: a leading or trailing space is part of the path, and shows. */
+.rmi-finding-place {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: pre;
-  vertical-align: bottom;
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--muted-foreground);
   direction: rtl;
+}
+/* The place whole, left to right, wrapping anywhere, its spaces kept. */
+.rmi-finding-tip {
+  right: auto;
+  left: 0;
+  max-width: 280px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
 }
 .rmi-finding-claim {
   color: var(--foreground);

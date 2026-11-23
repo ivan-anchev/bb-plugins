@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
-import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { roundBodyKey } from "../../../../../contract.ts";
 import type { Entry } from "../../../../../model/feed/entry.ts";
 import { bodyOf, COORDINATOR, FEED, id, issue, opened, roundKey } from "../../test-tab.ts";
@@ -91,11 +91,15 @@ test("a finding reads as its place, severity and claim, its path byte for byte a
     [path, path],
     "the path as the reviewer wrote it, nothing trimmed or stripped",
   );
-  assert.deepEqual(
-    items.map((item) => item.querySelector(".rmi-finding-place")?.getAttribute("title")),
-    [`${path}:4`, path],
-    "the whole place on hover",
-  );
+  const [first, second] = items.map((item) => item.querySelector<HTMLElement>(".rmi-finding-place") ?? assert.fail("no place"));
+  act(() => first?.focus());
+  assert.ok(document.activeElement === first, "the keyboard reaches the place");
+  assert.equal(three.getByRole("tooltip").textContent, `${path}:4`, "focused, its tooltip shows the place whole");
+  fireEvent.keyDown(document.body, { key: "Escape" });
+  assert.equal(three.queryAllByRole("tooltip").length, 0, "Escape closes it");
+  act(() => first?.blur());
+  fireEvent.mouseEnter(second?.parentElement ?? assert.fail("no slot"));
+  assert.equal(three.getByRole("tooltip").textContent, path, "hovered, too");
   assert.deepEqual(
     items.map((item) => item.querySelector("s")?.textContent ?? null),
     [null, "The padding differs from the row's."],

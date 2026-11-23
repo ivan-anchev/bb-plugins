@@ -8,11 +8,11 @@ import { criteriaGrid, type Round } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { CriterionResult } from "../../../../../model/verdict/verdict.ts";
-import { useEscapeToClose } from "../../../../ui/hold-escape.ts";
 import { ReadFailure } from "../../../../ui/read-failure.tsx";
 import { RESULT_WORD, ResultGlyph } from "./result-glyph.tsx";
 import { Score } from "./score.tsx";
 import { useRoundBody } from "./round-body.tsx";
+import { useTip } from "./tip.ts";
 
 /** `verified`: the issue is of a kind a verifier judges; else its criteria are questions its report answers. */
 type CriteriaGridProps = { coordinatorId: CoordinatorId; issueId: IssueId; verified: boolean; criteria: readonly string[]; rounds: readonly Round[] };
@@ -66,40 +66,15 @@ type GridCellProps = { round: number; result: CriterionResult | null; expanded: 
  * Escape closes it wherever focus is.
  */
 function GridCell({ round, result, expanded, onPress }: GridCellProps) {
-  const tipId = useId();
-  const [hovered, setHovered] = useState(false);
-  const [focused, setFocused] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  const shown = (hovered || focused) && !dismissed;
-  useEscapeToClose(shown, () => setDismissed(true));
+  const tip = useTip();
   const named = `Round ${round}: ${result === null ? "not judged" : RESULT_WORD[result]}`;
   return (
-    <span
-      className="rmi-grid-cell-slot"
-      onMouseEnter={() => {
-        setHovered(true);
-        setDismissed(false);
-      }}
-      onMouseLeave={() => setHovered(false)}
-    >
-      <button
-        type="button"
-        className="rmi-grid-cell"
-        data-result={result ?? "none"}
-        aria-expanded={expanded}
-        aria-label={named}
-        aria-describedby={shown ? tipId : undefined}
-        onClick={onPress}
-        onFocus={() => {
-          setFocused(true);
-          setDismissed(false);
-        }}
-        onBlur={() => setFocused(false)}
-      >
+    <span className="rmi-grid-cell-slot" {...tip.slot}>
+      <button type="button" className="rmi-grid-cell" data-result={result ?? "none"} aria-expanded={expanded} aria-label={named} aria-describedby={tip.shown ? tip.id : undefined} onClick={onPress} {...tip.trigger}>
         {result === null ? <span aria-hidden className="rmi-grid-none" /> : <ResultGlyph result={result} />}
       </button>
-      {shown && (
-        <span id={tipId} role="tooltip" className="rmi-grid-tip">
+      {tip.shown && (
+        <span id={tip.id} role="tooltip" className="rmi-tip">
           {named}. {expanded ? "Press to close its evidence." : "Press for its evidence."}
         </span>
       )}
