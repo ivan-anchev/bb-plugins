@@ -50,6 +50,12 @@ function mount(read: { failing: boolean; others?: NotStarted[] } = { failing: fa
     async create() {
       await act(async () => fireEvent.click(view.getByRole("button", { name: "Create" })));
     },
+    /** Shuffle, once the first read of the other managers has answered, which enables it; the preview is then the one from that list. */
+    async listed() {
+      const shuffle = await view.findByRole("button", { name: "Shuffle" });
+      await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
+      return shuffle;
+    },
     /** The names of the radios checked: the look's shape and colour. */
     chosen: () => view.getAllByRole("radio").filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label")),
   };
@@ -117,7 +123,9 @@ test("the form's submit, which Enter in a field sends, creates it", async () => 
   assert.deepEqual(page.creates.map(({ name }) => name), ["Webhooks"]);
 });
 
-test("the fields outlive the page", async () => {
+test("the fields outlive the page", async (t) => {
+  // why 0: the page then gives a circle or a pebble, so the click on Cat below always picks a look.
+  t.mock.method(Math, "random", () => 0);
   const page = mount();
   await page.named("Webhooks");
   fireEvent.click(page.view.getByRole("radio", { name: "Cat" }));
@@ -170,8 +178,7 @@ test("a later read of the managers that fails keeps their last list, but Shuffle
   localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_VIOLET }));
   const read = { failing: false };
   const page = mount(read);
-  const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
-  await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
+  const shuffle = await page.listed();
 
   read.failing = true;
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
@@ -185,10 +192,12 @@ test("a later read of the managers that fails keeps their last list, but Shuffle
   assert.equal(name.value, "Webhooks", "the fields stay");
 });
 
-test("a later read that fails keeps a new manager's fields and its preview, and Shuffle waits", async () => {
+test("a later read that fails keeps a new manager's fields and its preview, and Shuffle waits", async (t) => {
+  // why 0: the preview then starts from the look Scout has, so the one from the list read differs from the one before it.
+  t.mock.method(Math, "random", () => 0);
   const read = { failing: false };
   const page = mount(read);
-  await page.view.findByRole("textbox", { name: "Name" });
+  await page.listed();
   const given = page.chosen();
 
   read.failing = true;
@@ -205,7 +214,7 @@ test("a later read that fails keeps a new manager's fields and its preview, and 
 test("a new manager's preview moves on when a later read shows another manager has taken it since", async () => {
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
   const page = mount(read);
-  await page.view.findByRole("textbox", { name: "Name" });
+  await page.listed();
   const [shape, hue] = page.chosen().map((label) => label?.toLowerCase());
   const given = avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" });
 
@@ -237,6 +246,7 @@ test("a new manager's preview moves on when a later read shows it taken, even af
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
   const page = mount(read);
   await page.named("Webhooks");
+  await page.listed();
   const [shape, hue] = page.chosen().map((label) => label?.toLowerCase());
   const given = avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" });
 
@@ -263,8 +273,7 @@ test("Shuffle never lands on a look another manager has while one is free: with 
   const others = looks.slice(1, -1).map((avatar, n) => ({ id: coordinatorIdSchema.parse(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), name: `Manager ${n}`, description: null, avatar }));
   localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: free }));
   const page = mount({ failing: false, others });
-  const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
-  await waitFor(() => assert.equal(shuffle.getAttribute("aria-disabled"), "false"));
+  const shuffle = await page.listed();
 
   fireEvent.click(shuffle);
   await page.create();
