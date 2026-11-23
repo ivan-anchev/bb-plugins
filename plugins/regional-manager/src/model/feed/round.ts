@@ -27,6 +27,9 @@ export function roundTarget(key: RoundKey): { kind: "handoff"; handoffId: Handof
   return key.startsWith("h-") ? { kind: "handoff", handoffId: handoffIdSchema.parse(id) } : { kind: "final", checkId: checkIdSchema.parse(id) };
 }
 
+/** A moment on a round's rail: when it came. */
+const stepSchema = z.object({ at: z.number() });
+
 export const roundSchema = z.object({
   key: roundKeySchema,
   number: z.number().int().min(1),
@@ -36,12 +39,12 @@ export const roundSchema = z.object({
     z.object({ kind: z.literal("agent"), agentId: agentIdSchema, status: handoffStatusSchema, summary: z.string() }),
     z.object({ kind: z.literal("final"), defaultBranch: z.string() }),
   ]),
-  /** Its review: none (no review stage), still to come, missed (why is the body's), or reported with how many findings and, once the verdict triaged them, how many it confirmed. */
+  /** Its review: none (no review stage), still to come, missed (why is the body's), or reported with how many findings and, once the verdict triaged them, how many it confirmed; each that came, its step. */
   review: z.discriminatedUnion("state", [
     z.object({ state: z.literal("none") }),
     z.object({ state: z.literal("pending") }),
-    z.object({ state: z.literal("missed"), at: z.number() }),
-    z.object({ state: z.literal("reported"), at: z.number(), findings: z.number().int(), confirmed: z.number().int().nullable() }),
+    z.object({ state: z.literal("missed"), step: stepSchema }),
+    z.object({ state: z.literal("reported"), findings: z.number().int(), confirmed: z.number().int().nullable(), step: stepSchema }),
   ]),
   /**
    * Its verdict (null: nothing checks this round, as a blocked or research handoff): what it says,
@@ -179,9 +182,9 @@ function reviewOf({ review, verdict }: Check): Round["review"] {
     case "running":
       return reviewPending({ review, verdict }) ? { state: "pending" } : { state: "none" };
     case "missed":
-      return { state: "missed", at: review.at };
+      return { state: "missed", step: { at: review.at } };
     case "reported":
-      return { state: "reported", at: review.at, findings: review.findings.length, confirmed: confirmedOf(verdict) };
+      return { state: "reported", findings: review.findings.length, confirmed: confirmedOf(verdict), step: { at: review.at } };
     default:
       return review satisfies never;
   }

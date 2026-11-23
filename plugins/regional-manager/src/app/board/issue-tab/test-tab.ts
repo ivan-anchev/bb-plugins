@@ -65,7 +65,7 @@ function round(number: number, agentId: typeof A1, at: number, results: Criterio
     number,
     at,
     by: { kind: "agent", agentId, status: "done", summary: `Round ${number}: retries land with backoff` },
-    review: { state: "reported", at: at + 100, findings: 2, confirmed: 1 },
+    review: { state: "reported", findings: 2, confirmed: 1, step: { at: at + 100 } },
     verdict: { outcome: failed ? { kind: "fail", by: "criteria" } : { kind: "pass" }, results, fixRound: fixRound === null ? null : { round: fixRound, delivery: "sent" } },
     outcomeAt: at + 600,
     inFlight: false,

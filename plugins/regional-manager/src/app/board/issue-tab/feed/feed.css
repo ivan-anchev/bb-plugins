@@ -249,13 +249,15 @@
   color: var(--foreground);
 }
 
-/* A round: its head a button, one line, its number, its summary and its score. */
+/* A round: its head a button, its number, its summary, its findings and its score; one line, or two
+   when the findings and the score don't fit beside the number, so neither is cut. */
 .rmi-round-head {
   all: unset;
   box-sizing: border-box;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   width: 100%;
   min-height: 36px;
   padding: 6px 10px;
@@ -288,9 +290,29 @@
   white-space: nowrap;
   color: var(--muted-foreground);
 }
-/* Open, the summary is the first step's: the head keeps its number and score. */
+/* Open, the summary and the findings are the steps': the head keeps its number and score. */
 .rmi-round[data-open] .rmi-round-summary {
   visibility: hidden;
+}
+.rmi-round[data-open] .rmi-round-found {
+  display: none;
+}
+/* The findings and the score, as one group: on a line of its own when it doesn't fit beside the
+   number, and the score under the findings when it doesn't fit beside them. */
+.rmi-round-tail {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  column-gap: 8px;
+}
+.rmi-round-found {
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
 }
 /* why it may shrink: a reason as long as "Not the claimed commit on a clean tree" ends in an ellipsis at
    a 360px panel, its whole words in its title and in the open round's verifier step. */
@@ -500,7 +522,7 @@
   line-height: 20px;
 }
 
-/* The reviewer's findings: severity, place, claim, then the verifier's triage. */
+/* The reviewer's findings: place, severity and claim in a line, then the verifier's triage. */
 .rmi-findings {
   display: flex;
   flex-direction: column;
@@ -513,36 +535,33 @@
   flex-direction: column;
   gap: 2px;
 }
-.rmi-finding-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.rmi-finding-line {
   min-width: 0;
+  text-wrap: pretty;
 }
 /* why no chip behind it: on --muted, --destructive-text drops below 4.5:1 in the light theme. */
 .rmi-severity {
-  flex: none;
   font-size: 11px;
-  line-height: 18px;
   font-weight: 500;
   color: var(--muted-foreground);
 }
 .rmi-severity[data-severity="must-fix"] { color: var(--destructive-text); }
 .rmi-severity[data-severity="should-fix"] { color: var(--warning-text); }
+/* why right to left with an ellipsis: a long path is cut at its start, keeping its file and line. */
 .rmi-finding-place {
-  min-width: 0;
+  display: inline-block;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre;
+  vertical-align: bottom;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--muted-foreground);
   direction: rtl;
-  text-align: left;
 }
 .rmi-finding-claim {
   color: var(--foreground);
-  text-wrap: pretty;
 }
 .rmi-finding[data-triage="rejected"] .rmi-finding-claim {
   color: var(--muted-foreground);

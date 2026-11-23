@@ -116,7 +116,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
     { by: round.round.by, review: round.round.review, verdict: round.round.verdict, outcomeAt: round.round.outcomeAt, inFlight: round.round.inFlight },
     {
       by: { kind: "agent", agentId: "a1", status: "done", summary: "Retries land" },
-      review: { state: "reported", at: 3_200, findings: 1, confirmed: 1 },
+      review: { state: "reported", findings: 1, confirmed: 1, step: { at: 3_200 } },
       verdict: { outcome: { kind: "fail", by: "criteria" }, results: ["fail"], fixRound: { round: 1, delivery: "sent" } },
       outcomeAt: 3_600,
       inFlight: false,
