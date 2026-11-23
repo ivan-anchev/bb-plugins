@@ -134,8 +134,8 @@ function usePost(coordinatorId: CoordinatorId, issueId: IssueId, key: string, ta
         setPost(key, { kind: "sent", text, commentId });
         taken(draft);
       },
-      // why the message read here: bb's RPC rejects with whatever its transport threw.
-      (error: unknown) => setPost(key, { kind: "failed", error: error instanceof Error ? error.message : String(error) }),
+      // why Error: mutate rejects with the SDK's experimental_PluginRpcCallError.
+      (error: Error) => setPost(key, { kind: "failed", error: error.message }),
     );
   }
 
