@@ -2,7 +2,6 @@
 // agent holding it, as a reply to the user's comments there or to each other's. The caller's role
 // comes from the plugin's database by its thread id, never its metadata, and decides who it posts as.
 import { z } from "zod";
-import type { Agent } from "../../model/agent/agent.ts";
 import { commentIdSchema, commentTextSchema, type CommentAuthor } from "../../model/feed/comment.ts";
 import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
@@ -34,7 +33,6 @@ export function registerCommentTool(bb: ToolsBb, { store, inbox }: Deps): void {
         return role satisfies never;
     }
   }
-
 
   bb.agents.registerTool({
     name: COMMENT,

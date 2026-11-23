@@ -9,7 +9,7 @@ import { When, Who, type FeedAgents } from "./byline.tsx";
 type CommentCardProps = {
   coordinatorId: CoordinatorId;
   entry: Extract<Entry, { kind: "comment" }>;
-  /** The comment it answers, from the same feed (null: it answers none, or that one isn't read yet). */
+  /** The comment it answers, from the same feed (null: it answers none). */
   answered: Comment | null;
   agents: FeedAgents;
 };

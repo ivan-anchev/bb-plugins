@@ -7,7 +7,6 @@ import type { Agent, AgentCheckout, EndedHow } from "../../model/agent/agent.ts"
 import { handoffFieldsSchema, handoffIdSchema, reportOf } from "../../model/agent/handoff.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { PIPELINES, shipsCode } from "../../model/issue/kind.ts";
-import type { Role } from "../../model/role.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import { latestTurnSeq, listedThreads, type TurnsBb } from "../agents/threads.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
@@ -26,7 +25,6 @@ type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { 
 type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff"> };
 
 export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): void {
-
   /** The agent's environment, and bb's git plugin's read of it, once, now, while the agent is awake to hand off; null when its thread has none. */
   async function readEnvironment(threadId: string): Promise<EnvironmentRead | null> {
     const environmentId = (await listedThreads(bb, [threadId])).get(threadId)?.environmentId ?? null;

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { wakes } from "../../model/inbox/inbox-event.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, issueIn, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const DONE = { status: "done", summary: "Retries land", did: ["Added retries"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
 
@@ -48,15 +48,32 @@ test("the regional manager's issue_comment posts its reply on the issue and tell
   assert.ok(caughtUp.includes(`It answers ${commentId}, the user's: "Cap retries at five?". In its own words:\n\nCapped at five in retry.ts.`), caughtUp);
 });
 
-test("an ended agent, another regional manager and a verifier are refused issue_comment with the reason, and nothing is posted", async () => {
+test("an agent on another issue, a thread with no role, a reviewer, a verifier, an ended agent and another regional manager are refused issue_comment with the reason, and nothing is posted", async () => {
   const { kit, threadId, coordinatorId, issueId, agentThreadId, comments } = await asked();
   const before = comments();
   const comment = { issue: issueId, text: "Done here." };
+  const refusal = async (threadId: string, input: object = comment) => {
+    const result = await kit.call("issue_comment", input, threadId);
+    assert.ok(isRefusal(result));
+    return textOf(result);
+  };
 
+  const other = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, title: "Dead letters" }, threadId)));
+  assert.equal(await refusal(agentThreadId, { ...comment, issue: other }), `issue_comment is refused, and nothing was posted: you hold ${issueId}, not ${other}. Only an issue's regional manager, and the agent holding it now, comment on it.`);
+  assert.equal(await refusal("thr_stranger"), "issue_comment is refused, and nothing was posted: this thread is not a regional manager, nor an agent of one. Only an issue's regional manager, and the agent holding it now, comment on it.");
+
+  kit.reviewers.reportAtOnce = false;
   await kit.call("agent_handoff", DONE, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   await settled();
-  const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
+  const check = () => kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check ?? assert.fail("no check");
+  const review = check().review;
+  const reviewerThreadId = review.state === "running" ? review.reviewerThreadId : assert.fail(`no reviewer running: ${JSON.stringify(review)}`);
+  assert.equal(await refusal(reviewerThreadId), `issue_comment is refused, and nothing was posted: this thread is a reviewer of ${issueId}, and reports only through its own tool. Only an issue's regional manager, and the agent holding it now, comment on it.`);
+  await kit.call("issue_review", { findings: [] }, reviewerThreadId);
+  await kit.idle(reviewerThreadId, "Reviewed.");
+  await settled();
+  const verdict = check().verdict;
   const verifierThreadId = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`no verifier running: ${JSON.stringify(verdict)}`);
   const byVerifier = await kit.call("issue_comment", comment, verifierThreadId);
   assert.ok(isRefusal(byVerifier));
