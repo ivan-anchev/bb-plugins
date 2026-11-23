@@ -1,18 +1,28 @@
-// A regional manager's avatar, drawn in a tile: tiny in its thread, small in a list row, large in a page's header.
-import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
-import type { Avatar } from "../../model/profile.ts";
+// A regional manager's avatar, a still blob with nothing behind it: tiny in its thread, small in a
+// list row, large in a page's header. why paused: still pictures only; dropping it animates them.
+import { BlobAvatar } from "blob-avatar";
+import { HUES, type Avatar } from "../../model/profile/avatar.ts";
 
-const SIZES = {
-  xs: "size-5 rounded [&_[data-icon-root]]:size-3.5",
-  sm: "size-7 rounded-md [&_[data-icon-root]]:size-4",
-  lg: "size-10 rounded-lg [&_[data-icon-root]]:size-5",
-} as const;
+const SIZES = { xs: 20, sm: 28, lg: 40 } as const;
+
+// why: blob-avatar draws in a 200-unit box whose body spans about 136 of it, so a box this much
+// larger, its overflow given back by negative margins, makes the body fill the size asked for.
+const BODY_SCALE = 200 / 136;
 
 // why aria-hidden: the name beside it says who this is; the avatar only pictures it.
-export function AvatarTile({ avatar, size }: { avatar: Avatar; size: keyof typeof SIZES }) {
+export function AvatarBlob({ avatar, size }: { avatar: Avatar; size: keyof typeof SIZES }) {
+  const box = Math.round(SIZES[size] * BODY_SCALE);
   return (
-    <span aria-hidden className={`flex shrink-0 items-center justify-center bg-muted text-foreground ${SIZES[size]}`}>
-      <Icon name={avatar.icon} />
-    </span>
+    <BlobAvatar
+      aria-hidden
+      shape={avatar.shape}
+      color={HUES[avatar.hue]}
+      expression={avatar.expression}
+      animation="idle"
+      paused
+      size={box}
+      className="pointer-events-none shrink-0"
+      style={{ margin: (SIZES[size] - box) / 2 }}
+    />
   );
 }

@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { NAME_MAX } from "../../model/profile.ts";
+import { NAME_MAX } from "../../model/profile/profile.ts";
 import type { MemoryRoot } from "../memory/memory-files.ts";
 import type { Store } from "../store/store.ts";
 

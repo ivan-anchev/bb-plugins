@@ -34,7 +34,7 @@ const { issueTab } = await import("./issue-tab.tsx");
 
 afterEach(cleanup);
 
-const COORDINATOR = { id: "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10", threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "icon", icon: "Workflow" } };
+const COORDINATOR = { id: "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10", threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } };
 const SHA = "4b1d9e0c2a7f3e5d6c8b9a0f1e2d3c4b5a697881";
 
 const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({

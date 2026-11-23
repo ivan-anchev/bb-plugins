@@ -37,9 +37,10 @@ its role.
   `src/model/reminder.ts`: a reminder, and the one parser of `crew_remind`'s
   times. `src/model/decision.ts`: a question put to the user, and an issue's
   decisions: those questions naming it and those recorded on it, oldest first.
-  `src/model/profile.ts`: a regional manager's profile (name, description,
-  avatar) and the icons an avatar can be; the name is the thread's title,
-  which bb keeps, and the store keeps the rest.
+  `src/model/profile/`: a regional manager's profile (name, description,
+  avatar), and its avatar: a still blob's look, a shape in one of Zeron's
+  identity hues, stored once and never taken from the name; the name is the
+  thread's title, which bb keeps, and the store keeps the rest.
 - `src/server/`: `store/` holds every SQL statement, one file per cluster
   (issues, agents, checks, inbox, pull requests) composed by `store.ts`, and
   `migrations.ts`, the one list of statements, which only grows; `inbox/` is
@@ -86,7 +87,7 @@ its role.
   for a manager not started yet, and `useManager`, a started one's name from
   bb's thread list joined with what the plugin keeps. The panel's page of a
   manager not started yet holds its profile and bb's composer for its goal;
-  a started one's opens its thread. `src/app/thread/`: the manager's icon
+  a started one's opens its thread. `src/app/thread/`: the manager's avatar
   and name above its thread's composer, which open the profile's editor.
   `src/app/board/`: the Board and its thread tab, with Memory at its bottom;
   `issue/` its lanes and issue rows, `issue/detail/` an issue opened in

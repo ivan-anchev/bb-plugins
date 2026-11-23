@@ -2,9 +2,9 @@ import "../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { COORDINATORS_TAG, coordinatorContract as contract, type Coordinator, type NotStarted } from "../../../contract.ts";
-import type { Profile } from "../../../model/profile.ts";
+import type { Profile } from "../../../model/profile/profile.ts";
 import { coordinatorIdSchema } from "../../../model/role.ts";
 import { PROJECT, sidebarThread } from "../../test-sidebar.ts";
 
@@ -27,7 +27,7 @@ afterEach(() => {
  * settles, as the server's does.
  */
 function mount({ started = false, replied = Promise.resolve() }: { started?: boolean; replied?: Promise<void> } = {}) {
-  const profileOf = { description: "Moves webhooks off cron.", avatar: { kind: "icon", icon: "Workflow" } } as const;
+  const profileOf = { description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } } as const;
   const stored: Coordinator = { id: COORDINATOR, threadId: "thr_1", projectId: PROJECT.id, ...profileOf };
   let waiting: NotStarted | null = started ? null : { id: COORDINATOR, name: "Scout", ...profileOf };
   const saves: Profile[] = [];
@@ -70,7 +70,7 @@ test("the page's heading is the regional manager's name, with its description", 
   assert.ok(view.getByText("Moves webhooks off cron."));
 });
 
-test("Edit opens the profile in place on the name, and Save sends the changed name, description and icon, then closes it with the focus back on Edit", async () => {
+test("Edit opens the profile in place on the name, and Save sends the changed name, description and avatar, then closes it with the focus back on Edit", async () => {
   const { view, saves } = mount();
   const edit = await view.findByRole("button", { name: "Edit" });
   // why focus first: a click focuses the button in a browser, and jsdom's doesn't.
@@ -81,15 +81,42 @@ test("Edit opens the profile in place on the name, and Save sends the changed na
 
   fireEvent.change(name, { target: { value: "Scout v2" } });
   fireEvent.change(view.getByRole("textbox", { name: "Description" }), { target: { value: "Retries too." } });
-  fireEvent.click(view.getByRole("radio", { name: "Brain" }));
+  fireEvent.click(view.getByRole("radio", { name: "Cat" }));
+  fireEvent.click(view.getByRole("radio", { name: "Teal" }));
   view.getByRole("button", { name: "Save" }).focus();
   await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
   await act(() => view.experimental_invalidateRpc([COORDINATORS_TAG]));
 
-  assert.deepEqual(saves, [{ name: "Scout v2", description: "Retries too.", avatar: { kind: "icon", icon: "Brain" } }]);
+  assert.deepEqual(saves, [{ name: "Scout v2", description: "Retries too.", avatar: { kind: "blob", shape: "cat", hue: "teal", expression: "neutral" } }]);
   assert.equal(view.queryByRole("form", { name: "Edit profile" }), null);
   assert.ok(document.activeElement === view.getByRole("button", { name: "Edit" }), "the focus goes back to Edit");
   assert.ok(await view.findByText("Retries too."));
+});
+
+test("the editor pictures it with Shuffle, which never picks a look a manager has, or a shape and a colour, each a labelled radio group; Save stores the look picked", async (t) => {
+  // why 0: Shuffle then starts from the look this manager already has, circle in violet, and must step past it.
+  t.mock.method(Math, "random", () => 0);
+  const { view, saves } = mount();
+  fireEvent.click(await view.findByRole("button", { name: "Edit" }));
+  const shapes = view.getByRole("group", { name: "Shape" });
+  const colours = view.getByRole("group", { name: "Colour" });
+  const radios = (group: HTMLElement) => within(group).getAllByRole("radio");
+  const chosen = (group: HTMLElement) => radios(group).filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
+
+  assert.deepEqual(radios(shapes).map((radio) => radio.getAttribute("aria-label")), ["Circle", "Pebble", "Squircle", "Capsule", "Triangle", "Diamond", "Hexagon", "Star", "Cloud", "Droplet", "Heart", "Ghost", "Cat", "Bear", "Bunny", "Amoeba", "Flower", "Clover", "Leaf", "Gem", "Bubble"]);
+  assert.deepEqual(radios(colours).map((radio) => radio.getAttribute("aria-label")), ["Violet", "Blue", "Emerald", "Sky", "Amber", "Rose", "Lime", "Teal", "Orange", "Indigo", "Pink", "Cyan"]);
+  // why one name each: native radios of one name are one tab stop that the arrow keys move through.
+  for (const group of [shapes, colours]) assert.equal(new Set(radios(group).map((radio) => radio.getAttribute("name"))).size, 1);
+  assert.deepEqual([chosen(shapes), chosen(colours)], [["Circle"], ["Violet"]]);
+
+  fireEvent.click(view.getByRole("button", { name: "Shuffle" }));
+  const shuffled = [...chosen(shapes), ...chosen(colours)];
+  assert.notDeepEqual(shuffled, ["Circle", "Violet"], "Shuffle never picks a look a manager has");
+  await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
+
+  const [saved] = saves;
+  assert.ok(saved);
+  assert.deepEqual([saved.avatar.shape, saved.avatar.hue], shuffled.map((label) => label?.toLowerCase()));
 });
 
 test("an edit with no name is not sent, and the name field says why", async () => {
@@ -115,6 +142,19 @@ test("an open edit outlives the page, as when bb redraws the panel, and Cancel d
   fireEvent.click(again.view.getByRole("button", { name: "Cancel" }));
   assert.ok(again.view.getByText("Moves webhooks off cron."));
   assert.equal(localStorage.length, 0);
+});
+
+test("an open edit an earlier release kept, with an icon this one can't draw, stays open with what was typed and the manager's own look", async () => {
+  // why raw text with an icon: what 0.7.0 kept in the browser before avatars were blobs.
+  localStorage.setItem(`coordinator-profile-edit:${COORDINATOR}`, '{"name":"Scout v2","description":"Half typed","avatar":{"kind":"icon","icon":"Brain"}}');
+  const { view, saves } = mount();
+
+  const name = await view.findByRole("textbox", { name: "Name" });
+  assert.ok(name instanceof HTMLInputElement);
+  assert.equal(name.value, "Scout v2");
+  await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
+
+  assert.deepEqual(saves, [{ name: "Scout v2", description: "Half typed", avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } }]);
 });
 
 test("Esc closes an edit nothing changed in, and keeps one that has changes", async () => {

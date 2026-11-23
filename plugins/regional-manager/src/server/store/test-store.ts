@@ -6,7 +6,7 @@ import { memoryStorage } from "../memory-storage.ts";
 import type { AgentId } from "../../model/agent.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { issueKeySchema } from "../../model/issue/key/issue-key.ts";
-import { DEFAULT_AVATAR } from "../../model/profile.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { openStore, type Store } from "./store.ts";
 import type { NewIssue } from "./issue/issues-store.ts";
@@ -14,13 +14,16 @@ import type { NewIssue } from "./issue/issues-store.ts";
 export const MANAGER = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 export const OTHER_MANAGER = coordinatorIdSchema.parse("9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d");
 
+/** The avatar every test manager has unless the test is about avatars. */
+export const AVATAR: Avatar = { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" };
+
 export const EXECUTION = { providerId: "codex", model: "gpt-5.4", reasoningLevel: "medium" };
 
 export function freshStore() {
   const { db, storage } = memoryStorage();
   const store = openStore(storage);
   for (const [id, n] of [[MANAGER, 1], [OTHER_MANAGER, 2]] as const) {
-    store.insertCoordinator({ id, ticket: `manager-${n}`, name: `Manager ${n}`, description: null, avatar: DEFAULT_AVATAR, createdAt: 1_000 });
+    store.insertCoordinator({ id, ticket: `manager-${n}`, name: `Manager ${n}`, description: null, avatar: AVATAR, createdAt: 1_000 });
     store.startsOn(id, "prj_1", issueKeySchema.parse("WEB"));
     store.bindTicket(`manager-${n}`, `thr_manager_${n}`);
   }
@@ -56,13 +59,13 @@ export function startAgent(store: Store, issueId: IssueId, ticket: string, coord
 }
 
 /**
- * Makes every `op` on `table` fail until the returned function is called, as a full disk or a broken
+ * Makes every `op` on `table` (or each row `when` names) fail until the returned function is called, as a full disk or a broken
  * row would. A write that fails after earlier ones of its transaction proves those were rolled back
  * with it; calling the function lets a test retry the same write.
  */
-export function failWrites(db: Database.Database, op: "INSERT" | "UPDATE", table: string): () => void {
+export function failWrites(db: Database.Database, op: "INSERT" | "UPDATE", table: string, when = "1"): () => void {
   const trigger = `fail_${op}_${table}`;
-  db.exec(`CREATE TRIGGER ${trigger} BEFORE ${op} ON ${table} BEGIN SELECT RAISE(ABORT, 'forced failure'); END`);
+  db.exec(`CREATE TRIGGER ${trigger} BEFORE ${op} ON ${table} WHEN ${when} BEGIN SELECT RAISE(ABORT, 'forced failure'); END`);
   return () => db.exec(`DROP TRIGGER ${trigger}`);
 }
 

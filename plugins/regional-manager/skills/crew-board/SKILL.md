@@ -17,7 +17,8 @@ and no plugin settings. Its one setting belongs to each regional manager: the
 1. Open the plugin's panel in bb's navigation rail.
 2. Press **New** in its title bar.
 3. Under **New regional manager**, give it a **name**, an optional
-   **description**, and pick an **icon** (see [Profile](#profile)).
+   **description**, and keep, shuffle or pick its **avatar** (see
+   [Profile](#profile)).
 4. Press **Create**. It saves the regional manager, with no thread yet, and
    opens its page. A create with no name is refused: the name field says
    "Give it a name." and takes the focus.
@@ -51,7 +52,7 @@ while bb restarts, is tried again on the next minute's tick.
 
 The panel lists the regional managers not started yet under **Not started**,
 then every other one bb still lists under its project, newest first. A row is
-the manager's icon, its name and, below them, its description, and nothing
+the manager's avatar, its name and, below them, its description, and nothing
 else. It opens the manager's page, with the composer for its goal, until it
 starts, and its thread after; an old link to a started manager's page opens
 its thread too. An archived or deleted thread drops its manager off the list.
@@ -59,31 +60,40 @@ its thread too. An archived or deleted thread drops its manager off the list.
 ## Profile
 
 Each regional manager has a profile: a **name**, up to 80 characters, an
-optional **description**, up to 500, and an **icon**, one of 24 of bb's own
-(Workflow, the plugin's, unless you pick another).
+optional **description**, up to 500, and an **avatar**: a still blob, one of
+21 shapes in one of Zeron's 12 identity colours, with a friendly face. A new
+manager starts with a look no other manager has while one of the 252 is free,
+picked as Create saves it, so it can differ from the preview New shows;
+**Shuffle** picks another such look, and the **Shape** and **Colour** pickers
+choose one by hand, even one another manager has.
 
 - **Once it starts, the name is the thread's title.** bb keeps it; the
-  plugin stores the description and the icon. Renaming the thread in bb's
+  plugin stores the description and the avatar. Renaming the thread in bb's
   sidebar renames the manager in the panel too, and an edit of the name
   renames the thread. The thread shows the name as its title, and the
-  manager's icon and name above its composer, never its description. Before
+  manager's avatar and name above its composer, never its description. Before
   the start the plugin keeps the name, and the thread is titled with it.
 - **Edit it**: before the start, **Edit** on its page in the panel opens the
-  name, description and icons in place; after it, pressing the manager's icon
-  and name above its thread's composer opens them below that row. **Save**
-  keeps them, and **Cancel** drops the edit; both close it, and the focus
-  goes back to what opened it. Esc closes an edit only while nothing in it
-  changed. What you typed in an edit survives bb redrawing it and a reload: on
-  the page the edit stays open, and above the composer it is there again when
-  you open the editor. A save of a started one renames the thread first, so
-  one bb refuses changes nothing. bb's title bar names the manager whose page
-  is open.
+  name, description and avatar pickers in place; after it, pressing the
+  manager's avatar and name above its thread's composer opens them below that
+  row. **Save** keeps them, and **Cancel** drops the edit; both close it, and
+  the focus goes back to what opened it. Esc closes an edit only while
+  nothing in it changed. What you typed in an edit survives bb redrawing it
+  and a reload: on the page the edit stays open, and above the composer it is
+  there again when you open the editor. A save of a started one renames the
+  thread first, so one bb refuses changes nothing. bb's title bar names the
+  manager whose page is open.
 - **Delete** sits in the Edit form of a regional manager not started yet,
   since bb can't archive a thread it doesn't have. It asks "Delete it?" once,
   in place, then removes the manager and goes back to the list. A started one
   is removed by archiving or deleting its thread in bb.
-- **Managers started before profiles** have the Workflow icon and no
-  description; their name is the title their thread already had.
+- **A rename never changes the avatar**: it is stored once, never taken from
+  the name.
+- **Managers created before avatars were blobs** each get a look of their
+  own, taken from their id, as the plugin loads; no two get the same one while
+  a look is free.
+- **Managers started before profiles** have no description; their name is
+  the title their thread already had.
 - The New page keeps what you typed in the profile's fields until Create
   saves them.
 

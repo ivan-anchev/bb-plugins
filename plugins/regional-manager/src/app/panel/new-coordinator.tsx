@@ -4,8 +4,10 @@ import { experimental_Icon as Icon, experimental_useRpcMutation } from "@get-bb/
 import { useRef, useState, type Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { EMPTY_DRAFT, NAME_MISSING, NEW_PROFILE_KEY, profileDraftSchema, profileOf } from "../profile/profile-draft.ts";
+import { randomStart } from "../../model/profile/avatar.ts";
+import { NAME_MISSING, NEW_PROFILE_KEY, newDraft, profileOf, storedDraftSchema, withLook, type ProfileDraft, type StoredDraft } from "../profile/profile-draft.ts";
 import { ProfileFields } from "../profile/profile-fields.tsx";
+import { useTakenLooks } from "../profile/use-manager.ts";
 import { Button } from "../ui/button.tsx";
 import { useStored } from "../ui/stored.ts";
 
@@ -14,8 +16,14 @@ type NewCoordinatorProps = { ref: Ref<HTMLDivElement>; onBack(): void; onCreated
 export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) {
   const create = experimental_useRpcMutation({ contract, method: "createCoordinator" });
   // why kept in the browser: what the user typed outlives bb redrawing the panel, until Create saves it.
-  const stored = useStored(localStorage, NEW_PROFILE_KEY, profileDraftSchema);
-  const draft = stored.value ?? EMPTY_DRAFT;
+  const stored = useStored(localStorage, NEW_PROFILE_KEY, storedDraftSchema);
+  const taken = useTakenLooks();
+  // A preview of the look a new manager gets: the first from `start` that none of the others has in the
+  // list read last. Unless the user picks one, Create sends `auto` and the look is picked as it is
+  // saved (avatars.ts lookFor), so the one saved may differ; its page, which Create opens, shows it.
+  const [start] = useState(randomStart);
+  const preview = newDraft(start, taken.lastRead ?? []);
+  const draft = stored.value === null ? preview : withLook(stored.value, preview.avatar);
   // Whether a create found no name: the field says so from then on, until it has one.
   const [tried, setTried] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -29,7 +37,7 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
       return;
     }
     // why caught: the page shows the refusal under Create, and keeps the fields to try again.
-    const created = await create.mutate({ profile }).catch(() => null);
+    const created = await create.mutate({ profile: { ...profile, avatar: stored.value?.avatar ?? { kind: "auto" } } }).catch(() => null);
     if (created === null) return;
     stored.store(null);
     onCreated(created.coordinatorId);
@@ -56,7 +64,7 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
           </h1>
         </div>
         <div className="flex flex-col gap-5 px-3">
-          <ProfileFields value={draft} onChange={stored.store} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />
+          <ProfileFields value={draft} onChange={(next) => stored.store(keptOf(next, draft, stored.value))} nameError={tried && profile === null ? NAME_MISSING : null} nameRef={nameRef} />
           <div className="flex flex-col items-start gap-2">
             {/* why aria-disabled: a disabled button drops focus to the page while the create runs. */}
             <Button type="submit" variant="default" aria-disabled={create.isPending}>
@@ -72,4 +80,14 @@ export function NewCoordinator({ ref, onBack, onCreated }: NewCoordinatorProps) 
       </form>
     </div>
   );
+}
+
+/**
+ * The fields to keep in the browser: what was typed, and the avatar only once the user picked one
+ * (Shuffle, a shape or a colour), which Create sends as chosen; until then none, so Create sends `auto`.
+ */
+function keptOf(next: ProfileDraft, shown: ProfileDraft, before: StoredDraft | null): StoredDraft {
+  // why by value: a pick changes the look (the checked radio fires nothing). A Shuffle that keeps the look, when no other is free, stays unpicked, so Create sends `auto` and the store picks the look, which may differ from the preview as it can anywhere on this page.
+  const picked = JSON.stringify(next.avatar) !== JSON.stringify(shown.avatar);
+  return { ...next, avatar: picked ? next.avatar : (before?.avatar ?? null) };
 }

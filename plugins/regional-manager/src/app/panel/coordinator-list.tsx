@@ -4,9 +4,9 @@
 import { experimental_Icon as Icon, experimental_useRpcQuery, experimental_useSidebarThreads as useSidebarThreads, useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { ReactNode, Ref } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";
-import type { Avatar } from "../../model/profile.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { AvatarTile } from "../profile/avatar.tsx";
+import { AvatarBlob } from "../profile/avatar.tsx";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { listView } from "./coordinator-groups.ts";
 
@@ -68,7 +68,7 @@ function Row({ name, description, avatar, onOpen }: RowProps) {
         onClick={onOpen}
         className="flex min-h-11 w-full min-w-0 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-state-hover focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
-        <AvatarTile avatar={avatar} size="sm" />
+        <AvatarBlob avatar={avatar} size="sm" />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate font-medium">{name}</span>
           {description !== null && <span className="truncate text-xs text-muted-foreground">{description}</span>}

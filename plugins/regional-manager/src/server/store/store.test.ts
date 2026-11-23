@@ -6,12 +6,14 @@ import { handoffIdSchema, type Handoff } from "../../model/handoff.ts";
 import { issueKeyOf } from "../../model/issue/key/issue-key.ts";
 import { issueViews } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { DEFAULT_AVATAR } from "../../model/profile.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
+import type { NewProfile } from "../../model/profile/profile.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import type { NewAgent } from "./issue/agents-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
-import { openStore } from "./store.ts";
-import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
+import { openStore, type Store } from "./store.ts";
+import { AVATAR, EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
 
 test("a fresh database holds the design's tables and indexes, and nothing else", () => {
   const { db } = freshStore();
@@ -47,25 +49,123 @@ test("a store opened again, as after a reload, keeps what was stored", () => {
   assert.deepEqual(openStore(storage).issue(MANAGER, filed.id), filed);
 });
 
-test("a regional manager started before profiles lists with no description and the plugin's own icon once the store is opened by this release", () => {
+/**
+ * A database as the release before blobs left it: each regional manager named, in the order given,
+ * created a second apart, its thread bound, pictured by one of bb's icons.
+ */
+function iconManagers(managers: readonly (readonly [CoordinatorId, string])[]) {
   const { db, storage } = memoryStorage();
-  const profiles = MIGRATIONS.findIndex((statement) => statement.includes("ADD COLUMN description"));
-  storage.migrate(db, MIGRATIONS.slice(0, profiles));
-  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
-  db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at) VALUES (?, 'ticket-1', 'prj_1', 1, 1000)").run(MANAGER);
+  storage.migrate(db, [...MIGRATIONS]);
+  managers.forEach(([id, name], n) => {
+    db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES (?, ?, ?, ?)").run(`ticket-${n}`, `thr_${n}`, JSON.stringify({ kind: "coordinator", coordinatorId: id }), 1_000 + n);
+    // why no avatar: the column's default is the icon every manager had before profiles, and the plugin's own icon after.
+    db.prepare("INSERT INTO coordinators (id, ticket, project_id, name, created_at) VALUES (?, ?, 'prj_1', ?, ?)").run(id, `ticket-${n}`, name, 1_000 + n);
+  });
+  const stored = () => db.prepare("SELECT id, avatar FROM coordinators ORDER BY created_at").all().map((row) => z.object({ id: z.string(), avatar: z.string() }).parse(row));
+  return { db, storage, stored };
+}
 
-  assert.deepEqual(openStore(storage).coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", description: null, avatar: { kind: "icon", icon: "Workflow" } }]);
+const THIRD_MANAGER = coordinatorIdSchema.parse("0b9c8e5d-7a3f-4e2b-9c1d-5f6a7b8c9d0e");
+const THREE = [[MANAGER, "Webhooks"], [OTHER_MANAGER, "Scout"], [THIRD_MANAGER, "Docs"]] as const;
+const looksOf = (store: Store) => new Map(store.coordinators().map(({ id, avatar }) => [id, avatar]));
+const lookKey = ({ shape, hue }: Avatar) => `${shape}/${hue}`;
+
+test("regional managers pictured by an icon each get a blob look of their own as the store opens, taken from their ids and never their names", () => {
+  const looks = looksOf(openStore(iconManagers(THREE).storage));
+
+  assert.equal(looks.size, 3);
+  assert.equal(new Set([...looks.values()].map(lookKey)).size, 3, "no two share a shape in a hue");
+  const renamed = looksOf(openStore(iconManagers(THREE.map(([id]) => [id, "Another name"] as const)).storage));
+  assert.deepEqual(renamed, looks, "the same ids under other names get the same looks");
 });
 
-test("an avatar this release can't draw, as an icon a later one stored, reads as the plugin's own icon, and the list still reads", () => {
-  const { db, store } = freshStore();
-  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify({ kind: "icon", icon: "Rocket" }), MANAGER);
+test("of two icon managers whose ids seed the same look, the one created first keeps it and the later one gets the next free one, whatever order their rows were written in", () => {
+  // why these ids: both seed bubble in pink (found once, written here so no test draws ids at random).
+  const older = coordinatorIdSchema.parse("570ace8b-8f43-476b-a8a0-88aadbb4dfd6");
+  const newer = coordinatorIdSchema.parse("1995df9c-c6da-42dc-ac05-5de892e7c72b");
+  // why the newer row first: rows written in the reverse of their creation, so only created_at gives the order.
+  const { db, storage } = iconManagers([[newer, "Newer"], [older, "Older"]]);
+  db.prepare("UPDATE coordinators SET created_at = 2000 WHERE id = ?").run(newer);
 
-  assert.deepEqual(store.coordinator(MANAGER)?.avatar, DEFAULT_AVATAR);
-  assert.equal(store.coordinators().length, 2);
+  const looks = looksOf(openStore(storage));
+
+  assert.deepEqual(looks.get(older), { kind: "blob", shape: "bubble", hue: "pink", expression: "happy" });
+  assert.deepEqual(looks.get(newer), { kind: "blob", shape: "circle", hue: "cyan", expression: "curious" });
 });
 
-const SCOUT = { name: "Scout", description: null, avatar: DEFAULT_AVATAR };
+test("opening the store again changes no avatar: not the looks it gave, nor a look the user picked that another manager has", () => {
+  const { db, storage, stored } = iconManagers(THREE);
+  openStore(storage);
+  const shared = looksOf(openStore(storage)).get(MANAGER);
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify(shared), OTHER_MANAGER);
+  const before = stored();
+
+  openStore(storage);
+
+  assert.deepEqual(stored(), before);
+});
+
+test("a failed write gives no regional manager a look, and opening the store again gives each the look it would have had", () => {
+  const { db, storage, stored } = iconManagers(THREE);
+  const expected = looksOf(openStore(iconManagers(THREE).storage));
+  const before = stored();
+  const allow = failWrites(db, "UPDATE", "coordinators", `OLD.id = '${THIRD_MANAGER}'`);
+
+  assert.throws(() => openStore(storage), /forced failure/);
+  assert.deepEqual(stored(), before, "the two looks written before it were undone");
+
+  allow();
+  assert.deepEqual(looksOf(openStore(storage)), expected);
+});
+
+for (const [unreadable, stored] of [
+  ["text that isn't JSON", "{not json"],
+  ["a kind a later release stored", JSON.stringify({ kind: "image", url: "https://example.com/a.png" })],
+] as const) {
+  test(`managers created with an auto avatar next to one whose avatar is ${unreadable} never take the look it is drawn with`, () => {
+    const { db, storage } = memoryStorage();
+    const store = openStore(storage);
+    // why MANAGER for the unreadable one: the look it is drawn with is then fixed (bunny in rose). The others store blobs, whose looks don't depend on their ids.
+    const insert = (n: number, avatar: NewProfile["avatar"], id = coordinatorIdSchema.parse(randomUUID())) => store.insertCoordinator({ id, ticket: `ticket-${n}`, name: `Manager ${n}`, description: null, avatar, createdAt: 1_000 + n });
+    insert(0, AVATAR, MANAGER);
+    db.prepare("UPDATE coordinators SET avatar = ?").run(stored);
+
+    // why 251: with the unreadable one's, every look is then taken once, so one auto pick on its look would repeat it.
+    for (let n = 1; n <= 251; n++) insert(n, { kind: "auto" });
+
+    assert.equal(new Set(store.notStarted().map(({ avatar }) => lookKey(avatar))).size, 252);
+  });
+}
+
+test("an icon manager whose id seeds the look an unreadable avatar is drawn with steps past it as the store opens", () => {
+  const { db, storage } = iconManagers([[MANAGER, "Webhooks"]]);
+  // why this id: it seeds bunny in rose, as MANAGER does (found once, written here so no test draws ids at random).
+  const broken = coordinatorIdSchema.parse("4be35e2d-bb20-4bfb-abdd-e1d72643984b");
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-broken', NULL, ?, 900)").run(JSON.stringify({ kind: "coordinator", coordinatorId: broken }));
+  db.prepare("INSERT INTO coordinators (id, ticket, project_id, name, avatar, created_at) VALUES (?, 'ticket-broken', '', 'Broken', '{not json', 900)").run(broken);
+
+  const store = openStore(storage);
+
+  assert.deepEqual(store.notStarted().find(({ id }) => id === broken)?.avatar, { kind: "blob", shape: "bunny", hue: "rose", expression: "neutral" }, "drawn with the look its id seeds");
+  assert.deepEqual(store.coordinator(MANAGER)?.avatar, { kind: "blob", shape: "amoeba", hue: "rose", expression: "neutral" }, "the next free one after it");
+});
+
+test("an avatar this release can't draw, as a kind a later one stored or text that isn't JSON, reads as the look its id seeds, stays stored, and the list still reads", () => {
+  const { db, storage } = freshStore();
+  const later = JSON.stringify({ kind: "image", url: "https://example.com/a.png" });
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(later, MANAGER);
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run("{not json", OTHER_MANAGER);
+
+  const store = openStore(storage);
+
+  const drawn = new Map(store.coordinators().map(({ id, avatar }) => [id, avatar]));
+  // why these: the looks MANAGER's and OTHER_MANAGER's ids seed.
+  assert.deepEqual(drawn, new Map([[MANAGER, { kind: "blob", shape: "bunny", hue: "rose", expression: "neutral" }], [OTHER_MANAGER, { kind: "blob", shape: "heart", hue: "lime", expression: "curious" }]]));
+  const stored = db.prepare("SELECT avatar FROM coordinators ORDER BY created_at, rowid").all().map((row) => z.object({ avatar: z.string() }).parse(row).avatar);
+  assert.deepEqual(stored, [later, "{not json"]);
+});
+
+const SCOUT = { name: "Scout", description: null, avatar: AVATAR };
 
 test("a ticket binds once: a second bind, to the same or another thread, changes nothing", () => {
   const store = openStore(memoryStorage().storage);
@@ -90,7 +190,7 @@ test("a regional manager is created not started, with its name and no project; i
   store.bindTicket("ticket-1", "thr_a");
   assert.deepEqual(store.notStarted(), []);
   assert.deepEqual(store.startOf(MANAGER), { kind: "started", threadId: "thr_a" });
-  assert.deepEqual(store.coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", description: null, avatar: DEFAULT_AVATAR }]);
+  assert.deepEqual(store.coordinators(), [{ id: MANAGER, threadId: "thr_a", projectId: "prj_1", description: null, avatar: AVATAR }]);
   assert.equal(store.roleFor("thr_b", "ticket-1"), null);
 });
 
@@ -225,7 +325,8 @@ test("a 0.3.0 regional manager is a candidate of the upgrade until unheld: then 
   store.unhold(MANAGER, "ticket-1", "Again", "ticket-3", 3_000);
 
   assert.deepEqual([store.upgradeCandidates(), store.coordinators()], [[], []]);
-  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: DEFAULT_AVATAR }]);
+  // why that avatar: a 0.3.0 manager had the plugin's icon, which the store gives the first free look from its id as it opens.
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: { kind: "blob", shape: "bunny", hue: "rose", expression: "neutral" } }]);
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-2", name: "Webhooks" });
   assert.equal(store.roleOfThread("thr_a"), null);
   assert.equal(store.roleFor("thr_a", "ticket-1"), null);
@@ -249,6 +350,6 @@ test("a regional manager's stored name changes before its start only: once start
   store.rename(MANAGER, "Scout 2");
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-1", name: "Scout 2" });
 
-  store.setProfile(MANAGER, { description: "Finds work", avatar: DEFAULT_AVATAR });
-  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Scout 2", description: "Finds work", avatar: DEFAULT_AVATAR }]);
+  store.setProfile(MANAGER, { description: "Finds work", avatar: AVATAR });
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Scout 2", description: "Finds work", avatar: AVATAR }]);
 });
