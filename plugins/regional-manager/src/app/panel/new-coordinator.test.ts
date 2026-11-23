@@ -271,3 +271,41 @@ test("Shuffle never lands on a look another manager has while one is free: with 
 
   assert.deepEqual(page.creates.map(({ avatar }) => avatar), [free], "the look kept, face and all");
 });
+
+test("every shape, every colour and Shuffle is sized as a finger's tap target, 44px, while the tiles and their artwork keep their size", async () => {
+  const page = mount();
+  const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
+  const radios = page.view.getAllByRole("radio");
+  assert.equal(radios.length, SHAPES.length + HUE_NAMES.length);
+  const labels = radios.map((radio) => {
+    const label = radio.closest("label");
+    assert.ok(label, `${radio.getAttribute("aria-label")} has a label to tap`);
+    return label;
+  });
+
+  // why sizing classes and inline styles, not boxes: jsdom lays nothing out. The live editor's script
+  // measures and hit-tests the laid-out boxes; this pins the classes that give them their size.
+  assert.deepEqual(new Set(labels.map(sizing)), new Set(["size-11"]), "every label is a 44px cell, with nothing to cap it");
+  assert.equal(sizing(shuffle), "min-h-11", "Shuffle is at least 44px tall, with nothing to cap it");
+  assert.deepEqual(new Set(labels.map((label) => sizing(label.querySelector<HTMLElement>(":scope > span")!))), new Set(["size-8"]), "every tile is 32px");
+  const swatches = labels.slice(SHAPES.length).map((label) => label.querySelector<HTMLElement>(":scope > span > span")!);
+  assert.deepEqual(new Set(swatches.map(sizing)), new Set(["size-4"]), "every colour's swatch is 16px");
+  const blobs = labels.slice(0, SHAPES.length).map((label) => label.querySelector<HTMLElement>("[role=img]")!.style);
+  assert.deepEqual(new Set(blobs.map((style) => parseFloat(style.width) + 2 * parseFloat(style.margin))), new Set([20]), "every shape's blob is 20px");
+
+  fireEvent.click(labels[SHAPES.indexOf("cloud")]!);
+  assert.equal(page.view.getByRole("radio", { name: "Cloud" }).matches(":checked"), true, "a tap anywhere on the label picks its shape");
+});
+
+/** The inline lengths that would compete with a sizing class. */
+const SIZING_STYLES = ["width", "height", "min-width", "min-height", "max-width", "max-height"];
+
+/**
+ * An element's sizing: its width, height and size classes, minimum and maximum ones included, then
+ * any inline length that would compete with them.
+ */
+function sizing(element: HTMLElement): string {
+  const classes = [...element.classList].filter((name) => /^(min-|max-)?(size|w|h)-/.test(name));
+  const styles = SIZING_STYLES.filter((length) => element.style.getPropertyValue(length) !== "");
+  return [...classes, ...styles.map((length) => `style:${length}`)].join(" ");
+}

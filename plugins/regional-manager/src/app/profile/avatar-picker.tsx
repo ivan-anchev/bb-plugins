@@ -20,7 +20,7 @@ export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next
   // why aria-disabled: a disabled button drops focus to the page, and it is enabled again as soon as the looks are read.
   return (
     <div className="flex flex-col items-start gap-3">
-      <Button ref={shuffle} variant="secondary" size="sm" aria-disabled={looks === null} onClick={() => looks !== null && onChange(shuffledLook(randomStart(), looks, value))}>
+      <Button ref={shuffle} variant="secondary" size="touch" aria-disabled={looks === null} onClick={() => looks !== null && onChange(shuffledLook(randomStart(), looks, value))}>
         <ShuffleGlyph />
         Shuffle
       </Button>
@@ -29,33 +29,40 @@ export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next
           <ReadFailure onRetry={retry}>Could not read the other regional managers' looks, so Shuffle waits: {error.message}</ReadFailure>
         </div>
       )}
-      <Choices legend="Shape" options={SHAPES} chosen={value.shape} onChoose={(shape) => onChange({ ...value, shape })}>
+      <Choices legend="Shape" options={SHAPES} columns={7} chosen={value.shape} onChoose={(shape) => onChange({ ...value, shape })}>
         {(shape) => <AvatarBlob avatar={{ ...value, shape }} size="xs" />}
       </Choices>
-      <Choices legend="Colour" options={HUE_NAMES} chosen={value.hue} onChoose={(hue) => onChange({ ...value, hue })}>
+      <Choices legend="Colour" options={HUE_NAMES} columns={6} chosen={value.hue} onChoose={(hue) => onChange({ ...value, hue })}>
         {(hue) => <span className="size-4 rounded-full" style={{ backgroundColor: HUES[hue] }} />}
       </Choices>
     </div>
   );
 }
 
-type ChoicesProps<Option extends string> = { legend: string; options: readonly Option[]; chosen: Option; onChoose(option: Option): void; children(option: Option): ReactNode };
+type ChoicesProps<Option extends string> = { legend: string; options: readonly Option[]; columns: number; chosen: Option; onChoose(option: Option): void; children(option: Option): ReactNode };
 
 /**
  * One radio group under its legend, each option drawn by `children` and called by its name. why
  * native radios: one choice at a time, Tab reaches the chosen one and the arrow keys move between
  * them, as in any radio group.
+ * why each option a 44px cell around its 32px tile: a finger's tap target, with the tiles and the
+ * artwork in them kept at their size; the cells' 6px edge, taken back by the grid's margin and the
+ * legend's, keeps the tiles where they stood. why `columns`, the most a row holds: the 21 shapes in
+ * three rows of seven and the 12 colours in two of six share one grid on a wide editor; a narrower
+ * one fits fewer whole cells to a row, never a cell cut off at its edge.
  */
-function Choices<Option extends string>({ legend, options, chosen, onChoose, children }: ChoicesProps<Option>) {
+function Choices<Option extends string>({ legend, options, columns, chosen, onChoose, children }: ChoicesProps<Option>) {
   const group = useId();
   return (
-    <fieldset className="flex flex-col gap-1.5">
-      <legend className="mb-1.5 text-xs text-muted-foreground">{legend}</legend>
-      <div className="flex flex-wrap gap-1">
+    // why self-stretch and min-w-0: the grid wraps to the editor's width only once the fieldset takes
+    // that width, and a fieldset is never narrower than its content unless told so.
+    <fieldset className="flex min-w-0 flex-col gap-1.5 self-stretch">
+      <legend className="text-xs text-muted-foreground">{legend}</legend>
+      <div className="-mx-1.5 grid" style={{ gridTemplateColumns: `repeat(auto-fill, ${CELL})`, maxWidth: `calc(${columns} * ${CELL})` }}>
         {options.map((option) => (
-          <label key={option} className="cursor-pointer">
+          <label key={option} className="group flex size-11 cursor-pointer items-center justify-center">
             <input type="radio" name={group} aria-label={nameOf(option)} checked={chosen === option} onChange={() => onChoose(option)} className="peer sr-only" />
-            <span className="flex size-8 items-center justify-center rounded-md transition-colors duration-150 hover:bg-state-hover hover:duration-0 peer-checked:bg-secondary peer-checked:ring-1 peer-checked:ring-border peer-focus-visible:ring-1 peer-focus-visible:ring-ring">
+            <span className="flex size-8 items-center justify-center rounded-md transition-colors duration-150 group-hover:bg-state-hover group-hover:duration-0 peer-checked:bg-secondary peer-checked:ring-1 peer-checked:ring-border peer-focus-visible:ring-1 peer-focus-visible:ring-ring">
               {children(option)}
             </span>
           </label>
@@ -64,6 +71,9 @@ function Choices<Option extends string>({ legend, options, chosen, onChoose, chi
     </fieldset>
   );
 }
+
+/** An option's cell, its label's size-11: a grid track is one cell wide. */
+const CELL = "2.75rem";
 
 /** What a shape or a hue is called aloud: its name, capitalised. */
 const nameOf = (option: string): string => option.charAt(0).toUpperCase() + option.slice(1);
