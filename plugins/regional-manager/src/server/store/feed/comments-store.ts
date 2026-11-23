@@ -2,29 +2,32 @@
 // regional manager is told of it, in one transaction: the user's wakes it, an agent's waits for its
 // next catch-up, and its own tells it nothing.
 import { z } from "zod";
-import { commentAuthorSchema, commentIdSchema, commentSchema, type Comment, type CommentAuthor, type CommentId } from "../../../model/feed/comment.ts";
+import { commentAuthorSchema, commentIdSchema, commentSchema, type Comment, type CommentAuthor, type CommentId, type SubmissionId } from "../../../model/feed/comment.ts";
 import type { InboxEvent } from "../../../model/inbox/inbox-event.ts";
 import type { IssueId } from "../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import { insertEvent } from "../inbox/inbox-store.ts";
 import { json, type Db } from "../rows.ts";
 
-/** A comment to post: its id and time are the store's. */
-export type NewComment = Pick<Comment, "issueId" | "author" | "text" | "replyTo">;
+/** A comment to post: its id and time are the store's. `submission`: the tab's Send it came from (null: a tool's). */
+export type NewComment = Pick<Comment, "issueId" | "author" | "text" | "replyTo"> & { submission: SubmissionId | null };
 
 export function commentsStore(db: Db) {
   return {
     /**
      * Stores the comment and what the regional manager is told of it (announcementOf), together, at
      * `at`, and returns its id; null, with nothing written, when `replyTo` names no comment of the
-     * same issue. The issue is one of the regional manager's: its caller checked.
+     * same issue. A submission already posted is answered with its comment's id, and nothing more is
+     * written. The issue is one of the regional manager's: its caller checked.
      */
-    commentIssue(coordinatorId: CoordinatorId, { issueId, author, text, replyTo }: NewComment, at: number): CommentId | null {
+    commentIssue(coordinatorId: CoordinatorId, { issueId, author, text, replyTo, submission }: NewComment, at: number): CommentId | null {
       return db().transaction(() => {
+        const posted = submission === null ? undefined : db().prepare("SELECT id FROM comments WHERE coordinator_id = ? AND submission = ?").get(coordinatorId, submission);
+        if (posted !== undefined) return z.object({ id: idOfRowSchema }).parse(posted).id;
         if (replyTo !== null && db().prepare("SELECT 1 FROM comments WHERE id = ? AND coordinator_id = ? AND issue_id = ?").get(rowIdOf(replyTo), coordinatorId, issueId) === undefined) return null;
         const row = db()
-          .prepare("INSERT INTO comments (coordinator_id, issue_id, author, text, reply_to, at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id")
-          .get(coordinatorId, issueId, JSON.stringify(author), text, replyTo === null ? null : rowIdOf(replyTo), at);
+          .prepare("INSERT INTO comments (coordinator_id, issue_id, author, text, reply_to, at, submission) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id")
+          .get(coordinatorId, issueId, JSON.stringify(author), text, replyTo === null ? null : rowIdOf(replyTo), at, submission);
         const commentId = z.object({ id: idOfRowSchema }).parse(row).id;
         const event = announcementOf(author, issueId, commentId);
         if (event !== null) insertEvent(db, coordinatorId, event, at);

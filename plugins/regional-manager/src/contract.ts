@@ -7,7 +7,7 @@ import { agentIdSchema } from "./model/agent/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
 import { executionSchema } from "./model/agent/execution.ts";
-import { commentIdSchema, commentTextSchema } from "./model/feed/comment.ts";
+import { commentIdSchema, commentTextSchema, submissionIdSchema } from "./model/feed/comment.ts";
 import { entrySchema } from "./model/feed/entry.ts";
 import { roundBodySchema, roundKeySchema, type RoundKey } from "./model/feed/round.ts";
 import { descriptionSchema, doneCriteriaSchema, issueIdSchema, type IssueId } from "./model/issue/issue.ts";
@@ -215,10 +215,12 @@ export const coordinatorContract = defineRpcContract({
   /**
    * Posts the user's comment on an issue, from its tab, answering `replyTo`, a comment of the same
    * issue (null: none), and wakes its regional manager, whose every comment of theirs it is: it
-   * replies, records a decision, or tells the issue's agent.
+   * replies, records a decision, or tells the issue's agent. `submission` is the press of Send it
+   * came from: sent again, as when a lost answer is retried, it answers the same comment's id and
+   * posts nothing more.
    */
   commentIssue: {
-    input: z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema, text: commentTextSchema, replyTo: commentIdSchema.nullable() }),
+    input: z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema, text: commentTextSchema, replyTo: commentIdSchema.nullable(), submission: submissionIdSchema }),
     output: z.object({ commentId: commentIdSchema }),
   },
   /**

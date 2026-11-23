@@ -10,6 +10,13 @@ import { issueIdSchema } from "../issue/issue.ts";
 export const commentIdSchema = z.string().regex(/^m[1-9][0-9]*$/, "A comment id is m1, m2 and so on").brand<"commentId">();
 export type CommentId = z.infer<typeof commentIdSchema>;
 
+/**
+ * One press of the tab's Send, which the browser keeps with the draft until the server takes it:
+ * the same submission sent again, as when a lost answer is retried, posts nothing more.
+ */
+export const submissionIdSchema = z.string().regex(/^[0-9a-f]{32}$/, "A submission id is 32 hex digits").brand<"submissionId">();
+export type SubmissionId = z.infer<typeof submissionIdSchema>;
+
 /** What a comment says: an answer's bounds, as the user types both in the same kind of field. */
 export const commentTextSchema = answerSchema;
 

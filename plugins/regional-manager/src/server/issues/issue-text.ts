@@ -11,7 +11,8 @@ import { isReady, type Related, type Relations } from "../../model/issue/relatio
 import { headlineText, STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import { placementName, refOf, type Agent } from "../../model/agent/agent.ts";
 import { executionText, type Carried, type StartOutcome, type StopOutcome } from "../agents/agents.ts";
-import { finalCheckText, handoffText, type Lookups } from "../tools/inbox-text.ts";
+import type { Comment } from "../../model/feed/comment.ts";
+import { checkOnRecordInFlight, commentsText, finalCheckText, handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
 import type { FinalCheck } from "../../model/verdict/check.ts";
 import { recipientsText, type Withdrawn } from "./quiet.ts";
@@ -205,7 +206,8 @@ export function verifierText(issue: Issue): string {
 /**
  * An issue whole: its status and why, what blocks it, its plan, its decisions, its relations, the
  * verifier named, each agent with what it runs on, every handoff of every agent with its verdict, a
- * build parent's final checks, oldest first, and its agent's latest answer (null: none).
+ * build parent's final checks, oldest first, whether a check on its record is in flight, its
+ * comments whole, and its agent's latest answer (null: none).
  */
 export function issueText(
   { view, threadId, branch }: IssueRead,
@@ -213,6 +215,7 @@ export function issueText(
   agents: readonly Agent[],
   record: { handed: readonly Handed[]; finalChecks: readonly FinalCheck[] },
   decisions: readonly IssueDecision[],
+  comments: readonly Comment[],
   output: string | null,
   lookups: Pick<Lookups, "agents">,
   pluginId: string,
@@ -227,6 +230,7 @@ export function issueText(
   return [
     `## ${issue.id}: ${issue.title}`,
     `${PIPELINES[issue.kind].label}. ${sentence(`${STATUS_LABELS[view.status]}: ${headlineText(view)}`)}${view.needsYou === null ? "" : " Needs you."}${blockedText(view.blockedBy, " Blocked by ", linksOf(pluginId, issue))}${view.blockedBy.length === 0 ? "" : "."} Thread: ${threadLink(threadId)}${branch === null ? "" : `, branch \`${branch}\``}. Link: ${linksOf(pluginId, issue)(issue.id)}`,
+    ...(checkOnRecordInFlight(record.handed) ? [IN_FLIGHT] : []),
     `### What it is about\n\n${issue.description.trim()}`,
     `### Brief\n\n${issue.brief?.trim() ?? "None yet."}`,
     criteriaText(issue),
@@ -236,9 +240,13 @@ export function issueText(
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,
     `### Its record\n\n${record.handed.length === 0 ? "No handoff yet." : record.handed.map((handed) => `#### ${handed.handoff.agentId}'s handoff\n\n${handoffText(handed, lookups)}`).join("\n\n")}`,
     ...(record.finalChecks.length === 0 ? [] : [`### Its final checks\n\n${record.finalChecks.map((check) => `#### ${new Date(check.at).toISOString()}\n\n${finalCheckText(check, lookups)}`).join("\n\n")}`]),
+    `### Comments\n\n${commentsText(comments)}`,
     `### Its agent's latest answer\n\n${answer}`,
   ].join("\n\n");
 }
+
+const IN_FLIGHT =
+  "A check on its record is in flight: its verdict is still to come or to settle, or it waits for CI (see Its record). Message its agent only once it has settled: a message drops it or cuts across it.";
 
 /** The criteria under their heading: a verified kind's are done-criteria, any other's the questions its report answers. */
 function criteriaText({ kind, doneCriteria }: Issue): string {

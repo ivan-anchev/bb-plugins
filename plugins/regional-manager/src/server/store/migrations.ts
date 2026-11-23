@@ -252,6 +252,11 @@ export const MIGRATIONS: readonly string[] = [
     countIssueWrites("comments_issue_id_updated", "UPDATE ON comments", "NEW.coordinator_id", "NEW.issue_id"),
     countIssueWrites("comments_issue_id_deleted", "DELETE ON comments", "OLD.coordinator_id", "OLD.issue_id"),
   ].join(";\n"),
+
+  // The submission a comment of the user's was posted by (comment.ts SubmissionId), so a retry of
+  // the same one posts nothing more; null for a tool's comment. One comment per submission.
+  `ALTER TABLE comments ADD COLUMN submission TEXT`,
+  `CREATE UNIQUE INDEX comments_by_submission ON comments (coordinator_id, submission) WHERE submission IS NOT NULL`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

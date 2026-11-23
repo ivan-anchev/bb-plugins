@@ -33,10 +33,10 @@ export function feedHandlers({ store, reader, inbox }: Deps): PluginRpcHandlers<
         }),
       ),
 
-    commentIssue: ({ coordinatorId, issueId, text, replyTo }) => {
+    commentIssue: ({ coordinatorId, issueId, text, replyTo, submission }) => {
       if (!started(coordinatorId)) throw new Refusal({ code: "not_found", message: `There is no started regional manager ${coordinatorId}.` });
       if (store.issue(coordinatorId, issueId) === null) throw new Refusal({ code: "not_found", message: `This regional manager has no issue ${issueId}.` });
-      const commentId = inbox.commentIssue(coordinatorId, { issueId, author: { kind: "user" }, text, replyTo });
+      const commentId = inbox.commentIssue(coordinatorId, { issueId, author: { kind: "user" }, text, replyTo, submission });
       if (commentId === null) throw new Refusal({ code: "not_found", message: `${replyTo} is no comment on ${issueId}, so nothing was posted.` });
       return { commentId };
     },

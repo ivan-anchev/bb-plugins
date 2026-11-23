@@ -2,19 +2,22 @@
 // manager. ⌘↵ or Ctrl+↵ sends, Enter breaks the line; focus stays in the field through a send, and
 // bb's Esc is held while it has text. The browser keeps what was typed, by issue, until the server
 // took it, and a send that failed keeps it beside its error. A sent comment shows as a card saying
-// so until the feed reads it, and while it is on its way no composer of the issue sends again.
+// so until the feed reads it, and while it is on its way no composer of the issue sends again. Each
+// send carries a submission the browser keeps with its text until the server takes it, so sending
+// the same text again after an answer was lost posts nothing more.
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useId, useSyncExternalStore, type KeyboardEvent } from "react";
 import { coordinatorContract as contract } from "../../../../contract.ts";
 import { MAX_ANSWER_CHARS } from "../../../../model/decision.ts";
-import type { CommentId } from "../../../../model/feed/comment.ts";
+import { z } from "zod";
+import { commentTextSchema, submissionIdSchema, type CommentId, type SubmissionId } from "../../../../model/feed/comment.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { useManagerName } from "../../../profile/use-manager.ts";
 import { Button } from "../../../ui/button.tsx";
 import { GrowingTextarea } from "../../../ui/growing-textarea.tsx";
 import { useHoldEscape } from "../../../ui/hold-escape.ts";
-import { useStored } from "../../../ui/stored.ts";
+import { readStored, useStored, writeStored } from "../../../ui/stored.ts";
 import { answerDraftSchema } from "../../answer-draft.ts";
 import { SendingCard } from "./comment-card.tsx";
 
@@ -129,10 +132,12 @@ function usePost(coordinatorId: CoordinatorId, issueId: IssueId, key: string, ta
     // why read now, not the render's: a second press, or a composer mounted meanwhile, must see the first send.
     if (postByKey.get(key)?.kind === "sending" || text === "") return;
     setPost(key, { kind: "sending", text });
-    save.mutate({ coordinatorId, issueId, text, replyTo: null }).then(
+    const submission = submissionFor(key, text);
+    save.mutate({ coordinatorId, issueId, text, replyTo: null, submission }).then(
       ({ commentId }) => {
         setPost(key, { kind: "sent", text, commentId });
         taken(draft);
+        dropSubmission(key, submission);
       },
       // why Error: mutate rejects with the SDK's experimental_PluginRpcCallError.
       (error: Error) => setPost(key, { kind: "failed", error: error.message }),
@@ -140,4 +145,27 @@ function usePost(coordinatorId: CoordinatorId, issueId: IssueId, key: string, ta
   }
 
   return { post, send };
+}
+
+/** A send the server hasn't confirmed taking: its submission and the text it posts. */
+const keptSubmissionSchema = z.object({ submission: submissionIdSchema, text: commentTextSchema });
+
+/** Where the browser keeps the submission of the comment last sent from the draft under `key`, until the server takes it. */
+const submissionKeyOf = (key: string): string => `${key}:submission`;
+
+/**
+ * The submission to send `text` with: the one kept for the same text, whose answer may have been
+ * lost, so the server posts it once; else a new one, kept until the server takes it.
+ */
+function submissionFor(key: string, text: string): SubmissionId {
+  const kept = readStored(localStorage, submissionKeyOf(key), keptSubmissionSchema);
+  if (kept?.text === text) return kept.submission;
+  const submission = submissionIdSchema.parse(Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join(""));
+  writeStored(localStorage, submissionKeyOf(key), { submission, text });
+  return submission;
+}
+
+/** Forgets the kept submission once the server took it, unless a newer send replaced it meanwhile. */
+function dropSubmission(key: string, submission: SubmissionId): void {
+  if (readStored(localStorage, submissionKeyOf(key), keptSubmissionSchema)?.submission === submission) writeStored(localStorage, submissionKeyOf(key), null);
 }

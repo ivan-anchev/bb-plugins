@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { wakes } from "../../model/inbox/inbox-event.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, issueIn, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, issueIn, settled, startedAgent, textOf, newSubmission } from "../test-harness.ts";
 
 const DONE = { status: "done", summary: "Retries land", did: ["Added retries"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
 
@@ -14,7 +14,7 @@ async function asked() {
   const issueId = issueIdSchema.parse(issue);
   kit.thread(threadId).status = "idle";
   const sendsBefore = kit.sendAttempts().length;
-  const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId, text: "Cap retries at five?", replyTo: null });
+  const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId, text: "Cap retries at five?", replyTo: null, submission: newSubmission() });
   await settled();
   // why: every comment of the user's goes to the regional manager; nothing reaches the agent's thread.
   assert.ok(!kit.sendAttempts().slice(sendsBefore).includes(agentThreadId), "the user's comment sent nothing to the agent's thread");

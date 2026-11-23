@@ -57,6 +57,7 @@ import { createFinalChecks } from "./verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
 import { createVerify } from "./verify/verify.ts";
 import { createPrWatch } from "./watch/pr-watch.ts";
+import { submissionIdSchema, type SubmissionId } from "../model/feed/comment.ts";
 
 const PLUGIN_ID = "regional-manager";
 
@@ -147,6 +148,10 @@ export const BB_DEFAULT = { providerId: "codex", model: "gpt-default" };
 
 /** The commit bb's git plugin reads checked out in every environment a test doesn't set another for: the one its done handoffs claim. */
 export const HEAD = "0123456789abcdef0123456789abcdef01234567";
+
+let submissions = 0;
+/** A submission no other press of Send in the run has: one per comment posted through commentIssue. */
+export const newSubmission = (): SubmissionId => submissionIdSchema.parse((++submissions).toString(16).padStart(32, "0"));
 
 /**
  * What bb runs a spawn on, by bb's rule for a create: a requested field counts only when its

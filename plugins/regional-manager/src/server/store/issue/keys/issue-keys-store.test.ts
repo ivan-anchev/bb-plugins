@@ -39,8 +39,8 @@ function storedBy050() {
   }
   store.observeStatuses(MANAGER, [{ issue: dependent, status: "todo" }], 4_400);
   store.insertEvent(MANAGER, { kind: "unblocked", issueId: dependent.id, by: sub.id, closedAs: "done" }, 5_000);
-  const asked = store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "user" }, text: "Why three?", replyTo: null }, 5_100) ?? assert.fail("not posted");
-  store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "manager" }, text: "It is enough.", replyTo: asked }, 5_200);
+  const asked = store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "user" }, text: "Why three?", replyTo: null, submission: null }, 5_100) ?? assert.fail("not posted");
+  store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "manager" }, text: "It is enough.", replyTo: asked, submission: null }, 5_200);
   filedIssue(store, OTHER_MANAGER, newIssue(), 2_000);
   asBefore(db);
   return { db, store };

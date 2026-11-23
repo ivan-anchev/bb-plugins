@@ -110,7 +110,7 @@ export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, 
   bb.agents.registerTool({
     name: READ,
     description:
-      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, its decisions (the user's answers to questions naming it and those you recorded), the verifier named, each agent with what it runs on, every handoff with its verdict, and its agent's latest answer.",
+      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, its decisions (the user's answers to questions naming it and those you recorded), the verifier named, each agent with what it runs on, every handoff with its verdict, whether a check of one is in flight (message its agent only once none is), every comment on it whole by its id, and its agent's latest answer.",
     presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" } },
     parameters: z.object({ id: issueIdSchema }),
     execute: forIssue(READ, (issue) => issues.read(issue)),

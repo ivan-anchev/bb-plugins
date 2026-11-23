@@ -40,7 +40,7 @@ export function registerCommentTool(bb: ToolsBb, { store, inbox, turns }: Deps):
   /** Posts the comment as `poster`, or says why nothing was posted. why wrapped: a tool's text result is a string, which can't be told from Busy by its keys. */
   function post(poster: ReturnType<typeof posterOf>, { issue, text, replyTo }: { issue: IssueId; text: string; replyTo: CommentId | undefined }): { result: PluginAgentToolResult } {
     if ("refused" in poster) return { result: refused(poster) };
-    const id = inbox.commentIssue(poster.coordinatorId, { issueId: issue, author: poster.author, text, replyTo: replyTo ?? null });
+    const id = inbox.commentIssue(poster.coordinatorId, { issueId: issue, author: poster.author, text, replyTo: replyTo ?? null, submission: null });
     if (id === null) return { result: failed(`${COMMENT} is refused, and nothing was posted: ${replyTo} is no comment on ${issue}. Leave replyTo out, or give a comment of ${issue}'s.`) };
     return { result: poster.author.kind === "agent" ? `Posted ${id} on ${issue}. The user reads it on the issue's tab, and your regional manager in its next catch-up.` : `Posted ${id} on ${issue}. The user reads it on the issue's tab.` };
   }

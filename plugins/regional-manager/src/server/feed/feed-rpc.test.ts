@@ -12,7 +12,7 @@ import type { Store } from "../store/store.ts";
 import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../store/test-store.ts";
 import type { ListBb } from "../agents/threads.ts";
 import { createFeedReader } from "./feed-reader.ts";
-import { coordinating, doorbellOf, ISSUE, issueIn, settled, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, ISSUE, issueIn, settled, textOf, newSubmission } from "../test-harness.ts";
 import { feedHandlers } from "./feed-rpc.ts";
 
 const SHA = "a".repeat(40);
@@ -78,8 +78,8 @@ function seeded() {
   store.insertEvent(MANAGER, { kind: "unblocked", issueId, by: dependency, closedAs: "done" }, 4_100);
   store.endAgent({ coordinatorId: MANAGER, id: agentId, issueId }, "stopped", null, false, 4_200);
   store.updateIssue(MANAGER, issueId, { title: "Retries, capped" }, { requireUnheld: false, closes: new Map(), at: 4_300 });
-  const asked = store.commentIssue(MANAGER, { issueId, author: { kind: "user" }, text: "Cap them at five?", replyTo: null }, 4_350) ?? assert.fail("not posted");
-  store.commentIssue(MANAGER, { issueId, author: { kind: "manager" }, text: "Yes, five.", replyTo: asked }, 4_360);
+  const asked = store.commentIssue(MANAGER, { issueId, author: { kind: "user" }, text: "Cap them at five?", replyTo: null, submission: null }, 4_350) ?? assert.fail("not posted");
+  store.commentIssue(MANAGER, { issueId, author: { kind: "manager" }, text: "Yes, five.", replyTo: asked, submission: null }, 4_360);
   const issue = store.issue(MANAGER, issueId) ?? assert.fail("no issue");
   store.observeStatuses(MANAGER, [{ issue, status: "todo" }], 4_400);
   store.observeStatuses(MANAGER, [{ issue, status: "backlog" }], 4_500);
@@ -186,7 +186,7 @@ test("the user's comment, posted through commentIssue, answers only its id, wake
   const text = "Cap retries at five.\n\nAnd log each one.";
 
   // why the raw answer: the contract's parse would drop a key the handler added.
-  const raw = await kit.rpc.commentIssue({ coordinatorId, issueId, text, replyTo: null });
+  const raw = await kit.rpc.commentIssue({ coordinatorId, issueId, text, replyTo: null, submission: newSubmission() });
   assert.deepStrictEqual(keysOf(raw), ["commentId"]);
   const posted = coordinatorContract.commentIssue.output.parse(raw);
   await settled();
@@ -205,11 +205,28 @@ test("the user's comment, posted through commentIssue, answers only its id, wake
   assert.deepStrictEqual({ ...entry.comment, at: 0 }, { id: posted.commentId, issueId, at: 0, text, replyTo: null, author: { kind: "user" } });
 });
 
+test("a commentIssue retried with the same submission after its answer was lost answers the first comment's id, posts nothing more and wakes the manager once", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const issueId = issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", ISSUE, threadId))));
+  await kit.call("crew_catch_up", {}, threadId);
+  kit.thread(threadId).status = "idle";
+  const input = { coordinatorId, issueId, text: "Cap retries at five.", replyTo: null, submission: newSubmission() };
+
+  const first = await kit.rpc.commentIssue(input);
+  const retry = await kit.rpc.commentIssue(input);
+  assert.deepStrictEqual(retry, first);
+  await settled();
+  assert.deepStrictEqual(kit.store.commentsOf(coordinatorId, issueId).map(({ id }) => id), [first.commentId]);
+  assert.deepStrictEqual(kit.doorbellsSent(threadId), [doorbellOf(`The user commented on ${issueId} "Add retries": ${first.commentId}`)]);
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.ok(caughtUp.includes("1 update since your last catch-up"), caughtUp.slice(0, 300));
+});
+
 test("a comment on an issue the manager doesn't have, or one of a manager not started, is refused, and nothing wakes it", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   kit.thread(threadId).status = "idle";
-  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse("WEB-9"), text: "Hello?", replyTo: null }), /has no issue WEB-9/);
-  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId: OTHER_MANAGER, issueId: issueIdSchema.parse("WEB-1"), text: "Hello?", replyTo: null }), /no started regional manager/);
+  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse("WEB-9"), text: "Hello?", replyTo: null, submission: newSubmission() }), /has no issue WEB-9/);
+  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId: OTHER_MANAGER, issueId: issueIdSchema.parse("WEB-1"), text: "Hello?", replyTo: null, submission: newSubmission() }), /no started regional manager/);
   await settled();
   assert.deepStrictEqual(kit.doorbellsSent(threadId), []);
 });
@@ -217,12 +234,12 @@ test("a comment on an issue the manager doesn't have, or one of a manager not st
 test("the user's comment can answer a comment of the same issue; one naming no comment of it is refused, and nothing is posted", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   const [one, two] = [issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", ISSUE, threadId)))), issueIdSchema.parse(issueIn(textOf(await kit.call("issue_create", ISSUE, threadId))))];
-  const asked = coordinatorContract.commentIssue.output.parse(await kit.rpc.commentIssue({ coordinatorId, issueId: one, text: "Cap retries?", replyTo: null }));
+  const asked = coordinatorContract.commentIssue.output.parse(await kit.rpc.commentIssue({ coordinatorId, issueId: one, text: "Cap retries?", replyTo: null, submission: newSubmission() }));
   await kit.call("issue_comment", { issue: one, text: "At five?", replyTo: asked.commentId }, threadId);
   const answered = kit.store.commentsOf(coordinatorId, one).at(-1) ?? assert.fail("no reply");
 
-  const reply = coordinatorContract.commentIssue.output.parse(await kit.rpc.commentIssue({ coordinatorId, issueId: one, text: "Yes, five.", replyTo: answered.id }));
+  const reply = coordinatorContract.commentIssue.output.parse(await kit.rpc.commentIssue({ coordinatorId, issueId: one, text: "Yes, five.", replyTo: answered.id, submission: newSubmission() }));
   assert.equal(kit.store.comment(reply.commentId)?.replyTo, answered.id);
-  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: two, text: "Elsewhere.", replyTo: answered.id }), new RegExp(`${answered.id} is no comment on ${two}, so nothing was posted`));
+  await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: two, text: "Elsewhere.", replyTo: answered.id, submission: newSubmission() }), new RegExp(`${answered.id} is no comment on ${two}, so nothing was posted`));
   assert.deepStrictEqual(kit.store.commentsOf(coordinatorId, two), []);
 });

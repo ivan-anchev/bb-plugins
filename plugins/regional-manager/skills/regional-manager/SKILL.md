@@ -114,8 +114,8 @@ issue.
 - **Read** one with `issue_read`: its status and why, what blocks it, its
   plan, its parent and sub-issues, what it depends on and what it blocks, its
   decisions, the verifier named, each agent
-  with what it ran on, every handoff with its verdict, and its agent's latest
-  answer.
+  with what it ran on, every handoff with its verdict, whether a check is in
+  flight, its comments whole, and its agent's latest answer.
 - **Record a decision** on one with `issue_update` and `decision` (see
   [One place for each thing](#one-place-for-each-thing)).
 - **Name** one to the user by its link, as `crew_catch_up`, `issue_create`,
@@ -679,12 +679,17 @@ one of three things with it:
 - **Relay** it to the issue's agent with `agent_message`, only when it
   concerns the agent's work: quote the user's words and name the comment's id
   (such as `m4`), so the agent can answer it with `replyTo`. Never relay while
-  the issue is Reviewing or Verifying: a message stops its check. A done
-  handoff queues its check while the agent's turn still runs, and the board
-  shows the issue In progress until that turn ends, so `crew_catch_up` says
-  when a check is queued. Read the issue with `issue_read` just before you
-  relay, and wait while a handoff's verdict there reads "Not in yet". Relay
-  once the check has settled: its verdict reaches you.
+  a check of a handoff on the issue's record is in flight: while the issue is
+  Reviewing or Verifying, its verdict waits for CI, or a done handoff was made
+  while the agent's turn still runs (the board then shows In progress, so
+  `crew_catch_up` says so). A message drops that check or cuts across it.
+  Read the issue with `issue_read` just before you relay: it says when a
+  check is in flight.
+- **Keep** a relay that must wait: `crew_catch_up` gives a comment only
+  once, so set a reminder with `crew_remind` naming the issue and the
+  comment's id (such as "relay m4 on WEB-1 to a1"). `issue_read` gives every
+  comment on the issue whole, by its id; relay once it shows no check in
+  flight.
 - On a **parent**, put the comment in the brief of the sub-issue it concerns,
   or relay it to that sub-issue's agent under the same rule. The agent can
   comment only on its own sub-issue: ask it to answer there, and once its
