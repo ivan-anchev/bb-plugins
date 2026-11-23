@@ -155,7 +155,7 @@ function commentNextStep({ id, issueId }: Comment, view: IssueView | null): stri
   if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board: call crew_catch_up again before you relay it to an agent.`;
   const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
   // why first: a parent never has an agent, so its work is its sub-issues'.
-  if (view.subIssues !== null) return `${answer}, or put it in the brief of the sub-issue it concerns. ${now}; a parent has no agent of its own.`;
+  if (view.subIssues !== null) return `${answer}, or put it in the brief of the sub-issue it concerns; an agent already on that sub-issue gets it only as a relay with agent_message, quoting their words and naming ${id}, never while that sub-issue is Reviewing or Verifying. ${now}; a parent has no agent of its own.`;
   // why: agent_start refuses a closed issue.
   if (view.status === "done" || view.status === "canceled") return `${answer}, or file what it asks for as a new issue with issue_create. ${now}, so no agent can start on it.`;
   if (view.holder === null) return `${answer}, or put it in the brief of the agent you start on it. ${now}, and no agent holds it.`;

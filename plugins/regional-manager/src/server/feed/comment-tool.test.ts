@@ -76,22 +76,15 @@ test("an agent on another issue, a thread with no role, a reviewer, a verifier, 
   await settled();
   const verdict = check().verdict;
   const verifierThreadId = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`no verifier running: ${JSON.stringify(verdict)}`);
-  const byVerifier = await kit.call("issue_comment", comment, verifierThreadId);
-  assert.ok(isRefusal(byVerifier));
-  assert.equal(textOf(byVerifier), `issue_comment is refused, and nothing was posted: this thread is a verifier of ${issueId}, and reports only through its own tool. Only an issue's regional manager, and the agent holding it now, comment on it.`);
+  assert.equal(await refusal(verifierThreadId), `issue_comment is refused, and nothing was posted: this thread is a verifier of ${issueId}, and reports only through its own tool. Only an issue's regional manager, and the agent holding it now, comment on it.`);
 
   const second = await kit.startManager("Ship the billing service", { verify: true });
-  const byOther = await kit.call("issue_comment", comment, second.threadId);
-  assert.ok(isRefusal(byOther));
-  assert.equal(textOf(byOther), `issue_comment is refused, and nothing was posted: you have no issue ${issueId}. crew_catch_up lists your issues.`);
+  assert.equal(await refusal(second.threadId), `issue_comment is refused, and nothing was posted: you have no issue ${issueId}. crew_catch_up lists your issues.`);
 
   await kit.call("agent_stop", { agent: "a1" }, threadId);
-  const byEnded = await kit.call("issue_comment", comment, agentThreadId);
-  assert.ok(isRefusal(byEnded));
-  assert.equal(textOf(byEnded), `issue_comment is refused, and nothing was posted: you no longer hold ${issueId} (you were stopped). Only an issue's regional manager, and the agent holding it now, comment on it.`);
+  assert.equal(await refusal(agentThreadId), `issue_comment is refused, and nothing was posted: you no longer hold ${issueId} (you were stopped). Only an issue's regional manager, and the agent holding it now, comment on it.`);
 
-  const elsewhere = await kit.call("issue_comment", { ...comment, replyTo: "m9" }, threadId);
-  assert.equal(textOf(elsewhere), `issue_comment is refused, and nothing was posted: m9 is no comment on ${issueId}. Leave replyTo out, or give a comment of ${issueId}'s.`);
+  assert.equal(await refusal(threadId, { ...comment, replyTo: "m9" }), `issue_comment is refused, and nothing was posted: m9 is no comment on ${issueId}. Leave replyTo out, or give a comment of ${issueId}'s.`);
   assert.deepEqual(comments(), before);
 
   // The refusal's way forward: the same comment with replyTo left out posts.

@@ -134,8 +134,8 @@ function bodyOfKey(key: string): RoundBody | null {
 }
 
 /** How the plugin answers a comment posted from the tab: its output, a promise of it, or a throw. */
-type Comment = (input: unknown) => unknown;
-type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: Comment };
+type CommentAnswer = (input: unknown) => unknown;
+type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: CommentAnswer };
 
 /** The tab mounted with `params`, on a board of `issues`; the reads and writes it made, and ways to make the plugin answer anew. */
 export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }) }: MountOptions = {}) {

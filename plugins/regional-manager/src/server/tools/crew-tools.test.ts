@@ -8,7 +8,7 @@ import { coordinatorContract } from "../../contract.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { coordinatorIdSchema } from "../../model/role.ts";
+import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import { upgradeMemoryFrom040 } from "../memory/memory-upgrade.ts";
 import { coordinating, harness, HEAD, isRefusal, ISSUE, issueIn, startedAgent, textOf } from "../test-harness.ts";
 
@@ -210,7 +210,7 @@ test("the plugin loads in the SDK's fake host, which checks every tool's paramet
 });
 
 /** The update crew_catch_up gives for the user's comment `text` on `issueId`, posted from the issue's tab, and the comment's id. */
-async function commentCaughtUp(kit: Awaited<ReturnType<typeof coordinating>>["kit"], threadId: string, coordinatorId: Parameters<typeof kit.rpc.commentIssue>[0]["coordinatorId"], issueId: string, text: string) {
+async function commentCaughtUp(kit: Awaited<ReturnType<typeof coordinating>>["kit"], threadId: string, coordinatorId: CoordinatorId, issueId: string, text: string) {
   await kit.call("crew_catch_up", {}, threadId);
   const { commentId } = await kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse(issueId), text, replyTo: null });
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
@@ -238,8 +238,8 @@ test("the user's comment on a parent points at the sub-issue it concerns, never 
   const parent = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, title: "Webhook delivery" }, threadId)));
   const sub = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, parent }, threadId)));
   const { update } = await commentCaughtUp(kit, threadId, coordinatorId, parent, "Retries first, then dead letters.");
-  assert.ok(update.includes("or put it in the brief of the sub-issue it concerns.") && update.includes("a parent has no agent of its own."), update);
-  assert.ok(!update.includes("agent_message") && !update.includes("the agent you start on it"), update);
+  assert.ok(update.includes("or put it in the brief of the sub-issue it concerns; an agent already on that sub-issue gets it only as a relay with agent_message") && update.includes("a parent has no agent of its own."), update);
+  assert.ok(!update.includes("Nothing reaches") && !update.includes("the agent you start on it"), "no agent of the parent to relay to or start");
   assert.ok(!isRefusal(await kit.call("issue_update", { id: sub, brief: "Retries first, then dead letters (the user's comment)." }, threadId)));
 });
 
