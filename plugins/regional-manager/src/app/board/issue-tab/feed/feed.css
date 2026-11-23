@@ -45,6 +45,7 @@
 .rmi-decision:focus-visible,
 .rmi-filter button:focus-visible,
 .rmi-grid-cell:focus-visible,
+.rmi-finding-place:focus-visible,
 .rmi-round-head:focus-visible,
 .rmi-passes > summary:focus-visible,
 .rmi-report-fold > summary:focus-visible,
@@ -125,8 +126,9 @@
     background: var(--state-hover);
   }
 }
-/* why touching the cell: the pointer moves onto the tooltip with no gap, and stays on the slot. */
-.rmi-grid-tip {
+/* A tooltip (round/tip.ts) above what it names. why touching it: the pointer moves onto the tooltip
+   with no gap, and stays on the slot. */
+.rmi-tip {
   position: absolute;
   right: 0;
   bottom: 100%;
@@ -249,7 +251,7 @@
   color: var(--foreground);
 }
 
-/* A round: its head a button, one line, its number, its summary and its score. */
+/* A round: its head a button, one line, its number, its summary, its findings and its score. */
 .rmi-round-head {
   all: unset;
   box-sizing: border-box;
@@ -288,9 +290,19 @@
   white-space: nowrap;
   color: var(--muted-foreground);
 }
-/* Open, the summary is the first step's: the head keeps its number and score. */
+/* Open, the summary and the findings are the steps': the head keeps its number and score. */
 .rmi-round[data-open] .rmi-round-summary {
   visibility: hidden;
+}
+.rmi-round[data-open] .rmi-round-found {
+  display: none;
+}
+/* why it never shrinks: the summary gives way first, then the score's reason; the count stays whole. */
+.rmi-round-found {
+  flex: none;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
 }
 /* why it may shrink: a reason as long as "Not the claimed commit on a clean tree" ends in an ellipsis at
    a 360px panel, its whole words in its title and in the open round's verifier step. */
@@ -500,7 +512,7 @@
   line-height: 20px;
 }
 
-/* The reviewer's findings: severity, place, claim, then the verifier's triage. */
+/* The reviewer's findings: place, severity and claim in a line, then the verifier's triage. */
 .rmi-findings {
   display: flex;
   flex-direction: column;
@@ -513,36 +525,49 @@
   flex-direction: column;
   gap: 2px;
 }
-.rmi-finding-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.rmi-finding-line {
   min-width: 0;
+  text-wrap: pretty;
 }
 /* why no chip behind it: on --muted, --destructive-text drops below 4.5:1 in the light theme. */
 .rmi-severity {
-  flex: none;
   font-size: 11px;
-  line-height: 18px;
   font-weight: 500;
   color: var(--muted-foreground);
 }
 .rmi-severity[data-severity="must-fix"] { color: var(--destructive-text); }
 .rmi-severity[data-severity="should-fix"] { color: var(--warning-text); }
+/* A finding's place and, hovered or focused, its tooltip. */
+.rmi-finding-slot {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+/* why right to left with an ellipsis: a long path is cut at its start, keeping its file and line.
+   why white-space pre: a leading or trailing space is part of the path, and shows. */
 .rmi-finding-place {
-  min-width: 0;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre;
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--muted-foreground);
   direction: rtl;
-  text-align: left;
+}
+/* The place whole, left to right, wrapping anywhere, its spaces kept. */
+.rmi-finding-tip {
+  right: auto;
+  left: 0;
+  max-width: 280px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
 }
 .rmi-finding-claim {
   color: var(--foreground);
-  text-wrap: pretty;
 }
 .rmi-finding[data-triage="rejected"] .rmi-finding-claim {
   color: var(--muted-foreground);
