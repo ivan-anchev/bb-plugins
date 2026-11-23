@@ -1,0 +1,36 @@
+/* An issue link in a message (issue-links.tsx): the issue's glyph, then its id in the board's mono,
+   in the text's own colour, mid-sentence, as the board's rows name an issue. bb's link underline
+   comes back on hover and focus, so it still reads as a link. Its glyph's colours are the board's
+   (issue-board.css `.rmi-state`). Every class carries the `rmi-` prefix; the link is bb's, styled
+   only once it holds the plugin's slot. why bb's own selector, and a tag on the slot: a theme
+   styles message links as `[data-markdown-preview] a[href]…` (Zeron in its accent), and this must
+   outrank it. */
+[data-markdown-preview] a[href]:has(> span.rmi-issue-glyph) {
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  text-decoration-line: none;
+  white-space: nowrap;
+}
+[data-markdown-preview] a[href]:has(> span.rmi-issue-glyph):hover,
+[data-markdown-preview] a[href]:has(> span.rmi-issue-glyph):focus-visible {
+  text-decoration-line: underline;
+  text-decoration-color: currentColor;
+  text-underline-offset: 2px;
+}
+/* The glyph sits on the line, a space before the id, which a screen reader hears too: "In progress
+   BBP-24". why the text's own font for it: a mono space reads as a gap. */
+.rmi-issue-glyph {
+  font-family: var(--font-sans);
+}
+.rmi-issue-glyph > .rmi-state {
+  display: inline-flex;
+  vertical-align: -3px;
+}
+
+/* An issue link's card (card/link-hover-card.tsx), placed in the window by card/floating-placement.ts, over bb's message list and its panes, which would clip a card in them. */
+.rmi-card.rmi-card-floating {
+  position: fixed;
+  z-index: 50;
+  width: min(320px, calc(100vw - 16px));
+}

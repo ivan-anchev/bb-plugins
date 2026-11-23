@@ -2,6 +2,7 @@
    surface, ringed by its border with the menu's shadow. It sits in the row's box, so the pointer
    crossing onto it never leaves the row, and its edge reaches over the 4 between them. Under its row,
    or above it where the panel has no room below (placement.ts); its body scrolls when it is capped.
+   An issue link's card in chat floats, fixed in the window by its link (chat-links.css).
    Every colour is a bb theme token, and every class carries the `rmi-` prefix. */
 .rmi-card {
   position: absolute;
@@ -86,6 +87,11 @@
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 8px;
+}
+/* A refresh that failed, under the details an earlier read gave (REVIEW.md: an error shows next to the data still displayed). */
+.rmi-card-failure {
+  margin: 10px 0 0;
+  color: var(--destructive-text);
 }
 .rmi-card-section {
   margin-top: 10px;

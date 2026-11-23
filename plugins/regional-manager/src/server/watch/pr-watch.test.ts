@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent.ts";
-import { coordinating, doorbellOf, isRefusal, settled, startedAgent, textOf, type FakePr } from "../test-harness.ts";
+import { coordinating, doorbellOf, isRefusal, settled, startedAgent, textOf, withoutLinks, type FakePr } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
@@ -231,7 +231,7 @@ test("a repository is read every tick while CI runs or a verdict waits for it, e
   assert.equal(runs(), 6, "a verdict waiting for CI: every tick");
 
   await kit.call("agent_stop", { agent: "a1" }, threadId);
-  assert.equal(textOf(await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId)), "Updated WEB-1.");
+  assert.equal(withoutLinks(textOf(await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId))), "Updated WEB-1.");
   for (let i = 0; i < 10; i++) await minute();
   assert.equal(runs(), 6, "a closed issue is never read");
 });

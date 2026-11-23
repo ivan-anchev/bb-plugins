@@ -1,10 +1,10 @@
 // Opening an issue's tab: its address in the side panel and the params bb opens it with. bb stores a
 // tab's params, which bring it back after a reload, and keys the tab by them, so opening an issue
 // whose tab is open focuses that tab rather than adding a second one.
-import { experimental_useAppPanel } from "@get-bb/plugin-sdk/app";
+import { experimental_useAppPanel, type ExperimentalOpenTabOptions } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import type { IssueRow } from "../../../contract.ts";
-import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 
 /** The tab's address, for `openTab`. */
 export const ISSUE_TAB = { id: "issue", context: { kind: "thread" }, availability: "action" } as const;
@@ -13,11 +13,14 @@ export const ISSUE_TAB = { id: "issue", context: { kind: "thread" }, availabilit
 export const issueTabParamsSchema = z.object({ issueId: issueIdSchema });
 type IssueTabParams = z.infer<typeof issueTabParamsSchema>;
 
-/** Opens an issue's tab beside the Board, titled with its id and title, or focuses its tab when it has one. */
+/** Opens an issue's tab beside the Board, or focuses its tab when it has one. */
 export function useOpenIssue(): (issue: IssueRow) => void {
   const panel = experimental_useAppPanel();
-  return (issue) => {
-    const params: IssueTabParams = { issueId: issue.id };
-    panel.openTab({ tab: ISSUE_TAB, params, title: `${issue.id} ${issue.title}` });
-  };
+  return (issue) => panel.openTab(issueTabOf(issue.id, issue.title));
+}
+
+/** What opens an issue's tab in any thread pane's panel, titled with its id and title, or its id alone while its title is unknown (null). */
+export function issueTabOf(issueId: IssueId, title: string | null): ExperimentalOpenTabOptions {
+  const params: IssueTabParams = { issueId };
+  return { tab: ISSUE_TAB, params, title: title === null ? issueId : `${issueId} ${title}` };
 }

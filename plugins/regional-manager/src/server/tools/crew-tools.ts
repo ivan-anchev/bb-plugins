@@ -37,7 +37,7 @@ type Deps = {
   onChange(id: CoordinatorId): void;
 };
 
-export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, onChange }: Deps): void {
+export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, inbox, memory, board, onChange }: Deps): void {
   bb.agents.registerTool({
     name: CATCH_UP,
     description:
@@ -55,7 +55,7 @@ export function registerCrewTools(bb: ToolsBb, { store, inbox, memory, board, on
         decision: store.decision,
         view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
       });
-      return `${updates}\n\n${boardText(issues)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
+      return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),
   });
 

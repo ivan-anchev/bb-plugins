@@ -1,45 +1,71 @@
-// Where a row's hover card goes, so it is never cut off by the panel it scrolls in: under its row
-// when it fits there, else above it when there is more room above, and capped to the room on its
-// side, scrolling inside, when it fits on neither. Measured as the card mounts, before it paints.
+// Where a hover card goes, so it is never cut off: under its anchor when it fits there, else above it
+// when there is more room above, and capped to the room on its side, scrolling inside, when it fits
+// on neither. A row's card sits in the row's box and keeps inside the panel the board scrolls in; a
+// link's card floats, fixed, against the window, by the link's box, so the message list it sits in
+// clips none of it, on whichever side of the link has room (chat-links/card/floating-placement.ts
+// follows it), until the link can't be seen. Measured before it paints.
 import { useLayoutEffect, useRef, useState, type RefObject } from "react";
 
-/** The side of its row the card opens on, and the most it may be tall (null: as tall as it is). */
-export type Placement = { side: "below" | "above"; cap: number | null };
+/** The side of its anchor a card opens on, and the most it may be tall (null: as tall as it is). */
+export type Side = { side: "below" | "above"; cap: number | null };
 
-/** Spread `ref` on the card, whose parent is its row's box; `placement` is where it goes. */
-export function useCardPlacement(): { ref: RefObject<HTMLDivElement | null>; placement: Placement } {
+/** A floating card's side, and its place in the window: below its link by its top, above it by its foot, so the edge by the link stays there however tall the card grows or shrinks as the board changes. */
+export type FloatingPlacement = Side & { at: { left: number } & ({ top: number } | { bottom: number }) };
+
+/** A row's card: spread `ref` on the card, whose parent is its row's box. */
+export function useRowPlacement(): { ref: RefObject<HTMLDivElement | null>; placement: Side } {
   const ref = useRef<HTMLDivElement>(null);
-  const [placement, setPlacement] = useState<Placement>(UNMEASURED);
-  // why a layout effect: the card's height and the panel's edges are the browser's to measure, and the card must not paint where it doesn't fit.
+  const [placement, setPlacement] = useState<Side>(UNMEASURED);
+  // why a layout effect: the card's size and the room around its row are the browser's to measure, and the card must not paint where it doesn't fit.
   useLayoutEffect(() => {
     const card = ref.current;
-    const row = card?.parentElement ?? null;
-    // why: the ref's type only; the card is mounted in its row's box as this runs.
-    if (card === null || row === null) return;
-    setPlacement(placementOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row)));
+    // why: the types only; the card, in its row's box, is mounted as this runs.
+    if (card === null || card.parentElement === null) return;
+    setPlacement(rowPlacement(card.parentElement, card));
   }, []);
   return { ref, placement };
 }
 
+/** Where a link's card of `size` floats by `link` as the page is now; null once the link can't be seen, scrolled out of the message list or the window. */
+export function placeFloating(link: HTMLElement, size: { height: number; width: number }): FloatingPlacement | null {
+  const box = link.getBoundingClientRect();
+  return overlaps(box, visibleBounds(link)) ? floatingPlacement(box, size) : null;
+}
+
 // ------------------------------------------------------------------ layer 2
 
-const UNMEASURED: Placement = { side: "below", cap: null };
+const UNMEASURED: Side = { side: "below", cap: null };
 
-/** The gap between the card and its row (hover-card.css `.rmi-card`). */
+/** The gap between the card and its anchor (hover-card.css `.rmi-card`). */
 const GAP = 4;
 /** The least a capped card is tall: its title, its status and the start of what follows. */
 const MIN_CAP = 96;
+/** The least room a floating card keeps from the window's sides. */
+const MARGIN = 8;
 
 type Edges = { top: number; bottom: number };
 
-/** Below when the card fits under its row; above when it doesn't and there is more room above; capped to its side's room when it fits on neither. */
-function placementOf(row: Edges, height: number, bounds: Edges): Placement {
-  const below = bounds.bottom - row.bottom - GAP;
-  const above = row.top - bounds.top - GAP;
+/** A row's card, kept inside every ancestor of the row that clips. */
+const rowPlacement = (row: Element, card: HTMLElement): Side => sideOf(row.getBoundingClientRect(), card.scrollHeight, visibleBounds(row));
+
+/** A link's card of `size`, against the window as it is now: on the side of the link with room, from the link's left edge, kept off the window's right edge. why the size: only to pick the side and the cap. */
+function floatingPlacement(link: DOMRect, size: { height: number; width: number }): FloatingPlacement {
+  const { side, cap } = sideOf(link, size.height, { top: 0, bottom: window.innerHeight });
+  const left = Math.max(MARGIN, Math.min(link.left, window.innerWidth - size.width - MARGIN));
+  return { side, cap, at: side === "below" ? { left, top: link.bottom + GAP } : { left, bottom: window.innerHeight - link.top + GAP } };
+}
+
+/** Below when the card fits under its anchor; above when it doesn't and there is more room above; capped to its side's room when it fits on neither. */
+function sideOf(anchor: Edges, height: number, bounds: Edges): Side {
+  const below = bounds.bottom - anchor.bottom - GAP;
+  const above = anchor.top - bounds.top - GAP;
   if (height <= below) return { side: "below", cap: null };
   if (above > below) return { side: "above", cap: height <= above ? null : Math.max(above, MIN_CAP) };
   return { side: "below", cap: Math.max(below, MIN_CAP) };
 }
+
+/** Whether `box` reaches into `bounds`, touching its edge included. */
+const overlaps = (box: Edges, bounds: Edges): boolean => box.bottom >= bounds.top && box.top <= bounds.bottom;
 
 /** The part of the window `el` can be seen in: the window, cut by every ancestor that clips what overflows it, as the panel the board scrolls in does. */
 function visibleBounds(el: Element): Edges {

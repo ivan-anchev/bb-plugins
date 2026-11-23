@@ -18,7 +18,7 @@ import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./vie
 import { issueText, verifierText } from "./issue-text.ts";
 
 /** The parts of bb the issues read: their agents' threads and turns, bb's catalog, and an agent's latest answer. */
-type IssuesBb = FactsBb & CatalogBb & { sdk: { threads: { output(args: { threadId: string }): Promise<{ output: string | null }> } } };
+type IssuesBb = FactsBb & CatalogBb & { pluginId: string; sdk: { threads: { output(args: { threadId: string }): Promise<{ output: string | null }> } } };
 
 type Deps = {
   bb: IssuesBb;
@@ -155,7 +155,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       const output = read.threadId === null ? null : (await bb.sdk.threads.output({ threadId: read.threadId })).output;
       const views = reads.map(({ view }) => view);
       const record = { handed: store.record(coordinatorId, id), finalChecks: store.finalChecks(coordinatorId, id) };
-      return issueText(read, relationsOf(views, read.view.issue), agents, record, store.issueDecisions(coordinatorId, id), output, { agents: () => store.agents(coordinatorId) });
+      return issueText(read, relationsOf(views, read.view.issue), agents, record, store.issueDecisions(coordinatorId, id), output, { agents: () => store.agents(coordinatorId) }, bb.pluginId);
     },
   };
 }

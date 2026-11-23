@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent (a child thread) on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is reviewed, then verified, unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to create, start, rename or delete a manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders or decisions work, where memory lives, or which thread has which tools.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is reviewed, then verified, unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to create, start, rename or delete a manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders, decisions or issue links in chat work, where memory lives, or which thread has which tools.
 ---
 
 # Regional managers
@@ -1083,6 +1083,40 @@ and the new report goes beside it, as `reports/<issue id>-2.md`, then
 `-3.md` and so on. `crew_catch_up` names the file each report went to and
 says why when it isn't `reports/<issue id>.md`. Nothing anyone wrote is
 replaced, and the handoff never fails over it.
+
+## Issue links in chat
+
+Experimental: this rests on bb's markup and slots that may change, so it is the
+likeliest part to break with a bb update. A regional manager names an issue to
+you as a link, `[BBP-24](/plugins/regional-manager/regional-managers/issue/<id>/BBP-24)`,
+which `crew_catch_up`, `issue_create`, `issue_update` and `issue_read` hand it ready-made,
+for each issue on the board, each ready one and each issue one relates to; the
+id of the manager is in it because two managers can both have a BBP-24.
+
+- **In a message**, from the manager or anyone, the link reads as the issue's
+  status glyph and its id in mono, mid-sentence ("◕ BBP-24"), in the text's
+  colour, underlined on hover. The glyph is the board's, live: it changes as
+  the issue does, without the message changing. A bare `BBP-24`, or the link
+  inside code, stays plain text.
+- **Resting on it** for half a second, or focusing it, shows the Board's card
+  for the issue, floating by the link so the message list never cuts it off.
+  It stays while the pointer is on the link or the card; Escape closes it
+  wherever focus is, and focus stays on, or goes back to, the link. A press
+  puts it away; the card moves with its link, as the message scrolls or bb
+  lays it out again, and goes once the link scrolls out of sight. When the card is
+  too tall for the window and its body scrolls, Tab moves from the link into
+  the card and Shift+Tab goes back.
+- **Pressing it** opens the issue's tab beside the Board: in the manager's own
+  thread, in that thread's side panel; from any other thread, the manager's
+  thread opens in a split (or comes forward where it already shows) with the
+  tab open. ⌘ or Ctrl asks for the split from the manager's thread too.
+- **Elsewhere**: a link followed where the plugin's overlay doesn't run lands
+  on the plugin's panel, which opens the manager's thread with the issue's
+  tab, or says this bb server has no such manager (deleted, or the link is
+  from another); Back from the thread goes to the panel's
+  list, not to that page again. With the plugin disabled or removed, the
+  link reads as a plain "BBP-24" and bb's plugin-unavailable page answers it;
+  exported text and the CLI show the Markdown as written.
 
 ## Read and edit memory
 

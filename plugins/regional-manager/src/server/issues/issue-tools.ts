@@ -10,7 +10,7 @@ import { kindSchema } from "../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 import { failed, forManager, type ToolsBb } from "../tools/tool-kit.ts";
-import { filedText } from "./issue-text.ts";
+import { filedText, updatedText } from "./issue-text.ts";
 import type { Issues } from "./issues.ts";
 
 const CREATE = "issue_create";
@@ -40,7 +40,7 @@ const PARENT = issueIdSchema.describe(
   "The issue this one is a sub-issue of, one level deep. A parent never has an agent: start agents on its sub-issues, and its status rolls up from theirs. Its dependencies block them. A build parent holds build and research sub-issues; a research parent holds research ones only.",
 );
 
-export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
+export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, issues }: Deps): void {
   /** The tool runs on one of the caller's issues; an id it has none by is refused. */
   function forIssue<Input extends { id: IssueId }>(tool: string, run: (issue: Issue, input: Input) => PluginAgentToolResult | Promise<PluginAgentToolResult>) {
     return forManager<Input>(store, tool, (id: CoordinatorId, input) => {
@@ -73,7 +73,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
     }),
     execute: forManager(store, CREATE, async (id, { brief, doneCriteria, status, parent, dependsOn, ...plan }) => {
       const filed = await issues.create(id, { ...plan, brief: brief ?? null, doneCriteria: doneCriteria ?? [], rest: status ?? "todo", parentId: parent ?? null, dependsOn: dependsOn ?? [] });
-      return "refused" in filed ? failed(filed.refused) : filedText(filed.issue, filed.blockedBy);
+      return "refused" in filed ? failed(filed.refused) : filedText(filed.issue, filed.blockedBy, bb.pluginId);
     }),
   });
 
@@ -103,8 +103,7 @@ export function registerIssueTools(bb: ToolsBb, { store, issues }: Deps): void {
     execute: forIssue(UPDATE, async (issue, { id: _, parent, ...change }) => {
       const updated = await issues.update(issue, { ...change, ...(parent === undefined ? {} : { parentId: parent }) });
       if ("refused" in updated) return failed(updated.refused);
-      const ready = updated.nowReady.length === 0 ? null : `Now ready: ${updated.nowReady.join(", ")}.`;
-      return [`Updated ${issue.id}.`, updated.note, ready].filter((line) => line !== null).join(" ");
+      return updatedText(issue, updated, bb.pluginId);
     }),
   });
 

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn } from "../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const FIELDS = { summary: "Vault fits our PCI scope", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -14,9 +14,10 @@ const BUILD_DONE = { status: "done", ...FIELDS, summary: "Retries land", headSha
 
 async function managing(options: Parameters<typeof coordinating>[0] = {}) {
   const { kit, threadId, coordinatorId } = await coordinating(options);
+  // why without links: each issue's link is issues.test.ts's to prove; here, its lane and relations.
   const call = async (tool: string, input: object) => {
     const result = await kit.call(tool, input, threadId);
-    return { refused: isRefusal(result), text: textOf(result) };
+    return { refused: isRefusal(result), text: withoutLinks(textOf(result)) };
   };
   const text = async (tool: string, input: object) => (await call(tool, input)).text;
   const announced: string[] = [];

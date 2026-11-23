@@ -307,16 +307,17 @@ test("the board puts a running agent's issue In progress, one waiting on an appr
 });
 
 test("crew_catch_up shows the updates, then the board by lane with each issue's agent, then the memory", async () => {
-  const { kit, threadId, start } = await filed();
+  const { kit, threadId, coordinatorId, start } = await filed();
   const agentThreadId = threadIn(textOf(await start()));
   kit.thread(agentThreadId).status = "idle";
   await kit.call("issue_create", { ...RETRIES, title: "Dead letters", status: "backlog" }, threadId);
+  const link = (id: string) => `[${id}](/plugins/regional-manager/regional-managers/issue/${coordinatorId}/${id})`;
 
   const text = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(text, /^## Updates\n\nNothing new since your last catch-up\.\n\n## Board/);
   assert.ok(
     text.includes(
-      `## Board\n\n### In progress (1)\n- WEB-1 "Add retries" (Build; a1, @thread:${agentThreadId}, on branch \`bb/${agentThreadId}\`): Its turn ended without a handoff\n\n### Backlog (1)\n- WEB-2 "Dead letters" (Build; no agent): Not planned`,
+      `## Board\n\n### In progress (1)\n- WEB-1 "Add retries" (Build; a1, @thread:${agentThreadId}, on branch \`bb/${agentThreadId}\`): Its turn ended without a handoff; link: ${link("WEB-1")}\n\n### Backlog (1)\n- WEB-2 "Dead letters" (Build; no agent): Not planned; link: ${link("WEB-2")}`,
     ),
   );
   assert.ok(text.indexOf("## Board") < text.indexOf("## MEMORY.md"));

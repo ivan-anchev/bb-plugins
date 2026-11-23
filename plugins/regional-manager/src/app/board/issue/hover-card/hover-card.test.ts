@@ -119,6 +119,62 @@ test("the pointer resting on a row opens its card after half a second, the next 
   assert.equal(card(), null);
 });
 
+test("a focused row that leaves the board takes its card's hold with it: hovering another row opens that row's card", () => {
+  const { view, row, card } = mount();
+  act(() => row("WEB-4", /^In review/).focus());
+  assert.equal(card()?.on, "WEB-4");
+
+  const without = ISSUES.filter(({ id: issueId }) => issueId !== "WEB-4").map((row) => (row.id === "WEB-5" ? { ...row, blockedBy: [] } : row));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: without, decisionRow: () => null }));
+  assert.equal(card(), null, "its card went with it");
+
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const box = row("WEB-5", /^Todo/).closest(".rmi-rowbox") ?? assert.fail("no row box");
+  fireEvent.pointerEnter(box);
+  act(() => mock.timers.tick(1_000));
+  assert.equal(card()?.on, "WEB-5");
+});
+
+test("a hovered row that moves lanes leaves its card behind for good: blurring another row opens none for it", () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const { view, row, card } = mount();
+  fireEvent.pointerEnter(row("WEB-5", /^Todo/).closest(".rmi-rowbox") ?? assert.fail("no row box"));
+  act(() => mock.timers.tick(500));
+  assert.equal(card()?.on, "WEB-5");
+
+  const moved = ISSUES.map((issue) => (issue.id === "WEB-5" ? { ...issue, status: "in-progress" as const } : issue));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: moved, decisionRow: () => null }));
+  act(() => row("WEB-4", /^In review/).focus());
+  act(() => row("WEB-4", /^In review/).blur());
+  act(() => mock.timers.tick(5_000));
+  assert.equal(card(), null, "no card for a row the pointer left as it moved");
+});
+
+test("a focused row that moves lanes keeps its card in its new lane", async () => {
+  const { view, row, card } = mount();
+  act(() => row("WEB-5", /^Todo/).focus());
+  assert.equal(card()?.on, "WEB-5");
+
+  const moved = ISSUES.map((issue) => (issue.id === "WEB-5" ? { ...issue, status: "in-progress" as const } : issue));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: moved, decisionRow: () => null }));
+  await act(async () => {});
+  assert.ok(document.activeElement === row("WEB-5", /^In progress/), "focus landed on the row in its new lane");
+  assert.equal(card()?.on, "WEB-5", "and its card with it");
+});
+
+test("while the pointer rests on a row, focus on another row shows that row's card, and when focus goes the hovered row's card comes back", () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const { row, card } = mount();
+  fireEvent.pointerEnter(row("WEB-5", /^Todo/).closest(".rmi-rowbox") ?? assert.fail("no row box"));
+  act(() => mock.timers.tick(500));
+  assert.equal(card()?.on, "WEB-5");
+
+  act(() => row("WEB-4", /^In review/).focus());
+  assert.equal(card()?.on, "WEB-4");
+  act(() => row("WEB-4", /^In review/).blur());
+  assert.equal(card()?.on, "WEB-5", "the pointer never left WEB-5");
+});
+
 test("a press puts the card away, and the focus the press gives the row opens none", () => {
   const { row, card } = mount();
   act(() => row("WEB-4", /^In review/).focus());

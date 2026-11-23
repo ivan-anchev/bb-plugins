@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, type FakePr } from "../../test-harness.ts";
+import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks, type FakePr } from "../../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.";
@@ -13,9 +13,10 @@ const RESEARCH_DONE = { status: "done", ...FIELDS, report: REPORT };
 
 async function managing() {
   const { kit, threadId, coordinatorId } = await coordinating();
+  // why without links: each issue's link is issues.test.ts's to prove; here, its lane and relations.
   const call = async (tool: string, input: object) => {
     const result = await kit.call(tool, input, threadId);
-    return { refused: isRefusal(result), text: textOf(result) };
+    return { refused: isRefusal(result), text: withoutLinks(textOf(result)) };
   };
   const text = async (tool: string, input: object) => (await call(tool, input)).text;
   /** Every unblocked update a catch-up returned, in order, as "WEB-3 by WEB-1 done": a catch-up returns each event once, whether a doorbell named it or not. */
@@ -124,7 +125,7 @@ test("a handoff that closes nothing, or closes an issue nothing waits on, announ
   await kit.idle(other, "Handed off.");
   await settled();
   assert.deepEqual(await unblocked(), []);
-  assert.match(textOf(await kit.call("issue_read", { id: "WEB-2" }, threadId)), /Blocked by WEB-1 \(In progress\)\./);
+  assert.match(withoutLinks(textOf(await kit.call("issue_read", { id: "WEB-2" }, threadId))), /Blocked by WEB-1 \(In progress\)\./);
 });
 
 test("a build dependency whose pull request merges unblocks its dependent once; one still blocked by another is not announced", async () => {
