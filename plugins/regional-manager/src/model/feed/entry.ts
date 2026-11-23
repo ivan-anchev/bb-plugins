@@ -1,7 +1,7 @@
 // One item in an issue's feed, as the tab draws it and the issueFeed RPC carries it: the one type
 // for the concept, from feedOf to the component.
 import { z } from "zod";
-import { agentIdSchema, endedHowSchema, type AgentId, type EndedHow } from "../agent/agent.ts";
+import { agentIdSchema, endedHowSchema, type EndedHow } from "../agent/agent.ts";
 import { issueDecisionSchema } from "../decision.ts";
 import { issueIdSchema } from "../issue/issue.ts";
 import { issueStatusSchema } from "../issue/status.ts";
