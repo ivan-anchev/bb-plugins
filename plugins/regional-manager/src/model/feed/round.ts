@@ -8,7 +8,7 @@ import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, t
 import type { Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
 import { reviewFindingSchema, reviewPending, triageSchema, type Review } from "../verdict/review.ts";
-import { checkInFlight, criterionResultSchema, failureReasons, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
+import { checkInFlight, criterionResultSchema, firstFailure, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
 
 /**
  * A round's address within its issue: `h-` and its handoff's id, or `f-` and its final check's. why
@@ -45,7 +45,7 @@ export const roundSchema = z.object({
   ]),
   /**
    * Its verdict (null: nothing checks this round, as a blocked or research handoff): what it says,
-   * and, when it failed, what failed it first (verdict.ts failureReasons): its checkout (not the
+   * and, when it failed, what failed it first (verdict.ts firstFailure): its checkout (not the
    * claimed commit on a clean tree), a criterion, a must-fix finding the verifier confirmed, or CI; each criterion's result in the check's order ([] until it returned), and the
    * fix round its findings went back to its agent as once settled (null: none):
    * reached it, or may have (the plugin can't tell, so the verdict is its manager's). When it
@@ -132,7 +132,7 @@ export function scoreOf({ review, verdict }: Pick<Round, "review" | "verdict">):
   if (review.state === "pending") return { kind: "pending", stage: "reviewing" };
   const { outcome, results } = verdict;
   const passed = results.filter((result) => result === "pass").length;
-  // why its reason first: a checkout, a confirmed must-fix finding or CI that failed it is why, however many criteria passed (verdict.ts failureReasons).
+  // why its reason first: a checkout, a confirmed must-fix finding or CI that failed it is why, however many criteria passed (verdict.ts firstFailure).
   if (outcome.kind === "fail" && outcome.by !== "criteria") return { kind: "failed", by: outcome.by };
   // why a failed criterion next: it has failed, however the verdict settles.
   if (passed < results.length) return { kind: "failed", by: "criteria", passed, of: results.length };
@@ -208,12 +208,11 @@ function verdictOf(verdict: Verdict): Round["verdict"] {
   }
 }
 
-/** What the verdict says, and what failed it first when it failed (verdict.ts failureReasons). */
+/** What the verdict says, and what failed it first when it failed (verdict.ts firstFailure). */
 function outcomeOf(verdict: Verdict): NonNullable<Round["verdict"]>["outcome"] {
   const result = outcome(verdict);
   if (result !== "fail") return { kind: result };
-  const [first] = verdict.state === "returned" ? failureReasons(verdict) : [];
-  return { kind: "fail", by: first?.kind ?? "criteria" };
+  return { kind: "fail", by: firstFailure(verdict)?.kind ?? "criteria" };
 }
 
 /**

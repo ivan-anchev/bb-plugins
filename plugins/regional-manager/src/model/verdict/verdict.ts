@@ -257,6 +257,9 @@ export function failureReasons(verdict: Returned, ci: CiVerdict | null = ciVerdi
   return reasons;
 }
 
+/** What failed a verdict first (failureReasons): the one order the issue's headline and its round name it by; null when nothing failed it, or it hasn't returned. */
+export const firstFailure = (verdict: Verdict): FailureReason | null => (verdict.state === "returned" ? (failureReasons(verdict)[0] ?? null) : null);
+
 /**
  * The findings that fail the verdict on their own: the must-fix ones the verifier confirmed, unless
  * it settled before that rule (`mustFixFails`). Should-fix and nit findings never do.

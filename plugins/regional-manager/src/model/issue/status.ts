@@ -9,7 +9,7 @@ import type { Handoff, HandoffId } from "../agent/handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { reviewPending } from "../verdict/review.ts";
-import { ciVerdictOf, failureReasons, failureText, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
+import { ciVerdictOf, failureText, firstFailure, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
 import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
@@ -418,10 +418,10 @@ function passNote(ci: CiVerdict | null): string {
 /** What CI said about a settled verdict's commit; null for any other verdict. */
 const ciOfReturned = (verdict: Verdict): CiVerdict | null => (verdict.state === "returned" ? ciVerdictOf(verdict) : null);
 
-/** How a failure reads: by the first of its reasons (verdict.ts failureReasons), so by its criteria only when nothing read before them failed it. */
+/** How a failure reads: by the first of its reasons (verdict.ts firstFailure), so by its criteria only when nothing read before them failed it. */
 function failedAs(verdict: Verdict): string {
-  const [first] = verdict.state === "returned" ? failureReasons(verdict) : [];
-  if (first === undefined || first.kind === "criteria") return "✗ Failed verification";
+  const first = firstFailure(verdict);
+  if (first === null || first.kind === "criteria") return "✗ Failed verification";
   const words = failureText(first, "handoff");
   return `✗ ${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
