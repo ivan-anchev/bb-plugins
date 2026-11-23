@@ -33,11 +33,10 @@ export function CommentComposer({ coordinatorId, issueId, posted }: CommentCompo
   const typed = useStored(localStorage, key, answerDraftSchema);
   const draft = typed.value ?? "";
   // why only the draft sent: the field may hold a newer one by then, typed after a remount or in another tab.
-  const { sent, send, error } = usePost(coordinatorId, issueId, key, (sentDraft) => typed.update((current) => (current === sentDraft ? null : current)));
+  const { post, send } = usePost(coordinatorId, issueId, key, (sentDraft) => typed.update((current) => (current === sentDraft ? null : current)));
   useHoldEscape(draft !== "");
 
-  const sending = sent !== null && sent.commentId === null;
-  const showing = sent !== null && (sent.commentId === null || !posted.has(sent.commentId));
+  const sending = post?.kind === "sending";
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.nativeEvent.isComposing) return;
@@ -47,7 +46,8 @@ export function CommentComposer({ coordinatorId, issueId, posted }: CommentCompo
 
   return (
     <div className="rmi-composer">
-      {showing && <SendingCard text={sent.text} commentId={sent.commentId} />}
+      {post?.kind === "sending" && <SendingCard text={post.text} commentId={null} />}
+      {post?.kind === "sent" && !posted.has(post.commentId) && <SendingCard text={post.text} commentId={post.commentId} />}
       <form
         aria-label={`Comment on ${issueId}`}
         onSubmit={(event) => {
@@ -78,9 +78,9 @@ export function CommentComposer({ coordinatorId, issueId, posted }: CommentCompo
             Comment
           </Button>
         </div>
-        {error !== null && (
+        {post?.kind === "failed" && (
           <p role="alert" className="rmi-decision-error">
-            Could not post your comment: {error.message}
+            Could not post your comment: {post.error}
           </p>
         )}
       </form>
@@ -94,51 +94,50 @@ const commentDraftKeyOf = (coordinatorId: CoordinatorId, issueId: IssueId): stri
 /** The keys that send, as this machine names them. */
 const SEND_KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌘↵" : "Ctrl+↵";
 
-/** A comment sent from Send: its id once the server took it (null: on its way). */
-type Sent = { text: string; commentId: CommentId | null };
+/** The comment last sent from Send: on its way, taken by the server as `commentId`, or failed with bb's `error`. */
+type Post = { kind: "sending"; text: string } | { kind: "sent"; text: string; commentId: CommentId } | { kind: "failed"; error: string };
 
 /**
  * The comment last sent on each issue, by its draft's key, kept outside the composer. why: bb
  * remounts the panel when it redraws it, which drops a component's state, and a composer mounted
- * while a comment is on its way would otherwise send the same draft again.
+ * while a comment is on its way would otherwise send the same draft again, or lose its failure.
  */
-const sentByKey = new Map<string, Sent>();
-const sentListeners = new Set<() => void>();
+const postByKey = new Map<string, Post>();
+const postListeners = new Set<() => void>();
 
-function setSent(key: string, sent: Sent | null): void {
-  if (sent === null) sentByKey.delete(key);
-  else sentByKey.set(key, sent);
-  for (const listener of sentListeners) listener();
+function setPost(key: string, post: Post): void {
+  postByKey.set(key, post);
+  for (const listener of postListeners) listener();
 }
 
-function subscribeSent(listener: () => void): () => void {
-  sentListeners.add(listener);
-  return () => sentListeners.delete(listener);
+function subscribePost(listener: () => void): () => void {
+  postListeners.add(listener);
+  return () => postListeners.delete(listener);
 }
 
 /**
  * Posts one comment at a time on the issue whose draft is under `key`, across the composer's
- * mounts: `sent` is the comment sent, with its id once the server took it (null: none sent, or the
- * send failed, whose error is `error`). `taken` runs with the draft sent as the server takes it.
+ * mounts: `post` is the comment last sent (null: none yet). `taken` runs with the draft sent as the
+ * server takes it; a failed send keeps the draft, and its error shows beside it.
  */
 function usePost(coordinatorId: CoordinatorId, issueId: IssueId, key: string, taken: (draft: string) => void) {
   const save = experimental_useRpcMutation({ contract, method: "commentIssue" });
-  const sent = useSyncExternalStore(subscribeSent, () => sentByKey.get(key) ?? null);
+  const post = useSyncExternalStore(subscribePost, () => postByKey.get(key) ?? null);
 
   function send(draft: string): void {
     const text = draft.trim();
     // why read now, not the render's: a second press, or a composer mounted meanwhile, must see the first send.
-    if (sentByKey.get(key)?.commentId === null || text === "") return;
-    setSent(key, { text, commentId: null });
+    if (postByKey.get(key)?.kind === "sending" || text === "") return;
+    setPost(key, { kind: "sending", text });
     save.mutate({ coordinatorId, issueId, text, replyTo: null }).then(
       ({ commentId }) => {
-        setSent(key, { text, commentId });
+        setPost(key, { kind: "sent", text, commentId });
         taken(draft);
       },
-      // why nothing more: the hook's error shows beside the draft, which is kept.
-      () => setSent(key, null),
+      // why the message read here: bb's RPC rejects with whatever its transport threw.
+      (error: unknown) => setPost(key, { kind: "failed", error: error instanceof Error ? error.message : String(error) }),
     );
   }
 
-  return { sent, send, error: sent === null ? save.error : null };
+  return { post, send };
 }

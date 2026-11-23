@@ -234,9 +234,24 @@ test("the user's comment on an issue whose done handoff's check is queued says n
   const { issue, agentThreadId } = await startedAgent(kit, threadId);
   await kit.call("agent_handoff", { status: "done", summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
   const { update } = await commentCaughtUp(kit, threadId, coordinatorId, issue, "Cap retries at five?");
-  assert.ok(update.includes(`Don't relay it to a1 now: a check of its done handoff is queued or running, and a message drops it. Once its verdict reaches you, and only if it concerns a1's work, relay it`), update);
+  assert.ok(update.includes(`Don't relay it to a1 now: a check of its done handoff is queued or running, and a message drops it. Only if it concerns a1's work, relay it to a1`), update);
+  assert.ok(update.includes(RELAY_WAIT), "a relay after the check, too, waits on a fresh issue_read");
   assert.ok(update.includes(`${issue} is In progress now, while its check waits.`), update);
   assert.match(textOf(await kit.call("issue_read", { id: issue }, threadId)), /Not in yet: a verifier is checking it\./, "the read the guidance names shows the open check");
+});
+
+test("the user's comment while bb's thread list can't be read still says a queued check is open, and asks for a fresh issue_read before any relay", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await kit.call("crew_catch_up", {}, threadId);
+  await kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse(issue), text: "Cap retries at five?", replyTo: null });
+  kit.threadLists.failure = new Error("HTTP 503: bb is restarting");
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  const update = caughtUp.slice(caughtUp.indexOf("### "), caughtUp.indexOf("## Board"));
+  assert.ok(update.includes(`Where ${issue} stands, and whether an agent holds it, couldn't be read with the board, but a check of a done handoff on it is queued or running, so don't relay it to an agent now. ${RELAY_WAIT}`), update);
+  kit.threadLists.failure = null;
+  assert.match(textOf(await kit.call("issue_read", { id: issue }, threadId)), /Not in yet: a verifier is checking it\./, "the read it names shows the open check");
 });
 
 test("the user's comment on an issue no agent holds points at the brief of the agent started on it, never at a relay", async () => {

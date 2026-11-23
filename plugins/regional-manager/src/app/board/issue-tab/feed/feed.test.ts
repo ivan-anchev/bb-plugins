@@ -274,3 +274,23 @@ test("a comment on its way stays on its way across a remount: the remounted fiel
   await waitFor(() => assert.equal(composer(second.tab()).field.value, ""));
   assert.equal(within(activity(second.tab()).section.getByRole("article", { name: "Your comment" })).getByRole("status").textContent, "Sent as m1");
 });
+
+test("a send that fails after a remount shows its error beside the kept draft in the remounted field, which can send it again", async () => {
+  const key = `coordinator-issue-comment:${COORDINATOR.id}:WEB-1`;
+  localStorage.setItem(key, JSON.stringify("Draft that fails."));
+  let reject: () => void = () => {};
+  const first = await opened("WEB-1", WEB_1, { comment: () => new Promise((_, fail) => (reject = () => fail(new Error("bb is unreachable")))) });
+  fireEvent.click(composer(first.tab()).send);
+  await waitFor(() => assert.equal(first.comments.length, 1));
+  first.view.unmount();
+
+  const second = await opened("WEB-1", WEB_1);
+  await act(async () => reject());
+  const { form, field, send } = composer(second.tab());
+  await waitFor(() => assert.match(form.getByRole("alert").textContent ?? "", /^Could not post your comment: .*bb is unreachable/));
+  assert.equal(field.value, "Draft that fails.", "the draft stays to send again");
+  assert.equal(field.readOnly, false);
+  assert.equal(activity(second.tab()).section.queryByRole("article", { name: "Your comment" }), null, "no card for a comment that never arrived");
+  fireEvent.click(send);
+  await waitFor(() => assert.deepEqual(second.comments, [{ coordinatorId: COORDINATOR.id, issueId: "WEB-1", text: "Draft that fails.", replyTo: null }]));
+});

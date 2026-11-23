@@ -149,7 +149,8 @@ function whose(author: Comment["author"]): string {
  */
 function commentNextStep({ id, issueId }: Comment, view: IssueView | null, checking: boolean): string {
   const answer = `Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision)`;
-  if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board: call crew_catch_up again before you relay it to an agent.`;
+  // why issue_read, not another catch-up: this update comes only once, and the plugin's own record of the issue doesn't need bb's thread list.
+  if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board${checking ? `, but a check of a done handoff on it is queued or running, so don't relay it to an agent now` : ""}. ${RELAY_WAIT}`;
   const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
   // why first: a parent never has an agent, so its work is its sub-issues'. Their agents can comment only on their own issue, so the answer comes back through the manager.
   if (view.subIssues !== null) return `${answer}, or put it in the brief of the sub-issue it concerns. An agent already on that sub-issue gets it only as a relay with agent_message, quoting their words. ${RELAY_WAIT} It can't comment on ${issueId}: ask it to answer with issue_comment on its own sub-issue, and once its answer reaches you, reply to the user on ${issueId} with issue_comment (replyTo "${id}"). ${now}; a parent has no agent of its own.`;
@@ -158,7 +159,7 @@ function commentNextStep({ id, issueId }: Comment, view: IssueView | null, check
   if (view.holder === null) return `${answer}, or put it in the brief of the agent you start on it. ${now}, and no agent holds it.`;
   const agent = view.holder.id;
   const relay = `relay it to ${agent} with agent_message, quoting their words and naming ${id}, so it can answer on the issue`;
-  if (checking) return `Nothing reaches ${agent} on its own: the user's comments come to you. ${answer}. Don't relay it to ${agent} now: a check of its done handoff is queued or running, and a message drops it. Once its verdict reaches you, and only if it concerns ${agent}'s work, ${relay}. ${now}, while its check waits.`;
+  if (checking) return `Nothing reaches ${agent} on its own: the user's comments come to you. ${answer}. Don't relay it to ${agent} now: a check of its done handoff is queued or running, and a message drops it. Only if it concerns ${agent}'s work, ${relay}, once that check has settled. ${RELAY_WAIT} ${now}, while its check waits.`;
   return `Nothing reaches ${agent} on its own: the user's comments come to you. ${answer}, or, when it concerns ${agent}'s work, ${relay}. ${RELAY_WAIT} ${now}.`;
 }
 
