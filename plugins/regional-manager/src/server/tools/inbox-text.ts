@@ -152,7 +152,7 @@ function firstLine(text: string): string {
  */
 function commentNextStep({ id, issueId }: Comment, view: IssueView | null): string {
   const now = view === null ? `Where ${issueId} stands now couldn't be read with the board: call crew_catch_up again before you relay it.` : `${issueId} is ${STATUS_LABELS[view.status]} now.`;
-  return `Nothing reaches the issue's agent on its own: the user's comments come to you. Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision), or, when it concerns the agent's work, relay it with agent_message, quoting their words. Never relay while ${issueId} is Reviewing or Verifying: a message stops its check. Relay once the check has settled, and set yourself a reminder with crew_remind if it must wait. ${now}`;
+  return `Nothing reaches the issue's agent on its own: the user's comments come to you. Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision), or, when it concerns the agent's work, relay it with agent_message, quoting their words and naming ${id}, so the agent can answer it on the issue. Never relay while ${issueId} is Reviewing or Verifying: a message stops its check. Relay once the check has settled, and set yourself a reminder with crew_remind if it must wait. ${now}`;
 }
 
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */

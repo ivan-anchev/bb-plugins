@@ -45,7 +45,7 @@ export function CommentComposer({ coordinatorId, issueId, posted }: CommentCompo
 
   return (
     <div className="rmi-composer">
-      {showing && <SendingCard text={sent.text} />}
+      {showing && <SendingCard text={sent.text} commentId={sent.commentId} />}
       <form
         aria-label={`Comment on ${issueId}`}
         onSubmit={(event) => {

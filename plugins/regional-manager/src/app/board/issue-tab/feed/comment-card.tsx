@@ -1,6 +1,6 @@
 // A comment in an issue's feed: the user's, posted from the tab and sent to the regional manager, or
 // a reply from the manager or the agent holding the issue, quoting a line of what it answers.
-import type { Comment } from "../../../../model/feed/comment.ts";
+import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
 import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { useManager } from "../../../profile/use-manager.ts";
@@ -30,8 +30,8 @@ export function CommentCard({ coordinatorId, entry, answered, agents }: CommentC
   );
 }
 
-/** A comment of the user's on its way, from Send until the feed reads it: a quieter card, saying so. */
-export function SendingCard({ text }: { text: string }) {
+/** A comment of the user's from Send until the feed reads it: on its way, or taken by the server as `commentId` (null: not yet). */
+export function SendingCard({ text, commentId }: { text: string; commentId: CommentId | null }) {
   return (
     <article className="rmi-decision" aria-label="Your comment, sending">
       <p className="rmi-decision-head">
@@ -39,7 +39,7 @@ export function SendingCard({ text }: { text: string }) {
       </p>
       <p className="rmi-decision-text">{text}</p>
       <p role="status" className="rmi-verdict-meta">
-        Sending…
+        {commentId === null ? "Sending…" : `Sent as ${commentId}`}
       </p>
     </article>
   );

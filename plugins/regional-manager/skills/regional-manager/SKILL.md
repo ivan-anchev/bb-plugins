@@ -676,8 +676,9 @@ one of three things with it:
 - **Reply** on the issue with `issue_comment`: `issue`, `text`, and
   `replyTo` naming the comment you answer. The user reads it on the tab.
 - **Record** what it decides with `issue_update`'s `decision`.
-- **Relay** it to the issue's agent with `agent_message`, quoting the user's
-  words, only when it concerns the agent's work. Never relay while the issue
+- **Relay** it to the issue's agent with `agent_message`, only when it
+  concerns the agent's work: quote the user's words and name the comment's id
+  (such as `m4`), so the agent can answer it with `replyTo`. Never relay while the issue
   is Reviewing or Verifying: a message stops its check. Relay once the check
   has settled, and set yourself a reminder with `crew_remind` if it must
   wait.

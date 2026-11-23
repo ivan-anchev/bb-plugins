@@ -105,7 +105,7 @@ files are in your environment.
   disagree.
 - The user comments on your issue from its tab, and every comment goes to
   your regional manager: it reaches you only when the manager relays it, in
-  a message quoting their words. You can reply on the issue's tab with
+  a message quoting their words and naming the comment's id. You can reply on the issue's tab with
   `issue_comment` (`issue`, `text`, and `replyTo` naming the comment you
   answer, such as `m4`). The user reads it there, and your regional manager
   in its next catch-up. A comment is no report: your handoff is.
