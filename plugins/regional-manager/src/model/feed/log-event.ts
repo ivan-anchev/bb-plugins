@@ -8,7 +8,7 @@ import { issueStatusSchema, type IssueStatus, type IssueView } from "../issue/st
 
 /** The plan's fields an edit names, as the feed names them. */
 const editedFieldSchema = z.enum(["kind", "title", "description", "brief", "criteria", "verifier"]);
-export type EditedField = z.infer<typeof editedFieldSchema>;
+type EditedField = z.infer<typeof editedFieldSchema>;
 
 /** What the feed shows of a log as a line of its own: every kind but a status, which it shows on a moment (feed.ts attachStatuses). */
 const LINE_EVENTS = [
