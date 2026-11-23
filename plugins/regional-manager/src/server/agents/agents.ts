@@ -156,7 +156,7 @@ type Deps = {
   store: FactsStore &
     Pick<
       Store,
-      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks" | "issueDecisions"
+      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "latestHandoff" | "handoff" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks" | "issueDecisions"
     >;
   spawner: Pick<Spawner, "agent">;
   inbox: Pick<Inbox, "endAgent">;

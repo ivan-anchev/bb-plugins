@@ -4,7 +4,7 @@
 // any client, plugin or the thread's own agent can write.
 import { z } from "zod";
 import { optionsSchema, questionSchema } from "../../model/decision.ts";
-import { issueIdSchema } from "../../model/issue/issue.ts";
+import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
@@ -47,6 +47,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
     execute: forManager(store, CATCH_UP, async (id) => {
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+      const readOf = (issueId: IssueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId) ?? null));
       const updates = updatesText(inbox.takeUnread(id), {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
@@ -54,8 +55,9 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
         agents: () => store.agents(id),
         decision: store.decision,
         comment: store.comment,
-        record: (issueId) => store.record(id, issueId),
-        view: (issueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId)?.view ?? null)),
+        // why the store when bb's thread list couldn't be read: there is no view for the record to agree with.
+        record: (issueId) => readOf(issueId)?.record ?? store.record(id, issueId),
+        view: (issueId) => readOf(issueId)?.view ?? null,
       });
       return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),

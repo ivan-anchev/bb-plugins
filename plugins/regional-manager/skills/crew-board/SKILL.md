@@ -885,12 +885,15 @@ At the foot of an issue's **Activity** is a field to comment on the issue.
 doesn't leave the page while it has text. Focus stays in the field as it
 sends. A send that fails keeps your text, with the error under it, and text
 you haven't sent stays in the browser, through a reload, until the server
-takes it. Its hint says where it goes: every comment of yours goes to the
+takes it. Sending the same text again after a failure never posts it twice,
+even when the first send reached the server and only its answer was lost. Its hint says where it goes: every comment of yours goes to the
 regional manager, never straight to an agent. It wakes the manager, whose
 `crew_catch_up` gives it whole, and the manager replies on the issue,
 records a decision, or relays it to the issue's agent with `agent_message`
-when it concerns the agent's work, never while the issue is Reviewing or
-Verifying, since a message stops the check.
+when it concerns the agent's work, never while a check of the agent's
+handoff is in flight (Reviewing, Verifying, or a done handoff made while the
+agent's turn still runs), since a message drops that check or cuts across it.
+`issue_read` gives the manager every comment whole, so a relay can wait.
 
 Each comment shows as a card in the order posted, with its id (`m1`, `m2`…):
 yours with "Sent to" and the manager's name, the manager's and the agent's

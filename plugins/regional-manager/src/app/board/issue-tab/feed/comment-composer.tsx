@@ -131,8 +131,9 @@ function usePost(coordinatorId: CoordinatorId, issueId: IssueId, key: string, ta
     const text = draft.trim();
     // why read now, not the render's: a second press, or a composer mounted meanwhile, must see the first send.
     if (postByKey.get(key)?.kind === "sending" || text === "") return;
-    setPost(key, { kind: "sending", text });
+    // why the submission first: its write to storage can throw, which must leave nothing on its way.
     const submission = submissionFor(key, text);
+    setPost(key, { kind: "sending", text });
     save.mutate({ coordinatorId, issueId, text, replyTo: null, submission }).then(
       ({ commentId }) => {
         setPost(key, { kind: "sent", text, commentId });
