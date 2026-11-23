@@ -71,10 +71,13 @@ test("a row this version can't read is left out of the log, and a status it does
   const { db, store } = freshStore();
   const one = filedIssue(store, MANAGER, newIssue(), 2_000);
   store.observeStatuses(MANAGER, seen([one, "todo"]), 3_000);
-  // why raw rows: they stand in for what a newer version of the plugin logged, a kind and a status this one doesn't know, and a row JSON.parse can't decode, which SQLite stores as JSON5.
+  // why raw rows: they stand in for what a newer version of the plugin logged, a kind and a status this one doesn't know, a row JSON.parse can't decode, which SQLite stores as JSON5, and columns of other types than the plugin writes, which SQLite's loose typing keeps.
   const insert = db.prepare("INSERT INTO issue_log (coordinator_id, issue_id, at, event) VALUES (?, ?, ?, ?)");
   insert.run(MANAGER, one.id, 3_100, JSON.stringify({ kind: "commented", text: "Looks right" }));
   insert.run(MANAGER, one.id, 3_200, '{kind:"edited",fields:["title"],}');
+  insert.run(MANAGER, one.id, 3_250.5, JSON.stringify({ kind: "reopened" }));
+  insert.run(MANAGER, one.id, "soon", JSON.stringify({ kind: "reopened" }));
+  insert.run(MANAGER, one.id, 3_260, Buffer.from(JSON.stringify({ kind: "reopened" })));
   insert.run(MANAGER, one.id, 3_300, JSON.stringify({ kind: "status", status: "parked" }));
 
   assert.deepEqual(store.logOf(MANAGER, one.id), [{ at: 3_000, event: { kind: "status", status: "todo" } }], "the rows it can read, in order");

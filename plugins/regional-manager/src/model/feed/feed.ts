@@ -57,17 +57,21 @@ type Observed = Point & { shownAt: number; status: IssueStatus };
 /**
  * The log as the feed shows it: its lines, the statuses observed, and where it began for an issue
  * filed before it (null: filed since, so it holds everything). why a status before it began is
- * dropped: nothing before then was observed, so nothing above the marker shows one. why a row
- * written after it is placed no earlier than it, whatever its time: the clock can step back, and
- * what the log kept from its start must still sit below the marker.
+ * dropped: nothing before then was observed, so nothing above the marker shows one. why each row
+ * is placed no earlier than any row written before it, whatever its own time: the clock can step
+ * back, and the log's order is the order things were observed in, so a status never lands on what
+ * was written after it, nor a row kept since the marker above it. A row still shows its own time.
  */
 function readLog(log: readonly Logged[]): { lines: Placed[]; statuses: Observed[]; began: Point | null } {
-  const rows = log.map((row, seq) => ({ ...row, seq }));
+  let latest = Number.NEGATIVE_INFINITY;
+  const rows = log.map((row, seq) => {
+    latest = Math.max(latest, row.at);
+    return { ...row, seq, placedAt: latest };
+  });
   const marker = rows.find(({ event }) => event.kind === "log-began") ?? null;
-  const placedAt = (at: number, seq: number): number => (marker !== null && seq > marker.seq ? Math.max(at, marker.at) : at);
-  const statuses = rows.flatMap(({ at, seq, event }) => (event.kind === "status" && (marker === null || seq > marker.seq) ? [{ at: placedAt(at, seq), seq, shownAt: at, status: event.status }] : []));
-  const lines = rows.flatMap(({ at, seq, event }): Placed[] => (event.kind === "status" ? [] : [{ at: placedAt(at, seq), seq, entry: { kind: "logged", at, event, moved: null } }]));
-  return { lines, statuses, began: marker === null ? null : { at: marker.at, seq: marker.seq } };
+  const statuses = rows.flatMap(({ at, seq, placedAt, event }) => (event.kind === "status" && (marker === null || seq > marker.seq) ? [{ at: placedAt, seq, shownAt: at, status: event.status }] : []));
+  const lines = rows.flatMap(({ at, seq, placedAt, event }): Placed[] => (event.kind === "status" ? [] : [{ at: placedAt, seq, entry: { kind: "logged", at, event, moved: null } }]));
+  return { lines, statuses, began: marker === null ? null : { at: marker.placedAt, seq: marker.seq } };
 }
 
 /** A moment a status can be shown on: an entry, or one step of a round, the `entry`th placed. */

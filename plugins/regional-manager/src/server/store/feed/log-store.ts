@@ -1,8 +1,8 @@
 // Issues' logs (migrations.ts issue_log): appended to, never rewritten. Its writers are the plan's
 // one writer (issues-store.ts updateIssue, through appendLog in its own transaction) and the status
 // watch (observeStatuses). Rows are parsed into Logged here and nowhere else, one at a time: a row
-// this version can't read (a kind or status a newer one logged, or text it can't decode) is left
-// out, never failing the rest.
+// this version can't read (a kind or status a newer one logged, text it can't decode, or a column
+// of another type than the plugin writes) is left out, never failing the rest.
 import { z } from "zod";
 import { logEventSchema, statusMoves, type LogEvent, type Logged } from "../../../model/feed/log-event.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
@@ -24,9 +24,9 @@ export function logStore(db: Db) {
         .prepare("SELECT at, event FROM issue_log WHERE coordinator_id = ? AND issue_id = ? ORDER BY seq")
         .all(coordinatorId, issueId)
         .flatMap((row) => {
-          const { at, event } = logRowSchema.parse(row);
-          const logged = eventOf(event);
-          return logged === null ? [] : [{ at, event: logged }];
+          const columns = logRowSchema.safeParse(row).data;
+          const logged = columns === undefined ? null : eventOf(columns.event);
+          return columns === undefined || logged === null ? [] : [{ at: columns.at, event: logged }];
         });
     },
 

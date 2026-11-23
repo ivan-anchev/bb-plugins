@@ -356,3 +356,13 @@ test("a row the log kept after its start sits below the marker even when the clo
     { kind: "logged", at: 4_600, event: { kind: "edited", fields: ["title"] }, moved: null },
   ]);
 });
+
+test("a status shows only on what was written before it, even when the clock stepped back between them", () => {
+  const log: Logged[] = [...observed([[3_000, "todo"], [5_000, "in-progress"]]), { at: 4_000, event: { kind: "edited", fields: ["title"] } }, ...observed([[4_100, "backlog"]])];
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log });
+  assert.deepEqual(entries, [
+    { kind: "created", at: 1_000, moved: "todo" },
+    { kind: "moved", at: 5_000, status: "in-progress" },
+    { kind: "logged", at: 4_000, event: { kind: "edited", fields: ["title"] }, moved: "backlog" },
+  ]);
+});
