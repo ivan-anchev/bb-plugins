@@ -83,17 +83,21 @@ test("a verdict that passes while CI is pending waits under Verifying as waiting
   await minute();
   assert.equal(doorbells().length, before, "a verdict waiting for CI wakes nobody");
 
-  // why hold bb's turn reads: the verdict settles in WEB-1's turn, which the tick starts and doesn't
-  // wait for, so nothing orders it before the tick's ring. Held, it is still settling as the tick rings.
+  // why hold WEB-1's turn: the verdict settles in it, which the tick starts and doesn't wait for, so
+  // nothing orders it before the tick's ring. Held, it is still settling as the tick rings.
   pr({ rollup: "SUCCESS" });
-  kit.turnEvents.holding = true;
+  kit.turnsTaken.holding = true;
   await minute();
-  assert.equal(kit.turnEvents.held.length, 1, "the verdict's turn read held");
+  kit.turnsTaken.holding = false;
+  assert.deepEqual(
+    kit.turnsTaken.held.map(({ issueId }) => issueId),
+    ["WEB-1"],
+    "the verdict's settlement held in its issue's turn",
+  );
   assert.equal(doorbells().at(-1), doorbellOf('WEB-1 "Add retries" (a1) PR #41: CI passed'));
   assert.deepEqual(events(), [], "the doorbell carried the CI result");
 
-  kit.turnEvents.holding = false;
-  kit.turnEvents.held.splice(0).forEach((release) => release());
+  kit.turnsTaken.held.splice(0).forEach(({ release }) => release());
   await settled();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" });
   assert.deepEqual(events(), ["checked"], "the verdict waits for the doorbell still queued");

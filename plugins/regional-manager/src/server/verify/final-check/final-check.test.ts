@@ -332,12 +332,10 @@ test("an opened parent sends its final checks as rounds, each with only what its
   assert.equal(rounds.length, 1);
   const [{ round, body } = assert.fail("no final check")] = rounds;
   assert.deepEqual([round.by, round.review, body.handoff, body.findings], [{ kind: "final", defaultBranch: "main" }, { state: "none" }, null, []]);
-  const stored = latest().verdict;
   assert.deepEqual(
     body.verdict,
     {
       state: "returned",
-      at: stored.state === "returned" ? stored.at : assert.fail("not returned"),
       verifierThreadId,
       headSha: MERGED,
       checkout: { headSha: MERGED, changedFiles: [], changedFileCount: 0 },

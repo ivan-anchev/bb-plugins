@@ -172,6 +172,14 @@
   font-weight: 500;
   color: var(--foreground);
 }
+/* A status an entry moved the issue to, mid-line: the Board's glyph (issue-board.css `.rmi-state`) and its name, kept together. */
+.rmi-status {
+  white-space: nowrap;
+}
+.rmi-status > .rmi-state {
+  display: inline-flex;
+  vertical-align: -3px;
+}
 /* A quiet line: a machine event. */
 .rmi-line {
   padding: 4px 0;

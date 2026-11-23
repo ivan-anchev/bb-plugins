@@ -1077,9 +1077,23 @@ agent started on the issue gets them in its first message). Everything else
 is a quiet line: the manager filed the issue, started an agent or handed the
 issue on from one, an agent's thread was archived or deleted, its pull request
 opened, passed or failed CI or merged, an agent ended its turn with no
-handoff (with its last answer), failed, or waits on you, and the issue was
-unblocked. An agent named anywhere opens its thread while bb has it. The brief
-is the agent's, so the tab doesn't show it.
+handoff (with its last answer), failed, or waits on you, the issue was
+unblocked, and the manager changed its plan: "edited title, criteria", "moved
+it to Backlog", "canceled it", "accepted it as Done", "reopened it", "set its
+parent to BBP-3" or "made it top-level", "made it depend on BBP-7" or "removed
+its dependency on BBP-7". An agent named anywhere opens its thread while bb
+has it. The brief is the agent's, so the tab doesn't show it.
+
+A moment that moved the issue to another status shows its new status as the
+Board draws it: "a19 handed off · ◑ Verifying", "#219 merged · ● Done", on a
+line, a decision or a round's step (handed off, reviewer, verifier, and what
+became of it). The plugin sees each status as it reads the issues, after
+every change and once a minute, and keeps it from then on; it never works one
+out again from what happened. A move no moment explains, as a parent rolling
+up, is a quiet line of its own: "◑ Verifying". An issue filed before this
+release starts its record with "Edits and status moves are kept from here;
+verdict times above are as announced or approximate": nothing above it shows a
+status.
 
 A handoff places its issue until the agent's thread starts another turn: type
 into an agent that handed off and its issue moves back to In progress. Rows

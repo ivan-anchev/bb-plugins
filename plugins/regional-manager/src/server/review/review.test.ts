@@ -7,6 +7,7 @@ import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
+import type { Round } from "../../model/feed/round.ts";
 import type { Review } from "../../model/verdict/review.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import { memoryStorage } from "../memory-storage.ts";
@@ -33,8 +34,14 @@ const FINDINGS = [
 function shownPassing(stored: Verdict, settlement: object) {
   if (stored.state !== "returned") return assert.fail("not returned");
   const criteria = PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence }));
-  return { state: "returned", at: stored.at, verifierThreadId: stored.verifierThreadId, headSha: HEAD, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 }, criteria, findings: [], sameModel: false, settlement };
+  return { state: "returned", verifierThreadId: stored.verifierThreadId, headSha: HEAD, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 }, criteria, findings: [], sameModel: false, settlement };
 }
+
+/** What a round's verdict says it judged: its outcome, its criteria's results and its fix round (its step's time and status are the feed's, feed.test.ts). */
+const judged = ({ verdict }: Pick<Round, "verdict">) => {
+  const { outcome, results, fixRound } = verdict ?? assert.fail("no verdict");
+  return { outcome, results, fixRound };
+};
 
 const CREW = "# Crew rules\n\n- Reviewers: run the house review against REVIEW.md and report what it finds.\n- Keep every folder at nine files or fewer.\n";
 
@@ -263,7 +270,7 @@ test("a verdict that passes every criterion but confirms a must-fix finding fail
   assert.match(update, /Rejected:\n- `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\.\n {2}Why: Taste\./);
 
   const { round, body } = await opened();
-  assert.deepEqual(round.verdict, { outcome: { kind: "fail", by: "must-fix" }, results: ["pass", "pass"], fixRound: { round: 1, delivery: "sent" } }, "its round names the confirmed must-fix finding as what failed it");
+  assert.deepEqual(judged(round), { outcome: { kind: "fail", by: "must-fix" }, results: ["pass", "pass"], fixRound: { round: 1, delivery: "sent" } }, "its round names the confirmed must-fix finding as what failed it");
   assert.deepEqual(body.verdict, shownPassing(stored, { kind: "sent-back", ci: { kind: "none" } }), "the verdict whole, never its model, its triage, the rule's flag or the fix round");
 });
 
@@ -451,6 +458,7 @@ test("issues stored before reviews, in every status, load with the same status, 
   // issue feed's tables, and every migration from the review column on still to run.
   for (const { name } of z.array(z.object({ name: z.string() })).parse(db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%issue_writes%'").all())) db.exec(`DROP TRIGGER ${name}`);
   db.exec("DROP TABLE issue_writes");
+  db.exec("DROP TABLE issue_log");
   db.exec("DROP INDEX events_of_issue");
   db.exec("ALTER TABLE checks DROP COLUMN review");
   db.exec("UPDATE checks SET verdict = json_remove(verdict, '$.triage', '$.at')");
@@ -485,13 +493,15 @@ test("a check stores each finding's severity once, on its review; a verdict sett
 
   // As the release before this rule left a verdict that passed with the must-fix finding confirmed: settled, and its last migration still to run.
   db.exec(`UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0].result', 'confirmed'), '$.mustFixFails')`);
+  // why the issue log dropped too: it came after this rule, and its migration runs again.
+  db.exec("DROP TABLE issue_log");
   migrated.applied = BEFORE_MUST_FIX;
   settledBefore.kit.reload();
   const kept = settledBefore.check().verdict;
   assert.deepEqual(kept.state === "returned" && [kept.mustFixFails, kept.triage.map(({ severity, result }) => [severity, result])], [false, [["must-fix", "confirmed"], ["nit", "confirmed"]]]);
   assert.deepEqual(await settledBefore.row(), ["in-review", "✓ Verified: Retries land with backoff"], "it keeps the outcome it was settled and announced with");
   const keptRound = await settledBefore.opened();
-  assert.deepEqual(keptRound.round.verdict, { outcome: { kind: "pass" }, results: ["pass", "pass"], fixRound: null }, "its round still reads passed");
+  assert.deepEqual(judged(keptRound.round), { outcome: { kind: "pass" }, results: ["pass", "pass"], fixRound: null }, "its round still reads passed");
   assert.deepEqual(keptRound.body.verdict, shownPassing(kept, { kind: "checked", ci: { kind: "none" } }));
   const update = await settledBefore.catchUp();
   assert.match(update, /Verified: 2 of 2 criteria passed/);
@@ -579,6 +589,8 @@ async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confir
   assert.equal(stored.state === "returned" && stored.settlement.kind, left, "as the release before this rule left it");
   // The release before this rule let a confirmed must-fix finding pass, and stored no mustFixFails.
   before.db.prepare("UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0]', json(?)), '$.mustFixFails')").run(JSON.stringify({ result: triaged, reason: "It never caps." }));
+  // why the issue log dropped too: it came after this rule, and its migration runs again.
+  before.db.exec("DROP TABLE issue_log");
   before.migrated.applied = BEFORE_MUST_FIX;
   agent.kit.reload();
   return agent;

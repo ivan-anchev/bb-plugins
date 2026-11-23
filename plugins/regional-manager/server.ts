@@ -23,7 +23,7 @@ import { issueTurns } from "./src/server/issues/issue-turns.ts";
 import { createIssues } from "./src/server/issues/issues.ts";
 import { currentViews } from "./src/server/issues/views/current-views.ts";
 import { pluginInstance } from "./src/server/lifetime.ts";
-import { watchUnblocked } from "./src/server/issues/views/unblocked.ts";
+import { watchViews } from "./src/server/issues/views/view-watch.ts";
 import { openMemoryRoot } from "./src/server/memory/memory-files.ts";
 import { memoryHandlers } from "./src/server/memory/memory-rpc.ts";
 import { upgradeMemoryFrom040 } from "./src/server/memory/memory-upgrade.ts";
@@ -32,6 +32,7 @@ import { registerReviewTool } from "./src/server/review/review-tool.ts";
 import { registerRoles } from "./src/server/roles.ts";
 import { createSpawner } from "./src/server/spawn.ts";
 import { openStore } from "./src/server/store/store.ts";
+import { toldWrites } from "./src/server/store/told-writes.ts";
 import { registerCrewTools } from "./src/server/tools/crew-tools.ts";
 import { registerHandoffTool } from "./src/server/tools/handoff-tool.ts";
 import { createFinalChecks } from "./src/server/verify/final-check/final-checks.ts";
@@ -43,7 +44,9 @@ import { createPrWatch } from "./src/server/watch/pr-watch.ts";
 export default function plugin(host: BbPluginApi): void {
   const instance = pluginInstance(host);
   const { bb } = instance;
-  const store = instance.bind(openStore(bb.storage));
+  // why told: a write that can move a status, whoever made it, wakes the view watch as it commits (told-writes.ts).
+  const written = toldWrites(openStore(bb.storage));
+  const store = instance.bind(written.store);
   const memory = openMemoryRoot(bb.storage.database().name, store, (id) => bb.rpc.experimental_invalidate([memoryTag(id)]));
   bb.log.info(`Memory files are in ${memory.dir}`);
   upgradeMemoryFrom040(memory, store.coordinators().map(({ id }) => id));
@@ -58,7 +61,7 @@ export default function plugin(host: BbPluginApi): void {
   const onChange = (id: CoordinatorId) => {
     refreshBoard(id);
     views.changed(id);
-    unblocked.changed(id);
+    viewWatch.changed(id);
   };
   // why one hook: deletion and the tick's reconcile both remove a regional manager through it.
   const onRemoved = (id: CoordinatorId) => {
@@ -71,7 +74,8 @@ export default function plugin(host: BbPluginApi): void {
   const issueTags = issueTagPublisher({ store, invalidate: (tags) => bb.rpc.experimental_invalidate(tags) });
   const inbox = createInbox({ bb, store, memory, onChange });
   const views = currentViews({ bb, store });
-  const unblocked = watchUnblocked({ bb, store, views, inbox });
+  const viewWatch = watchViews({ bb, store, views, inbox, publish: (id) => issueTags.publish(id), now: Date.now });
+  written.tell((id) => viewWatch.changed(id));
   const turns = issueTurns(instance.signal);
   const prWatch = createPrWatch({ bb, store, inbox, gh: runGh, now: Date.now });
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
@@ -104,14 +108,14 @@ export default function plugin(host: BbPluginApi): void {
     // why the final checks between them: a merge read this tick makes its parent's check this tick, and a check the verifiers' pass then finds busy is the final checks' turn's to start.
     // why nothing waits for the issues' turns the agents' and the verifiers' passes start: a call bb
     // never answers holds only its own issue, which every tick skips until it answers (issue-turns.ts).
-    // why what was unblocked after both, and before the ring: a merge read this tick is announced in the same doorbell.
+    // why the views after both, and before the ring: a merge read this tick is announced, and its status logged, in the same doorbell.
     void upgrade030();
     void keyIssues();
     await agents.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the agents; the next tick tries again: ${messageOf(error)}`));
     await prWatch.tick(Date.now()).catch((error: unknown) => bb.log.warn(`Could not read the issues' pull requests; the next tick tries again: ${messageOf(error)}`));
     await finalChecks.tick().catch((error: unknown) => bb.log.warn(`Could not read which final checks are due; the next tick tries again: ${messageOf(error)}`));
     await verify.reconcile().catch((error: unknown) => bb.log.warn(`Could not reconcile the verifiers; the next tick tries again: ${messageOf(error)}`));
-    await unblocked.tick();
+    await viewWatch.tick();
     // why every manager: a write no onChange followed is still published within a minute.
     for (const { id } of store.coordinators()) issueTags.publish(id);
     await inbox.tick(Date.now());

@@ -137,20 +137,20 @@ const shownSettlementSchema = z.discriminatedUnion("kind", [
 ]);
 
 /** A returned verdict as it is shown (see shownVerdictSchema). */
-const shownReturnedSchema = returnedSchema.omit({ model: true, triage: true, mustFixFails: true, settlement: true }).extend({ settlement: shownSettlementSchema });
+const shownReturnedSchema = returnedSchema.omit({ model: true, triage: true, mustFixFails: true, settlement: true, at: true }).extend({ settlement: shownSettlementSchema });
 
 /**
  * A verdict as the user is shown it: only what the board reads, the board's RPC payload. why
  * without the model, the triage or mustFixFails: the board shows none of them here (a round sends
  * its findings with their triage, and what failed it, round.ts); they stay with the plugin and the
  * regional manager. why no checkout before a verdict returns, nor a verifier's nudge: the board
- * shows neither.
+ * shows neither. why no time: a round's verdict step carries it (round.ts).
  */
 export const shownVerdictSchema = z.discriminatedUnion("state", [
   queuedSchema.omit({ checkout: true }),
   runningSchema.omit({ checkout: true, nudged: true, declined: true }),
   shownReturnedSchema,
-  couldNotRunSchema,
+  couldNotRunSchema.omit({ at: true }),
   supersededSchema,
   waivedSchema,
 ]);

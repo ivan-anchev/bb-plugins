@@ -128,19 +128,19 @@ test("a relation knows its dependency's close from when it is written: kept thro
   const { store } = freshStore();
   const views = mergedOrNot(store);
   const [i1, i2] = [filedIssue(store, MANAGER, newIssue(), 2_000).id, filedIssue(store, MANAGER, newIssue(), 2_000).id];
-  store.updateIssue(MANAGER, i2, { closed: { as: "canceled", at: 2_050 } }, { requireUnheld: false, closes: new Map() });
+  store.updateIssue(MANAGER, i2, { closed: { as: "canceled", at: 2_050 } }, { requireUnheld: false, closes: new Map(), at: 3_000 });
   const i3 = filedIssue(store, MANAGER, newIssue({ dependsOn: [i1] }), 2_100).id;
 
   // WEB-1 merged while the manager added WEB-2: the read it was answered from already said so.
-  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i2], remove: [] } }, { requireUnheld: false, closes: closesOf(views(true)) });
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i2], remove: [] } }, { requireUnheld: false, closes: closesOf(views(true)), at: 3_000 });
   assert.deepEqual(recorded(store, views(true), 3_000), ["WEB-3 by WEB-1 done"], "WEB-1 kept the close it knew, open");
   assert.deepEqual(recorded(store, views(true), 3_100), []);
 
-  store.updateIssue(MANAGER, i3, { dependsOn: { add: [], remove: [i1] } }, { requireUnheld: false, closes: closesOf(views(false)) });
-  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i1], remove: [] } }, { requireUnheld: false, closes: closesOf(views(false)) });
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [], remove: [i1] } }, { requireUnheld: false, closes: closesOf(views(false)), at: 3_000 });
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i1], remove: [] } }, { requireUnheld: false, closes: closesOf(views(false)), at: 3_000 });
   assert.deepEqual(recorded(store, views(true), 3_200), ["WEB-3 by WEB-1 done"], "added again while open, it knows nothing of its old close");
-  store.updateIssue(MANAGER, i3, { dependsOn: { add: [], remove: [i1] } }, { requireUnheld: false, closes: closesOf(views(true)) });
-  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i1], remove: [] } }, { requireUnheld: false, closes: closesOf(views(true)) });
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [], remove: [i1] } }, { requireUnheld: false, closes: closesOf(views(true)), at: 3_000 });
+  store.updateIssue(MANAGER, i3, { dependsOn: { add: [i1], remove: [] } }, { requireUnheld: false, closes: closesOf(views(true)), at: 3_000 });
   assert.deepEqual(recorded(store, views(true), 3_300), [], "added again closed, it is no news");
 });
 

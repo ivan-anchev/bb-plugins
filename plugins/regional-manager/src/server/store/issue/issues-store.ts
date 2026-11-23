@@ -10,7 +10,9 @@ import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchem
 import { kindSchema } from "../../../model/issue/kind.ts";
 import { planProblem } from "../../../model/issue/plan.ts";
 import { knownClose, type CloseKey, type Closes, type KnownCloses } from "../../../model/issue/relations.ts";
+import { planChanges } from "../../../model/feed/log-event.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
+import { appendLog } from "../feed/log-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 
 /** An issue as the manager files it. */
@@ -69,9 +71,11 @@ export function issuesStore(db: Db) {
      * writeDependencies). Decided in the same transaction, so an agent starting meanwhile is seen:
      * the kind is fixed once any agent has started on the issue, the issue as it would be must stand
      * (verifierProblem), and so must the plan, among the issues as they are now (plan.ts), and a new
-     * parent must be one no agent holds.
+     * parent must be one no agent holds. What it changed of the plan is logged at `at` (log-event.ts
+     * planChanges), after every other write of the edit: the store's one plan writer is its one
+     * plan logger, so no edit goes unlogged and none is logged that didn't apply.
      */
-    updateIssue(coordinatorId: CoordinatorId, id: IssueId, edit: IssueEdit, { requireUnheld, closes }: { requireUnheld: boolean; closes: Closes }): { issue: Issue } | { refused: string } {
+    updateIssue(coordinatorId: CoordinatorId, id: IssueId, edit: IssueEdit, { requireUnheld, closes, at }: { requireUnheld: boolean; closes: Closes; at: number }): { issue: Issue } | { refused: string } {
       return db().transaction(() => {
         const now = issues(coordinatorId, id)[0];
         if (now === undefined) return { refused: `You have no issue ${id}.` };
@@ -92,6 +96,7 @@ export function issuesStore(db: Db) {
           .run(next.kind, next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, next.parentId, coordinatorId, id);
         if (dependsOn !== undefined) writeDependencies(db, next, closes);
         if (decision !== undefined) db().prepare("INSERT INTO issue_decisions (coordinator_id, issue_id, text, at) VALUES (?, ?, ?, ?)").run(coordinatorId, id, decision.text, decision.at);
+        appendLog(db, coordinatorId, id, at, planChanges(now, next));
         return { issue: next };
       })();
     },

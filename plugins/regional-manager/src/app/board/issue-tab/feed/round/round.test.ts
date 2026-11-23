@@ -114,7 +114,7 @@ test("a finding reads as its place, severity and claim, its path byte for byte a
 test("before its verdict returns, a round's findings show with no triage; its rail and, folded, its line count the findings and none confirmed", async () => {
   const verifying: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.review.state === "reported"
-      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, confirmed: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null }, outcomeAt: null, inFlight: true } }
+      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, confirmed: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null, step: null }, outcome: null, inFlight: true } }
       : entry,
   );
   const running = { ...bodyOf(3), verdict: { state: "running", verifierThreadId: "thr_verifier_3" }, findings: bodyOf(3).findings.map((finding) => ({ ...finding, triage: null })) } satisfies ReturnType<typeof bodyOf>;
@@ -134,7 +134,7 @@ test("before its verdict returns, a round's findings show with no triage; its ra
 });
 
 test("a review that found nothing says so, on its rail and on its folded line", async () => {
-  const clean: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "reported", findings: 0, confirmed: 0, step: { at: 5_100 } } } } : entry));
+  const clean: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "reported", findings: 0, confirmed: 0, step: { at: 5_100, moved: null } } } } : entry));
   await withFeedCss(async () => {
     const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: clean }), bodies: () => ({ ...bodyOf(3), findings: [] }) });
     const { card, head } = rounds(tab());
@@ -287,7 +287,7 @@ test("the grid's head says the latest round's own score, so one all of whose cri
 test("a round nothing verified, as with verification off, shows no reviewer step, no verifier step and no outcome line; its score says it", async () => {
   // why this shape: with verification off a handoff gets no review and a waived verdict (server/review/review.test.ts).
   const waived: Entry[] = FEED.entries.map((entry) =>
-    entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "none" }, verdict: { outcome: { kind: "unverified" }, results: [], fixRound: null }, inFlight: false } } : entry,
+    entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "none" }, verdict: { outcome: { kind: "unverified" }, results: [], fixRound: null, step: null }, inFlight: false } } : entry,
   );
   const unverified = { ...bodyOf(3), verdict: { state: "waived" }, findings: [] } satisfies ReturnType<typeof bodyOf>;
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: waived }), bodies: () => unverified });
@@ -315,7 +315,7 @@ test("a long history keeps the criterion's words: its cells wrap, six to a line,
 });
 
 test("a missed review says it was missed in its step, with why once the round's body is read", async () => {
-  const missed: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "missed", step: { at: 5_100 } } } } : entry));
+  const missed: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "missed", step: { at: 5_100, moved: null } } } } : entry));
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: missed }), bodies: () => ({ ...bodyOf(3), findings: [], reviewMissed: "no independent reviewer model" }) });
   assert.ok(await rounds(tab()).card(3).findByText(/^Review missed: no independent reviewer model/));
 });

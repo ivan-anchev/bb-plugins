@@ -1,18 +1,30 @@
 // A machine event in an issue's feed as a quiet line: who did it, when the entry names someone
-// (entry.ts actorOf), what happened, and when.
+// (entry.ts actorOf), what happened, the status it moved the issue to, and when; or a status move no
+// moment explains, alone.
 import type { ReactNode } from "react";
 import { actorOf, type Actor, type Entry } from "../../../../model/feed/entry.ts";
+import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
-import { AgentName, When, type FeedAgents } from "./byline.tsx";
+import { AgentName, MovedTo, Status, When, type FeedAgents } from "./byline.tsx";
 
-/** The entries drawn as lines: everything but rounds and decisions, which are cards. */
-type LineEntry = Exclude<Entry, { kind: "round" | "decision" }>;
+/** The entries drawn as lines with a who and a what: everything but rounds and decisions, which are cards, and a status move alone. */
+type LineEntry = Exclude<Entry, { kind: "round" | "decision" | "moved" }>;
 
 export function EntryLine({ entry, agents }: { entry: LineEntry; agents: FeedAgents }) {
   return (
     <p className="rmi-line">
       <Who actor={actorOf(entry)} agents={agents} />
-      {whatOf(entry, agents)} <When at={entry.at} />
+      {whatOf(entry, agents)}
+      <MovedTo status={entry.moved} /> <When at={entry.at} />
+    </p>
+  );
+}
+
+/** A status the issue moved to that no moment explains, as a parent rolling up or a turn ending. */
+export function MovedLine({ entry }: { entry: Extract<Entry, { kind: "moved" }> }) {
+  return (
+    <p className="rmi-line">
+      <Status status={entry.status} /> <When at={entry.at} />
     </p>
   );
 }
@@ -60,10 +72,40 @@ function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
       return <ThreadSaid event={entry.event} />;
     case "unblocked":
       return `Unblocked: ${entry.by}, the last of its dependencies, closed`;
+    case "logged":
+      return loggedText(entry.event);
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
       entry satisfies never;
       return null;
+  }
+}
+
+/** A change to the plan, by the manager, or where the log began. */
+function loggedText(event: Extract<Entry, { kind: "logged" }>["event"]): string {
+  switch (event.kind) {
+    case "edited":
+      // why the fields' own names: they are the words the feed names them by (log-event.ts).
+      return `edited ${event.fields.join(", ")}`;
+    case "rested":
+      // why a setting, not a move: where it rests shows only while no agent's work or sub-issue places it; what it moved to is the status observed (its glyph).
+      return `set it to rest in ${STATUS_LABELS[event.rest]}`;
+    case "closed":
+      return event.as === "canceled" ? "canceled it" : "accepted it as Done";
+    case "reopened":
+      return "reopened it";
+    case "parent-set":
+      return event.parentId === null ? "made it top-level" : `set its parent to ${event.parentId}`;
+    case "dependency-added":
+      return `made it depend on ${event.on}`;
+    case "dependency-removed":
+      return `removed its dependency on ${event.on}`;
+    case "log-began":
+      return "Edits and status moves are kept from here; verdict times above are as announced or approximate";
+    default:
+      // why nothing: the server may be newer than this bundle for a moment after an update.
+      event satisfies never;
+      return "";
   }
 }
 

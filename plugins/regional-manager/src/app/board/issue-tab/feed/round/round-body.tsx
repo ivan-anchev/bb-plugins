@@ -6,14 +6,14 @@ import { experimental_useRpcKeyedQuery, Markdown } from "@get-bb/plugin-sdk/app"
 import { useId, type ReactNode } from "react";
 import { coordinatorContract as contract, roundBodyKey } from "../../../../../contract.ts";
 import type { HandoffBody } from "../../../../../model/agent/handoff.ts";
-import type { Round, RoundBody as Body, RoundKey } from "../../../../../model/feed/round.ts";
+import type { Round, RoundBody as Body, RoundKey, Step as StepAt } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { Outcome } from "../../../../../model/verdict/verdict.ts";
 import { ReadFailure } from "../../../../ui/read-failure.tsx";
 import { ThreadLink } from "../../../issue/thread-link.tsx";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
-import { AgentName, When, type FeedAgents } from "../byline.tsx";
+import { AgentName, MovedTo, When, type FeedAgents } from "../byline.tsx";
 import { Findings, findingsText } from "./findings.tsx";
 import { Score } from "./score.tsx";
 import { VerdictStep } from "./verdict-step.tsx";
@@ -54,7 +54,7 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
             title={
               <>
                 <ThreadLink name="Verifier" threadId={verifierThreadOf(loaded)} /> <Score round={round} />
-                <VerdictTime body={loaded} />
+                {round.verdict.step !== null && <StepTime step={round.verdict.step} />}
               </>
             }
           >
@@ -85,13 +85,14 @@ function HandedStep({ round, agents, handoff }: { round: Round; agents: FeedAgen
   const { by } = round;
   switch (by.kind) {
     case "final":
-      return <Step title={<>Final check on {by.defaultBranch} <When at={round.at} /></>} />;
+      return <Step title={<>Final check on {by.defaultBranch}<StepTime step={round.handed} /></>} />;
     case "agent":
       return (
         <Step
           title={
             <>
-              <AgentName agentId={by.agentId} agents={agents} /> {handedText(by.status)} <When at={round.at} />
+              <AgentName agentId={by.agentId} agents={agents} /> {handedText(by.status)}
+              <StepTime step={round.handed} />
             </>
           }
         >
@@ -131,7 +132,8 @@ function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state
         <Step
           title={
             <>
-              Review missed{body?.reviewMissed != null && `: ${body.reviewMissed}`} <When at={review.step.at} />
+              Review missed{body?.reviewMissed != null && `: ${body.reviewMissed}`}
+              <StepTime step={review.step} />
             </>
           }
         />
@@ -141,7 +143,8 @@ function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state
         <Step
           title={
             <>
-              Reviewer · {findingsText(review)} <When at={review.step.at} />
+              Reviewer · {findingsText(review)}
+              <StepTime step={review.step} />
             </>
           }
         >
@@ -167,7 +170,7 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
     <p className="rmi-outcome" data-result={verdict.outcome.kind}>
       {/* why one span: a sentence long enough to wrap wraps within itself, not as whole flex items. */}
       <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} confirmed={confirmedOf(round.review)} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
-      {round.outcomeAt !== null && <When at={round.outcomeAt} />}
+      {round.outcome !== null && <StepTime step={round.outcome} />}
     </p>
   );
 }
@@ -220,11 +223,12 @@ const OUTCOME: Record<Outcome, string> = {
   "waiting-for-ci": "Waiting for CI",
 };
 
-/** When the verdict returned or couldn't be had, once the body is read; nothing before. */
-function VerdictTime({ body }: { body: Body | null }) {
-  const verdict = body?.verdict ?? null;
-  return verdict !== null && (verdict.state === "returned" || verdict.state === "could-not-run") ? <When at={verdict.at} /> : null;
-}
+/** A step's status move, if any, then its time: " · ◑ Verifying 12:04". */
+const StepTime = ({ step }: { step: StepAt }) => (
+  <>
+    <MovedTo status={step.moved} /> <When at={step.at} />
+  </>
+);
 
 const verifierThreadOf = (body: Body | null): string | null => {
   const verdict = body?.verdict ?? null;

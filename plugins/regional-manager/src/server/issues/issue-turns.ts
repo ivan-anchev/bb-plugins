@@ -20,6 +20,7 @@
 // issue, an agent's or a verifier's, finds it running in bb and stops it first.
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { settlesWithin } from "../settles-within.ts";
 
 /** What an operation that didn't get its issue's turn returns: it did nothing, and can be asked again. */
 export type Busy = { busy: string };
@@ -68,15 +69,4 @@ export function issueTurns(disposal: AbortSignal, waitMs = WAIT_MS) {
     runIfFree: <T>(coordinatorId: CoordinatorId, issueId: IssueId, operation: () => Promise<T>): Promise<T | Busy> =>
       tails.has(keyOf(coordinatorId, issueId)) ? Promise.resolve(busy(issueId)) : take(coordinatorId, issueId, operation, async () => true),
   };
-}
-
-/** Whether `promise` settles within `ms`. */
-async function settlesWithin(promise: Promise<void>, ms: number): Promise<boolean> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<false>((resolve) => (timer = setTimeout(() => resolve(false), ms)));
-  try {
-    return await Promise.race([promise.then(() => true), late]);
-  } finally {
-    clearTimeout(timer);
-  }
 }

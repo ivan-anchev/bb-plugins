@@ -6,6 +6,7 @@ import { handoffIdSchema, type Handoff } from "../../model/agent/handoff.ts";
 import { issueKeyOf, issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import { checkIdSchema } from "../../model/verdict/check.ts";
 import { issueViews } from "../../model/issue/status.ts";
+import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { Avatar } from "../../model/profile/avatar.ts";
 import type { NewProfile } from "../../model/profile/profile.ts";
@@ -23,9 +24,9 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
       .prepare("SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all(type)
       .map((row) => z.object({ name: z.string() }).parse(row).name);
-  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_relations", "issue_writes", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  assert.deepEqual(names("table"), ["agents", "checks", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_log", "issue_relations", "issue_writes", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
   const facts = ["agents", "checks", "decisions", "handoffs", "issue_relations", "issues", "pr_snapshots"];
-  const feeds = ["agents_issue_id", "checks_issue_id", "handoffs_issue_id", "issue_decisions_issue_id", "issue_relations_depends_on", "issue_relations_issue_id", "issues_id"];
+  const feeds = ["agents_issue_id", "checks_issue_id", "handoffs_issue_id", "issue_decisions_issue_id", "issue_log_issue_id", "issue_relations_depends_on", "issue_relations_issue_id", "issues_id"];
   const writes = (tables: string[]) => tables.flatMap((table) => ["deleted", "inserted", "updated"].map((write) => `${table}_${write}`));
   assert.deepEqual(
     names("trigger"),
@@ -43,6 +44,8 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
     "handoffs_of_agent",
     "handoffs_of_issue",
     "issue_decisions_of_issue",
+    "issue_log_of_issue",
+    "issue_log_statuses",
     "issue_relations_blocks",
     "issues_of_parent",
     "reminders_due",
@@ -201,8 +204,10 @@ test("a regional manager is created not started, with its name and no project; i
   assert.equal(store.roleFor("thr_b", "ticket-1"), null);
 });
 
-test("removing a regional manager removes everything it owns, and nothing of another's", () => {
-  const { store } = freshStore();
+const WEB_1 = issueIdSchema.parse("WEB-1");
+
+test("removing a regional manager removes everything it owns, and nothing of another's; a removal that fails part way removes nothing, and the same removal then succeeds", () => {
+  const { db, store } = freshStore();
   for (const manager of [MANAGER, OTHER_MANAGER]) {
     const { id } = filedIssue(store, manager, newIssue(), 2_000);
     const agentId = startAgent(store, id, `agent-of-${manager}`, manager);
@@ -216,8 +221,19 @@ test("removing a regional manager removes everything it owns, and nothing of ano
     store.savePrRead(manager, "bb/retries", { issueId: id, agentId }, null, null, 3_000);
     filedIssue(store, manager, { ...newIssue(), dependsOn: [id] }, 3_000);
     store.recordUnblocked(manager, issueViews(store.issues(manager).map((issue) => ({ issue, holder: null, ended: null, pr: null, openDecision: false, finalCheck: null, verifierAsks: false }))), 3_000);
+    store.updateIssue(manager, id, { title: "Retries, with jitter" }, { requireUnheld: false, closes: new Map(), at: 3_000 });
   }
 
+  // why the issues: they are deleted after their log, so the failure comes once the log is gone.
+  const restore = failWrites(db, "DELETE", "issues");
+  assert.throws(() => store.removeCoordinator(MANAGER), /forced failure/);
+  assert.equal(store.issues(MANAGER).length, 2, "its issues stay");
+  assert.deepEqual(store.logOf(MANAGER, WEB_1), [{ at: 3_000, event: { kind: "edited", fields: ["title"] } }], "and their log with them");
+  assert.equal(store.agents(MANAGER).length, 1);
+  assert.equal(store.decisions(MANAGER).length, 1);
+  assert.equal(store.roleOfThread("thr_manager_1")?.kind, "coordinator");
+
+  restore();
   store.removeCoordinator(MANAGER);
 
   assert.equal(store.startOf(MANAGER), null);
@@ -228,13 +244,13 @@ test("removing a regional manager removes everything it owns, and nothing of ano
   assert.equal(store.roleOfThread("thr_manager_1"), null);
   assert.equal(store.roleOfThread(`thr_agent-of-${MANAGER}`), null);
   assert.equal(store.prOfBranch(MANAGER, "bb/retries"), null);
-  assert.equal(store.hasDependencies(MANAGER), false);
+  assert.deepEqual(store.logOf(MANAGER, WEB_1), []);
   assert.deepEqual(store.coordinatorsToRing(), [OTHER_MANAGER]);
 
   assert.equal(store.issues(OTHER_MANAGER).length, 2);
   assert.equal(store.agents(OTHER_MANAGER).length, 1);
   assert.equal(store.decisions(OTHER_MANAGER).length, 1);
-  assert.equal(store.hasDependencies(OTHER_MANAGER), true);
+  assert.deepEqual(store.logOf(OTHER_MANAGER, WEB_1), [{ at: 3_000, event: { kind: "edited", fields: ["title"] } }]);
   assert.equal(store.roleOfThread("thr_manager_2")?.kind, "coordinator");
   assert.deepEqual([store.factWrites(MANAGER), store.factWrites(OTHER_MANAGER) > 0], [0, true]);
   assert.deepEqual([store.issueWrites(MANAGER).size, store.issueWrites(OTHER_MANAGER).size], [0, 2]);
@@ -254,7 +270,7 @@ test("every write to what an issue's view is read from counts for its regional m
     write();
     assert.equal(at(), before, `${what} counts nothing`);
   };
-  const unheld = { requireUnheld: false, closes: new Map() };
+  const unheld = { requireUnheld: false, closes: new Map(), at: 3_000 };
 
   const i1 = counted("an issue filed", () => filedIssue(store, MANAGER, newIssue(), 2_000).id);
   const i2 = counted("an issue filed with a dependency", () => filedIssue(store, MANAGER, newIssue({ dependsOn: [i1] }), 2_000).id);
@@ -377,7 +393,7 @@ test("every write to what an issue's feed reads counts for that issue as it comm
   const agentId = startAgent(store, bbp19, "agent-1");
   const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
   const done = (at: number): Handoff => ({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: bbp19, agentId, at, turnSeq: at, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } });
-  const unheld = { requireUnheld: false, closes: new Map() };
+  const unheld = { requireUnheld: false, closes: new Map(), at: 3_000 };
 
   assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" })), [bbp19], "a handoff");
   assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { dependsOn: { add: [bbp7], remove: [] } }, unheld)).sort(), [bbp19, bbp7].sort(), "a dependency");
@@ -385,6 +401,10 @@ test("every write to what an issue's feed reads counts for that issue as it comm
   assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { decision: { text: "SQS", at: 3_200 } }, unheld)), [bbp19], "a decision recorded on it");
   assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "unblocked", issueId: bbp19, by: bbp7, closedAs: "done" }, 3_300)), [bbp19], "an inbox event naming it");
   assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "verification-toggled", verify: false }, 3_400)), [], "an event naming no issue");
+  const facts = store.factWrites(MANAGER);
+  const seen = [{ issue: store.issue(MANAGER, bbp7) ?? assert.fail("no BBP-7"), status: "todo" as const }];
+  assert.deepEqual(moved(() => store.observeStatuses(MANAGER, seen, 3_450)), [bbp7], "a status observed in its log");
+  assert.equal(store.factWrites(MANAGER), facts, "a status observed is no fact a view is read from, so it never overtakes the read it was observed from");
   assert.deepEqual(moved(() => store.insertReminder(MANAGER, { note: "Look again", dueAt: 9_000, everyMs: null })), [], "a reminder");
   assert.deepEqual(moved(() => filedIssue(store, OTHER_MANAGER, newIssue(), 3_500)), [], "another manager's issue");
 
