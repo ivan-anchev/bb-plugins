@@ -26,7 +26,7 @@ import { createFeedReader } from "./feed/feed-reader.ts";
 import { feedHandlers } from "./feed/feed-rpc.ts";
 import { issueTagPublisher } from "./feed/issue-tags.ts";
 import { createBoard } from "./board/board.ts";
-import type { CatalogModel } from "../model/execution.ts";
+import type { CatalogModel } from "../model/agent/execution.ts";
 import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
 import { PLACEHOLDER, upgradeFrom030 } from "./manager/held-managers.ts";
