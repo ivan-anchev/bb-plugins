@@ -4,6 +4,7 @@ import type { z } from "zod";
 import type { Agent } from "../../model/agent/agent.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
 import type { Busy } from "../issues/issue-turns.ts";
+import type { Store } from "../store/store.ts";
 
 /** The part of bb the tools use: registering a tool whose parameters are a zod schema. */
 export type ToolsBb = {
@@ -40,7 +41,7 @@ export function forManager<Input>(
 }
 
 /** An agent thread's agent as stored now. why throw: an agent's role is inserted with its agent, in one transaction. */
-export function agentOf(store: { agent(coordinatorId: CoordinatorId, agentId: Agent["id"]): Agent | null }, role: Extract<Role, { kind: "agent" }>): Agent {
+export function agentOf(store: Pick<Store, "agent">, role: Extract<Role, { kind: "agent" }>): Agent {
   const agent = store.agent(role.coordinatorId, role.agentId);
   if (agent === null) throw new Error(`The agent ${role.agentId} of ${role.coordinatorId} is missing.`);
   return agent;

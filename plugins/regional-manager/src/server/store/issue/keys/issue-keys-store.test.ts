@@ -18,7 +18,8 @@ const CLEAN: CheckoutRead = { kind: "read", branch: null, checkout: { headSha: S
  * no issue key: a parent i1 with a sub-issue i2, which i3 depends on; an agent on i2 whose done
  * handoff ("Retries land on i1") is checked by a verifier, a final check of i1 judging i2's merged
  * work, a question to the user and a recorded decision on i3, i3's log of a dependency on i1 added
- * and removed and of its status, and the event announcing i3 unblocked by i2. OTHER_MANAGER keeps its key, WEB, and its issue WEB-1.
+ * and removed and of its status, the event announcing i3 unblocked by i2, and the user's comment on i3
+ * with the manager's reply. OTHER_MANAGER keeps its key, WEB, and its issue WEB-1.
  */
 function storedBy050() {
   const { db, store } = freshStore();
@@ -38,6 +39,8 @@ function storedBy050() {
   }
   store.observeStatuses(MANAGER, [{ issue: dependent, status: "todo" }], 4_400);
   store.insertEvent(MANAGER, { kind: "unblocked", issueId: dependent.id, by: sub.id, closedAs: "done" }, 5_000);
+  const asked = store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "user" }, text: "Why three?", replyTo: null }, 5_100) ?? assert.fail("not posted");
+  store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "manager" }, text: "It is enough.", replyTo: asked }, 5_200);
   filedIssue(store, OTHER_MANAGER, newIssue(), 2_000);
   asBefore(db);
   return { db, store };
@@ -94,7 +97,18 @@ test("keying a regional manager renames every issue id it stores to KEY-N, the n
     ["Which queue?", "Retry three times"],
     "questions put to the user and decisions recorded",
   );
-  assert.deepEqual(store.unannounced(MANAGER).map(({ event }) => event), [{ kind: "unblocked", issueId: "BBP-3", by: "BBP-2", closedAs: "done" }], "inbox events");
+  assert.deepEqual(
+    store.unannounced(MANAGER).map(({ event }) => event),
+    [
+      { kind: "unblocked", issueId: "BBP-3", by: "BBP-2", closedAs: "done" },
+      { kind: "comment-to-you", issueId: "BBP-3", commentId: "m1" },
+    ],
+    "inbox events",
+  );
+  assert.deepEqual(store.commentsOf(MANAGER, id("BBP-3")).map(({ id: commentId, issueId, replyTo }) => ({ commentId, issueId, replyTo })), [
+    { commentId: "m1", issueId: "BBP-3", replyTo: null },
+    { commentId: "m2", issueId: "BBP-3", replyTo: "m1" },
+  ], "comments");
   assert.deepEqual(
     store.logOf(MANAGER, id("BBP-3")).map(({ event }) => event),
     [{ kind: "dependency-added", on: "BBP-1" }, { kind: "dependency-removed", on: "BBP-1" }, { kind: "status", status: "todo" }],
