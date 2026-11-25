@@ -36,6 +36,17 @@ export const reviewFindingSchema = z.object({
 });
 export type ReviewFinding = z.infer<typeof reviewFindingSchema>;
 
+/** How many findings a reviewer reports at most, its own, in one review. */
+export const MAX_REPORTED = 50;
+
+/**
+ * How many findings a check's verifier triages at most: a review's own and the earlier blocking
+ * findings it answered not fixed, together. why its own limit: a round's blocking findings, each
+ * answered and possibly carried on as unfixed, are at most this many, so every tool that takes them
+ * by number takes this many (issue_review's earlier, issue_verdict's triage).
+ */
+export const MAX_TRIAGED = 100;
+
 /**
  * A later round's reviewer's answer on one of the earlier round's blocking findings, in their
  * order: whether it is fixed, and what it saw. One answered not fixed is also stored as an
@@ -91,7 +102,7 @@ export const ANCHOR_RULE = `A must-fix blocks the work only when it breaks one o
 
 /** What a missed finding does, in the one wording each place a reviewer or a verifier reads gives it. */
 export const MISSED_RULE =
-  "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so the verifier never anchors it.";
+  "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so the verifier never anchors it. A missed must-fix that holds is downgraded, its missed origin the reason even when it breaks one of the five; a missed should-fix or nit that holds is confirmed or downgraded as any other.";
 
 /**
  * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
@@ -228,8 +239,16 @@ export function triaged(findings: readonly ReviewFinding[], triage: readonly Tri
 /** A must-fix the verifier confirmed, as verdicts from before the anchor rule stored one. */
 const isLegacyConfirmed = ({ severity }: ReviewFinding, { result }: Triage): boolean => severity === "must-fix" && result === "confirmed";
 
-/** A finding in a line: its place, its severity and, when it isn't new, its origin, then its claim. */
-export const findingText = (finding: ReviewFinding): string => `${placeText(finding)} (${finding.severity}${finding.origin === "new" ? "" : `, ${finding.origin}`}): ${finding.claim}`;
+/**
+ * A finding in a line: its place, its severity and, when it isn't new, its origin, then its claim,
+ * the claim's later lines indented by `indent` to sit under it in a list. why only the claim's: the
+ * place keeps its path byte for byte, a newline in it included.
+ */
+export const findingText = (finding: ReviewFinding, indent = ""): string =>
+  `${placeText(finding)} (${finding.severity}${finding.origin === "new" ? "" : `, ${finding.origin}`}): ${finding.claim.replaceAll("\n", `\n${indent}`)}`;
+
+/** Findings as a numbered list, from 1, as issue_review's earlier and issue_verdict's triage take them (findingText). */
+export const numberedText = (findings: readonly ReviewFinding[]): string => findings.map((finding, i) => `${i + 1}. ${findingText(finding, "   ")}`).join("\n");
 
 /** Where in the diff a finding is, as code: its file, and its line when it names one. */
 export const placeText = ({ file, line }: Pick<ReviewFinding, "file" | "line">): string => `\`${file}${line === null ? "" : `:${line}`}\``;

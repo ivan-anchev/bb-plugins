@@ -9,7 +9,7 @@ import type { IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
-import { findingText, MISSED_RULE, TRIAGE_RULE, type Review, type ReviewFinding } from "../../model/verdict/review.ts";
+import { findingText, MISSED_RULE, numberedText, TRIAGE_RULE, type Review } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import { decisionsPart, type Scope } from "../review/checker-brief.ts";
@@ -77,29 +77,34 @@ function reviewPart(review: Review, scope: Scope): string[] {
     case "missed":
       if (scope.kind === "first" || list.length === 0) return [`## The review\n\nNo review was had: ${review.reason}. There is nothing to triage: pass triage as [].`];
       return [
-        `## Round ${scope.round}'s blocking findings\n\nNo review was had: ${review.reason}. So each finding that failed round ${scope.round}'s verdict stands as unfixed until you check it here: triage every one in issue_verdict by its number. ${TRIAGE_RULE}\n\n${numbered(list)}`,
+        `## Round ${scope.round}'s blocking findings\n\nNo review was had: ${review.reason}. So each finding that failed round ${scope.round}'s verdict stands as unfixed until you check it here: triage every one in issue_verdict by its number. ${TRIAGE_RULE}\n\n${numberedText(list)}`,
       ];
     case "reported":
-      if (list.length === 0) return [`## The review\n\n${coveredText(scope)} and found nothing. There is nothing to triage: pass triage as [].${fixedPart(review, scope)}`];
+      if (list.length === 0) return [`## The review\n\n${coveredText(scope, "found nothing")} There is nothing to triage: pass triage as [].${fixedPart(review, scope)}`];
       return [
-        `## The reviewer's findings\n\n${coveredText(scope)} and claims these. They are claims, not facts: check each one yourself here, and triage every one in issue_verdict by its number. It reviewed as the regional manager's CREW.md instructs reviewers: read CREW.md with crew_memory_read when a finding cites it. ${TRIAGE_RULE}${originsText(scope)}\n\n${numbered(list)}${fixedPart(review, scope)}`,
+        `## The reviewer's findings\n\n${coveredText(scope, "claims these")} They are claims, not facts: check each one yourself here, and triage every one in issue_verdict by its number. It reviewed as the regional manager's CREW.md instructs reviewers: read CREW.md with crew_memory_read when a finding cites it. ${TRIAGE_RULE}${originsText(scope)}\n\n${numberedText(list)}${fixedPart(review, scope)}`,
       ];
     default:
       return review satisfies never;
   }
 }
 
-/** What the reviewer read, as a sentence's start: the whole diff on a first round; after a reviewed round, only the change since its commit. */
-function coveredText(scope: Scope): string {
-  if (scope.kind === "first") return "An independent reviewer read the diff before you";
-  return `An independent reviewer read only the change since round ${scope.round}, the last round reviewed, at \`${scope.base.subject.headSha}\`, in the files this branch changes,`;
+/**
+ * What the reviewer was asked to read, and what it reported (`reported`, "claims these"): the whole
+ * diff on a first round; after a reviewed round, only the change since its commit, or the whole diff
+ * when that commit isn't in this environment. why both, unsaid which: the plugin doesn't see which
+ * the reviewer ran.
+ */
+function coveredText(scope: Scope, reported: string): string {
+  if (scope.kind === "first") return `An independent reviewer read the diff before you and ${reported}.`;
+  return `An independent reviewer read the diff before you and ${reported}. It was asked to review only the change since round ${scope.round}, the last round reviewed, at \`${scope.base.subject.headSha}\`, in the files this branch changes; or, when that commit isn't in this environment, the whole diff, marking every finding new.`;
 }
 
 /** After a reviewed round, what each finding's origin means; nothing on a first round, whose findings are all new. */
 const originsText = (scope: Scope): string =>
   scope.kind === "first"
     ? ""
-    : ` A finding marked unfixed is one of round ${scope.round}'s blocking findings the reviewer says this diff doesn't fix; one marked missed sits on code round ${scope.round} reviewed unchanged; every other one is new, on code changed since. ${MISSED_RULE}`;
+    : ` A finding marked unfixed is one of round ${scope.round}'s blocking findings the reviewer says this diff doesn't fix; one marked missed sits on code round ${scope.round} reviewed unchanged; every other one is new, on code changed since, or anywhere when it reviewed the whole diff. ${MISSED_RULE}`;
 
 /** After a reviewed round, the blocking findings the reviewer answered fixed, with its note, as context: they are not triaged. */
 function fixedPart(review: Extract<Review, { state: "reported" }>, scope: Scope): string {
@@ -108,13 +113,10 @@ function fixedPart(review: Extract<Review, { state: "reported" }>, scope: Scope)
     const finding = scope.blocking[i];
     // why throw: issue_review stores one answer per blocking finding, in their order (review.ts reportOf).
     if (finding === undefined) throw new Error(`Round ${scope.round} has no blocking finding ${i + 1} to answer.`);
-    return fixed ? [`- ${findingText(finding).replaceAll("\n", "\n  ")}\n  The reviewer: ${note}`] : [];
+    return fixed ? [`- ${findingText(finding, "  ")}\n  The reviewer: ${note}`] : [];
   });
   return fixed.length === 0 ? "" : `\n\nRound ${scope.round}'s blocking findings the reviewer answered fixed, for context; they are not yours to triage:\n\n${fixed.join("\n")}`;
 }
-
-/** The findings, numbered from 1 as issue_verdict takes them, each in a line (review.ts findingText). */
-const numbered = (findings: readonly ReviewFinding[]): string => findings.map((finding, i) => `${i + 1}. ${findingText(finding).replaceAll("\n", "\n   ")}`).join("\n");
 
 const criteriaPart = (criteria: readonly string[]): string => `## Done-criteria\n\n${criteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`;
 

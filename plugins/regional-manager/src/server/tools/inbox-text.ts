@@ -429,7 +429,7 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
 function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
   const all = verdict.triage;
   const held = all.filter(holds).length;
-  const each = all.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n");
+  const each = all.map((finding) => `- ${findingText(finding, "  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n");
   const triaged = (lead: string): string[] => [[`${lead}; ${triageTotals(all)}.`, ...(held === 0 ? [] : [heldSent(verdict)])].join(" "), each];
   if (review.state === "missed") {
     const missed = `Review: no review was had, as ${review.reason}`;

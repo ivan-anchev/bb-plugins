@@ -28,9 +28,12 @@ export function deltaOf(earlier: readonly Check[]): Delta {
   const reviewed = earlier.filter(isReviewed);
   const base = reviewed.at(-1);
   if (base === undefined) return { kind: "first" };
-  const blocking = heldFindings(base.verdict).failing;
+  const blocking = blockingOf(base);
   return { kind: "after", base, blocking, known: knownOf(reviewed, blocking) };
 }
+
+/** What triageList reads of a delta: whether a round before was reviewed, and that round's blocking findings. */
+type Blocking = { kind: "first" } | { kind: "after"; blocking: readonly ReviewFinding[] };
 
 /**
  * The findings a check's verifier triages, in the order issue_verdict numbers them, for either
@@ -39,7 +42,7 @@ export function deltaOf(earlier: readonly Check[]): Delta {
  * unfixed, as a "not fixed" answer makes them, so a stalled reviewer drops no blocker. The one list
  * the verifier's first message, issue_verdict and the store read.
  */
-export function triageList(review: Review, delta: Delta): ReviewFinding[] {
+export function triageList(review: Review, delta: Blocking): ReviewFinding[] {
   switch (review.state) {
     case "reported":
       return review.findings;
@@ -58,31 +61,43 @@ export function triageList(review: Review, delta: Delta): ReviewFinding[] {
 export const unfixed = ({ file, line, severity, claim }: ReviewFinding): ReviewFinding => ({ file, line, severity, claim, origin: "unfixed" });
 
 /**
- * An issue's checks as stored (`stored`, oldest first), each read whole: its verdict joined with the
- * list its verifier triaged (triageList), on the delta of the checks before it. why a missed
- * review's verdict that triaged nothing reads with no list: one returned before the delta existed
- * was given no earlier findings, and issue_verdict refuses a new one that skips any.
+ * An issue's checks as stored (`stored`, oldest first), each read whole, in one pass: its verdict
+ * joined with the list its verifier triaged (triageList), on the blocking findings of the latest
+ * reviewed round before it, the base deltaOf names. why a missed review's verdict that triaged
+ * nothing reads with no list: one returned before the delta existed was given no earlier findings,
+ * and issue_verdict refuses a new one that skips any.
  */
 export function readInOrder(stored: readonly StoredCheck[]): Check[] {
   const read: Check[] = [];
+  let base: ReviewedCheck | null = null;
   for (const check of stored) {
     const { review, verdict } = check;
-    const list = review.state === "missed" && verdict.state === "returned" && verdict.triage.length === 0 ? [] : triageList(review, deltaOf(read));
-    read.push({ ...check, verdict: withReview(verdict, list) });
+    const legacy = review.state === "missed" && verdict.state === "returned" && verdict.triage.length === 0;
+    const list = legacy ? [] : triageList(review, base === null ? { kind: "first" } : { kind: "after", blocking: blockingOf(base) });
+    const joined: Check = { ...check, verdict: withReview(verdict, list) };
+    read.push(joined);
+    if (isReviewed(joined)) base = joined;
   }
   return read;
 }
 
 const isReviewed = (check: Check): check is ReviewedCheck => check.subject.kind === "handoff" && check.review.state === "reported" && check.verdict.state === "returned";
 
+/** The findings that failed a reviewed round's verdict. */
+const blockingOf = (base: ReviewedCheck): Triaged[] => heldFindings(base.verdict).failing;
+
 /** Every finding the reviewed rounds' verifiers held, but the blocking ones, each once, oldest first. */
 function knownOf(reviewed: readonly ReviewedCheck[], blocking: readonly Triaged[]): Triaged[] {
-  const known: Triaged[] = [];
-  for (const finding of reviewed.flatMap(({ verdict }) => verdict.triage.filter(holds))) {
-    if (![...blocking, ...known].some((seen) => sameFinding(seen, finding))) known.push(finding);
-  }
-  return known;
+  const seen = new Set(blocking.map(findingKey));
+  return reviewed.flatMap(({ verdict }) =>
+    verdict.triage.filter((finding) => {
+      const key = findingKey(finding);
+      if (!holds(finding) || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }),
+  );
 }
 
-/** Whether two findings are one: the same place and claim, byte for byte. */
-const sameFinding = (a: ReviewFinding, b: ReviewFinding): boolean => a.file === b.file && a.line === b.line && a.claim === b.claim;
+/** What makes two findings one: the same place and claim, byte for byte. why JSON: it keeps every part apart, whatever bytes a path or claim holds. */
+const findingKey = ({ file, line, claim }: ReviewFinding): string => JSON.stringify([file, line, claim]);

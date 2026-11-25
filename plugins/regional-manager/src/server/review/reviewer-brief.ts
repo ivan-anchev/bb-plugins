@@ -8,7 +8,7 @@ import type { IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { MemoryText } from "../../model/memory-file.ts";
 import type { HandoffCheck } from "../../model/verdict/check.ts";
-import { ANCHOR_RULE, findingText, MISSED_RULE, type ReviewFinding } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, findingText, MISSED_RULE, numberedText } from "../../model/verdict/review.ts";
 import { crewSection } from "../agents/brief.ts";
 import { decisionsPart, type Scope } from "./checker-brief.ts";
 import { REVIEW } from "./review-tool.ts";
@@ -46,8 +46,9 @@ function wholeDiffText({ headSha, prUrl, defaultBranch }: Diff): string {
 
 /**
  * A later round's diff: only the change since round `round`'s commit, in the files this branch
- * changes, so commits merged in from the default branch are not reviewed; and what to do when that
- * commit isn't in this environment, as after a handover to a new branch.
+ * changes, each hunk checked against the branch's own diff, so changes merged in from the default
+ * branch are not reviewed; and what to do when that commit isn't in this environment, as after a
+ * handover to a new branch.
  */
 function deltaText({ headSha, prUrl, defaultBranch }: Diff, { round, base }: After): string {
   const baseSha = base.subject.headSha;
@@ -55,8 +56,10 @@ function deltaText({ headSha, prUrl, defaultBranch }: Diff, { round, base }: Aft
     defaultBranch === null
       ? "the files this branch changes against the default branch"
       : `the files this branch changes (\`git diff origin/${defaultBranch}...${headSha} --stat\`)`;
+  const own = defaultBranch === null ? "the branch's own diff against the default branch" : `\`git diff origin/${defaultBranch}...${headSha} -- <file>\``;
   return [
     `Round ${round} was the last round reviewed, at \`${baseSha}\`. Review only what changed since then, up to \`${headSha}\`, checked out in this environment: \`git diff ${baseSha} ${headSha}\`, limited to ${files}, so commits merged in from the default branch are not reviewed.${pullText(prUrl)}`,
+    `A file this branch changes can also hold a change merged in from the default branch since round ${round}. Check each hunk of \`git diff ${baseSha} ${headSha} -- <file>\` against ${own}: review only the hunks the branch's own diff also shows, and leave out any it doesn't, as the default branch's.`,
     `If \`git cat-file -e ${baseSha}\` fails, that commit isn't in this environment: review the whole diff instead${wholeCommand(headSha, defaultBranch)}, mark every finding new, and still answer each of round ${round}'s blocking findings below.`,
   ].join("\n\n");
 }
@@ -66,19 +69,15 @@ function laterRoundParts({ round, blocking, known }: After): string[] {
   const answer =
     blocking.length === 0
       ? `None of round ${round}'s findings failed its verdict: pass earlier as [].`
-      : `Each of these failed round ${round}'s verdict. Answer every one in ${REVIEW}'s earlier, by its number: fixed or not, with a note on what you saw. One not fixed goes to the verifier again, as unfixed; don't report it again as a finding.\n\n${numbered(blocking)}`;
+      : `Each of these failed round ${round}'s verdict. Answer every one in ${REVIEW}'s earlier, by its number: fixed or not, with a note on what you saw. One not fixed goes to the verifier again, as unfixed; don't report it again as a finding.\n\n${numberedText(blocking)}`;
   return [
     `## Round ${round}'s blocking findings\n\n${answer}`,
-    ...(known.length === 0 ? [] : [`## Findings already known\n\nEarlier rounds' findings that held. Don't report them again.\n\n${known.map((finding) => `- ${indented(finding, "  ")}`).join("\n")}`]),
+    ...(known.length === 0 ? [] : [`## Findings already known\n\nEarlier rounds' findings that held. Don't report them again.\n\n${known.map((finding) => `- ${findingText(finding, "  ")}`).join("\n")}`]),
     `## Marking your findings\n\nMark each finding you report with its origin: new, on code changed since round ${round}'s commit, or missed, on code round ${round} reviewed unchanged. ${MISSED_RULE} Report a missed one at the severity CREW.md gives it all the same.`,
   ];
 }
 
-/** The findings, numbered from 1 as the tool takes them. */
-const numbered = (findings: readonly ReviewFinding[]): string => findings.map((finding, i) => `${i + 1}. ${indented(finding, "   ")}`).join("\n");
 
-/** A finding in a line (review.ts findingText), its claim's later lines indented under it. */
-const indented = (finding: ReviewFinding, indent: string): string => findingText(finding).replaceAll("\n", `\n${indent}`);
 
 /** The command for the whole diff, as a parenthesis; nothing when bb records no default branch. */
 const wholeCommand = (headSha: string, defaultBranch: string | null): string => (defaultBranch === null ? "" : ` (\`git diff origin/${defaultBranch}...${headSha}\`)`);

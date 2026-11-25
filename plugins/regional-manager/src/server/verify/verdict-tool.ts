@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
+import { MAX_TRIAGED, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
@@ -32,10 +32,10 @@ const verdictInputSchema = z.object({
     .array(
       triageVariants({
         finding: z.number().int().min(1).describe("The reviewer's finding's number in your first message."),
-        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five."),
+        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five, or that it is marked missed."),
       }),
     )
-    .max(50)
+    .max(MAX_TRIAGED)
     .default([])
     .describe(`One entry for every finding of the reviewer's in your first message, none skipped, by its number. ${TRIAGE_RULE} [] when it lists none.`),
 });
@@ -95,10 +95,13 @@ function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: re
       criteria.length,
       { verb: "judge", each: "done-criterion", all: "done-criteria" },
     ) ??
-    numbersRefusal(
-      input.triage.map(({ finding }) => finding),
-      findings.length,
-      { verb: "triage", each: "finding of the reviewer's", all: "findings of the reviewer's" },
+    listed(
+      numbersRefusal(
+        input.triage.map(({ finding }) => finding),
+        findings.length,
+        { verb: "triage", each: "finding of the reviewer's", all: "findings of the reviewer's" },
+      ),
+      findings,
     ) ??
     triageRefusal(input.triage, findings);
   if (refused !== null) return refused;
@@ -119,6 +122,16 @@ function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: re
       return triage;
     }),
   };
+}
+
+/**
+ * A refusal of the triage's numbers, with the findings to triage listed by number, so a verifier
+ * whose first message listed others, as one started before the list changed, can still triage
+ * each; null when there is no refusal.
+ */
+function listed(refused: string | null, findings: readonly ReviewFinding[]): string | null {
+  if (refused === null || findings.length === 0) return refused;
+  return `${refused} The findings to triage, by number:\n\n${numberedText(findings)}`;
 }
 
 /** Why the triage of a finding can't be taken (review.ts triageProblem), naming the first such finding by its number and place; null when every entry can. */

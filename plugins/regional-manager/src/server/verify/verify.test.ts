@@ -1087,7 +1087,7 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
     { ...findings[3], origin: "new", result: "confirmed", reason: nit.reason },
   ]);
   const tool = kit.tools().find(({ name }) => name === "issue_verdict") ?? assert.fail("no issue_verdict");
-  assert.match(JSON.stringify(z.toJSONSchema(tool.parameters)), /For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five\./, "a downgrade's reason asks why the lower severity fits, and the no-anchor reason only of a must-fix");
+  assert.match(JSON.stringify(z.toJSONSchema(tool.parameters)), /For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five, or that it is marked missed\./, "a downgrade's reason asks why the lower severity fits, and the no-anchor reason only of a must-fix");
 });
 
 test("a verifier's first message holds the issue's decisions under a Decisions heading, a recorded one and an answered question, never the plugin's own answered question at the cap; one with no decisions has no such heading", async () => {
@@ -1175,8 +1175,12 @@ test("issue_verdict refuses an anchored finding the reviewer marked missed, with
   await settled();
 
   const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
-  assert.match(brief, new RegExp(`An independent reviewer read only the change since round 1, the last round reviewed, at \`${HEAD}\`, in the files this branch changes, and claims these\\.`));
-  assert.match(brief, /A finding marked unfixed is one of round 1's blocking findings[^\n]*; one marked missed sits on code round 1 reviewed unchanged; every other one is new/);
+  assert.match(
+    brief,
+    new RegExp(`An independent reviewer read the diff before you and claims these\\. It was asked to review only the change since round 1, the last round reviewed, at \`${HEAD}\`, in the files this branch changes; or, when that commit isn't in this environment, the whole diff, marking every finding new\\.`),
+    "the scope it was given and its fallback, never which one it ran",
+  );
+  assert.match(brief, /A finding marked unfixed is one of round 1's blocking findings[^\n]*; one marked missed sits on code round 1 reviewed unchanged; every other one is new, on code changed since, or anywhere when it reviewed the whole diff/);
   assert.match(brief, /\n\n1\. `src\/retry\.ts:3` \(must-fix, missed\): A token is logged in plain text\.\n\nRound 1's blocking findings the reviewer answered fixed, for context; they are not yours to triage:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The reviewer: Capped at 5 minutes\./);
 
   for (const anchor of ["safety", "criterion"]) {
@@ -1209,7 +1213,11 @@ test("after a failed round, a round whose review was missed gives its verifier t
     /## Round 1's blocking findings\n\nNo review was had: its reviewer ended its turn without reporting\. So each finding that failed round 1's verdict stands as unfixed until you check it here: triage every one in issue_verdict by its number\.[^\n]*\n\n1\. `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n/,
   );
   const skipped = await kit.call("issue_verdict", PASSES, verifier());
-  assert.equal(textOf(skipped), "issue_verdict is refused and nothing was saved: triage every finding of the reviewer's; missing 1 of 1 to 1.", "a stalled reviewer drops no blocker");
+  assert.equal(
+    textOf(skipped),
+    "issue_verdict is refused and nothing was saved: triage every finding of the reviewer's; missing 1 of 1 to 1. The findings to triage, by number:\n\n1. `src/retry.ts:42` (must-fix, unfixed): The backoff never caps.",
+    "a stalled reviewer drops no blocker, and a verifier whose first message said to pass [], as one started before this release, learns what to triage",
+  );
 
   const verifierThreadId = verifier();
   assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "brief", reason: "retry.ts:42 still doubles with no ceiling." }] }, verifierThreadId)), /^Verdict recorded/);

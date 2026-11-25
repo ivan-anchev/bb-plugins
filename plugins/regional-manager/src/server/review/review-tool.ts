@@ -3,7 +3,7 @@
 // each of the earlier round's blocking findings. The verifier triages them next (verdict-tool.ts).
 // The caller's role comes from the plugin's database by its thread id.
 import { z } from "zod";
-import { ANCHOR_RULE, MISSED_RULE, severitySchema } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, MAX_REPORTED, MAX_TRIAGED, MISSED_RULE, severitySchema } from "../../model/verdict/review.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Review } from "./review.ts";
@@ -26,7 +26,7 @@ const reviewInputSchema = z.object({
           .describe(`new: on code changed since the last reviewed commit, or any finding of a first round. missed: on code an earlier round reviewed unchanged, only on a later round. ${MISSED_RULE}`),
       }),
     )
-    .max(50)
+    .max(MAX_REPORTED)
     .describe("Every finding of your review. [] when you found nothing."),
   earlier: z
     .array(
@@ -36,7 +36,7 @@ const reviewInputSchema = z.object({
         note: z.string().trim().min(1).max(1_000).describe("What you saw that shows it, in a line or two."),
       }),
     )
-    .max(50)
+    .max(MAX_TRIAGED)
     .default([])
     .describe("On a later round, one answer for every blocking finding of the earlier round your first message numbers, none skipped. One not fixed goes to the verifier again: don't report it again in findings. [] on a first round."),
 });

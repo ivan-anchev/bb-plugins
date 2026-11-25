@@ -31,7 +31,7 @@ export function findingsMessage(review: Review, verdict: Returned, ci: CiVerdict
 function heldPart(review: Review, verdict: Returned): string[] {
   const missed = review.state === "missed" ? [`### Review\n\nNo review was had: ${review.reason}.`] : [];
   const { failing, others } = heldFindings(verdict);
-  const list = (findings: Returned["triage"]) => findings.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason}`).join("\n");
+  const list = (findings: Returned["triage"]) => findings.map((finding) => `- ${findingText(finding, "  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason}`).join("\n");
   return [
     ...missed,
     ...(failing.length === 0 ? [] : [`### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${list(failing)}`]),

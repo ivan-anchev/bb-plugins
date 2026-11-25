@@ -181,14 +181,22 @@ export function checksStore(db: Db) {
 
   const check = (checkId: CheckId): Check | null => readCheck(db, checkId);
 
-  /** The handoffs the clause picks, each with its check. */
+  /** The handoffs the clause picks, each with its check, every issue's checks read once (issueChecks). */
   function handed(clause: string, ...params: string[]): Handed[] {
+    const issues = new Map<string, Map<CheckId, Check>>();
+    const checksOf = (coordinatorId: CoordinatorId, issueId: IssueId): Map<CheckId, Check> => {
+      const key = JSON.stringify([coordinatorId, issueId]);
+      const read = issues.get(key) ?? issueChecks(db, coordinatorId, issueId);
+      issues.set(key, read);
+      return read;
+    };
     return db()
       .prepare(`SELECT ${HANDOFF_COLUMNS}, c.id AS checkId FROM handoffs h LEFT JOIN checks c ON c.handoff_id = h.id ${clause}`)
       .all(...params)
       .map((row) => {
         const { checkId } = z.object({ checkId: checkIdSchema.nullable() }).parse(row);
-        return { handoff: toHandoff(row), check: checkId === null ? null : check(checkId) };
+        const handoff = toHandoff(row);
+        return { handoff, check: checkId === null ? null : (checksOf(handoff.coordinatorId, handoff.issueId).get(checkId) ?? null) };
       });
   }
 
@@ -284,10 +292,7 @@ export function checksStore(db: Db) {
 
     /** Every final check of the issue, oldest first: none but a build parent's. */
     finalChecks(coordinatorId: CoordinatorId, issueId: IssueId): FinalCheck[] {
-      return db()
-        .prepare("SELECT id FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(subject, '$.kind') = 'final' ORDER BY rowid")
-        .all(coordinatorId, issueId)
-        .map((row) => toFinalCheck(readCheck(db, toCheckId(row))));
+      return [...issueChecks(db, coordinatorId, issueId).values()].flatMap((check) => (check.subject.kind === "final" ? [{ ...check, subject: check.subject }] : []));
     },
 
     /** One handoff with its check, or null when there is none by that id. */
@@ -446,8 +451,17 @@ function readCheck(db: Db, checkId: CheckId): Check | null {
   const row = db().prepare("SELECT coordinator_id AS coordinatorId, issue_id AS issueId, rowid AS seq FROM checks WHERE id = ?").get(checkId);
   if (row === undefined) return null;
   const { coordinatorId, issueId, seq } = z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema, seq: z.number() }).parse(row);
-  const stored = db().prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND issue_id = ? AND rowid <= ? ORDER BY rowid`).all(coordinatorId, issueId, seq);
-  return readInOrder(stored.map((one): StoredCheck => checkRowSchema.parse(one))).at(-1) ?? null;
+  return storedChecks(db, coordinatorId, issueId, seq).at(-1) ?? null;
+}
+
+/** Every check of the issue, by its id, each read whole in one pass (rounds/delta.ts readInOrder). */
+const issueChecks = (db: Db, coordinatorId: CoordinatorId, issueId: IssueId): Map<CheckId, Check> =>
+  new Map(storedChecks(db, coordinatorId, issueId, Number.MAX_SAFE_INTEGER).map((check) => [check.id, check]));
+
+/** The issue's checks up to the row `upTo`, oldest first, each read whole. */
+function storedChecks(db: Db, coordinatorId: CoordinatorId, issueId: IssueId, upTo: number): Check[] {
+  const rows = db().prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND issue_id = ? AND rowid <= ? ORDER BY rowid`).all(coordinatorId, issueId, upTo);
+  return readInOrder(rows.map((row): StoredCheck => checkRowSchema.parse(row)));
 }
 
 function writeVerdict(db: Db, checkId: CheckId, verdict: StoredVerdict): void {
@@ -476,15 +490,6 @@ const checkRowSchema = z.object({
   review: json(reviewSchema),
   verdict: json(storedVerdictSchema),
 });
-/** why throw on null: the query just listed its id. */
-function toFinalCheck(check: Check | null): FinalCheck {
-  if (check === null) throw new Error("A listed final check is missing.");
-  const { subject } = check;
-  // why throw: the query picks only final checks.
-  if (subject.kind !== "final") throw new Error(`The check ${check.id} is not a final check.`);
-  return { ...check, subject };
-}
-
 /** why throw on null: the query just listed its id. */
 function toOpenCheck(check: Check | null): OpenCheck {
   if (check === null) throw new Error("A listed open check is missing.");

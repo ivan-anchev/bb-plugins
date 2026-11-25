@@ -29,9 +29,11 @@ For a done handoff:
   finding's file and line, its severity (must-fix, should-fix or nit) and its
   claim. Or that it found nothing, or that no review was had, and why. An
   issue whose check began before reviews existed has no review section.
-- On a later round, what the review covered: only the change since the last
-  reviewed round's commit, in the files this branch changes. Each finding
-  not marked is new, on code changed since; one marked **unfixed** is that
+- On a later round, what the reviewer was asked to review: only the change
+  since the last reviewed round's commit, in the files this branch changes,
+  or the whole diff when that commit isn't in the environment. The plugin
+  doesn't see which it ran. Each finding not marked is new, on code changed
+  since (or anywhere, after a whole-diff review); one marked **unfixed** is that
   round's blocking finding the reviewer says is not fixed; one marked
   **missed** sits on code that round reviewed unchanged. The blocking
   findings the reviewer answered fixed follow, for context only. When no
@@ -102,9 +104,11 @@ For a final check:
    is never a finding.
 
    **A missed finding never fails the verdict**, whatever it breaks, safety
-   included: never anchor it. Downgrade or reject it. An unfixed one is
-   triaged as any other: anchor it when it still holds and breaks what you
-   name.
+   included: never anchor it. A missed must-fix that holds is downgraded,
+   with its missed origin as the reason even when it breaks one of the five;
+   a missed should-fix or nit that holds is confirmed or downgraded as any
+   other, and one that doesn't hold is rejected. An unfixed one is triaged as
+   any other: anchor it when it still holds and breaks what you name.
 
    `issue_verdict` refuses a must-fix triaged confirmed, an anchored
    should-fix or nit, an anchored missed finding, and a downgrade that isn't

@@ -10,6 +10,7 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { sameModel, type Execution } from "../../model/agent/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
+import { MAX_TRIAGED } from "../../model/verdict/review.ts";
 import { unfixed } from "../../model/verdict/rounds/delta.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
 import { isRunning, listedThreads, stopThreads, type StopBb } from "../agents/threads.ts";
@@ -172,7 +173,7 @@ async function reviewerExecution(bb: CatalogBb, choice: VerifierChoice): Promise
  * A reviewer's report as its check stores it, or why it can't be taken: on a first round, every
  * finding new and no earlier answers; after a reviewed round, each of its blocking findings
  * answered once, by its number. Each answered not fixed joins the findings as unfixed, first, in
- * the blocking findings' order.
+ * the blocking findings' order; with them, no more than the verifier triages (MAX_TRIAGED).
  */
 function reportOf({ findings, earlier }: ReviewInput, scope: Scope): ReviewReport | string {
   const blocking = scope.kind === "after" ? scope.blocking : [];
@@ -184,10 +185,10 @@ function reportOf({ findings, earlier }: ReviewInput, scope: Scope): ReviewRepor
   );
   if (refused !== null) return refused;
   const answered = blocking.map((finding, i) => ({ finding, answer: answerTo(earlier, i + 1) }));
-  return {
-    findings: [...answered.filter(({ answer }) => !answer.fixed).map(({ finding }) => unfixed(finding)), ...findings],
-    earlier: answered.map(({ answer }) => answer),
-  };
+  const carried = answered.filter(({ answer }) => !answer.fixed).map(({ finding }) => unfixed(finding));
+  if (carried.length + findings.length > MAX_TRIAGED)
+    return `the verifier triages at most ${MAX_TRIAGED} findings, and ${carried.length} earlier blocking findings not fixed with your ${findings.length} come to ${carried.length + findings.length}: report at most ${MAX_TRIAGED - carried.length} of your own, the ones that matter most.`;
+  return { findings: [...carried, ...findings], earlier: answered.map(({ answer }) => answer) };
 }
 
 /** The answer to the earlier blocking finding `number`. why throw: numbersRefusal refused a report that skips one. */

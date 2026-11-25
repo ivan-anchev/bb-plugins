@@ -293,9 +293,9 @@ test("the verifier's brief lists the review's findings; its verdict triages each
 
   const untriaged = await kit.call("issue_verdict", FAILS, verifier());
   assert.ok(isRefusal(untriaged));
-  assert.equal(textOf(untriaged), "issue_verdict is refused and nothing was saved: triage every finding of the reviewer's; missing 1, 2 of 1 to 2.");
+  assert.equal(textOf(untriaged), "issue_verdict is refused and nothing was saved: triage every finding of the reviewer's; missing 1, 2 of 1 to 2. The findings to triage, by number:\n\n1. `src/retry.ts:42` (must-fix): The backoff never caps, so a dead endpoint is retried every 2^n ms forever.\n2. `src/retry.ts` (nit): The retry helper's name says nothing about backoff.", "the refusal lists each finding to triage");
   const unknown = await kit.call("issue_verdict", { ...FAILS, triage: [1, 2, 3].map((finding) => ({ finding, result: "rejected", reason: "No." })) }, verifier());
-  assert.equal(textOf(unknown), "issue_verdict is refused and nothing was saved: there are only 2 findings of the reviewer's; 3 is not one.");
+  assert.equal(textOf(unknown), "issue_verdict is refused and nothing was saved: there are only 2 findings of the reviewer's; 3 is not one. The findings to triage, by number:\n\n1. `src/retry.ts:42` (must-fix): The backoff never caps, so a dead endpoint is retried every 2^n ms forever.\n2. `src/retry.ts` (nit): The retry helper's name says nothing about backoff.");
 
   const triage = [
     { finding: 1, result: "anchored", anchor: "criterion", reason: "retry.ts:42 doubles the delay with no ceiling; a test with 20 failures waits 17 minutes." },
@@ -730,13 +730,13 @@ async function secondRound() {
   return agent;
 }
 
-test("a later round's reviewer is told to review git diff from the last reviewed commit to the new one, limited to the branch's files, with that round's blocking findings numbered and the known ones listed; a first round's asks for the whole diff", async () => {
+test("a later round's reviewer is told to review git diff from the last reviewed commit to the new one, limited to the branch's files and checked hunk by hunk against the branch's own diff, with that round's blocking findings numbered and the known ones listed; a first round's asks for the whole diff", async () => {
   const { kit, reviewer } = await secondRound();
   const prompt = kit.thread(reviewer()).spawnedWith.prompt ?? assert.fail("no prompt");
   const part = (heading: string) => prompt.split("\n\n## ").find((one) => one.startsWith(heading)) ?? assert.fail(`no ${heading}`);
   assert.equal(
     part("The diff"),
-    `The diff\n\nRound 1 was the last round reviewed, at \`${HEAD}\`. Review only what changed since then, up to \`${ROUND_2}\`, checked out in this environment: \`git diff ${HEAD} ${ROUND_2}\`, limited to the files this branch changes (\`git diff origin/main...${ROUND_2} --stat\`), so commits merged in from the default branch are not reviewed.\n\nIf \`git cat-file -e ${HEAD}\` fails, that commit isn't in this environment: review the whole diff instead (\`git diff origin/main...${ROUND_2}\`), mark every finding new, and still answer each of round 1's blocking findings below.`,
+    `The diff\n\nRound 1 was the last round reviewed, at \`${HEAD}\`. Review only what changed since then, up to \`${ROUND_2}\`, checked out in this environment: \`git diff ${HEAD} ${ROUND_2}\`, limited to the files this branch changes (\`git diff origin/main...${ROUND_2} --stat\`), so commits merged in from the default branch are not reviewed.\n\nA file this branch changes can also hold a change merged in from the default branch since round 1. Check each hunk of \`git diff ${HEAD} ${ROUND_2} -- <file>\` against \`git diff origin/main...${ROUND_2} -- <file>\`: review only the hunks the branch's own diff also shows, and leave out any it doesn't, as the default branch's.\n\nIf \`git cat-file -e ${HEAD}\` fails, that commit isn't in this environment: review the whole diff instead (\`git diff origin/main...${ROUND_2}\`), mark every finding new, and still answer each of round 1's blocking findings below.`,
   );
   assert.equal(
     part("Round 1's blocking findings"),
@@ -779,4 +779,65 @@ test("issue_review refuses an earlier that misses one of the earlier round's blo
   const early = await first.kit.call("issue_review", { findings: [], earlier: [{ finding: 1, fixed: true, note: "Fine." }] }, first.reviewer());
   assert.equal(textOf(early), "issue_review is refused and nothing was saved: there are no earlier blocking findings to answer; pass [].");
   assert.equal(first.review().state, "running");
+});
+
+/** `n` must-fix findings, each at its own line of src/retry.ts. */
+const mustFixes = (n: number, from = 1) => Array.from({ length: n }, (_, i) => ({ file: "src/retry.ts", line: from + i, severity: "must-fix", claim: `Blocker ${from + i}.` }));
+const anchoredAll = (n: number) => Array.from({ length: n }, (_, i) => ({ finding: i + 1, result: "anchored", anchor: "brief", reason: "Seen." }));
+
+test("every blocker carried forward unfixed stays triageable: 50 earlier blockers not fixed with one new finding pass through issue_review and issue_verdict; a report that would carry more than the verifier triages is refused, naming how many it can add", async () => {
+  const { kit, check, reviewer, verifier, handOff } = await withAgent();
+  const review = async (input: object) => {
+    const threadId = reviewer();
+    const answer = textOf(await kit.call("issue_review", input, threadId));
+    await kit.idle(threadId, "Reviewed.");
+    return answer;
+  };
+  const verdict = async (n: number) => {
+    const threadId = verifier();
+    const answer = textOf(await kit.call("issue_verdict", { ...PASSES, triage: anchoredAll(n) }, threadId));
+    await kit.idle(threadId, "Verdict returned.");
+    await settled();
+    return answer;
+  };
+  await handOff();
+  await review({ findings: mustFixes(50) });
+  assert.match(await verdict(50), /^Verdict recorded/);
+
+  await handOff();
+  const notFixed = (n: number) => Array.from({ length: n }, (_, i) => ({ finding: i + 1, fixed: false, note: "Still there." }));
+  assert.match(await review({ findings: mustFixes(1, 100), earlier: notFixed(50) }), /^Review recorded: 1 finding, and 50 earlier blocking findings not fixed\./);
+  const stored = check().review;
+  assert.equal(stored.state === "reported" && stored.findings.length, 51);
+  assert.match(await verdict(51), /^Verdict recorded/, "the verifier triages all 51");
+
+  await handOff();
+  const threadId = reviewer();
+  const over = await kit.call("issue_review", { findings: mustFixes(50, 200), earlier: notFixed(51) }, threadId);
+  assert.ok(isRefusal(over));
+  assert.equal(textOf(over), "issue_review is refused and nothing was saved: the verifier triages at most 100 findings, and 51 earlier blocking findings not fixed with your 50 come to 101: report at most 49 of your own, the ones that matter most.");
+  assert.match(textOf(await kit.call("issue_review", { findings: mustFixes(49, 200), earlier: notFixed(51) }, threadId)), /^Review recorded: 49 findings, and 51 earlier blocking findings not fixed\./, "its way forward works");
+});
+
+test("a path holding a newline reaches the later round's reviewer and verifier byte for byte, in the blocking list, the unfixed list and the answered-fixed list", async () => {
+  const { kit, reviewer, verifier, handOff, returned } = await withAgent();
+  const one = { file: "src/one\ntwo.ts", line: 4, severity: "must-fix", claim: "First line.\nSecond line." };
+  const other = { file: "src/three\nfour.ts", line: 8, severity: "must-fix", claim: "Another." };
+  await handOff();
+  let threadId = reviewer();
+  await kit.call("issue_review", { findings: [one, other] }, threadId);
+  await kit.idle(threadId, "Reviewed.");
+  await returned({ ...PASSES, triage: anchoredAll(2) });
+  await settled();
+  await handOff();
+
+  threadId = reviewer();
+  const brief = kit.thread(threadId).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.ok(brief.includes("1. `src/one\ntwo.ts:4` (must-fix): First line.\n   Second line.\n2. `src/three\nfour.ts:8` (must-fix): Another."), "only the claim is indented");
+  await kit.call("issue_review", { findings: [], earlier: [{ finding: 1, fixed: false, note: "Still." }, { finding: 2, fixed: true, note: "Gone." }] }, threadId);
+  await kit.idle(threadId, "Reviewed.");
+  await settled();
+  const verifierBrief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.ok(verifierBrief.includes("1. `src/one\ntwo.ts:4` (must-fix, unfixed): First line.\n   Second line."), "the unfixed finding, its path whole");
+  assert.ok(verifierBrief.includes("- `src/three\nfour.ts:8` (must-fix): Another.\n  The reviewer: Gone."), "the answered-fixed finding, its path whole");
 });
