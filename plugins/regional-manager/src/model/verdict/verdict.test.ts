@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
-import type { Review } from "./review.ts";
+import type { Review, ReviewFinding } from "./review.ts";
 import { failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type StoredVerdict, type Verdict } from "./verdict.ts";
 
 /** The claimed commit, on a clean tree, as bb's git plugin read it. */
@@ -47,7 +47,7 @@ test("a criterion the verifier couldn't check is not a pass", () => {
 
 /** A finding of the given severity, as the reviewer reported it. */
 const finding = (severity: Severity) => ({ file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps." });
-type Severity = "must-fix" | "should-fix" | "nit";
+type Severity = ReviewFinding["severity"];
 
 /** A verdict that passed both its criteria, as the store reads it with its review: each finding of `severity` triaged as `triage`. */
 function readWith(triaged: [Severity, Triage][], mustFixFails = true): Extract<Verdict, { state: "returned" }> {
@@ -81,6 +81,13 @@ test("a stored verdict from before the anchor rule, with a confirmed must-fix, k
   assert.equal(outcome(withReview(stored, review)), "fail", "returned under the must-fix rule: it failed, and still does");
   assert.deepEqual(failureReasons(readWith([["must-fix", CONFIRMED]])), [{ kind: "must-fix", count: 1 }]);
   assert.equal(outcome(readWith([["must-fix", CONFIRMED]], false)), "pass", "settled before the must-fix rule: it passed, and still does");
+});
+
+test("a stored triage the rule refuses for its finding's severity is refused as the store reads it, never read as failing a verdict", () => {
+  assert.throws(() => readWith([["nit", ANCHORED]]), /^Error: The verdict's triage of finding 1 breaks the triage rule: only a must-fix is anchored, and this one is a nit: confirm it\.$/);
+  assert.throws(() => readWith([["must-fix", REJECTED], ["should-fix", ANCHORED]]), /triage of finding 2 breaks the triage rule: only a must-fix is anchored, and this one is a should-fix/);
+  assert.throws(() => readWith([["should-fix", DOWNGRADED]]), /triage of finding 1 breaks the triage rule: a downgrade goes lower than the reviewer's should-fix, and should-fix isn't/);
+  assert.equal(outcome(readWith([["must-fix", CONFIRMED], ["should-fix", { ...DOWNGRADED, to: "nit" }]])), "fail", "a confirmed must-fix from before the anchor rule still reads, and a valid downgrade beside it");
 });
 
 test("a returned verdict is pending until it is settled: its findings reached the agent, or it is checked", () => {

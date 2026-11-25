@@ -23,6 +23,7 @@ import type { Store } from "../store/store.ts";
 import type { AsksBb } from "../hidden/asks.ts";
 import { verifierExecution, type VerifierChoice } from "../verify/verifier-model.ts";
 import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
+import { checkedIssue } from "../verify/verifier-brief.ts";
 import { reviewerBrief } from "./reviewer-brief.ts";
 
 type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[number];
@@ -68,9 +69,8 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
   /** Everything the reviewer of a check needs: its role, where it runs, on what, and its first message; or why none can review it independently. */
   async function requestFor(check: HandoffCheck): Promise<CheckerRequest | { none: string }> {
     const coordinator = store.coordinator(check.coordinatorId);
-    const issue = store.issue(check.coordinatorId, check.issueId);
-    // why throw: checks are kept while their issue and regional manager are, and an agent starts only on an issue with a brief.
-    if (coordinator === null || issue === null || issue.brief === null) throw new Error(`The issue ${check.issueId} of ${check.coordinatorId}, its brief or its regional manager is missing.`);
+    // why throw: checks are kept while their regional manager is.
+    if (coordinator === null) throw new Error(`The regional manager ${check.coordinatorId} of ${check.issueId} is missing.`);
     const agent = handingAgent(store, check);
     const environmentId = (await listedThreads(bb, [agent.threadId])).get(agent.threadId)?.environmentId ?? null;
     if (environmentId === null) throw new Error("the agent's thread has no environment to review");
@@ -79,6 +79,8 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       bb.sdk.environments.get({ environmentId }),
     ]);
     if (execution === null) return { none: `no independent reviewer model: bb can run none there but ${agent.id}'s own` };
+    // why read here, after every await: the brief and the decisions it gives must agree (checkedIssue).
+    const issue = checkedIssue(store, check.coordinatorId, check.issueId);
     return {
       role: { kind: "reviewer", coordinatorId: coordinator.id, issueId: issue.id, checkId: check.id } as const,
       coordinator,
@@ -86,11 +88,7 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       title: `Review ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId } as const,
       execution,
-      prompt: reviewerBrief(
-        { ...issue, brief: issue.brief, doneCriteria: check.criteria, decisions: store.issueDecisions(check.coordinatorId, issue.id) },
-        { ...check.subject, defaultBranch },
-        memory.of(check.coordinatorId).read(CREW_FILE).text,
-      ),
+      prompt: reviewerBrief({ ...issue, doneCriteria: check.criteria }, { ...check.subject, defaultBranch }, memory.of(check.coordinatorId).read(CREW_FILE).text),
     };
   }
 

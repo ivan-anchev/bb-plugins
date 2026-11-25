@@ -1041,13 +1041,14 @@ test("a failure settled while a cap question is open, as when a person wakes the
 /** The sections of a first message, each from its heading: what a test compares where a brief must not change. */
 const headingsOf = (prompt: string): string[] => prompt.split("\n\n").filter((part) => part.startsWith("#")).map((part) => part.split("\n")[0] ?? "");
 
-test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix and a downgrade to the same severity, each naming the finding, and stores an anchored and a downgraded entry", async () => {
+test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix or nit and a downgrade to the same severity, each naming the finding and a way forward that works, and stores an anchored and a downgraded entry", async () => {
   const { kit, check, verifier, handOff } = await withAgent();
   kit.reviewers.reportAtOnce = false;
   const findings = [
     { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
     { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." },
     { file: "src/retry.ts", line: null, severity: "must-fix", claim: "The helper's name says nothing about backoff." },
+    { file: "src/retry.css", line: 2, severity: "nit", claim: "The padding differs from the row's." },
   ];
   await handOff();
   const review = check().review;
@@ -1059,10 +1060,13 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
   const anchored = { finding: 1, result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." };
   const confirmed = { finding: 2, result: "confirmed", reason: "Both calls sit on line 7." };
   const downgraded = { finding: 3, result: "downgraded", to: "nit", reason: "A name breaks none of the five." };
+  const nit = { finding: 4, result: "confirmed", reason: "Row padding is 8px, this is 6px." };
   const refusals = [
-    [[{ finding: 1, result: "confirmed", reason: anchored.reason }, confirmed, downgraded], "finding 1, the must-fix at `src/retry.ts:42`: a must-fix that holds is anchored, naming what it breaks, or downgraded, never just confirmed."],
-    [[anchored, { ...confirmed, result: "anchored", anchor: "criterion" }, downgraded], "finding 2, the should-fix at `src/retry.ts:7`: only a must-fix is anchored, and this one is a should-fix: confirm it, or downgrade it."],
-    [[anchored, confirmed, { ...downgraded, to: "must-fix" }], "finding 3, the must-fix at `src/retry.ts`: a downgrade goes lower than the reviewer's must-fix, and must-fix isn't."],
+    [[{ finding: 1, result: "confirmed", reason: anchored.reason }, confirmed, downgraded, nit], "finding 1, the must-fix at `src/retry.ts:42`: a must-fix that holds is anchored, naming what it breaks, or downgraded, never just confirmed."],
+    [[anchored, { ...confirmed, result: "anchored", anchor: "criterion" }, downgraded, nit], "finding 2, the should-fix at `src/retry.ts:7`: only a must-fix is anchored, and this one is a should-fix: confirm it, or downgrade it to nit."],
+    [[anchored, confirmed, { ...downgraded, to: "must-fix" }, nit], "finding 3, the must-fix at `src/retry.ts`: a downgrade goes lower than the reviewer's must-fix, and must-fix isn't: anchor it, naming what it breaks, or downgrade it to should-fix or nit."],
+    [[anchored, confirmed, downgraded, { ...nit, result: "anchored", anchor: "brief" }], "finding 4, the nit at `src/retry.css:2`: only a must-fix is anchored, and this one is a nit: confirm it."],
+    [[anchored, confirmed, downgraded, { ...nit, result: "downgraded", to: "nit" }], "finding 4, the nit at `src/retry.css:2`: a downgrade goes lower than the reviewer's nit, and nit isn't: confirm it."],
   ] as const;
   for (const [triage, why] of refusals) {
     const refused = await kit.call("issue_verdict", { ...PASSES, triage }, verifier());
@@ -1072,14 +1076,18 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
   }
 
   const verifierThreadId = verifier();
-  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [anchored, confirmed, downgraded] }, verifierThreadId)), /^Verdict recorded/);
+  // The refusals' ways forward, followed: the must-fix anchored, the should-fix confirmed, the must-fix downgraded, the nit confirmed.
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [anchored, confirmed, downgraded, nit] }, verifierThreadId)), /^Verdict recorded/);
   await kit.idle(verifierThreadId, "Verdict returned.");
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.triage, [
     { ...findings[0], result: "anchored", anchor: "brief", reason: anchored.reason },
     { ...findings[1], result: "confirmed", reason: confirmed.reason },
     { ...findings[2], result: "downgraded", to: "nit", reason: downgraded.reason },
+    { ...findings[3], result: "confirmed", reason: nit.reason },
   ]);
+  const tool = kit.tools().find(({ name }) => name === "issue_verdict") ?? assert.fail("no issue_verdict");
+  assert.match(JSON.stringify(z.toJSONSchema(tool.parameters)), /For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five\./, "a downgrade's reason asks why the lower severity fits, and the no-anchor reason only of a must-fix");
 });
 
 test("a verifier's first message holds the issue's decisions under a Decisions heading, a recorded one and an answered question, never the plugin's own answered question at the cap; one with no decisions has no such heading", async () => {
@@ -1093,6 +1101,7 @@ test("a verifier's first message holds the issue's decisions under a Decisions h
   await kit.call("crew_ask_user", { question: "Cap the backoff at five minutes?", options: ["Yes", "No"], issue: "WEB-1" }, threadId);
   await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d2"), answer: "Yes" });
   await kit.call("issue_update", { id: "WEB-1", decision: "Keep the helper named retry: the user's call." }, threadId);
+  await kit.call("crew_ask_user", { question: "Log each retry?", options: ["Yes", "No"], issue: "WEB-1" }, threadId);
   await kit.startTurn(a2Thread);
   await kit.call("agent_handoff", DONE, a2Thread);
   await kit.idle(a2Thread, "Handed off.");
@@ -1101,8 +1110,13 @@ test("a verifier's first message holds the issue's decisions under a Decisions h
   const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a2"))?.check?.verdict;
   const prompt = kit.thread(verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier")).spawnedWith.prompt ?? assert.fail("no prompt");
   const decisions = prompt.split("\n\n## ").find((part) => part.startsWith("Decisions on WEB-1")) ?? assert.fail("no Decisions heading");
-  assert.match(decisions, /^Decisions on WEB-1\n\nWhat the user and the regional manager decided about this issue\. They are part of the work, as its brief is: work that follows one is never a finding, and a must-fix that breaks one breaks a recorded decision\.\n\nOldest first; where two disagree, the later one wins\.\n\n/);
-  assert.match(decisions, /\n- [^\n]+: asked the user \(d2\): Cap the backoff at five minutes\? They answered at [^\n]+: Yes\n- [^\n]+: Keep the helper named retry: the user's call\.$/);
+  assert.match(decisions, /^Decisions on WEB-1\n\nWhat the user and the regional manager decided about this issue: the decisions recorded on it, and the user's answers to the questions put to them\. They are part of the work, as its brief is: work that follows one is never a finding, and a must-fix that breaks one breaks a recorded decision\. A question not answered yet decides nothing\.\n\nOldest first; where two disagree, the later one wins\.\n\n/);
+  // why each item by itself: two made in one millisecond keep no order between them.
+  const items = decisions.split("\n").filter((line) => line.startsWith("- "));
+  assert.equal(items.length, 3, "the two decisions about the work, and the question still open");
+  for (const item of [/: asked the user \(d2\): Cap the backoff at five minutes\? They answered at [^\n]+: Yes$/, /: Keep the helper named retry: the user's call\.$/, /: asked the user \(d3\): Log each retry\? Not answered yet\.$/]) {
+    assert.ok(items.some((line) => item.test(line)), `${item}: a question not answered yet is listed too, under an introduction that says it decides nothing`);
+  }
   assert.doesNotMatch(decisions, /d1|One more round|failed verification/, "the question at the cap is no decision about the work");
 });
 

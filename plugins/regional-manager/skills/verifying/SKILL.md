@@ -33,7 +33,8 @@ For a done handoff:
   the user and the regional manager decided about it. They are part of the
   work, as its brief is. The plugin's own question at the issue's cap of
   failed verifications is left out: its answer allows a round, and decides
-  nothing about the work.
+  nothing about the work. A question not answered yet is listed, and decides
+  nothing either.
 
 For a final check:
 

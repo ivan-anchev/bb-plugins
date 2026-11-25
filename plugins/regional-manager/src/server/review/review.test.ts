@@ -155,6 +155,11 @@ test("the reviewer's first message, its role's rules and issue_review's instruct
   };
   assert.match(places["first message"], /Report each finding at the severity CREW\.md gives it, a must-fix that breaks none of the five included: the verifier anchors or downgrades it, never you\./);
   assert.match(places["role's rules"], /report each finding at the severity it gives, a must-fix that breaks none of the five below included/);
+  assert.match(
+    JSON.stringify(z.toJSONSchema(tool.parameters)),
+    /must-fix: wrong, and must not merge as it is, as CREW\.md says\. Report it as must-fix even when it breaks none of the five things below, and say in the claim which it breaks, or that it breaks none: the verifier anchors or downgrades it, never you\./,
+    "issue_review's severity field keeps a CREW.md must-fix a must-fix",
+  );
   for (const [place, text] of Object.entries(places)) {
     assert.match(text, /CREW\.md says what to look for[^\n]*(this|the anchor|The anchor) rule alone says what blocks/, place);
     assert.ok(
@@ -186,9 +191,35 @@ test("a reviewer's first message holds the issue's decisions under a Decisions h
   const at = sections.findIndex((part) => part.startsWith("Decisions on WEB-1"));
   assert.deepEqual([sections[at - 1]?.split("\n")[0], sections[at + 1]?.split("\n")[0]], ["Done-criteria", "CREW.md: the rules every agent follows"], "after the criteria, before CREW.md");
   const decisions = sections[at] ?? assert.fail("no Decisions heading");
-  assert.match(decisions, /^Decisions on WEB-1\n\nWhat the user and the regional manager decided about this issue\. They are part of the work, as its brief is: work that follows one is never a finding, and a must-fix that breaks one breaks a recorded decision\.\n\nOldest first; where two disagree, the later one wins\.\n\n/);
+  assert.match(decisions, /^Decisions on WEB-1\n\nWhat the user and the regional manager decided about this issue: the decisions recorded on it, and the user's answers to the questions put to them\. They are part of the work, as its brief is: work that follows one is never a finding, and a must-fix that breaks one breaks a recorded decision\. A question not answered yet decides nothing\.\n\nOldest first; where two disagree, the later one wins\.\n\n/);
   assert.match(decisions, /\n- [^\n]+: asked the user \(d2\): Cap the backoff at five minutes\? They answered at [^\n]+: Yes\n- [^\n]+: Keep the helper named retry: the user's call\.$/);
   assert.doesNotMatch(decisions, /d1|One more round|failed verification/, "the question at the cap is no decision about the work");
+});
+
+test("an issue_update that changes the brief and records a decision while a reviewer's or a verifier's setup reads bb reaches its first message whole: the new brief beside the new decision, never the old brief", async () => {
+  const { kit, threadId, reviewer, verifier, handOff, reported } = await withAgent();
+  /** While bb is slow to list the models a checker can run on, the manager rewrites WEB-1's brief and records a decision in one issue_update. */
+  async function editedDuringSetup(start: () => Promise<void>, brief: string, decision: string): Promise<void> {
+    kit.providers.holding = true;
+    await start();
+    assert.ok(kit.providers.held.length > 0, "the setup reads the catalog");
+    const updated = await kit.call("issue_update", { id: "WEB-1", brief, decision }, threadId);
+    assert.ok(!isRefusal(updated), textOf(updated));
+    kit.providers.holding = false;
+    kit.providers.held.splice(0).forEach((release) => release());
+    await settled();
+  }
+  const sectionsOf = (prompt: string) => ({ brief: /\n## The issue's brief(?:, for context)?\n\n([^\n]*)/.exec(prompt)?.[1], decisions: prompt.match(/^- [^\n]+$/gm) ?? [] });
+
+  await editedDuringSetup(() => handOff(), "Retry failed deliveries with capped backoff.", "Cap the backoff at five minutes.");
+  const review = sectionsOf(kit.thread(reviewer()).spawnedWith.prompt ?? assert.fail("no prompt"));
+  assert.equal(review.brief, "Retry failed deliveries with capped backoff.", "the reviewer's brief is the one the decision came with");
+  assert.equal(review.decisions.filter((line) => line.endsWith("Cap the backoff at five minutes.")).length, 1);
+
+  await editedDuringSetup(async () => void (await reported([])), "Retry failed deliveries with backoff capped at five minutes.", "Jitter is out of scope.");
+  const verify = sectionsOf(kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt"));
+  assert.equal(verify.brief, "Retry failed deliveries with backoff capped at five minutes.", "the verifier's brief is the one the latest decision came with");
+  assert.equal(verify.decisions.filter((line) => line.endsWith("Jitter is out of scope.")).length, 1);
 });
 
 test("a reviewer runs on neither the agent's model nor the one its verifier then runs on; with no third, on the verifier's, never the agent's", async () => {

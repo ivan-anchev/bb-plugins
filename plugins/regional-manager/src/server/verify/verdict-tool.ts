@@ -30,7 +30,7 @@ const verdictInputSchema = z.object({
     .array(
       triageVariants({
         finding: z.number().int().min(1).describe("The reviewer's finding's number in your first message."),
-        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't, and for a downgrade why it breaks none of the five."),
+        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five."),
       }),
     )
     .max(50)

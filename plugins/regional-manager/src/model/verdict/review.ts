@@ -11,6 +11,7 @@ import type { Verdict } from "./verdict.ts";
 
 /** How much a finding matters, by the reviewer's judgement: must-fix, should-fix, or a nit. */
 export const severitySchema = z.enum(["must-fix", "should-fix", "nit"]);
+type Severity = z.infer<typeof severitySchema>;
 
 /** One thing the reviewer found: where in the diff (its file, and its line, null when it names none), how much it matters, and what it claims is wrong. */
 export const reviewFindingSchema = z.object({
@@ -105,9 +106,9 @@ export function triageProblem({ severity }: ReviewFinding, triage: Triage): stri
     case "confirmed":
       return severity === "must-fix" ? "a must-fix that holds is anchored, naming what it breaks, or downgraded, never just confirmed" : null;
     case "anchored":
-      return severity === "must-fix" ? null : `only a must-fix is anchored, and this one is a ${severity}: confirm it, or downgrade it`;
+      return severity === "must-fix" ? null : `only a must-fix is anchored, and this one is a ${severity}: ${holdsAs(severity)}`;
     case "downgraded":
-      return SEVERITIES.indexOf(triage.to) > SEVERITIES.indexOf(severity) ? null : `a downgrade goes lower than the reviewer's ${severity}, and ${triage.to} isn't`;
+      return lowerThan(severity).includes(triage.to) ? null : `a downgrade goes lower than the reviewer's ${severity}, and ${triage.to} isn't: ${holdsAs(severity)}`;
     default:
       return triage satisfies never;
   }
@@ -143,8 +144,15 @@ export function triageText(triage: Triage): string {
   }
 }
 
-/** Severities, the most a finding can matter first. */
-const SEVERITIES = severitySchema.options;
+/** The severities lower than `severity`, the most a finding can matter first. */
+const lowerThan = (severity: Severity): Severity[] => severitySchema.options.slice(severitySchema.options.indexOf(severity) + 1);
+
+/** How a finding of `severity` that holds can be triaged, as a refusal's way forward: a must-fix anchored, any other confirmed, or either downgraded when a lower severity exists. */
+function holdsAs(severity: Severity): string {
+  const keep = severity === "must-fix" ? "anchor it, naming what it breaks" : "confirm it";
+  const lower = lowerThan(severity);
+  return lower.length === 0 ? keep : `${keep}, or downgrade it to ${lower.join(" or ")}`;
+}
 
 /** The anchors as a list in a sentence: "a done-criterion, the issue's brief, …, or existing behaviour, as a regression". */
 function anchorList(): string {
@@ -167,15 +175,26 @@ export const reviewPending = ({ review, verdict }: { review: Review; verdict: Pi
 
 /**
  * Each finding the reviewer reported, with the verifier's triage of it (`triage`, in the
- * findings' order); [] when it reported none or none was had. why throw on a count that differs:
- * issue_verdict refuses a triage that doesn't take every finding once, and the two are stored
- * together, so a stored check that breaks it is refused as the store reads it.
+ * findings' order); [] when it reported none or none was had. why throw on a count that differs,
+ * or on a triage the rule refuses for its finding's severity (triageProblem), as an anchored nit:
+ * issue_verdict refuses both, and the two are stored together, so a stored check that breaks
+ * either is refused as the store reads it, never read as failing a verdict it couldn't fail. A
+ * confirmed must-fix passes: verdicts from before the anchor rule stored it so (verdict.ts
+ * failsVerdict).
  */
 export function triaged(review: Review, triage: readonly Triage[]): Triaged[] {
   const findings = review.state === "reported" ? review.findings : [];
   if (findings.length !== triage.length) throw new Error(`The verdict triages ${triage.length} of the review's ${findings.length} findings.`);
-  return findings.map((finding, i) => ({ ...finding, ...at(triage, i) }));
+  return findings.map((finding, i) => {
+    const one = at(triage, i);
+    const problem = isLegacyConfirmed(finding, one) ? null : triageProblem(finding, one);
+    if (problem !== null) throw new Error(`The verdict's triage of finding ${i + 1} breaks the triage rule: ${problem}.`);
+    return { ...finding, ...one };
+  });
 }
+
+/** A must-fix the verifier confirmed, as verdicts from before the anchor rule stored one. */
+const isLegacyConfirmed = ({ severity }: ReviewFinding, { result }: Triage): boolean => severity === "must-fix" && result === "confirmed";
 
 /** A finding in a line: its place, its severity, then its claim. */
 export const findingText = (finding: ReviewFinding): string => `${placeText(finding)} (${finding.severity}): ${finding.claim}`;

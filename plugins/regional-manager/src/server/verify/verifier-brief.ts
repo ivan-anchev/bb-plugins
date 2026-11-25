@@ -5,7 +5,9 @@
 // checks the work rather than an agent's account of it.
 import type { AgentId } from "../../model/agent/agent.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
-import type { Issue } from "../../model/issue/issue.ts";
+import type { CoordinatorId } from "../../model/role.ts";
+import type { Issue, IssueId } from "../../model/issue/issue.ts";
+import type { Store } from "../store/store.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
 import { findingText, TRIAGE_RULE, type Review } from "../../model/verdict/review.ts";
@@ -75,6 +77,21 @@ function reviewPart(review: Review): string[] {
   }
 }
 
+/** An issue as a reviewer's or a verifier's first message gives it: its brief, and its decisions. */
+export type CheckedIssue = Issue & { brief: string; decisions: IssueDecision[] };
+
+/**
+ * The issue a checker's first message is written from, with its decisions, in one read. why one
+ * synchronous read, after any await: an issue_update can change the brief and record a decision
+ * together, and the two must agree in the message. why throw: a checker starts only for a check of
+ * an issue that had a brief for its agent, and checks are kept while their issue is.
+ */
+export function checkedIssue(store: Pick<Store, "issue" | "issueDecisions">, coordinatorId: CoordinatorId, issueId: IssueId): CheckedIssue {
+  const issue = store.issue(coordinatorId, issueId);
+  if (issue === null || issue.brief === null) throw new Error(`The issue ${issueId} of ${coordinatorId}, or its brief, is missing.`);
+  return { ...issue, brief: issue.brief, decisions: store.issueDecisions(coordinatorId, issueId) };
+}
+
 /**
  * What the user and the regional manager decided about the issue, as a reviewer's and a
  * verifier's first message give it: the decisions agents get (decision.ts decisionsText), less the
@@ -84,7 +101,7 @@ function reviewPart(review: Review): string[] {
 export function decisionsPart(issueId: Issue["id"], decisions: readonly IssueDecision[]): string[] {
   const about = decisions.filter((decision) => decision.kind === "recorded" || decision.cap === null);
   if (about.length === 0) return [];
-  return [`## Decisions on ${issueId}\n\nWhat the user and the regional manager decided about this issue. They are part of the work, as its brief is: work that follows one is never a finding, and a must-fix that breaks one breaks a recorded decision.\n\n${decisionsText(about)}`];
+  return [`## Decisions on ${issueId}\n\nWhat the user and the regional manager decided about this issue: the decisions recorded on it, and the user's answers to the questions put to them. They are part of the work, as its brief is: work that follows one is never a finding, and a must-fix that breaks one breaks a recorded decision. A question not answered yet decides nothing.\n\n${decisionsText(about)}`];
 }
 
 const criteriaPart = (criteria: readonly string[]): string => `## Done-criteria\n\n${criteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`;

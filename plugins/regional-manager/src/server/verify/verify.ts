@@ -23,7 +23,7 @@ import { branchOf, type Agent, type AgentCheckout, type EndedHow } from "../../m
 import { sameModel, type Execution } from "../../model/agent/execution.ts";
 import { handoffIsCurrent, type GivenHandoff, type Handoff } from "../../model/agent/handoff.ts";
 import type { Coordinator } from "../../contract.ts";
-import type { Issue, IssueId } from "../../model/issue/issue.ts";
+import type { IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { checkedAgents, type Check, type CheckId, type HandoffCheck } from "../../model/verdict/check.ts";
 import { isReviewing, reviewPending } from "../../model/verdict/review.ts";
@@ -49,7 +49,7 @@ import { refusalOf } from "./send-refusal.ts";
 import type { AsksBb } from "../hidden/asks.ts";
 import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { verifierExecution } from "./verifier-model.ts";
-import { verifierBrief } from "./verifier-brief.ts";
+import { checkedIssue, verifierBrief } from "./verifier-brief.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type ThreadRow = Awaited<ReturnType<Threads["list"]>>[number];
@@ -180,7 +180,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
     const { subject } = check;
     switch (subject.kind) {
       case "handoff":
-        return handoffRequest({ ...check, subject }, coordinator, issue, check.verdict.checkout);
+        return handoffRequest({ ...check, subject }, coordinator, check.verdict.checkout);
       case "final": {
         const theirs = checkedAgents(check, store.agents(check.coordinatorId)).map(({ execution }) => execution);
         return finalCheckerRequest(bb, { check: { ...check, subject }, coordinator, issue, theirs });
@@ -195,10 +195,10 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
    * read as it handed off; null while bb reports the agent's thread running, as it does through the
    * turn that handed off, so the verifier never runs beside it there.
    */
-  async function handoffRequest(check: HandoffCheck, coordinator: Coordinator, issue: Issue, checkout: Checkout | null): Promise<CheckerRequest | null> {
+  async function handoffRequest(check: HandoffCheck, coordinator: Coordinator, checkout: Checkout | null): Promise<CheckerRequest | null> {
     const agent = agentOf(check);
-    // why throw: a check is made of a bound agent's handoff, on an issue that had a brief for it to start, and queued with the read made as it handed off.
-    if (issue.brief === null || checkout === null) throw new Error(`The check ${check.id} of ${issue.id} has no brief or no checkout to verify.`);
+    // why throw: a check is made of a bound agent's handoff, queued with the read made as it handed off.
+    if (checkout === null) throw new Error(`The check ${check.id} of ${check.issueId} has no checkout to verify.`);
     const thread = (await listedThreads(bb, [agent.threadId])).get(agent.threadId);
     if (thread === undefined) throw new Error("the agent's thread was archived or deleted");
     if (isRunning(thread)) return null;
@@ -209,6 +209,8 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       theirs: [agent.execution],
       routing: { environmentId: thread.environmentId },
     });
+    // why read here, after every await: the brief and the decisions it gives must agree (checkedIssue).
+    const issue = checkedIssue(store, coordinator.id, check.issueId);
     return {
       role: { kind: "verifier", coordinatorId: coordinator.id, issueId: issue.id, checkId: check.id },
       coordinator,
@@ -216,7 +218,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       title: `Verify ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId: thread.environmentId },
       execution,
-      prompt: verifierBrief({ ...issue, brief: issue.brief, decisions: store.issueDecisions(coordinator.id, issue.id) }, check, checkout),
+      prompt: verifierBrief(issue, check, checkout),
     };
   }
 
