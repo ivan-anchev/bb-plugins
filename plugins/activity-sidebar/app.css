@@ -108,11 +108,11 @@
     color: var(--foreground);
   }
 }
-/* why an outline in the full ink, not the rows' --ring shadow: the ring falls under 3:1 on the selected
+/* why a 2px outline in the full ink, not the rows' --ring shadow: the ring falls under 3:1 on the selected
    thumb and wash in Zeron, and a shadow vanishes in forced colors; an outline is kept there. */
 .as-segment > button:focus-visible {
-  outline: 1.5px solid var(--foreground);
-  outline-offset: -1.5px;
+  outline: 2px solid var(--foreground);
+  outline-offset: -2px;
 }
 @media (prefers-reduced-motion: reduce) {
   .as-segment-thumb,
@@ -163,8 +163,8 @@
 }
 /* why: as the segment's tabs: an outline in the full ink reads at 3:1 on every surface and in forced colors. */
 .as-manager:focus-visible {
-  outline: 1.5px solid var(--foreground);
-  outline-offset: -1.5px;
+  outline: 2px solid var(--foreground);
+  outline-offset: -2px;
 }
 /* why: the avatar's left edge lines up with the section titles, bb's nav icons and the agent marks, 16 in. */
 .as-manager-face {
