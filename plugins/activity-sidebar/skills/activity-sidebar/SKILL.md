@@ -49,7 +49,10 @@ the sidebar, and each side owns the whole list under it.
   at its end when it doesn't fit. Tool calls, empty replies, subagents' replies
   and messages sent to the manager (yours, or the Regional Manager plugin's
   wake-ups) never show there. A manager with no reply yet shows its name
-  alone, centred on its avatar. The line changes as soon as the manager posts
+  alone, centred on its avatar. A name that doesn't fit runs through to its
+  end after a beat, under the pointer or while ↑/↓ has the row focused; with
+  Reduce motion on, the focused row's name jumps to its end instead, and the
+  pointer leaves it still. The line changes as soon as the manager posts
   a new reply, and keeps its quiet colour when the row is selected. No
   agent, project, state, age, subthread count or pull request. Click a row to
   open the manager's thread; right-click it (or press the Menu key or

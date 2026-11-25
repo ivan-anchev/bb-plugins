@@ -596,6 +596,24 @@
     transition: transform var(--as-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
   }
 }
+/* A manager's name runs through the same way while its row has the keyboard's focus. With reduced
+   motion it doesn't run: after the same beat it stands at its end at once, and goes home at once. */
+.as-manager:focus-visible > .as-manager-words > .as-title[data-over] {
+  --as-fade-in: 12px;
+  transition-delay: 500ms;
+}
+.as-manager:focus-visible > .as-manager-words > .as-title[data-over] > .as-title-text {
+  transform: translateX(calc(-1 * var(--as-travel)));
+  transition: transform var(--as-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-manager > .as-manager-words > .as-title[data-over],
+  .as-manager > .as-manager-words > .as-title[data-over] > .as-title-text,
+  .as-manager:focus-visible > .as-manager-words > .as-title[data-over],
+  .as-manager:focus-visible > .as-manager-words > .as-title[data-over] > .as-title-text {
+    transition-duration: 0s;
+  }
+}
 .as-row[data-strong] .as-line .as-title {
   color: var(--foreground);
   font-weight: 500;
