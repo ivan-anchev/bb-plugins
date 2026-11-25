@@ -36,6 +36,11 @@ bb plugin install git:https://github.com/ivan-anchev/bb-plugins.git@^0.1.0 --tag
 | [Regional Manager](plugins/regional-manager) | Experimental: it may break with a bb update. A regional manager is a long-lived thread that plans a body of work as issues, keeps its memory in files, and starts an agent thread on each issue, on this machine or in a sandbox; all of its agents are its crew. An independent verifier checks every done handoff, and a board shows each issue by status, with Needs you above, its pull request and CI. |
 | [`subagents-strip`](plugins/subagents-strip) | A live strip above the composer that counts the thread's subagents and child threads and opens into one row per subagent that expands to its report and latest steps. |
 
+## Themes
+
+Custom bb themes, plain CSS rather than plugins, live in [`themes/`](themes),
+with a one-command download for each.
+
 ## Develop
 
 ```sh
