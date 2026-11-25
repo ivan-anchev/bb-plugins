@@ -3,7 +3,7 @@
 // count each question was asked at (decisions.cap): the failures are counted from the issue's
 // checks every time, those settled before the cap existed included, and the lock is an open cap
 // question naming the issue.
-import type { Decision } from "../../decision.ts";
+import type { Decision, DecisionId } from "../../decision.ts";
 import type { IssueId } from "../../issue/issue.ts";
 import type { Check, CheckId } from "../check.ts";
 import { failureHeadline, outcome, type Verdict } from "../verdict.ts";
@@ -66,7 +66,7 @@ export const capText = (cap: number): string =>
 const pastCap = (cap: number): string => (cap === MAX_FAILED_VERDICTS ? "its cap" : `past its cap of ${MAX_FAILED_VERDICTS}`);
 
 /** What the regional manager can do while the cap question `questionId` locks `issueId`: only the moves that work then. */
-export const capMovesText = (issueId: IssueId, questionId: string): string =>
+export const capMovesText = (issueId: IssueId, questionId: DecisionId): string =>
   `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} on the board; or stop its agent with agent_stop and cancel ${issueId} with issue_update.`;
 
 /** What a failure that asked did, in a sentence: "BBP-2's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user (d4)". */
