@@ -49,7 +49,7 @@ export const activitySidebarContract = defineRpcContract({
     output: archivedCountSchema,
     tags: () => [ARCHIVED_COUNT_TAG],
   },
-  /** Each started regional manager's avatar and description; none when the Regional Manager plugin can't be read. */
+  /** Each open regional manager's avatar and description; none when the Regional Manager plugin can't be read. */
   managerLooks: {
     input: z.object({}),
     output: z.object({ looks: z.array(managerLookSchema) }),

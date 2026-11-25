@@ -155,7 +155,7 @@ export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 /**
  * What other plugins may read, published to them as discoverable (server.ts). A cross-plugin contract:
  * the Activity Sidebar reads each started manager's `threadId`, `description` and `avatar` to draw
- * its Managers view, so those three keep their names and shapes (skills/regional-manager/SKILL.md).
+ * its Managers view, so those three keep their names and shapes (skills/crew-board/SKILL.md).
  */
 export const publishedContract = defineRpcContract({
   /** Every regional manager whose thread exists, and every one not started yet, each newest first. */
