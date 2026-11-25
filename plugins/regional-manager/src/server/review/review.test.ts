@@ -318,11 +318,18 @@ test("the verifier's brief lists the review's findings; its verdict triages each
   ]);
 });
 
-test("a verdict that passes every criterion but anchors a must-fix finding fails: the finding goes back to the agent with the verifier's reason as its fix round, and the manager's update names it as the cause", async () => {
+test("a verdict that passes every criterion but anchors a must-fix finding fails: the finding goes back to the agent with the verifier's reason as its fix round, a downgraded one beside it at its lower severity, and the manager's update names the anchored one as the cause", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, row, check, handOff, reported, returned, catchUp, opened } = await withAgent();
   await handOff();
-  await reported(FINDINGS);
-  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "brief", reason: "It never caps: 20 failures wait 17 minutes." }, { finding: 2, result: "rejected", reason: "Taste." }] });
+  await reported([...FINDINGS, { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports break REVIEW.md's order." }]);
+  await returned({
+    ...PASSES,
+    triage: [
+      { finding: 1, result: "anchored", anchor: "brief", reason: "It never caps: 20 failures wait 17 minutes." },
+      { finding: 2, result: "rejected", reason: "Taste." },
+      { finding: 3, result: "downgraded", to: "nit", reason: "Neither the brief nor a criterion names REVIEW.md's import order." },
+    ],
+  });
   await settled();
 
   const stored = check().verdict;
@@ -333,7 +340,12 @@ test("a verdict that passes every criterion but anchors a must-fix finding fails
   assert.match(sent, /^## Verifier findings: a must-fix review finding upheld, though every done-criterion passed\n/);
   assert.match(
     sent,
-    /### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: Anchored, as it breaks the issue's brief\. It never caps: 20 failures wait 17 minutes\.$/,
+    /### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: Anchored, as it breaks the issue's brief\. It never caps: 20 failures wait 17 minutes\.$/m,
+  );
+  assert.match(
+    sent,
+    /### Other review findings that held\n\n- `src\/retry\.ts:3` \(must-fix\): The imports break REVIEW\.md's order\.\n {2}The verifier: Downgraded to nit\. Neither the brief nor a criterion names REVIEW\.md's import order\.$/m,
+    "the downgraded finding goes back too, with its lower severity and the verifier's reason, outside the findings that fail the verdict",
   );
   assert.doesNotMatch(sent, /helper's name|Taste/, "a rejected finding never reaches the agent");
   assert.doesNotMatch(sent, /nothing to fix/, "the must-fix finding is what there is to fix");
@@ -344,7 +356,7 @@ test("a verdict that passes every criterion but anchors a must-fix finding fails
   const update = await catchUp();
   assert.match(update, /handed off: done, failed verification, a must-fix review finding upheld, findings sent back to it\n/);
   assert.match(update, /Failed verification: a must-fix review finding upheld\. 2 of 2 criteria passed/);
-  assert.match(update, /the verifier anchored 1, downgraded 0, confirmed 0 and rejected 1\. The ones that held went back to the agent with the failed verdict\./);
+  assert.match(update, /the verifier anchored 1, downgraded 1, confirmed 0 and rejected 1\. The ones that held went back to the agent with the failed verdict\./);
   assert.match(update, /\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps[^\n]*\n {2}Anchored, as it breaks the issue's brief: It never caps: 20 failures wait 17 minutes\.\n- `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\.\n {2}Rejected: Taste\./);
 
   const { round, body } = await opened();

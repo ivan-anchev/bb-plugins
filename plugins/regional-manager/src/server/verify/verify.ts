@@ -147,7 +147,7 @@ const CI_UNFINISHED: CiVerdict = { kind: "not-checked", reason: "CI hadn't finis
 const MAX_AUTO_FIX_ROUNDS = 1;
 
 const NUDGE =
-  "You ended your turn without calling issue_verdict, so nobody has your verdict. Finish checking each done-criterion and call issue_verdict once; it is the only way your verdict reaches anyone.";
+  "Your turn ended and no verdict was recorded, so nobody has your verdict. Finish checking each done-criterion and call issue_verdict; if it was refused for what you passed, correct that and call it again. It is the only way your verdict reaches anyone.";
 
 export type Verify = ReturnType<typeof createVerify>;
 

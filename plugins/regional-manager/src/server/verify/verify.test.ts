@@ -680,7 +680,7 @@ test("a verifier that goes idle without a verdict is nudged once, then the row r
 
   await kit.idle(verifierThreadId, "All good.");
   await kit.tick();
-  assert.match(kit.delivered(verifierThreadId).join(), /without calling issue_verdict/);
+  assert.match(kit.delivered(verifierThreadId).join(), /no verdict was recorded/);
   assert.equal(verdict().state, "running");
   await kit.tick();
   assert.equal(kit.delivered(verifierThreadId).length, 1, "nudged once, while it works on the nudge");
@@ -1120,20 +1120,24 @@ test("a verifier's first message holds the issue's decisions under a Decisions h
   assert.doesNotMatch(decisions, /d1|One more round|failed verification/, "the question at the cap is no decision about the work");
 });
 
-test("a final check's first message is unchanged by its parent's decisions: no Decisions heading, the same sections", async () => {
-  const { kit, threadId, coordinatorId } = await coordinating();
-  const text = async (tool: string, input: object) => textOf(await kit.call(tool, input, threadId));
-  await text("issue_create", { title: "Card vault", description: "Cards live in a vault.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes"], kind: "build" });
-  await text("issue_create", { title: "Vault client", description: "A client.", brief: "Write it.", doneCriteria: ["npm test passes"], kind: "build", parent: "WEB-1" });
-  await text("issue_update", { id: "WEB-1", decision: "Use the hosted vault: the user's call." });
-  const builder = threadIn(await text("agent_start", { issue: "WEB-2" }));
-  kit.github.prs.set(kit.thread(builder).environmentBranchName ?? assert.fail("no branch"), { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
-  kit.repo.origin.set("main", "b".repeat(40));
-  kit.clock.now += 10 * 60_000;
-  await kit.tick();
+test("a final check's first message is unchanged by its parent's decisions: the same message whole, with a decision recorded on the parent or without one", async () => {
+  /** The first message of WEB-1's final check, its decision `decision` recorded on it first (null: none). */
+  async function finalCheckPrompt(decision: string | null): Promise<string> {
+    const { kit, threadId, coordinatorId } = await coordinating();
+    const text = async (tool: string, input: object) => textOf(await kit.call(tool, input, threadId));
+    await text("issue_create", { title: "Card vault", description: "Cards live in a vault.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes"], kind: "build" });
+    await text("issue_create", { title: "Vault client", description: "A client.", brief: "Write it.", doneCriteria: ["npm test passes"], kind: "build", parent: "WEB-1" });
+    if (decision !== null) await text("issue_update", { id: "WEB-1", decision });
+    const builder = threadIn(await text("agent_start", { issue: "WEB-2" }));
+    kit.github.prs.set(kit.thread(builder).environmentBranchName ?? assert.fail("no branch"), { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+    kit.repo.origin.set("main", "b".repeat(40));
+    kit.clock.now += 10 * 60_000;
+    await kit.tick();
+    const verdict = kit.store.finalChecks(coordinatorId, i1).at(-1)?.verdict;
+    return kit.thread(verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the final check is ${verdict?.state}`)).spawnedWith.prompt ?? assert.fail("no prompt");
+  }
 
-  const verdict = kit.store.finalChecks(coordinatorId, i1).at(-1)?.verdict;
-  const prompt = kit.thread(verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the final check is ${verdict?.state}`)).spawnedWith.prompt ?? assert.fail("no prompt");
-  assert.deepEqual(headingsOf(prompt), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## Rules"]);
-  assert.doesNotMatch(prompt, /Decisions|hosted vault/);
+  const decided = await finalCheckPrompt("Use the hosted vault: the user's call.");
+  assert.equal(decided, await finalCheckPrompt(null), "the decision changes nothing in it");
+  assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## Rules"]);
 });

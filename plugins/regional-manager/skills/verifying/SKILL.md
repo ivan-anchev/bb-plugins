@@ -106,7 +106,7 @@ For a final check:
 
 ## Return the verdict
 
-Call `issue_verdict` once, as your last action, then stop:
+Call `issue_verdict` as your last action, and stop once it records your verdict:
 
 - **criteria**: one entry per done-criterion, by its number: `result` and
   `evidence`, the command you ran and the lines it printed that decide it
@@ -142,7 +142,10 @@ Its regional manager reads every finding of the reviewer's with your triage
 and reason, rejected ones included.
 
 It is refused, and nothing is saved, when you skip, repeat or invent a
-criterion, or a finding of the reviewer's. Fix the call and make it again. If it is refused because an
+criterion, or a finding of the reviewer's, or triage one as the rule refuses
+(a must-fix confirmed, a should-fix or nit anchored, a downgrade that isn't
+lower): correct what the refusal names and call it again. Stop once it
+records your verdict. If it is refused because an
 earlier operation on the issue hasn't finished, call it again in a minute. If
 it says the check no longer waits for your verdict, a newer handoff or final
 check replaced it: stop. On a final check, if the plugin couldn't read your

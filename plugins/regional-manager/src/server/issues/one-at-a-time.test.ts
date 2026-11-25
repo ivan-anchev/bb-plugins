@@ -487,7 +487,7 @@ test("B7: a quiet verifier isn't reminded while a person has woken a1; the remin
   assert.deepEqual([kit.delivered(verifier), ...statusesOf(kit, agentThreadId, verifier)], [[], "active", "idle"], "no reminder beside a1");
 
   await kit.idle(agentThreadId, "Answered.");
-  assert.match(kit.delivered(verifier).join(), /without calling issue_verdict/);
+  assert.match(kit.delivered(verifier).join(), /no verdict was recorded/);
   assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
 });
 
@@ -749,7 +749,7 @@ test("R143: a manager's message refused on another thread's queue keeps WEB-1 un
   assert.deepEqual(statusesOf(kit, agentThreadId, verifier), ["idle", "active"]);
 });
 
-const isReminder = (text: string): boolean => text.includes("without calling issue_verdict");
+const isReminder = (text: string): boolean => text.includes("no verdict was recorded");
 
 test("R141: the reminder stops a1 idle with a background command first, after a manager's message bb took but whose answer was lost, so a1 never wakes beside the reminded verifier", async () => {
   const on = await onI1();

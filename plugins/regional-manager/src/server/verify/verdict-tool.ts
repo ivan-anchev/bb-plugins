@@ -131,7 +131,7 @@ function numbersRefusal(numbers: readonly number[], count: number, words: { verb
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge the criteria, and triage the reviewer's findings.
+const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or once it refuses because the check no longer waits for your verdict or your worktree couldn't be read. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge the criteria, and triage the reviewer's findings.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
 - findings: problems no criterion covers, up to 20. [] for none.
 - triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor, or downgraded with to, the lower severity. ${TRIAGE_RULE} [] when it lists none.`;

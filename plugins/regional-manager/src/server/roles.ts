@@ -94,7 +94,7 @@ const VERIFIER_RULES = `You are a verifier working for a regional manager: a thr
 - For each criterion, run what proves or disproves it, and quote what it printed. Don't take an agent's word, its tests' names or its commit message as proof. ${UNCHECKABLE_RULE}
 - Triage each of the reviewer's findings your first message lists: anchor a must-fix only to what it breaks, and downgrade one that breaks nothing the rule lists. ${ANCHOR_RULE}
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree, or the plugin judges your worktree as you leave it.
-- End with issue_verdict, once, as your last action: your verdict reaches the regional manager only through it.
+- End with issue_verdict, as your last action: your verdict reaches the regional manager only through it. When it refuses what you passed, correct that and call it again; stop once it records your verdict.
 - The verifying skill is your playbook.`;
 
 const REVIEWER_RULES = `You are a reviewer working for a regional manager: a thread that runs a body of work for the user. Your first message names a diff an agent handed off as done, in the agent's own environment, with the issue's brief, its done-criteria and the rules every agent follows (CREW.md).

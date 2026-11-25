@@ -560,8 +560,9 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   criterion does, even when every criterion passed, and your update names it
   as the cause. A CREW.md or REVIEW.md rule anchors only when the brief or a
   criterion names it: name the rules that must block in the brief.
-  Confirmed and downgraded findings never fail it. Every finding that held
-  goes back to the agent with a failed verdict. When the issue has a pull
+  Confirmed and downgraded findings never fail it. When a failed verdict
+  goes back to the agent as its automatic fix round, every finding that held
+  goes with it. When the issue has a pull
   request, a verdict that passed every criterion, with no must-fix finding
   anchored, also waits for CI on the claimed commit; CI
   failing fails it.
