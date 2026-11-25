@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { roundBodyKey } from "../../../../../contract.ts";
+import { decisionIdSchema } from "../../../../../model/decision.ts";
 import type { Entry } from "../../../../../model/feed/entry.ts";
 import { bodyOf, COORDINATOR, FEED, id, issue, opened, roundKey } from "../../test-tab.ts";
 
@@ -204,6 +205,19 @@ test("a round whose body fails to read says so beside its steps, and Retry reads
   await three.findByText("The backoff has no cap.");
   assert.equal(three.queryByRole("alert"), null);
   assert.deepEqual(new Set(bodyReads.flat()), new Set([keyOf(3)]));
+});
+
+test("only the round whose failure asked the user at the cap says so by its score: \"3rd failed verification: asked you\"", async () => {
+  const capped: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 2 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, asked: { decisionId: decisionIdSchema.parse("d4"), failed: 3 } } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: capped }) });
+  const { head } = rounds(tab());
+  assert.deepEqual(
+    [1, 2, 3].map((n) => head(n).querySelector(".rmi-score-asked")?.textContent ?? null),
+    [null, "· 3rd failed verification: asked you", null],
+  );
+  assert.equal(head(2).querySelector(".rmi-score-asked")?.getAttribute("title"), "3rd failed verification: asked you on the board (d4)");
 });
 
 test("a round whose findings may or may not have reached its agent says so, and that the manager decides", async () => {

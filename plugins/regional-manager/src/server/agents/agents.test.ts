@@ -3,9 +3,10 @@ import { test } from "node:test";
 import { z } from "zod";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
+import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -550,3 +551,39 @@ for (const first of ["agent", "manager", "neither"] as const) {
     assert.ok(kit.invalidated().includes("coordinators"), "the panel lists it no more");
   });
 }
+
+test("while a cap question is open, agent_start and agent_message on its issue are refused naming it and issue_comment, and both work once the user answers", async () => {
+  const { kit, threadId, coordinatorId, start } = await filed();
+  const a2Thread = await toCap(kit, threadId, coordinatorId, "WEB-1", threadIn(textOf(await start())));
+  const moves = "Wait for their answer, which crew_catch_up brings you; or reply on WEB-1 with issue_comment, pointing them at d1 on the board; or stop its agent with agent_stop and cancel WEB-1 with issue_update.";
+  const why = `WEB-1 failed verification 3 times, so the plugin asked the user (d1) whether it gets another round, and until they answer no agent starts on WEB-1 and none is messaged on it. ${moves}`;
+  const sentBefore = kit.sent().length;
+
+  const message = await kit.call("agent_message", { agent: "a2", text: "Try once more." }, threadId);
+  assert.ok(isRefusal(message));
+  assert.equal(textOf(message), `agent_message is refused and nothing was sent: ${why}`);
+  const started = await start();
+  assert.ok(isRefusal(started));
+  assert.equal(textOf(started), `agent_start is refused: ${why}`);
+  assert.deepEqual(kit.sent().slice(sentBefore), [], "nothing was sent or taken back");
+  assert.deepEqual(kit.store.agents(coordinatorId).map(({ id, ended }) => [id, ended?.how ?? null]), [["a1", "replaced"], ["a2", null]], "a2 still holds WEB-1, and nothing was stopped");
+  assert.equal(kit.thread(a2Thread).status, "idle");
+
+  const comment = await kit.call("issue_comment", { issue: "WEB-1", text: "WEB-1 failed verification 3 times: see d1 on the board." }, threadId);
+  assert.ok(!isRefusal(comment), textOf(comment));
+
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d1"), answer: "One more round" });
+  assert.match(textOf(await kit.call("agent_message", { agent: "a2", text: "Try once more." }, threadId)), /^(Sent to|Queued for) a2\./);
+  assert.match(textOf(await start()), /^Stopped a2 and started a3 on WEB-1/);
+});
+
+test("while a cap question is open, agent_stop still stops the agent, and the issue can then be canceled, which takes its question off Needs you", async () => {
+  const { kit, threadId, coordinatorId, start } = await filed();
+  await toCap(kit, threadId, coordinatorId, "WEB-1", threadIn(textOf(await start())));
+  assert.deepEqual((await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId], { decisions: 1, issues: 1 });
+
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a2" }, threadId)), /^a2 is stopped; it no longer holds WEB-1\./);
+  const canceled = await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId);
+  assert.ok(!isRefusal(canceled), textOf(canceled));
+  assert.deepEqual((await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId], { decisions: 0, issues: 0 });
+});

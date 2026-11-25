@@ -1231,3 +1231,35 @@ export async function startedAgent(kit: ReturnType<typeof harness>, threadId: st
   const issue = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, ...fields }, threadId)));
   return { issue, agentThreadId: threadIn(textOf(await kit.call("agent_start", { issue, ...start }, threadId))) };
 }
+
+/**
+ * The agent in `agentThreadId` hands off done (its summary "Retries land with backoff") and ends
+ * its turn, and the verifier the plugin starts on it fails its first criterion and passes the rest.
+ */
+export async function failsVerification(kit: ReturnType<typeof harness>, coordinatorId: CoordinatorId, agentThreadId: string): Promise<void> {
+  const done = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD };
+  await kit.call("agent_handoff", done, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  await settled();
+  const agent = kit.store.agents(coordinatorId).find(({ threadId }) => threadId === agentThreadId) ?? assert.fail(`no agent in ${agentThreadId}`);
+  const check = kit.store.latestHandoff(coordinatorId, agent.id)?.check ?? assert.fail("no check");
+  const { verdict } = check;
+  const verifierThreadId = verdict.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict.state}`);
+  const criteria = check.criteria.map((_, i) => ({ criterion: i + 1, result: i === 0 ? "fail" : "pass", evidence: i === 0 ? "# fail 1" : "# pass" }));
+  await kit.call("issue_verdict", { criteria, findings: [] }, verifierThreadId);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+}
+
+/**
+ * Drives `issue` to its cap of failed verdicts: its agent `agentThreadId` fails verification twice,
+ * the first going back to it as its fix round, then the regional manager `threadId` hands the issue
+ * to a fresh agent, which fails once more, and the plugin asks the user. Returns the fresh agent's thread.
+ */
+export async function toCap(kit: ReturnType<typeof harness>, threadId: string, coordinatorId: CoordinatorId, issue: string, agentThreadId: string): Promise<string> {
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
+  await failsVerification(kit, coordinatorId, fresh);
+  return fresh;
+}

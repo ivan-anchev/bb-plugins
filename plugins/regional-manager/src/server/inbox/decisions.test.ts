@@ -6,7 +6,7 @@ import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, doorbellOf, isRefusal, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, toCap } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
@@ -189,4 +189,35 @@ test("a question about an issue reads that issue's open tab again at once, and n
   await kit.call("crew_ask_user", { question: "Start WEB-1 now?", options: ["Yes", "Not yet"], issue: "WEB-1" }, threadId);
   const tags = kit.invalidated().slice(before).filter((tag) => tag.startsWith("issue:"));
   assert.deepEqual(tags, [issueTag(coordinatorId, issueIdSchema.parse("WEB-1"))]);
+});
+
+test("a cap question whose issue's pull request merged leaves Needs you, on the board and in the needsYou count, while one on an open issue stays; the board sends each question's cap", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  for (const title of ["Add retries", "Dead letters"]) {
+    const { issue, agentThreadId } = await startedAgent(kit, threadId, { title });
+    await toCap(kit, threadId, coordinatorId, issue, agentThreadId);
+  }
+  const needsYouLane = async () => {
+    const board = await boardOf(kit, coordinatorId);
+    const lane = boardGroups(board.decisions, board.issues).find(({ lane: name }) => name === "needs-you")?.rows ?? [];
+    return lane.map((row) => (row.kind === "decision" ? `${row.decision.id} ${row.decision.issueId}` : row.issue.id));
+  };
+  const counted = async () => (await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId];
+  assert.deepEqual(await needsYouLane(), ["d1 WEB-1", "d2 WEB-2", "WEB-1", "WEB-2"]);
+  assert.deepEqual(await counted(), { decisions: 2, issues: 2 });
+  const board = await boardOf(kit, coordinatorId);
+  assert.deepEqual(board.decisions.map((decision) => Object.keys(decision).sort()), [0, 1].map(() => ["answer", "askedAt", "cap", "id", "issueId", "options", "question"]));
+  assert.deepEqual(board.decisions.map(({ cap }) => cap), [3, 3]);
+
+  const web1 = kit.store.agents(coordinatorId).find(({ issueId, ended }) => issueId === "WEB-1" && ended === null) ?? assert.fail("no holder");
+  const branch = kit.thread(web1.threadId ?? assert.fail("no thread")).environmentBranchName ?? assert.fail("no branch");
+  kit.github.prs.set(branch, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 60_000;
+  await kit.tick();
+  await settled();
+
+  assert.equal((await boardOf(kit, coordinatorId)).issues.find(({ id }) => id === "WEB-1")?.status, "done");
+  assert.deepEqual(await needsYouLane(), ["d2 WEB-2", "WEB-2"], "WEB-1's question is on no lane; WEB-2's stays");
+  assert.deepEqual(await counted(), { decisions: 1, issues: 1 });
+  assert.equal(kit.store.decision(d1)?.answer, null, "nothing was written: the question is still unanswered");
 });

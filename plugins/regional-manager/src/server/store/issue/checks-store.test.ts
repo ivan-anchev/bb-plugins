@@ -468,3 +468,34 @@ test("a final check made while verification is off is waived and announced at on
   assert.deepEqual(events(store).slice(seen), [{ kind: "checked", issueId: parent.id, checkId: waived.id }]);
   assert.equal(store.check(open.id)?.verdict.state, "superseded");
 });
+
+test("a third failure that settles asks the user at the cap in the same transaction: a failed question's insert undoes the settlement, and a retry asks exactly once", () => {
+  const { db, store, issue, agentId } = withAgent();
+  const failedOnce = (n: number) => {
+    const check = runningCheck(store, issue.id, agentId, n);
+    store.receiveVerdict(check.id, returned(`thr_verifier_${n}`, "fail"), 4_000 + n);
+    return check;
+  };
+  for (const n of [1, 2]) assert.equal(store.settleReturned(failedOnce(n).id, CHECKED, 4_500 + n), MANAGER);
+  assert.deepEqual(store.decisions(MANAGER), [], "two failures ask nothing");
+  const third = failedOnce(3);
+  const before = events(store);
+
+  const restore = failWrites(db, "INSERT", "decisions");
+  assert.throws(() => store.settleReturned(third.id, CHECKED, 4_600), /forced failure/);
+  assert.deepEqual(store.unsettledChecks(), [third.id], "the settlement was undone");
+  assert.deepEqual(events(store), before, "and nobody was told");
+  assert.deepEqual(store.decisions(MANAGER), []);
+
+  restore();
+  assert.equal(store.settleReturned(third.id, CHECKED, 4_600), MANAGER);
+  assert.equal(store.settleReturned(third.id, CHECKED, 4_700), null, "settled once");
+  const settled = store.check(third.id)?.verdict;
+  assert.deepEqual(settled?.state === "returned" && settled.settlement, CHECKED);
+  const [asked = assert.fail("nothing asked"), ...more] = store.decisions(MANAGER);
+  assert.deepEqual(more, [], "exactly one question");
+  const { question, ...rest } = asked;
+  assert.deepEqual(rest, { id: "d1", issueId: issue.id, options: ["One more round", "Cancel it"], askedAt: 4_600, answer: null, cap: 3 });
+  assert.match(question, /^✗ Failed verification, 0 of 1 criteria passed\. WEB-1 has failed verification 3 times, its cap: /, "it leads with the failure's reason and how many criteria passed, then the count");
+  assert.ok(question.length < 500);
+});

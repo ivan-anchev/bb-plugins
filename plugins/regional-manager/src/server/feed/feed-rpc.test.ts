@@ -12,7 +12,7 @@ import type { Store } from "../store/store.ts";
 import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../store/test-store.ts";
 import type { ListBb } from "../agents/threads.ts";
 import { createFeedReader } from "./feed-reader.ts";
-import { coordinating, doorbellOf, ISSUE, issueIn, settled, textOf, newSubmission } from "../test-harness.ts";
+import { coordinating, doorbellOf, ISSUE, issueIn, settled, startedAgent, textOf, newSubmission, toCap } from "../test-harness.ts";
 import { feedHandlers } from "./feed-rpc.ts";
 
 const SHA = "a".repeat(40);
@@ -242,4 +242,20 @@ test("the user's comment can answer a comment of the same issue; one naming no c
   assert.equal(kit.store.comment(reply.commentId)?.replyTo, answered.id);
   await assert.rejects(async () => kit.rpc.commentIssue({ coordinatorId, issueId: two, text: "Elsewhere.", replyTo: answered.id, submission: newSubmission() }), new RegExp(`${answered.id} is no comment on ${two}, so nothing was posted`));
   assert.deepStrictEqual(kit.store.commentsOf(coordinatorId, two), []);
+});
+
+test("through the feed RPC, only the round whose failure asked at the cap carries the question and its count, and every other round's verdict says it asked nothing", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await toCap(kit, threadId, coordinatorId, issue, agentThreadId);
+  const feed = coordinatorContract.issueFeed.output.parse(await kit.rpc.issueFeed({ coordinatorId, issueId: issueIdSchema.parse(issue) }));
+  const rounds = feed.entries.flatMap((entry) => (entry.kind === "round" ? [entry.round] : []));
+  assert.deepEqual(rounds.map(({ number, by }) => [number, by.kind === "agent" ? by.agentId : null]), [[1, "a1"], [2, "a1"], [3, "a2"]], "three rounds, the third by another agent");
+  const verdicts = rounds.map(({ verdict }) => verdict ?? assert.fail("no verdict"));
+  for (const verdict of verdicts) assert.deepStrictEqual(keysOf(verdict), ["asked", "fixRound", "outcome", "results", "step"]);
+  assert.deepStrictEqual(verdicts.map(({ asked }) => asked), [null, null, { decisionId: "d1", failed: 3 }]);
+  assert.deepStrictEqual(keysOf(verdicts[2]?.asked ?? assert.fail("not asked")), ["decisionId", "failed"]);
+  const decision = feed.entries.find((entry) => entry.kind === "decision");
+  assert.ok(decision?.kind === "decision" && decision.decision.kind === "asked" && decision.decision.id === "d1", "the question shows as the issue's decision entry");
+  assert.deepStrictEqual(keysOf(decision.decision), ["answer", "at", "id", "kind", "options", "question"]);
 });
