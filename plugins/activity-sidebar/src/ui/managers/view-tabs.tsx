@@ -1,7 +1,7 @@
 // The Managers | Threads segment at the top of the sidebar, and the view it shows under it: the ARIA
 // tabs pattern, ←/→ (and Home/End) moving between the two tabs and showing each as it goes.
 import { useId, useRef, type KeyboardEvent, type ReactNode } from "react";
-import type { View } from "../data/local-choice/choices.ts";
+import type { View } from "../../data/local-choice/choices.ts";
 
 const TABS: readonly { view: View; label: string }[] = [
   { view: "managers", label: "Managers" },

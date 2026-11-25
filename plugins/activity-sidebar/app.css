@@ -37,7 +37,7 @@
   pointer-events: none;
 }
 
-/* --- With regional managers: the Managers | Threads segment over the view it shows (src/ui/view-tabs.tsx) */
+/* --- With regional managers: the Managers | Threads segment over the view it shows (src/ui/managers/view-tabs.tsx) */
 .as-views {
   display: flex;
   flex-direction: column;
@@ -94,6 +94,7 @@
   font-weight: 500;
   color: var(--muted-foreground);
   cursor: pointer;
+  user-select: none;
   transition: color 150ms ease;
 }
 .as-segment > button[aria-selected="true"] {

@@ -15,7 +15,7 @@ import { ARCHIVED_FIRST, ARCHIVED_STEP, listItems, retryNotice, type NoticeKey }
 import { buildActivity, isOpenManager, type SectionKey } from "../model/activity.ts";
 import type { ThreadIndex } from "../model/thread-index.ts";
 import { ListViewport } from "./list-viewport.tsx";
-import { SidebarViews } from "./sidebar-views.tsx";
+import { SidebarViews } from "./managers/sidebar-views.tsx";
 import { ViewMenu } from "./view-menu.tsx";
 
 // why: one read for both lifecycles, so the Archived shelf's first page has loaded by the time it opens.

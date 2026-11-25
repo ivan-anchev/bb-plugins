@@ -43,7 +43,7 @@ test("reads each started manager's thread, description and avatar from the Regio
   assert.deepEqual(calls, [{ pluginId: "regional-manager", method: "coordinators", input: {} }]);
 });
 
-test("no looks, and a warning, when the plugin is missing or fails: each manager keeps its name and a plain avatar", async () => {
+test("no looks, and a warning, when the plugin is missing or fails before any read: each manager keeps its name and a plain avatar", async () => {
   const { looks, warnings } = harness(async () => {
     throw new Error('plugin "regional-manager" is not installed');
   });
@@ -65,6 +65,17 @@ test("no looks when the plugin answers in a shape this copy of its schema doesn'
   }
 });
 
+test("a failed read after a good one keeps the looks last read, so the avatars shown never blank", async () => {
+  let fail = false;
+  const { looks } = harness(async () => {
+    if (fail) throw new Error("bb is restarting the plugin");
+    return ANSWER;
+  });
+  const good = await looks.read();
+  fail = true;
+  assert.deepEqual(await looks.read(), good);
+});
+
 test("a manager's thread created, archived, unarchived or deleted marks the looks stale; any other thread doesn't", () => {
   const { looks, invalidated } = harness(async () => ANSWER);
   looks.changed({ originPluginId: "regional-manager", parentThreadId: null });
@@ -78,11 +89,12 @@ test("a manager's thread created, archived, unarchived or deleted marks the look
 
 test("a manager retitled marks the looks stale, as its profile edit may have changed its description too", async () => {
   const { looks, invalidated } = harness(async () => ANSWER);
-  looks.retitled("thr_pr");
+  looks.threadChanged({ id: "thr_pr", changes: ["title-changed"] });
   assert.deepEqual(invalidated, [], "before any read, no thread is known to be a manager");
 
   await looks.read();
-  looks.retitled("thr_other");
-  looks.retitled("thr_pr");
+  looks.threadChanged({ id: "thr_other", changes: ["title-changed"] });
+  looks.threadChanged({ id: "thr_pr", changes: ["status-changed", "read-state-changed"] });
+  looks.threadChanged({ id: "thr_pr", changes: ["status-changed", "title-changed"] });
   assert.deepEqual(invalidated, [MANAGER_LOOKS_TAG]);
 });

@@ -14,13 +14,7 @@ export default function plugin(bb: BbPluginApi): void {
 
   const looks = openManagerLooks({ plugins: bb.sdk.plugins, rpc: bb.rpc, log: bb.log });
   for (const event of MANAGER_EVENTS) bb.events.on(event, ({ thread }) => looks.changed(thread));
-  const unsubscribe = bb.sdk.subscribe({
-    event: "thread:changed",
-    callback: ({ id, changes }) => {
-      if (id !== undefined && changes.includes("title-changed")) looks.retitled(id);
-    },
-  });
-  bb.onDispose(unsubscribe);
+  bb.onDispose(bb.sdk.subscribe({ event: "thread:changed", callback: looks.threadChanged }));
   bb.background.schedule("manager-looks", "* * * * *", looks.stale);
 
   bb.rpc.register(activitySidebarContract, createRpcHandlers({ rpc: bb.rpc, store, archived, looks }));

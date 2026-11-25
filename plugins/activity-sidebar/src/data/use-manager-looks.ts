@@ -8,7 +8,7 @@ const NONE: readonly ManagerLook[] = [];
 
 /**
  * Every known look; none until the first read, and none while there are no managers to draw, so a bb
- * without regional managers never asks for them. A failed read keeps the last looks the SDK holds.
+ * without regional managers never asks for them.
  */
 export function useManagerLooks(hasManagers: boolean): readonly ManagerLook[] {
   const read = experimental_useRpcQuery({ contract: activitySidebarContract, method: "managerLooks", input: {}, enabled: hasManagers });

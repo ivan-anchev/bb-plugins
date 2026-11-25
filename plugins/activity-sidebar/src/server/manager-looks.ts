@@ -15,27 +15,30 @@ type Deps = {
   log: Pick<BbPluginApi["log"], "warn">;
 };
 
+/** What `thread:changed` says of a thread: which, and what about it changed. */
+type ThreadChange = { id?: string; changes: readonly string[] };
+
 export type ManagerLooks = ReturnType<typeof openManagerLooks>;
 
 export function openManagerLooks({ plugins, rpc, log }: Deps) {
-  /** The managers' threads as last read, whose renames mark the looks stale. */
-  let read = new Set<string>();
+  /** The looks as last read; also which threads are managers, whose renames mark them stale. */
+  let last: ManagerLook[] = [];
   const stale = () => rpc.experimental_invalidate([MANAGER_LOOKS_TAG]);
 
   return {
     /**
-     * Every started manager's look. None when the plugin is missing, fails, or answers in a shape this
-     * copy of its schema doesn't know: each manager then shows with its name and a plain avatar.
+     * Every started manager's look. When the plugin is missing, fails, or answers in a shape this copy
+     * of its schema doesn't know, the looks last read (none at first): a manager without one shows
+     * with its name and a plain avatar, and one failed read never blanks the avatars already shown.
      */
     async read(): Promise<{ looks: ManagerLook[] }> {
       try {
         const { coordinators } = await plugins.callRpc({ pluginId: REGIONAL_MANAGER, method: "coordinators", input: {}, outputSchema: coordinatorsReadSchema });
-        read = new Set(coordinators.map(({ threadId }) => threadId));
-        return { looks: coordinators };
+        last = coordinators;
       } catch (error) {
-        log.warn(`Couldn't read the regional managers' avatars and descriptions; they show with their names only: ${error instanceof Error ? error.message : String(error)}`);
-        return { looks: [] };
+        log.warn(`Couldn't read the regional managers' avatars and descriptions; showing the last ones read: ${error instanceof Error ? error.message : String(error)}`);
       }
+      return { looks: last };
     },
 
     /** A thread created, archived, unarchived or deleted: a manager's makes every client read again. */
@@ -43,9 +46,9 @@ export function openManagerLooks({ plugins, rpc, log }: Deps) {
       if (isManagerThread(thread)) stale();
     },
 
-    /** A thread retitled: a manager's (its profile edited, perhaps with its description) makes every client read again. */
-    retitled(threadId: string): void {
-      if (read.has(threadId)) stale();
+    /** A manager's thread retitled (its profile edited, perhaps with its description) makes every client read again. */
+    threadChanged({ id, changes }: ThreadChange): void {
+      if (changes.includes("title-changed") && last.some(({ threadId }) => threadId === id)) stale();
     },
 
     /** Every client reads again: the timer's, for an edit nothing announces. */
