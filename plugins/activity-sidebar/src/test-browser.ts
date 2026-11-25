@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
 import { JSDOM } from "jsdom";
+import { timeoutManager } from "@tanstack/query-core";
 import ts from "typescript";
 
 const { window } = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/", pretendToBeVisual: true });
@@ -27,7 +28,19 @@ class StillResizeObserver {
   unobserve(): void {}
   disconnect(): void {}
 }
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: StillResizeObserver, __BB_PLUGIN_ID__: "activity-sidebar" });
+// why: the SDK's query cache keeps a finished read 5 minutes before collecting it; in a test that timer
+// would hold the process open after the last test, so it doesn't count as work left.
+timeoutManager.setTimeoutProvider({
+  setTimeout: (callback, delay) => setTimeout(callback, delay).unref(),
+  clearTimeout: (id) => clearTimeout(id),
+  setInterval: (callback, delay) => setInterval(callback, delay).unref(),
+  clearInterval: (id) => clearInterval(id),
+});
+
+// why: jsdom has no media queries; none matches (no reduced motion, a fine pointer).
+const noMedia = (media: string): MediaQueryList =>
+  Object.assign(new window.EventTarget(), { media, matches: false, onchange: null, addListener() {}, removeListener() {} }) as unknown as MediaQueryList;
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: StillResizeObserver, matchMedia: noMedia, __BB_PLUGIN_ID__: "activity-sidebar" });
 window.Element.prototype.scrollIntoView = () => {};
 
 registerHooks({

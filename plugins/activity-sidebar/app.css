@@ -118,6 +118,11 @@
 /* why: forced colors drop the thumb's wash and the labels' two inks, the only marks of the chosen tab;
    there it is filled in the system's Highlight instead. */
 @media (forced-colors: active) {
+  /* why: the fill and the label's HighlightText change at once, never the fill sliding under the wrong label. */
+  .as-segment-thumb,
+  .as-segment > button {
+    transition: none;
+  }
   .as-segment-thumb {
     forced-color-adjust: none;
     background: Highlight;

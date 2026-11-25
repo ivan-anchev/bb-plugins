@@ -7,6 +7,7 @@ import type { View } from "../../data/local-choice/choices.ts";
 import { OUT3 } from "../../list/motion-plan.ts";
 import type { ManagerModel } from "../../model/activity.ts";
 import { ManagerList } from "./manager-list.tsx";
+import { PanelShown } from "../portal-scope.ts";
 import { panelId, tabId, ViewSegment } from "./view-segment.tsx";
 
 type Props = {
@@ -29,20 +30,35 @@ export function SidebarViews({ managers, view, onView, onNavigate, threads }: Pr
   const focus = useFocusInside();
   const { shown, choose } = useShownView(hasManagers, view, onView, focus.inside);
   useFocusKeptWhenManagersGo(root, hasManagers, focus.inside);
+  const keepOutOfHidden = useFocusOutOfHiddenPanels(id, shown, focus.inside);
   // why: a hidden panel is out of the tab order, so the sidebar keeps one keyboard stop, the shown scroller.
   const panel = (of: View) => (hasManagers ? { role: "tabpanel", id: panelId(id, of), "aria-labelledby": tabId(id, of), hidden: shown !== of } : {});
 
   return (
-    <div ref={root} className="as-views" style={MOTION} onFocus={focus.entered} onBlur={focus.left}>
+    <div
+      ref={root}
+      className="as-views"
+      style={MOTION}
+      onFocus={(e) => {
+        focus.entered();
+        keepOutOfHidden(e.target);
+      }}
+      onBlur={focus.left}
+    >
       {hasManagers && <ViewSegment id={id} view={shown} onChange={choose} />}
+      {/* why: each panel tells what it holds whether it shows, so a hidden one's overlays close (portal-scope.ts). */}
       {hasManagers && (
-        <div className="as-panel" {...panel("managers")}>
-          <ManagerList managers={managers} onNavigate={onNavigate} />
-        </div>
+        <PanelShown.Provider value={shown === "managers"}>
+          <div className="as-panel" {...panel("managers")}>
+            <ManagerList managers={managers} onNavigate={onNavigate} />
+          </div>
+        </PanelShown.Provider>
       )}
-      <div className="as-panel" {...panel("threads")}>
-        {threads}
-      </div>
+      <PanelShown.Provider value={shown === "threads"}>
+        <div className="as-panel" {...panel("threads")}>
+          {threads}
+        </div>
+      </PanelShown.Provider>
     </div>
   );
 }
@@ -85,6 +101,26 @@ function useShownView(hasManagers: boolean, view: View, onView: (view: View) => 
   };
   return { shown, choose };
 }
+
+/**
+ * A panel hidden (a tab chosen, or the last manager gone) never keeps focus: focus left in it, dropped
+ * from an overlay of it that closed, or handed back to a trigger in it later (a closing menu's) goes to
+ * the chosen tab. Returns the check for focus arriving.
+ */
+function useFocusOutOfHiddenPanels(id: string, shown: View, focusInside: boolean) {
+  useLayoutEffect(() => {
+    const active = document.activeElement;
+    const lost = active === null || active === document.body || !active.isConnected || inHiddenPanel(active);
+    if (focusInside && lost) focusTab(id, shown);
+  }, [id, shown, focusInside]);
+
+  return (target: EventTarget) => {
+    if (target instanceof Element && inHiddenPanel(target)) focusTab(id, shown);
+  };
+}
+
+const inHiddenPanel = (el: Element): boolean => el.closest(".as-panel[hidden]") !== null;
+const focusTab = (id: string, view: View) => document.getElementById(tabId(id, view))?.focus({ preventScroll: true });
 
 /**
  * The last manager archived takes the segment and the Managers panel. Focus held in them (or in a menu

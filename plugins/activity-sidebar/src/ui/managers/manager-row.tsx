@@ -5,18 +5,21 @@ import { useState } from "react";
 import type { ManagerModel } from "../../model/activity.ts";
 import { FadingTitle, openMenuFromKeyboard } from "../row/row.tsx";
 import { toActionTarget } from "../row/row-menu.tsx";
+import { usePanelShown } from "../portal-scope.ts";
 import { ManagerAvatar } from "./manager-avatar.tsx";
 
 export function ManagerRow({ manager, onNavigate }: { manager: ManagerModel; onNavigate(): void }) {
   const t = manager.thread;
   const { splitProps } = useSidebarThreadSplit(t.id);
   const [menuOpen, setMenuOpen] = useState(false);
+  const shown = usePanelShown();
   const spoken = manager.description === null ? t.displayTitle : `${t.displayTitle}, ${manager.description}`;
 
   // why: tabIndex -1: the list is one tab stop and ↑/↓ move between rows, as in the threads' list.
   // The host routes a plain click on href in place; onNavigate closes the mobile drawer.
   return (
-    <ThreadActionsContextMenu thread={toActionTarget(t)} onOpenChange={setMenuOpen}>
+    // why: bb's only way to close its menu from outside; with Managers hidden, it closes as every overlay does (portal-scope.ts).
+    <ThreadActionsContextMenu thread={toActionTarget(t)} dragging={!shown} onOpenChange={setMenuOpen}>
       <a
         href={t.href}
         className="as-manager"

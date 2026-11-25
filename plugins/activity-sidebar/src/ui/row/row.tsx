@@ -23,6 +23,7 @@ import { Corner } from "../corner.tsx";
 import { ProjectTile } from "../project-tile.tsx";
 import { syncMinute } from "../../data/use-minute.ts";
 import { SleepDialog } from "../sleep-dialog.tsx";
+import { useOverlayOpen, usePanelShown } from "../portal-scope.ts";
 import { PrBadge } from "./pr-badge.tsx";
 import { useRowActions, type RowActions, type RowSleep } from "./row-menu.tsx";
 import { TitleEditor } from "./title-editor.tsx";
@@ -34,7 +35,8 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
   const { splitProps } = useSidebarThreadSplit(t.id);
   const link = useRef<HTMLAnchorElement>(null);
   const rename = useRename(link);
-  const [sleepingCustom, setSleepingCustom] = useState(false);
+  const [sleepingCustom, setSleepingCustom] = useOverlayOpen();
+  const shown = usePanelShown();
   const [menuOpen, setMenuOpen] = useState(false);
   const actions = useRowActions(row, sleep, () => setSleepingCustom(true));
   const jump = shortcut?.label ?? null;
@@ -80,6 +82,8 @@ export function Row({ row, tall, sleep, onNavigate }: { row: RowModel; tall: boo
         inline={actions.inline}
         requestRename={rename.request}
         disabled={rename.editing}
+        // why: bb's only way to close its menu from outside; its panel hidden, it closes as every overlay does (portal-scope.ts).
+        dragging={!shown}
         onCloseAutoFocus={rename.onCloseAutoFocus}
         onOpenChange={(open) => {
           if (open) syncMinute();
