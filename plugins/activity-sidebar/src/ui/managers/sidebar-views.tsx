@@ -12,6 +12,8 @@ import { panelId, tabId, ViewSegment } from "./view-segment.tsx";
 
 type Props = {
   managers: readonly ManagerModel[];
+  /** Since when each thread has worked, for a manager's card; null where no card shows (a compact viewport). */
+  underWaySince: ReadonlyMap<string, number> | null;
   view: View;
   onView(view: View): void;
   onNavigate(): void;
@@ -23,7 +25,7 @@ type Props = {
 const MOTION: CSSProperties & Record<"--as-ease-out", string> = { "--as-ease-out": OUT3 };
 
 // why: the view menu (Compact, the project filter) rides on Activity's title, so the Managers view, which neither changes, has none.
-export function SidebarViews({ managers, view, onView, onNavigate, threads }: Props) {
+export function SidebarViews({ managers, underWaySince, view, onView, onNavigate, threads }: Props) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const hasManagers = managers.length > 0;
@@ -50,7 +52,7 @@ export function SidebarViews({ managers, view, onView, onNavigate, threads }: Pr
       {hasManagers && (
         <PanelShown.Provider value={shown === "managers"}>
           <div className="as-panel" {...panel("managers")}>
-            <ManagerList managers={managers} onNavigate={onNavigate} />
+            <ManagerList managers={managers} underWaySince={underWaySince} onNavigate={onNavigate} />
           </div>
         </PanelShown.Provider>
       )}

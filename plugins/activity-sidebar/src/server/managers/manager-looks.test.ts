@@ -53,12 +53,12 @@ function harness(answer: RpcCall, held: Record<string, Thread> = OPEN, get?: Thr
   return { looks, calls, invalidated, warnings };
 }
 
-test("reads each started manager's thread and avatar from the Regional Manager plugin", async () => {
+test("reads each started manager's id, thread, description and avatar from the Regional Manager plugin", async () => {
   const { looks, calls } = harness(async () => ANSWER);
   assert.deepEqual(await looks.read(), {
     looks: [
-      { threadId: "thr_pr", avatar: AVATAR },
-      { threadId: "thr_sb", avatar: { ...AVATAR, shape: "bunny", hue: "red" } },
+      { id: "mgr_1", threadId: "thr_pr", description: "Reviews every open pull request.", avatar: AVATAR },
+      { id: "mgr_2", threadId: "thr_sb", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "red" } },
     ],
   });
   assert.deepEqual(calls, [{ pluginId: "regional-manager", method: "coordinators", input: {} }]);

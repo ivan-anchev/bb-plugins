@@ -339,11 +339,17 @@ test("the project filter narrows the threads, never the managers", () => {
 
 test("a manager shows its look and its line; without them (unread, failed, or none), its name alone with a plain avatar", () => {
   const threads = [thread("known", { ...MANAGER, createdAt: 1, displayTitle: "PR Reviews" }), thread("unknown", { ...MANAGER, createdAt: 2, displayTitle: "Sidebar" })];
-  const looks = [{ threadId: "known", avatar: AVATAR }];
+  const look = { id: "mgr_1", threadId: "known", description: "Reviews every open pull request.", avatar: AVATAR };
   const lines = [{ threadId: "known", line: "Two pull requests wait on you." }];
-  const [known, unknown] = model(threads, { looks, lines, activeThreadId: "unknown" }).managers;
-  assert.deepEqual({ ...known, thread: known.thread.displayTitle }, { thread: "PR Reviews", avatar: AVATAR, line: "Two pull requests wait on you.", current: false });
-  assert.deepEqual({ ...unknown, thread: unknown.thread.displayTitle }, { thread: "Sidebar", avatar: null, line: null, current: true });
+  const [known, unknown] = model(threads, { looks: [look], lines, activeThreadId: "unknown" }).managers;
+  assert.deepEqual({ ...known, thread: known.thread.displayTitle }, { thread: "PR Reviews", look, line: "Two pull requests wait on you.", current: false, state: null, project: "bb-plugins" });
+  assert.deepEqual({ ...unknown, thread: unknown.thread.displayTitle }, { thread: "Sidebar", look: null, line: null, current: true, state: null, project: "bb-plugins" });
+});
+
+test("a manager's card says its state, as a row would, and its project, or that it has none", () => {
+  const [working, elsewhere] = model([thread("working", { ...MANAGER, ...WORKING, createdAt: 1 }), thread("elsewhere", { ...MANAGER, createdAt: 2, projectId: "prj_gone" })]).managers;
+  assert.deepEqual([working.state, working.project], ["working", "bb-plugins"]);
+  assert.deepEqual([elsewhere.state, elsewhere.project], [null, "No project"]);
 });
 
 test("with no managers there are none, and the sections are exactly as without them", () => {

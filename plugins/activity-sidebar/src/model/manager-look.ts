@@ -1,5 +1,5 @@
-// A regional manager as the Managers view draws it beyond its thread: its avatar, which only the
-// Regional Manager plugin keeps. Read through that plugin's published `coordinators`
+// A regional manager as the Managers view draws it beyond its thread: its id, its avatar and its
+// description, which only the Regional Manager plugin keeps. Read through that plugin's published `coordinators`
 // (its skills/crew-board/SKILL.md), parsed with this copy of its schema: a plugin imports nothing
 // from another.
 import { z } from "zod";
@@ -38,8 +38,14 @@ export const MANAGER_HUE_COLORS: Record<(typeof MANAGER_HUES)[number], `#${strin
 const avatarSchema = z.object({ kind: z.literal("blob"), shape: z.enum(SHAPES), hue: z.enum(MANAGER_HUES), expression: z.literal("neutral") });
 export type Avatar = z.infer<typeof avatarSchema>;
 
-/** What the Managers view reads of one started manager; the rest of the record is dropped. */
-export const managerLookSchema = z.object({ threadId: z.string().min(1), avatar: avatarSchema });
+/** A description as the Regional Manager plugin keeps it: trimmed, 1 to 500 characters; null for none. */
+const descriptionSchema = z.string().trim().min(1).max(500).nullable();
+
+/**
+ * What the Managers view reads of one started manager; the rest of the record is dropped. `id` keys
+ * its open work and names it in its issues' links; the card shows its description.
+ */
+export const managerLookSchema = z.object({ id: z.string().min(1), threadId: z.string().min(1), description: descriptionSchema, avatar: avatarSchema });
 export type ManagerLook = z.infer<typeof managerLookSchema>;
 
 /** The `coordinators` read's output, as far as the Managers view reads it: one look a manager's thread. */

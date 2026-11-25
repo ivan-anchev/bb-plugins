@@ -7,7 +7,7 @@ import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
 import { defaultBranchReader, placementFactsReader } from "./src/server/agents/environments.ts";
 import { forwardThreadEvents } from "./src/server/agents/events/thread-events.ts";
-import { boardHandlers } from "./src/server/board/board-rpc.ts";
+import { boardHandlers, openIssuesHandler } from "./src/server/board/board-rpc.ts";
 import { createBoard } from "./src/server/board/board.ts";
 import { createFeedReader } from "./src/server/feed/feed-reader.ts";
 import { feedHandlers } from "./src/server/feed/feed-rpc.ts";
@@ -125,8 +125,8 @@ export default function plugin(host: BbPluginApi): void {
 
   bb.rpc.register(
     publishedContract,
-    { coordinators: () => ({ coordinators: store.coordinators(), notStarted: store.notStarted() }) },
-    { experimental_discoverable: true, experimental_description: "Every regional manager: a started one's thread, project, description and avatar; one not started yet with its name." },
+    { coordinators: () => ({ coordinators: store.coordinators(), notStarted: store.notStarted() }), ...openIssuesHandler({ store, board }) },
+    { experimental_discoverable: true, experimental_description: "The regional managers, and each started one's open work." },
   );
   bb.rpc.register(privateContract, {
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),

@@ -34,7 +34,7 @@ function looksRead(answer: () => Promise<unknown>) {
 async function rowsAfter(read: ReturnType<typeof looksRead>) {
   const { looks } = await read.read();
   const { managers } = buildActivity({ threads: THREADS, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null, looks, lines: [] });
-  const slot = renderSlot({ component: SidebarViews }, { managers, view: "managers", onView: () => {}, onNavigate: () => {}, threads: null });
+  const slot = renderSlot({ component: SidebarViews }, { managers, underWaySince: null, view: "managers", onView: () => {}, onNavigate: () => {}, threads: null });
   const rows = Array.from(slot.container.querySelectorAll<HTMLElement>(".as-manager")).map((row) => ({
     name: row.querySelector(".as-title-text")?.textContent,
     avatar: row.querySelector(".as-avatar-plain") !== null ? "plain" : row.querySelector("svg") !== null ? "blob" : "none",

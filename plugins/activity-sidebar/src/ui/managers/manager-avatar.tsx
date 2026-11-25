@@ -13,22 +13,24 @@ const SIZE = 36;
 // 64.4 across). Measured with getBBox, still; check again when blob-avatar changes. Scaling 2 × REACH
 // units to the frame keeps every shape inside it, centred.
 const REACH = 67;
-const BOX = (SIZE * 200) / (2 * REACH);
-
-const FRAME: CSSProperties = { width: SIZE, height: SIZE };
-const PLACE: CSSProperties = { position: "absolute", left: (SIZE - BOX) / 2, top: (SIZE - BOX) / 2 };
 
 // why: a white body on a light surface shows no edge; a hairline in the colour of the theme's input
 // borders (--input, which reads on white where --border fades), hugging its outline, gives it one, as
 // the Regional Manager plugin draws it. Each 0.5px shadow is one side; a blurred one would fade to nothing.
-const EDGED: CSSProperties = { ...PLACE, filter: ["0.5px 0", "-0.5px 0", "0 0.5px", "0 -0.5px"].map((offset) => `drop-shadow(${offset} 0 var(--input))`).join(" ") };
+const EDGE = ["0.5px 0", "-0.5px 0", "0 0.5px", "0 -0.5px"].map((offset) => `drop-shadow(${offset} 0 var(--input))`).join(" ");
 
-// why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside it says who this is.
-export function ManagerAvatar({ avatar }: { avatar: Avatar | null }) {
-  if (avatar === null) return <span className="as-avatar as-avatar-plain" style={FRAME} aria-hidden />;
+/**
+ * why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside
+ * it says who this is. `size`: the frame's side; a row's unless given (a card's is smaller).
+ */
+export function ManagerAvatar({ avatar, size = SIZE }: { avatar: Avatar | null; size?: number }) {
+  const frame: CSSProperties = { width: size, height: size };
+  if (avatar === null) return <span className="as-avatar as-avatar-plain" style={frame} aria-hidden />;
+  const box = (size * 200) / (2 * REACH);
+  const place: CSSProperties = { position: "absolute", left: (size - box) / 2, top: (size - box) / 2, filter: avatar.hue === "white" ? EDGE : undefined };
   return (
-    <span className="as-avatar" style={FRAME} aria-hidden>
-      <BlobAvatar shape={avatar.shape} color={MANAGER_HUE_COLORS[avatar.hue]} expression={avatar.expression} animation="idle" paused size={BOX} style={avatar.hue === "white" ? EDGED : PLACE} />
+    <span className="as-avatar" style={frame} aria-hidden>
+      <BlobAvatar shape={avatar.shape} color={MANAGER_HUE_COLORS[avatar.hue]} expression={avatar.expression} animation="idle" paused size={box} style={place} />
     </span>
   );
 }

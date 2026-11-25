@@ -6,7 +6,7 @@ import type { ListItem, NoticeKey } from "../list/items.ts";
 import type { SectionKey } from "../model/activity.ts";
 import { layoutItems, METRICS, visibleKeys, type Layout, type LayoutEntry } from "../list/layout.ts";
 import type { Ghost } from "../list/motion-plan.ts";
-import { cardKeyOf, HoverCard, type CardData } from "./card/hover-card.tsx";
+import { cardKeyOf, ThreadCard, type CardData } from "./card/thread-card.tsx";
 import { usePanelShown } from "./portal-scope.ts";
 import { useLayoutMotion } from "./motion/use-layout-motion.ts";
 import { Row } from "./row/row.tsx";
@@ -78,7 +78,7 @@ export function ListViewport({ items, card, ...actions }: Props) {
         </div>
         {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does.
             Put away while the list's panel is hidden, as every overlay is (portal-scope.ts). */}
-        {card !== null && shown && <HoverCard scroller={scroller} entries={layout.entries} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
+        {card !== null && shown && <ThreadCard scroller={scroller} entries={layout.entries} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
       </div>
     </>
   );

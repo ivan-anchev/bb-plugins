@@ -1,7 +1,9 @@
-// The Board's RPC, for a started regional manager: its read, what of it needs the user, its verification switch, and the user's answers to its decisions.
+// The Board's RPC, for a started regional manager: its read, what of it needs the user, its verification
+// switch, and the user's answers to its decisions; and its open work, published to other plugins.
 import { experimental_PluginRpcRefusal as Refusal, type PluginRpcHandlers } from "@get-bb/plugin-sdk";
-import type { coordinatorContract } from "../../contract.ts";
+import type { coordinatorContract, publishedContract } from "../../contract.ts";
 import { needsYou } from "../../model/board/board-groups.ts";
+import { openIssues } from "../../model/board/open-issues.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
@@ -9,7 +11,7 @@ import type { BoardReader } from "./board.ts";
 
 type Deps = {
   store: Pick<Store, "coordinator">;
-  board: Pick<BoardReader, "read" | "needsYou">;
+  board: Pick<BoardReader, "read" | "needsYou" | "openIssues">;
   inbox: Pick<Inbox, "setVerify" | "answerDecision">;
 };
 
@@ -47,5 +49,12 @@ export function boardHandlers({ store, board, inbox }: Deps): PluginRpcHandlers<
           return outcome satisfies never;
       }
     },
+  };
+}
+
+/** Each board's open work, for another plugin. why none for an unknown id, or one not started, as needsYou: one refusal would fail every key read with it. */
+export function openIssuesHandler({ store, board }: Pick<Deps, "store" | "board">): PluginRpcHandlers<Pick<typeof publishedContract, "openIssues">> {
+  return {
+    openIssues: async ({ keys }) => Object.fromEntries(await Promise.all(keys.map(async (id) => [id, store.coordinator(id) === null ? openIssues([], []) : await board.openIssues(id)] as const))),
   };
 }

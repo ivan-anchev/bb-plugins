@@ -33,7 +33,7 @@ export function ManagerRow({ manager, onNavigate }: { manager: ManagerModel; onN
         {...splitProps}
       >
         <span className="as-manager-face">
-          <ManagerAvatar avatar={manager.avatar} />
+          <ManagerAvatar avatar={manager.look?.avatar ?? null} />
         </span>
         <span className="as-manager-words">
           <FadingTitle text={t.displayTitle} />
