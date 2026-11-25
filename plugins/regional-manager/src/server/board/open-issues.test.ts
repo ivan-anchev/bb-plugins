@@ -1,0 +1,96 @@
+// What another plugin reads of a board's open work (`openIssues`) agrees with the board it is read
+// beside: the same issues, with the same statuses and reasons, under Needs you and under way.
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { coordinatorIdSchema } from "../../model/role.ts";
+import { coordinating, HEAD, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
+
+const REPORT = { summary: "Done", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+
+/**
+ * A manager with an issue in each place the open work reads, and in places it leaves out: working,
+ * reviewing, verifying, blocked, a parent in Todo with a sub-issue asked about, a decision on no
+ * issue; in review, and in Todo.
+ */
+async function busyBoard() {
+  const started = await coordinating();
+  const { kit, threadId, coordinatorId } = started;
+  const file = async (input: object) => textOf(await kit.call("issue_create", { ...ISSUE, ...input }, threadId));
+  const handedOff = async (title: string, status: "done" | "blocked") => {
+    const { agentThreadId } = await startedAgent(kit, threadId, { title });
+    await kit.call("agent_handoff", { ...REPORT, status, ...(status === "done" ? { headSha: HEAD } : {}) }, agentThreadId);
+    await kit.idle(agentThreadId, "Handed off.");
+    await settled();
+  };
+  await startedAgent(kit, threadId, { title: "Retry budget" }); // WEB-1: working
+  kit.reviewers.reportAtOnce = false;
+  await handedOff("Retry queue", "done"); // WEB-2: its review running
+  kit.reviewers.reportAtOnce = true;
+  await handedOff("Retry jitter", "done"); // WEB-3: reviewed, its verifier running
+  await handedOff("Dead letters", "blocked"); // WEB-4
+  await file({ title: "Webhook schema" }); // WEB-5: todo, its sub-issue asked about
+  await file({ title: "Schema version", parent: "WEB-5" }); // WEB-6
+  await kit.call("crew_ask_user", { question: "Keep v1 fields?", options: [], issue: "WEB-6" }, threadId);
+  await kit.call("crew_ask_user", { question: "Ship on Friday?", options: [] }, threadId);
+  await kit.rpc.setVerify({ coordinatorId, verify: false });
+  await handedOff("Retry metrics", "done"); // WEB-7: in review, unverified
+  await file({ title: "Backoff docs" }); // WEB-8: todo
+  return started;
+}
+
+test("openIssues lists the board's Needs you and its work under way, with the board's own statuses and reasons", async () => {
+  const { kit, coordinatorId } = await busyBoard();
+  const board = await kit.rpc.board({ coordinatorId });
+  // why unparsed: the contract's schema would drop a field the handler sends and the card never reads.
+  const work = (await kit.rpc.openIssues({ keys: [coordinatorId] }))[coordinatorId] ?? assert.fail("no open work read");
+  const rows = new Map(board.issues.map((row) => [row.id, row]));
+  const keysOf = (items: readonly object[]) => [...new Set(items.map((item) => Object.keys(item).sort().join(",")))];
+
+  assert.deepEqual(Object.keys(work).sort(), ["decisions", "needsYou", "parents", "underWay"], "it sends only what another plugin's card reads");
+  assert.deepEqual(keysOf(work.needsYou), ["id,parentId,reason,status,title"]);
+  assert.deepEqual(keysOf(work.underWay), ["id,parentId,status,title"]);
+  assert.deepEqual(keysOf(work.parents), ["id,status,title"]);
+  assert.deepEqual(keysOf(work.decisions), ["id,question"]);
+
+  assert.deepEqual(
+    work.needsYou.map(({ id }) => id),
+    ["WEB-4", "WEB-6"],
+    "the blocked issue, and the sub-issue asked about, flagged itself",
+  );
+  assert.deepEqual(
+    work.needsYou.map(({ id, status, reason, parentId }) => [id, status, reason, parentId]),
+    board.issues.filter((row) => row.needsYou !== null).map(({ id, status, needsYou, parentId }) => [id, status, needsYou, parentId]),
+    "Needs you is the board's, each with its status and reason",
+  );
+  assert.deepEqual(
+    work.underWay.map(({ id, status }) => [id, status]),
+    [
+      ["WEB-3", "verifying"],
+      ["WEB-2", "reviewing"],
+      ["WEB-1", "in-progress"],
+    ],
+    "under way: Verifying, Reviewing, then In progress, as the board orders them; In review and Todo left out",
+  );
+  for (const { id, status, title } of [...work.needsYou, ...work.underWay]) assert.deepEqual([status, title], [rows.get(id)?.status, rows.get(id)?.title], `${id} reads as on the board`);
+  assert.deepEqual(
+    board.issues.filter(({ id }) => id === "WEB-7" || id === "WEB-8").map(({ id, status }) => [id, status]),
+    [
+      ["WEB-7", "in-review"],
+      ["WEB-8", "todo"],
+    ],
+    "the issues left out are on the board, In review and Todo",
+  );
+  assert.deepEqual(work.parents, [{ id: "WEB-5", title: "Webhook schema", status: "todo" }], "a listed sub-issue's parent, listed nowhere itself");
+  assert.deepEqual(
+    work.decisions.map(({ question }) => question),
+    ["Ship on Friday?"],
+    "only the decision naming no listed issue",
+  );
+});
+
+test("a manager's open work is empty when it has none, or is unknown, rather than refused", async () => {
+  const { kit, coordinatorId } = await coordinating();
+  const unknown = coordinatorIdSchema.parse("00000000-0000-4000-8000-000000000000");
+  const empty = { needsYou: [], underWay: [], parents: [], decisions: [] };
+  assert.deepEqual(await kit.rpc.openIssues({ keys: [coordinatorId, unknown] }), { [coordinatorId]: empty, [unknown]: empty });
+});

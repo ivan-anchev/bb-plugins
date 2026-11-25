@@ -4,8 +4,8 @@
 // worktree's base branch, and the plan. The title and lines stay put; the plan and tree under them
 // scroll when the card would run past the window (app.css `.as-card-body`), from the keyboard too.
 import { useSdk, type PluginBrowserBbSdk, type PluginSidebarThread } from "@get-bb/plugin-sdk/app";
-import { useState, type ReactNode } from "react";
-import { stateLine, type StateLine } from "../../card/state-line.ts";
+import { useState } from "react";
+import { stateLine } from "../../card/state-line.ts";
 import { subthreadLines } from "../../card/subthread-tree.ts";
 import { useAsk } from "../../data/use-asks.ts";
 import { useMinute } from "../../data/use-minute.ts";
@@ -14,10 +14,9 @@ import { usePullRequest } from "../../data/pull-request/use-pull-request.ts";
 import { useRead } from "../../data/use-read.ts";
 import { UNDER_WAY, withAsk } from "../../model/state.ts";
 import { PrBadge } from "../row/pr-badge.tsx";
-import { sleepGlyph } from "../row/sleep-glyphs.tsx";
-import { StateGlyph } from "../state-glyph.tsx";
 import { CardGlyph } from "./card-glyphs.tsx";
-import type { CardData, RowItem } from "./hover-card.tsx";
+import { Line, StateLineView } from "./card-lines.tsx";
+import type { CardData, RowItem } from "./thread-card.tsx";
 import { PlanSection } from "./plan-section.tsx";
 import { SubthreadSection } from "./subthread-section.tsx";
 import { useFocusKept } from "./use-focus-kept.ts";
@@ -44,10 +43,7 @@ export function CardBody({ item, data, onOpen }: Props) {
     <>
       <div className="as-card-title">{t.displayTitle}</div>
       <div className="as-card-lines">
-        <Line glyph={stateGlyph(line)}>
-          {line.lead}
-          {line.note !== null && <i> · {line.note}</i>}
-        </Line>
+        <StateLineView line={line} />
         {/* why: an unknown machine is left unsaid, as Zeron's card leaves a device it can't name. */}
         {t.host !== null && <Line glyph={<CardGlyph name="laptop" />}>{t.host.name}</Line>}
         <Line glyph={<CardGlyph name="folder" />}>{row.project.name}</Line>
@@ -77,34 +73,6 @@ export function CardBody({ item, data, onOpen }: Props) {
 }
 
 // ------------------------------------------------------------------ layer 2
-
-/**
- * A line: a 12 glyph and its words, cut with "…" at the card's edge. `after` stays whole after them:
- * the branch gives way before where it runs, which is short and new.
- */
-function Line({ glyph, after = null, children }: { glyph: ReactNode; after?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="as-card-line">
-      <span className="as-card-g">{glyph}</span>
-      <span className="as-card-t">{children}</span>
-      {after !== null && <span className="as-card-after">{after}</span>}
-    </div>
-  );
-}
-
-function stateGlyph(line: StateLine): ReactNode {
-  switch (line.glyph.kind) {
-    case "state":
-      return <StateGlyph state={line.glyph.state} size={12} />;
-    case "asleep":
-      return sleepGlyph("Moon");
-    case "clock":
-      return <CardGlyph name="clock" />;
-    default:
-      line.glyph satisfies never;
-      return null;
-  }
-}
 
 type ThreadGetResult = Awaited<ReturnType<PluginBrowserBbSdk["threads"]["get"]>>;
 

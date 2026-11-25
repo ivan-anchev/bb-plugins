@@ -72,6 +72,7 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   return (
     <SidebarViews
       managers={model.managers}
+      underWaySince={card === null ? null : card.underWaySince}
       view={view}
       onView={setView}
       onNavigate={onNavigate}

@@ -1,14 +1,23 @@
 // The Managers view: one row a regional manager, oldest first, in a scroller that is one tab stop,
-// ↑/↓ moving between its rows as in the threads' list. Few rows, so all of them are mounted.
+// ↑/↓ moving between its rows as in the threads' list. Few rows, so all of them are mounted. Resting on
+// a row shows its card (card/manager-card.tsx), as a thread's row does.
 import { useLayoutEffect, useMemo, useRef, type KeyboardEvent, type RefObject } from "react";
 import { heirOf } from "../../list/focus.ts";
 import type { ManagerModel } from "../../model/activity.ts";
+import type { ListFocus } from "../card/hover-card.tsx";
+import { usePanelShown } from "../portal-scope.ts";
+import { ManagerCard } from "./card/manager-card.tsx";
 import { ManagerRow } from "./manager-row.tsx";
 
-export function ManagerList({ managers, onNavigate }: { managers: readonly ManagerModel[]; onNavigate(): void }) {
+/** `underWaySince`: since when each thread has worked, for a card's state line; null where no card shows (a compact viewport). */
+type Props = { managers: readonly ManagerModel[]; underWaySince: ReadonlyMap<string, number> | null; onNavigate(): void };
+
+export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
+  const shown = usePanelShown();
   const scroller = useRef<HTMLDivElement>(null);
   const keys = useMemo(() => managers.map((m) => m.thread.id), [managers]);
   const held = useHeldRow(keys, scroller);
+  const listFocus = useListFocus(held, scroller);
 
   // why: React bubbles focus through portals, so a row's menu holds focus for its row, as in the threads' list.
   return (
@@ -29,6 +38,7 @@ export function ManagerList({ managers, onNavigate }: { managers: readonly Manag
         <div
           key={manager.thread.id}
           data-key={manager.thread.id}
+          data-card={manager.thread.id}
           onFocus={() => {
             held.current = manager.thread.id;
           }}
@@ -36,6 +46,9 @@ export function ManagerList({ managers, onNavigate }: { managers: readonly Manag
           <ManagerRow manager={manager} onNavigate={onNavigate} />
         </div>
       ))}
+      {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does.
+          Put away while the Managers panel is hidden, as every overlay is (portal-scope.ts). */}
+      {underWaySince !== null && shown && <ManagerCard scroller={scroller} managers={managers} underWaySince={underWaySince} listFocus={listFocus} onNavigate={onNavigate} />}
     </div>
   );
 }
@@ -63,6 +76,23 @@ function useHeldRow(keys: readonly string[], scroller: RefObject<HTMLDivElement 
   }, [keys, scroller]);
 
   return held;
+}
+
+/** The list's focus as its card counts it: focus in a card is its row's, and goes back to that row, or the list once the row is gone. */
+function useListFocus(held: RefObject<string | null>, scroller: RefObject<HTMLDivElement | null>): ListFocus {
+  return useMemo(
+    () => ({
+      hold: (key) => {
+        held.current = key;
+      },
+      refocus: () => {
+        const key = held.current;
+        const row = key === null ? null : scroller.current?.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"] a`);
+        (row ?? scroller.current)?.focus({ preventScroll: true });
+      },
+    }),
+    [held, scroller],
+  );
 }
 
 /**

@@ -2,6 +2,7 @@
 // whole on every call; bb's thread events only say when to read again.
 import type { Board, IssueRow } from "../../contract.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
+import { openIssues, type OpenIssues } from "../../model/board/open-issues.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "../issues/views/issue-facts.ts";
@@ -62,6 +63,11 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
     /** What sits under Needs you on the board, from the same reads as the board's own: its decisions and its issues. */
     async needsYou(id: CoordinatorId): Promise<NeedsYou> {
       return needsYou(store.decisions(id), (await readIssues(bb, store, id)).map((read) => read.view));
+    },
+
+    /** Its open work, as another plugin reads it, from the board's own rows. */
+    async openIssues(id: CoordinatorId): Promise<OpenIssues> {
+      return openIssues(store.decisions(id), (await readIssues(bb, store, id)).map(rowOf));
     },
   };
 }
