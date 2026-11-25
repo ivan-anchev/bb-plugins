@@ -36,6 +36,7 @@ import { headlineText, keepsPlaceAfterEnd, type IssueView } from "../../model/is
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { PrRead } from "../../model/verdict/pr.ts";
+import { capMovesText, capQuestionsOf, openCapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
@@ -143,10 +144,12 @@ export type StopOutcome = { kind: "stopped"; archived: boolean } | { kind: "alre
 /**
  * What a message did: sent or queued by bb, `dropped` saying whether it superseded the check of the
  * agent's done handoff still waiting for its verifier; or nothing, as the agent ended or has no
- * thread yet, or as its issue's other threads aren't quiet (see quietIssue).
+ * thread yet, as its issue is locked at its cap (`capped`, see capRefusal), or as its issue's other
+ * threads aren't quiet (see quietIssue).
  */
 type MessageOutcome =
   | { kind: "sent" | "queued"; dropped: boolean }
+  | { kind: "capped"; reason: string }
   | { kind: "unbound" }
   | { kind: "already-ended"; how: EndedHow }
   | { kind: "unquiet"; unquiet: Unquiet };
@@ -156,7 +159,7 @@ type Deps = {
   store: FactsStore &
     Pick<
       Store,
-      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "latestHandoff" | "handoff" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks" | "issueDecisions"
+      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "latestHandoff" | "handoff" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks" | "issueDecisions" | "decisions"
     >;
   spawner: Pick<Spawner, "agent">;
   inbox: Pick<Inbox, "endAgent">;
@@ -283,7 +286,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    * turn (issue-turns.ts), so it decides on facts no other operation on the issue changes before it
    * is done. The order keeps a sandbox alive, where nothing waits once the last live thread is
    * archived (SH5):
-   * 1. decide where it runs and on what, from what bb has now; a refusal changes nothing. A move
+   * 1. refuse while the issue is locked at its cap (capRefusal); else decide where it runs and on
+   *    what, from what bb has now; a refusal changes nothing. A move
    *    reads the previous agent's environment, and its pull request when it cuts through origin;
    * 2. quiet the issue for the new agent (see quietIssue): take back what the plugin queued for any
    *    of its threads, the holder's included, then stop every live thread the plugin started for
@@ -298,6 +302,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    */
   function start(coordinatorId: CoordinatorId, request: StartRequest): Promise<StartOutcome | Busy> {
     return turns.run(coordinatorId, request.issueId, async () => {
+      const capped = capRefusal(coordinatorId, request.issueId);
+      if (capped !== null) return { kind: "refused", reason: capped };
       const prove = provenOnce(coordinatorId);
       const decided = await decide(coordinatorId, request, prove);
       if ("refused" in decided) return { kind: "refused", reason: decided.refused };
@@ -472,6 +478,18 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     await turns.runIfFree(agent.coordinatorId, agent.issueId, () => end(agent, how));
   }
 
+  /**
+   * Why no agent may start on the issue, nor be messaged on it, leading with the reason: the plugin
+   * asked the user at its cap of failed verdicts and they haven't answered (rounds/cap.ts), so the
+   * open question is the lock. Offers only moves that work while it holds. null: nothing locks it.
+   * Call in the issue's turn, before anything is quieted or started.
+   */
+  function capRefusal(coordinatorId: CoordinatorId, issueId: IssueId): string | null {
+    const open = openCapQuestion(capQuestionsOf(store.decisions(coordinatorId), issueId));
+    if (open === null) return null;
+    return `${issueId} failed verification ${open.cap} times, so the plugin asked the user (${open.id}) whether it gets another round, and until they answer no agent starts on ${issueId} and none is messaged on it. ${capMovesText(issueId, open.id)}`;
+  }
+
   /** The agent as stored now. why throw: a tool resolved it from the store, and agents are kept while their regional manager is. */
   function agentOf(coordinatorId: CoordinatorId, id: AgentId): Agent {
     const agent = store.agent(coordinatorId, id);
@@ -499,7 +517,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
      * Sends the text as a message from the regional manager: it steers a running turn, starts one,
      * or waits in bb's queue. In its issue's turn, to an agent that still holds it, so a handover
      * never has it wake the agent it replaced; a handover takes back one still waiting in the queue.
-     * First it quiets the issue's other threads, its verifiers' and any ended agent's (see
+     * Refused while the issue is locked at its cap (capRefusal). Then it quiets the issue's other threads, its verifiers' and any ended agent's (see
      * quietIssue), as the agent never runs beside its own verifier; while they aren't quiet, it
      * sends nothing. Once sent, it drops the check of the agent's done handoff still waiting for its
      * verifier: the manager asked for more work, so that handoff is no longer the agent's last word,
@@ -511,6 +529,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
         const agent = agentOf(coordinatorId, id);
         if (agent.ended !== null) return { kind: "already-ended", how: agent.ended.how };
         if (agent.threadId === null) return { kind: "unbound" };
+        const capped = capRefusal(coordinatorId, issueId);
+        if (capped !== null) return { kind: "capped", reason: capped };
         const quieted = await quietIssue(bb, store, coordinatorId, issueId, { kind: "thread", threadId: agent.threadId });
         if (quieted.kind !== "quiet") return { kind: "unquiet", unquiet: quieted };
         const { delivery } = await bb.sdk.threads.send({

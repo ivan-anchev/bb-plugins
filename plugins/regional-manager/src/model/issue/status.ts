@@ -9,7 +9,8 @@ import type { Handoff, HandoffId } from "../agent/handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { reviewPending } from "../verdict/review.ts";
-import { ciVerdictOf, failureText, firstFailure, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
+import { capText } from "../verdict/rounds/cap.ts";
+import { ciVerdictOf, failureHeadline, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
 import { blockedBy, isClosed, statusIn, type Related } from "./relations.ts";
@@ -46,8 +47,8 @@ export type IssueFacts = {
   ended: { how: EndedHow; left: Handed | null } | null;
   /** The pull request of its branch (agent.ts issueBranch) as last read (null: none seen). */
   pr: PrSnapshot | null;
-  /** An unanswered decision names it. */
-  openDecision: boolean;
+  /** An unanswered decision names it (null: none), with `cap` when one is the plugin's question at its cap of failed verdicts (rounds/cap.ts), the count it asked at; else null. */
+  openDecision: { cap: number | null } | null;
   /** Its latest final check (null: none was made, as for every issue but a build parent whose work was all merged). */
   finalCheck: FinalCheck | null;
   /** The verifier of one of its running checks waits on an answer or an approval in its thread, which the plugin declines (verify.ts watchRunning). */
@@ -130,15 +131,25 @@ function issueView({ issue, holder, ended, pr, openDecision, verifierAsks }: Iss
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null, finalCheckDue: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
-  const asked = openDecision ? ASKED : null;
   if (holder !== null) {
     const placed = held(issue.kind, holder, { pr, verifierAsks });
-    return { ...base, ...placed, needsYou: placed.needsYou ?? asked, closedBy: handedOffClose(placed, holder.current) };
+    return { ...base, ...placed, needsYou: waitingOn(placed.needsYou, openDecision), closedBy: handedOffClose(placed, holder.current) };
   }
   const left = ended?.left ?? null;
   const after = left === null ? null : placedByLeft(issue.kind, left, { pr, verifierAsks });
-  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: after.needsYou ?? asked, closedBy: handedOffClose(after, left) };
-  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: asked, closedBy: null };
+  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: waitingOn(after.needsYou, openDecision), closedBy: handedOffClose(after, left) };
+  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: waitingOn(null, openDecision), closedBy: null };
+}
+
+/**
+ * Why the issue waits on the user: its own reason (`own`, null: none), else its open decision's;
+ * at its cap, led by the cap, as the plugin's question there locks it (rounds/cap.ts). null: it
+ * doesn't wait. why the headline never carries the cap: only the Needs you reason leads with it.
+ */
+function waitingOn(own: string | null, open: IssueFacts["openDecision"]): string | null {
+  if (open === null) return own;
+  const reason = own ?? ASKED;
+  return open.cap === null ? reason : `${capText(open.cap)}: ${reason}`;
 }
 
 /** The handoff that placed the issue, as what closed it when that is Done; null for any other place. */
@@ -162,18 +173,17 @@ function parentView({ issue, openDecision, finalCheck, verifierAsks }: IssueFact
   const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: counted.length }, finalCheckDue: null };
   const final = finalOf(issue, null);
   if (final !== null) return { ...base, ...final, needsYou: null };
-  const asked = openDecision ? ASKED : null;
   if (done.length > 0 && subIssues.every(({ status }) => isClosed(status))) {
     if (!isVerified(issue.kind)) return { ...base, status: "done", headline: null, needsYou: null, closedBy: closedBySubIssues(subIssues) };
     const builds = done.filter(({ issue: sub }) => shipsCode(sub.kind));
     const unmerged = builds.filter(({ pr }) => pr?.state !== "merged").map(({ issue: sub }) => sub.id);
     if (unmerged.length > 0) return { ...base, ...flagged(`${unmerged.join(", ")} ${unmerged.length === 1 ? "isn't" : "aren't"} merged, so ${issue.id}'s work isn't all on the default branch`), closedBy: null };
     const placed = finalCheckPlaces(issue, finalCheck, builds.map(({ issue: sub }) => sub.id), verifierAsks);
-    return { ...base, ...placed, needsYou: placed.needsYou ?? asked };
+    return { ...base, ...placed, needsYou: waitingOn(placed.needsYou, openDecision) };
   }
   const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
   const status = started ? "in-progress" : subIssues.some(({ status }) => status === "todo") ? "todo" : issue.rest;
-  return { ...base, status, headline: asked, needsYou: asked, closedBy: null };
+  return { ...base, status, headline: openDecision === null ? null : ASKED, needsYou: waitingOn(null, openDecision), closedBy: null };
 }
 
 /**
@@ -363,7 +373,7 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
       case "fail":
         // why: findings that reached the agent mean it is fixing them; nothing waits on the user.
         if (verdict.state === "returned" && verdict.settlement.kind === "sent-back") return { status: "in-progress", headline: `Fixing its verifier's findings: ${summary}`, needsYou: null };
-        return flagged(`${failedAs(verdict)}${failureNote(verdict, fixRounds)}: ${summary}`);
+        return flagged(`${failureHeadline(verdict)}${failureNote(verdict, fixRounds)}: ${summary}`);
       case "could-not-run":
         return flagged(`Couldn't verify${because(verdict)}: ${summary}`);
       case "superseded":
@@ -419,10 +429,3 @@ function passNote(ci: CiVerdict | null): string {
 /** What CI said about a settled verdict's commit; null for any other verdict. */
 const ciOfReturned = (verdict: Verdict): CiVerdict | null => (verdict.state === "returned" ? ciVerdictOf(verdict) : null);
 
-/** How a failure reads: by the first of its reasons (verdict.ts firstFailure), so by its criteria only when nothing read before them failed it. */
-function failedAs(verdict: Verdict): string {
-  const first = firstFailure(verdict);
-  if (first === null || first.kind === "criteria") return "✗ Failed verification";
-  const words = failureText(first, "handoff");
-  return `✗ ${words.charAt(0).toUpperCase()}${words.slice(1)}`;
-}

@@ -29,6 +29,7 @@ import { checkedAgents, type Check, type CheckId, type HandoffCheck } from "../.
 import { isReviewing, reviewPending } from "../../model/verdict/review.ts";
 import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
+import { capQuestionsOf, countedFailures, mayGoBack } from "../../model/verdict/rounds/cap.ts";
 import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
 import { environmentGone, type EnvironmentsBb } from "../agents/environments.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
@@ -98,6 +99,8 @@ type Deps = {
     | "claimFixRound"
     | "unsettledChecks"
     | "prOfBranch"
+    | "record"
+    | "decisions"
   >;
   spawner: Pick<Spawner, "checker">;
   review: Pick<Review, "start" | "follow">;
@@ -338,8 +341,9 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
    * thread, which bb still has; `thread`: that thread, as bb lists it), judged with CI on its commit
    * as the PR status of the agent's branch says, the branch the PR watch reads. One that passed all
    * but CI waits while CI is still to come. A failed one is sent back when its handoff is current,
-   * the agent still holds its issue with a round left and its pull request hasn't merged (a merge
-   * made the issue Done); else it is checked. One whose round is claimed was being sent when the
+   * the agent still holds its issue with a round left, its pull request hasn't merged (a merge
+   * made the issue Done) and the issue's cap allows it (capAllowsSending); else it is checked, and
+   * at the cap its settling asks the user (checks-store.ts settleReturned). One whose round is claimed was being sent when the
    * plugin stopped, as settle owns a claim until it settles it. Its findings may or may not have
    * reached the agent, and nothing bb keeps can tell: a send's pluginSubmission is never stored, and
    * a turn in the agent's thread may be anyone's. So it goes to the regional manager, with the round
@@ -355,8 +359,18 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
     if (judged === "waiting-for-ci") return { kind: "waiting-for-ci" };
     const settledCi = ci.kind === "waiting" ? CI_UNFINISHED : ci;
     const merged = status?.snapshot?.state === "merged";
-    const send = judged === "fail" && !merged && current && agent.ended === null && agent.fixRounds < MAX_AUTO_FIX_ROUNDS;
+    const send = judged === "fail" && !merged && current && agent.ended === null && agent.fixRounds < MAX_AUTO_FIX_ROUNDS && capAllowsSending(check);
     return send ? { kind: "send", ci: settledCi } : { kind: "checked", refused: null, ci: settledCi };
+  }
+
+  /**
+   * Whether the issue's cap lets the check's failure, still unsettled, go back to its agent: no cap
+   * question of the issue is open, and settling it as the next counted failure asks none
+   * (rounds/cap.ts mayGoBack). Read from the store, with no await, as stepOf decides.
+   */
+  function capAllowsSending({ coordinatorId, issueId }: HandoffCheck): boolean {
+    const failed = countedFailures(store.record(coordinatorId, issueId)).length;
+    return mayGoBack(failed + 1, capQuestionsOf(store.decisions(coordinatorId), issueId));
   }
 
   /**

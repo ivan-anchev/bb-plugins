@@ -33,7 +33,7 @@ function issue(id: string, fields: Partial<IssueRow>): IssueRow {
   return { id: issueIdSchema.parse(id), kind: "build", parentId: null, subIssues: null, blockedBy: [], blocks: [], title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
 }
 
-const QUESTION: OpenDecision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null };
+const QUESTION: OpenDecision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], askedAt: 1_000, answer: null, cap: null };
 
 const ISSUES: IssueRow[] = [
   issue("WEB-1", { status: "in-progress", needsYou: "Failed after its fix round", headline: "✗ Failed after its fix round", agent: { id: agentIdSchema.parse("a1"), threadId: "thr_one" } }),

@@ -73,7 +73,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
 
 const thread = (status: HolderThread["status"], hasPendingInteraction = false): HolderThread => ({ status, hasPendingInteraction });
-const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: false, finalCheck: null, verifierAsks: false, ...over });
+const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: null, finalCheck: null, verifierAsks: false, ...over });
 const held = (thread: HolderThread | null, current: Handed | null = null, fixRounds = 0): Partial<IssueFacts> => ({ holder: { agent: { ...agent, fixRounds }, thread, current } });
 const view = (over: Partial<IssueFacts>) => {
   const [placed] = issueViews([facts(over)]);
@@ -168,9 +168,16 @@ test("an issue resting in Todo after its agent ended says how it ended; only one
 
 test("an issue named by an unanswered decision Needs you, unless something more pressing does", () => {
   const asked = "Waiting on your answer to its decision";
-  assert.deepEqual(view({ openDecision: true }), at("todo", "Not started", asked));
-  assert.deepEqual(view({ openDecision: true, ...held(thread("active")) }), at("in-progress", "Working", asked));
-  assert.deepEqual(view({ openDecision: true, ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
+  assert.deepEqual(view({ openDecision: { cap: null } }), at("todo", "Not started", asked));
+  assert.deepEqual(view({ openDecision: { cap: null }, ...held(thread("active")) }), at("in-progress", "Working", asked));
+  assert.deepEqual(view({ openDecision: { cap: null }, ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
+});
+
+test("an issue whose cap question is open Needs you with a reason that leads with its cap, and its headline carries no count", () => {
+  assert.deepEqual(view({ openDecision: { cap: 3 } }), at("todo", "Not started", "At its cap of 3 failed verifications: Waiting on your answer to its decision"));
+  const blocking = { ...held(thread("idle"), { handoff: blocked, check: null }) };
+  assert.deepEqual(view({ openDecision: { cap: 3 }, ...blocking }), at("in-progress", "Blocked: Needs a staging key", "At its cap of 3 failed verifications: Blocked: Needs a staging key"));
+  assert.deepEqual(view({ openDecision: { cap: 4 } }).needsYou, "At 4 failed verifications, past its cap of 3: Waiting on your answer to its decision");
 });
 
 /** A parent WEB-1 of `kind` and its sub-issues WEB-2, WEB-3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */
@@ -191,7 +198,7 @@ const reported = (at: number): Partial<IssueFacts> => ({ issue: { ...issue, kind
 test("a parent's headline says only what its count of Done sub-issues doesn't: nothing, or why it Needs you", () => {
   const asked = "Waiting on your answer to its decision";
   assert.deepEqual(rolled("build", [resting("todo")]), at("todo", null));
-  const [parent = assert.fail("no view")] = issueViews([facts({ openDecision: true }), facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-2"), parentId: issue.id } })]);
+  const [parent = assert.fail("no view")] = issueViews([facts({ openDecision: { cap: null } }), facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-2"), parentId: issue.id } })]);
   assert.deepEqual({ status: parent.status, headline: parent.headline, needsYou: parent.needsYou }, at("todo", asked, asked));
 });
 
@@ -202,7 +209,7 @@ test("a parent rolls up from its sub-issues: any started is In progress, any in 
   assert.deepEqual(rolled("build", [resting("backlog")]), at("todo", null), "the parent rests in Todo");
   assert.deepEqual(rolled("build", [closedAs("canceled"), closedAs("canceled")], { rest: "backlog" }), at("backlog", null), "every sub-issue canceled");
   assert.deepEqual(rolled("build", [closedAs("canceled")]), at("todo", null));
-  assert.deepEqual(rolled("build", [{ openDecision: false }], { closed: { as: "canceled", at: 9_000 } }), at("canceled", "Canceled"));
+  assert.deepEqual(rolled("build", [{ openDecision: null }], { closed: { as: "canceled", at: 9_000 } }), at("canceled", "Canceled"));
   const { parent, subs } = family("build", [held(thread("idle"), { handoff: blocked, check: null }), resting("todo")]);
   assert.deepEqual([parent.status, parent.needsYou, parent.subIssues, parent.holder], ["in-progress", null, { done: 0, total: 2 }, null], "a flagged sub-issue flags itself, not its parent");
   assert.equal(subs[0]?.needsYou, "Blocked: Needs a staging key");

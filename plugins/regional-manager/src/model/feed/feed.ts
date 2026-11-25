@@ -11,7 +11,8 @@ import type { FinalCheck } from "../verdict/check.ts";
 import { timeOf, type Entry } from "./entry.ts";
 import type { Comment } from "./comment.ts";
 import type { Logged } from "./log-event.ts";
-import { finalRoundOf, roundOf, type Round, type Step } from "./round.ts";
+import { askedBy, countedFailures, type CapQuestion } from "../verdict/rounds/cap.ts";
+import { finalRoundOf, roundOf, type Asked, type Round, type Step } from "./round.ts";
 
 /** Everything one issue's feed is made of, each list as its table holds it, oldest first. */
 type FeedFacts = {
@@ -26,6 +27,8 @@ type FeedFacts = {
   log: readonly Logged[];
   /** The issue's comments, in the order posted. */
   comments: readonly Comment[];
+  /** The questions the plugin put to the user at the issue's cap, in the order asked. */
+  capQuestions: readonly CapQuestion[];
 };
 
 /** The issue's feed, oldest first; two moments at one millisecond keep the order listed here, the log's rows in the order written. */
@@ -163,13 +166,23 @@ function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus 
 }
 
 /** Rounds numbered in the order they began: every handoff, and a build parent's final checks. */
-function roundsOf({ handed, finalChecks, events }: FeedFacts): Round[] {
+function roundsOf({ handed, finalChecks, events, capQuestions }: FeedFacts): Round[] {
   const outcomeAt = outcomeTimes(events);
+  const asked = askedOf(handed, capQuestions);
   const begun = sortByTime([
-    ...handed.map((one) => ({ at: one.handoff.at, make: (n: number) => roundOf(one, n, one.check === null ? null : (outcomeAt.get(one.check.id) ?? null)) })),
+    ...handed.map((one) => ({ at: one.handoff.at, make: (n: number) => roundOf(one, n, one.check === null ? null : (outcomeAt.get(one.check.id) ?? null), asked(one)) })),
     ...finalChecks.map((check) => ({ at: check.at, make: (n: number) => finalRoundOf(check, n, outcomeAt.get(check.id) ?? null) })),
   ]);
   return begun.map(({ make }, i) => make(i + 1));
+}
+
+/** What each handoff's failure asked the user at the issue's cap (rounds/cap.ts askedBy), as its round carries it; null when it asked nothing. */
+function askedOf(handed: readonly Handed[], capQuestions: readonly CapQuestion[]): (one: Handed) => Asked {
+  const byCheck = askedBy(countedFailures(handed), capQuestions);
+  return ({ check }) => {
+    const question = check === null ? undefined : byCheck.get(check.id);
+    return question === undefined ? null : { decisionId: question.id, failed: question.cap };
+  };
 }
 
 /** When each check's outcome was announced: the first `checked` or `sent-back` event naming it. */

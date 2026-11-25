@@ -12,7 +12,7 @@ test("a decision may name the issue it flags, and is answered once", () => {
   const named = store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId }, 3_000);
   const general = store.insertDecision(MANAGER, { question: "Ship on Friday?", options: [], issueId: null }, 3_100);
 
-  assert.deepEqual(named, { id: "d1", issueId, question: "Which queue?", options: ["SQS", "Redis"], askedAt: 3_000, answer: null });
+  assert.deepEqual(named, { id: "d1", issueId, question: "Which queue?", options: ["SQS", "Redis"], askedAt: 3_000, answer: null, cap: null });
   assert.equal(general.issueId, null);
   assert.equal(store.answerDecision(MANAGER, named.id, "SQS", 4_000), "answered");
   assert.equal(store.answerDecision(MANAGER, named.id, "Redis", 4_100), "already-answered");
@@ -115,7 +115,7 @@ test("the manager's own working tree is recorded once per state", () => {
 /** WEB-1 merged as #41 when `merged`, WEB-2 canceled by the manager, WEB-3 depending on them as stored: every issue of the manager as viewed with no agent. */
 function mergedOrNot(store: ReturnType<typeof freshStore>["store"]) {
   const pr: PrSnapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: "0123456789abcdef0123456789abcdef01234567", failedChecks: [] };
-  return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, openDecision: false, finalCheck: null, verifierAsks: false, pr: merged && issue.id === "WEB-1" ? pr : null })));
+  return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, openDecision: null, finalCheck: null, verifierAsks: false, pr: merged && issue.id === "WEB-1" ? pr : null })));
 }
 
 /** The issues `views` says are unblocked since what is known, recorded, as "WEB-3 by WEB-1 done". */

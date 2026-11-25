@@ -8,7 +8,9 @@
 import type { AgentId } from "../agent/agent.ts";
 import type { Decision, DecisionId } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
+import type { Handed } from "../issue/status.ts";
 import type { Check, CheckId } from "../verdict/check.ts";
+import { askedText, questionAskedBy, type CapQuestion } from "../verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
 import { ciVerdictOf, failurePhrases, failureReasons, mayHaveReachedAgent, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
@@ -20,6 +22,10 @@ type Lookups = {
   titles: ReadonlyMap<IssueId, string>;
   check(id: CheckId): Check | null;
   decision(id: DecisionId): Decision | null;
+  /** Every handoff on the issue's record, each with its check, oldest first: only its checks are read here. */
+  record(id: IssueId): readonly Pick<Handed, "check">[];
+  /** The questions the plugin put to the user at the issue's cap, in the order asked. */
+  capQuestions(id: IssueId): readonly CapQuestion[];
 };
 
 export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): string {
@@ -28,14 +34,15 @@ export function doorbellText(events: readonly StoredEvent[], lookups: Lookups): 
   return [`[${DISPLAY_NAME}] ${count}. Call crew_catch_up to read ${events.length === 1 ? "it" : "them"} in full.`, ...lines].join("\n");
 }
 
-function line(event: InboxEvent, { titles, check, decision }: Lookups): string {
+function line(event: InboxEvent, lookups: Lookups): string {
+  const { titles, check, decision } = lookups;
   if (event.kind === "memory-edited") return `The user edited ${event.file}`;
   if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
   if (event.kind === "reminder") return `Your reminder ${event.reminderId}: ${event.note}`;
   if (event.kind === "decision-answered") return `The user answered your question ${event.decisionId}: ${askedOf(decision(event.decisionId)).question}`;
   if (event.kind === "coordinator-edited-files") return `Your own environment has ${filesText(event.fileCount)} changed after your turn: hand the change to an agent`;
   if (event.kind === "coordinator-tree-clean") return "Your own environment is clean again";
-  if (event.kind === "checked") return checkedLine(checkedOf(check(event.checkId)), titles);
+  if (event.kind === "checked") return checkedLine(checkedOf(check(event.checkId)), lookups);
   if (event.kind === "unblocked") return `${titled(event.issueId, titles)} is unblocked: ${event.by} ${event.closedAs}`;
   if (event.kind === "comment-to-you") return `The user commented on ${titled(event.issueId, titles)}: ${event.commentId}`;
   const on = issueName(event.issueId, titles, event.agentId);
@@ -82,12 +89,17 @@ export function askedOf(decision: Decision | null): Decision {
   return decision;
 }
 
-/** A check made final, by what it judged: `BBP-1 "Add retries" (a1) handed off: done, verified`, `BBP-1 "Card vault" final check: failed`. */
-function checkedLine(check: Check, titles: ReadonlyMap<IssueId, string>): string {
+/**
+ * A check made final, by what it judged: `BBP-1 "Add retries" (a1) handed off: done, verified`, `BBP-1 "Card vault" final check: failed`;
+ * a failure that asked the user at the issue's cap says so, with the question's id.
+ */
+function checkedLine(check: Check, { titles, record, capQuestions }: Lookups): string {
   const { subject, issueId } = check;
   switch (subject.kind) {
-    case "handoff":
-      return `${issueName(issueId, titles, subject.agentId)} handed off: done, ${checkedAs(check)}`;
+    case "handoff": {
+      const asked = questionAskedBy(check, record(issueId), capQuestions(issueId));
+      return `${issueName(issueId, titles, subject.agentId)} handed off: done, ${checkedAs(check)}${asked === null ? "" : `; ${askedText(issueId, asked)}`}`;
+    }
     case "final":
       return `${titled(issueId, titles)} final check: ${finalCheckedAs(check)}`;
     default:

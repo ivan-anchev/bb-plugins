@@ -313,7 +313,8 @@ or gave up, waits for an answer or approval in its thread, its last turn
 failed, its work failed verification after its fix round or couldn't be
 verified, a build parent's final check failed or couldn't run, or it has no
 done-criteria for one, bb never confirmed starting its agent's thread ("No thread":
-`agent_start` again replaces that agent), or a decision you asked names it. The board shows these first.
+`agent_start` again replaces that agent), or a decision you asked names it,
+or the plugin's own question at its cap of failed verdicts, which leads its reason. The board shows these first.
 
 `issue_update` with `status` does only four things:
 
@@ -577,6 +578,22 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     the agent with what to change, hand the issue to a new agent with
     `agent_start` (see [Handing over](#handing-over)), or ask the user. A new
     agent gets its own fix round.
+  - **failed verification; BBP-2's 3rd failed verification, its cap: nothing
+    went back to an agent, and the plugin asked the user (d14)**: an issue
+    gets 3 failed verdicts across all its agents, those from before this
+    rule included, and a handover doesn't reset the count. At the 3rd, and at
+    each later failure the user hasn't allowed, nothing goes back to any
+    agent, and the plugin itself asks the user on the board, leading with
+    why the last round failed, with One more round and Cancel it. The issue
+    is under Needs you, its reason led by "At its cap of 3 failed
+    verifications". While that question is open, `agent_start` and
+    `agent_message` on the issue are refused, naming it: wait for the
+    answer, reply on the issue with `issue_comment` pointing the user at its
+    id, or stop the agent with `agent_stop` and cancel the issue. Any answer
+    allows one more round: read their words for what they want. A failure
+    made while the question is open (a person woke the agent) goes back to
+    nobody and asks nothing. Once the issue closes, as by a merge or a
+    cancel, the question leaves Needs you.
   - **could not be verified**: under Needs you, with the reason: the
     verifier stopped without a verdict, showed no activity for 30 minutes,
     or asked a person something bb wouldn't let the plugin decline (a

@@ -257,6 +257,11 @@ export const MIGRATIONS: readonly string[] = [
   // the same one posts nothing more; null for a tool's comment. One comment per submission.
   `ALTER TABLE comments ADD COLUMN submission TEXT`,
   `CREATE UNIQUE INDEX comments_by_submission ON comments (coordinator_id, submission) WHERE submission IS NOT NULL`,
+
+  // The count of failed verdicts at which the plugin itself asked the user about an issue
+  // (rounds/cap.ts); null for every question the regional manager asked. why the only stored fact
+  // of the cap: the failures are counted from the checks, and the lock is the open question.
+  `ALTER TABLE decisions ADD COLUMN cap INTEGER`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

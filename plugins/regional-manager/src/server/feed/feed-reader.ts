@@ -7,10 +7,11 @@ import { bodyOf, roundTarget, type RoundBody, type RoundKey } from "../../model/
 import type { IssueId } from "../../model/issue/issue.ts";
 import { dependentsOf } from "../../model/issue/relations.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { capQuestionsOf } from "../../model/verdict/rounds/cap.ts";
 import { threadsById, type ListBb } from "../agents/threads.ts";
 import type { Store } from "../store/store.ts";
 
-type FeedStore = Pick<Store, "issue" | "issues" | "agents" | "record" | "finalChecks" | "issueDecisions" | "eventsOfIssue" | "logOf" | "commentsOf" | "handoff" | "check">;
+type FeedStore = Pick<Store, "issue" | "issues" | "agents" | "record" | "finalChecks" | "issueDecisions" | "decisions" | "eventsOfIssue" | "logOf" | "commentsOf" | "handoff" | "check">;
 
 export type FeedReader = ReturnType<typeof createFeedReader>;
 
@@ -31,6 +32,7 @@ export function createFeedReader(bb: ListBb<{ id: string; deletedAt: number | nu
         events: store.eventsOfIssue(coordinatorId, issueId),
         log: store.logOf(coordinatorId, issueId),
         comments: store.commentsOf(coordinatorId, issueId),
+        capQuestions: capQuestionsOf(store.decisions(coordinatorId), issueId),
       });
       const blocks = dependentsOf(store.issues(coordinatorId), issueId);
       // why bb's listing, not how the agent ended: a thread archived or kept when its agent ended may be deleted since, and the agent's row never says so.

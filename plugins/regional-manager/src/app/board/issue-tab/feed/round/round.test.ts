@@ -114,7 +114,7 @@ test("a finding reads as its place, severity and claim, its path byte for byte a
 test("before its verdict returns, a round's findings show with no triage; its rail and, folded, its line count the findings and none confirmed", async () => {
   const verifying: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.review.state === "reported"
-      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, confirmed: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null, step: null }, outcome: null, inFlight: true } }
+      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, confirmed: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null, step: null, asked: null }, outcome: null, inFlight: true } }
       : entry,
   );
   const running = { ...bodyOf(3), verdict: { state: "running", verifierThreadId: "thr_verifier_3" }, findings: bodyOf(3).findings.map((finding) => ({ ...finding, triage: null })) } satisfies ReturnType<typeof bodyOf>;
@@ -287,7 +287,7 @@ test("the grid's head says the latest round's own score, so one all of whose cri
 test("a round nothing verified, as with verification off, shows no reviewer step, no verifier step and no outcome line; its score says it", async () => {
   // why this shape: with verification off a handoff gets no review and a waived verdict (server/review/review.test.ts).
   const waived: Entry[] = FEED.entries.map((entry) =>
-    entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "none" }, verdict: { outcome: { kind: "unverified" }, results: [], fixRound: null, step: null }, inFlight: false } } : entry,
+    entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "none" }, verdict: { outcome: { kind: "unverified" }, results: [], fixRound: null, step: null, asked: null }, inFlight: false } } : entry,
   );
   const unverified = { ...bodyOf(3), verdict: { state: "waived" }, findings: [] } satisfies ReturnType<typeof bodyOf>;
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: waived }), bodies: () => unverified });

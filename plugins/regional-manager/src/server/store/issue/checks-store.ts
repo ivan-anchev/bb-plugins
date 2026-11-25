@@ -17,7 +17,8 @@ import type { CiVerdict } from "../../../model/verdict/pr.ts";
 import { firstReview, reviewSchema, type Review, type ReviewFinding } from "../../../model/verdict/review.ts";
 import { failureReasons, firstVerdict, isSettled, storedVerdictSchema, withReview, type FirstVerdict, type StoredVerdict, type Verdict } from "../../../model/verdict/verdict.ts";
 import type { ModelRef } from "../../../model/agent/execution.ts";
-import { insertEvent } from "../inbox/inbox-store.ts";
+import { capAsks, capQuestionsOf, capQuestionText, CAP_OPTIONS, countedFailures } from "../../../model/verdict/rounds/cap.ts";
+import { decisionsOf, insertDecision, insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 import { countFixRound } from "./agents-store.ts";
 
@@ -150,6 +151,19 @@ export function checksStore(db: Db) {
   function unsettled(checkId: CheckId): Returned | null {
     const verdict = verdictOf(db, checkId);
     return verdict?.state === "returned" && !isSettled(verdict) ? verdict : null;
+  }
+
+  /**
+   * When the check just settled as one of the issue's counted failures, asks the user at its cap,
+   * as the one rule says (rounds/cap.ts capAsks), leading the question with why it failed. Call
+   * inside the settling transaction, after its writes, so the count includes it.
+   */
+  function askAtCap(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, at: number): void {
+    const failures = countedFailures(handed("WHERE h.coordinator_id = ? AND h.issue_id = ? ORDER BY h.rowid", coordinatorId, issueId));
+    const settled = failures.find(({ id }) => id === checkId)?.verdict;
+    if (settled?.state !== "returned") return;
+    const cap = capAsks(failures.length, capQuestionsOf(decisionsOf(db, coordinatorId), issueId));
+    if (cap !== null) insertDecision(db, coordinatorId, { issueId, question: capQuestionText(issueId, settled, cap), options: CAP_OPTIONS, cap }, at);
   }
 
   /** Inserts a check made of the handoff `handoffId` (null: a final check, made of none), with its first verdict. Call inside a transaction. */
@@ -369,9 +383,10 @@ export function checksStore(db: Db) {
     /**
      * Settles an unsettled verdict and records it for its regional manager, together. `sent-back`
      * and `maybe-sent-back` need a claimed round, and keep it and its CI; `checked` gives back a
-     * round claimed for findings that never left. `waiting-for-ci` moves a pending verdict to wait,
-     * and records nothing: nobody is told until it settles. Returns whose it was, or null when it
-     * was already settled or waiting, or there is no claim to keep.
+     * round claimed for findings that never left. A failure at the issue's cap also puts the cap
+     * question to the user, in the same transaction (askAtCap). `waiting-for-ci` moves a pending
+     * verdict to wait, and records nothing: nobody is told until it settles. Returns whose it was,
+     * or null when it was already settled or waiting, or there is no claim to keep.
      */
     settleReturned(checkId: CheckId, as: Settlement, at: number): CoordinatorId | null {
       return db().transaction(() => {
@@ -388,12 +403,14 @@ export function checksStore(db: Db) {
           if (settlement.kind === "sending-back") countFixRound(db, coordinatorId, handingAgentOf(checkId), -1);
           writeSettlement(db, checkId, as);
           insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId }, at);
+          askAtCap(coordinatorId, issueId, checkId, at);
           return coordinatorId;
         }
         if (settlement.kind !== "sending-back") return null;
         const { round, ci } = settlement;
         writeSettlement(db, checkId, { kind: as.kind, round, ci });
         insertEvent(db, coordinatorId, as.kind === "sent-back" ? { kind: "sent-back", issueId, agentId: handingAgentOf(checkId), checkId, round } : { kind: "checked", issueId, checkId }, at);
+        askAtCap(coordinatorId, issueId, checkId, at);
         return coordinatorId;
       })();
     },

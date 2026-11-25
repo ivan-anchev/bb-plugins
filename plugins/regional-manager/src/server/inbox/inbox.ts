@@ -9,6 +9,7 @@ import type { CommentId } from "../../model/feed/comment.ts";
 import type { GivenHandoff, Handoff, HandoffId } from "../../model/agent/handoff.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
+import { capQuestionsOf } from "../../model/verdict/rounds/cap.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import type { IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -74,6 +75,7 @@ type InboxStore = Pick<
   | "dueReminders"
   | "fireReminder"
   | "decision"
+  | "decisions"
   | "answerDecision"
   | "recordOwnTree"
   | "recordUnblocked"
@@ -113,7 +115,13 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
-      const text = doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision });
+      const text = doorbellText(events, {
+        titles: new Map(store.issues(id).map(({ id, title }) => [id, title])),
+        check: store.check,
+        decision: store.decision,
+        record: (issueId) => store.record(id, issueId),
+        capQuestions: (issueId) => capQuestionsOf(store.decisions(id), issueId),
+      });
       // why agent-only: the model reads the doorbell, but bb draws no message for it, so the user sees only the turn it starts.
       const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text, visibility: "agent-only", mentions: [] }], mode: "queue-if-active" });
       // why record a send that lands after a dispose: it happened, and announcing it again would ring twice.

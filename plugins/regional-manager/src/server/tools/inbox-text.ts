@@ -15,6 +15,7 @@ import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
+import { askedText, capMovesText, openCapQuestion, questionAskedBy, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { findingText, type Review } from "../../model/verdict/review.ts";
 import { checkInFlight, ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
@@ -34,6 +35,8 @@ export type Lookups = {
   record(id: IssueId): readonly Handed[];
   /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
   view(id: IssueId): IssueView | null;
+  /** The questions the plugin put to the user at the issue's cap, in the order asked, as they stand now. */
+  capQuestions(id: IssueId): readonly CapQuestion[];
 };
 
 /** The updates section of a catch-up: every event it returned, oldest first. */
@@ -65,7 +68,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     switch (subject.kind) {
       case "handoff": {
         const handed = handedOf(subject.handoffId, lookups);
-        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${FAILED_IS_YOURS}` : "";
+        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${failedNextStep(check, lookups)}` : "";
         return `### ${issueName(event.issueId, titles, subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
       }
       case "final":
@@ -224,6 +227,21 @@ const MAY_HAVE_REACHED_AGENT =
 
 const MOVE_TO_AN_AGENT =
   "bb's git plugin read changed files in your working tree when your turn ended, and the board warns the user of it. You never edit project files yourself, and you never touch your working tree: no stash, revert, checkout or deletion, not even of files you changed, since the user may have edited the same files. First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's rules say: describe its title, brief and done-criteria, file it with issue_create, and start its agent only once they agree. In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours. If you made none of these changes, they are the user's: leave them and say so in your reply. The warning stays until a turn of yours ends with a clean tree.";
+
+/**
+ * What a failed done handoff leaves the regional manager to do, led by what its failure asked the
+ * user at the issue's cap, if it did: decide, or, while the issue's cap question is open, only
+ * what works then (rounds/cap.ts).
+ */
+function failedNextStep(check: Check, { record, capQuestions }: Pick<Lookups, "record" | "capQuestions">): string {
+  const questions = capQuestions(check.issueId);
+  const asked = questionAskedBy(check, record(check.issueId), questions);
+  const open = openCapQuestion(questions);
+  const led = asked === null ? "" : `This was ${askedText(check.issueId, asked)}, on the board. `;
+  if (open === null) return `${led}${FAILED_IS_YOURS}`;
+  const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;
+  return `${led}${held}Until the user answers ${open.id}, agent_start and agent_message on ${check.issueId} are refused. ${capMovesText(check.issueId, open.id)}`;
+}
 
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";

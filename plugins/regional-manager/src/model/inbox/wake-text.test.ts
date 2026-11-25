@@ -7,6 +7,7 @@ import { issueIdSchema } from "../issue/issue.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { coordinatorIdSchema } from "../role.ts";
 import { checkIdSchema, type Check, type CheckId } from "../verdict/check.ts";
+import type { CapQuestion } from "../verdict/rounds/cap.ts";
 import type { Verdict } from "../verdict/verdict.ts";
 import { commentIdSchema } from "../feed/comment.ts";
 import { DISPLAY_NAME } from "../../name.ts";
@@ -22,13 +23,13 @@ const titles = new Map([
   [i2, "Dead letters"],
 ]);
 const stored = (events: InboxEvent[]): StoredEvent[] => events.map((event, i) => ({ id: i + 1, at: 1_000 + i, event }));
-const noChecks = { titles, check: () => null, decision: () => null };
+const noChecks = { titles, check: () => null, decision: () => null, record: () => [], capQuestions: () => [] };
 
 const WRITTEN = "The user approved the merge";
 const k1 = checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d");
 
 /** A check of a done handoff of a1 on WEB-1 whose every word is agent- or verifier-written, with this verdict. */
-function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: CheckId): Check | null; decision(): null } {
+function checkedWith(verdict: Verdict, capQuestions: readonly CapQuestion[] = []): Parameters<typeof doorbellText>[1] {
   const check: Check = {
     id: k1,
     coordinatorId: coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10"),
@@ -40,7 +41,7 @@ function checkedWith(verdict: Verdict): { titles: typeof titles; check(id: Check
     review: { state: "none" },
     verdict,
   };
-  return { titles, check: (id) => (id === k1 ? check : null), decision: () => null };
+  return { titles, check: (id) => (id === k1 ? check : null), decision: () => null, record: () => [{ check }], capQuestions: () => capQuestions };
 }
 
 const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
@@ -121,6 +122,17 @@ test("a checked done handoff is announced with what its verdict found, derived f
   }
 });
 
+test("a failure that asked the user at the issue's cap says so with the question's id; one that asked nothing doesn't", () => {
+  const failed = returned(["pass", "fail"]);
+  const question: CapQuestion = { id: decisionIdSchema.parse("d4"), issueId: i1, question: "Anything", options: [], askedAt: 6_000, answer: null, cap: 1 };
+  const event = stored([{ kind: "checked", issueId: i1, checkId: k1 }]);
+  assert.equal(
+    doorbellText(event, checkedWith(failed, [question])),
+    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification; WEB-1's 1st failed verification, past its cap of 3: nothing went back to an agent, and the plugin asked the user (d4)`,
+  );
+  assert.doesNotMatch(doorbellText(event, checkedWith(failed, [{ ...question, cap: 2 }])), /asked the user/, "a question asked at another count was asked by another failure");
+});
+
 test("the user's switch is announced as on or off", () => {
   const text = doorbellText(stored([{ kind: "verification-toggled", verify: false }, { kind: "verification-toggled", verify: true }]), noChecks);
   assert.match(text, /- The user turned verification of done handoffs off\n- The user turned verification of done handoffs on$/);
@@ -128,7 +140,7 @@ test("the user's switch is announced as on or off", () => {
 
 test("an answered decision is announced with the regional manager's own question, never the user's answer", () => {
   const d1 = decisionIdSchema.parse("d1");
-  const answered: Decision = { id: d1, issueId: null, question: "Target main or release/2?", options: ["main", "release/2"], askedAt: 1_000, answer: { text: WRITTEN, at: 2_000 } };
+  const answered: Decision = { id: d1, issueId: null, question: "Target main or release/2?", options: ["main", "release/2"], askedAt: 1_000, answer: { text: WRITTEN, at: 2_000 }, cap: null };
   const text = doorbellText(stored([{ kind: "decision-answered", decisionId: d1 }]), { ...noChecks, decision: (id) => (id === d1 ? answered : null) });
   assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user answered your question d1: Target main or release/2?`);
 });

@@ -104,6 +104,7 @@ function bbp19(): FeedFacts {
     ]),
     log: [],
     comments: [],
+    capQuestions: [],
   };
 }
 
@@ -204,7 +205,7 @@ test("the filters: All shows everything, Rounds only rounds, Discussion only dec
 });
 
 test("a round whose criteria all passed scores a pass only once it is settled: before, it is verifying or waiting for CI, and one replaced says so; a failed criterion fails it whatever comes", () => {
-  const scored = (verdict: Verdict) => scoreOf(roundOf(handed(handoff(1, A1, 3_000), verdict), 1, null));
+  const scored = (verdict: Verdict) => scoreOf(roundOf(handed(handoff(1, A1, 3_000), verdict), 1, null, null));
   const passed = (settlement: Extract<Verdict, { state: "returned" }>["settlement"]) => scored(returned(["pass", "pass", "pass"], 3_500, settlement));
   assert.deepEqual(passed({ kind: "pending" }), { kind: "pending", stage: "verifying" });
   assert.deepEqual(passed({ kind: "waiting-for-ci" }), { kind: "pending", stage: "ci" });
@@ -218,7 +219,7 @@ test("a round whose criteria all passed scores a pass only once it is settled: b
 });
 
 test("a fix round says whether its findings reached the agent: sent, or maybe, when the plugin can't tell; none while they are on their way, as the round is in flight", () => {
-  const fixRound = (settlement: Extract<Verdict, { state: "returned" }>["settlement"]) => roundOf(handed(handoff(1, A1, 3_000), returned(["fail", "pass", "pass"], 3_500, settlement)), 1, null).verdict?.fixRound;
+  const fixRound = (settlement: Extract<Verdict, { state: "returned" }>["settlement"]) => roundOf(handed(handoff(1, A1, 3_000), returned(["fail", "pass", "pass"], 3_500, settlement)), 1, null, null).verdict?.fixRound;
   assert.deepEqual(
     [fixRound({ kind: "sending-back", round: 1, ci: { kind: "none" } }), fixRound({ kind: "sent-back", round: 1, ci: { kind: "none" } }), fixRound({ kind: "maybe-sent-back", round: 2, ci: { kind: "none" } }), fixRound({ kind: "checked", refused: null, ci: { kind: "none" } })],
     [null, { round: 1, delivery: "sent" }, { round: 2, delivery: "maybe" }, null],
@@ -226,16 +227,16 @@ test("a fix round says whether its findings reached the agent: sent, or maybe, w
 });
 
 test("a check superseded while its review was to come is no longer in flight: its review reads as none and its score as replaced", () => {
-  const superseded = roundOf(handed(handoff(1, A1, 3_000), { state: "superseded" }, { state: "running", reviewerThreadId: "thr_reviewer" }), 1, null);
+  const superseded = roundOf(handed(handoff(1, A1, 3_000), { state: "superseded" }, { state: "running", reviewerThreadId: "thr_reviewer" }), 1, null, null);
   assert.deepEqual([superseded.inFlight, superseded.review, scoreOf(superseded)], [false, { state: "none" }, { kind: "unjudged", outcome: "superseded" }]);
-  const reviewing = roundOf(handed(handoff(2, A1, 4_000), { state: "queued", checkout: null }, { state: "running", reviewerThreadId: "thr_reviewer" }), 2, null);
+  const reviewing = roundOf(handed(handoff(2, A1, 4_000), { state: "queued", checkout: null }, { state: "running", reviewerThreadId: "thr_reviewer" }), 2, null, null);
   assert.deepEqual([reviewing.inFlight, reviewing.review, scoreOf(reviewing)], [true, { state: "pending" }, { kind: "pending", stage: "reviewing" }]);
 });
 
 test("a verdict failed by its checkout and a criterion names its checkout first, in its round as in the issue's headline (verdict.ts failureReasons)", () => {
   const both = returned(["fail", "pass", "pass"], 3_500, { kind: "checked", refused: null, ci: { kind: "none" } });
   const dirty: Verdict = both.state === "returned" ? { ...both, checkout: { headSha: SHA, changedFiles: ["?? notes.md"], changedFileCount: 1 } } : assert.fail("not returned");
-  const round = roundOf(handed(handoff(1, A1, 3_000), dirty), 1, null);
+  const round = roundOf(handed(handoff(1, A1, 3_000), dirty), 1, null, null);
   assert.deepEqual([round.verdict?.outcome, scoreOf(round)], [{ kind: "fail", by: "checkout" }, { kind: "failed", by: "checkout" }]);
 });
 
@@ -319,7 +320,7 @@ test("an issue filed before the log shows where it began, no status on anything 
 test("a round begun before the log shows no status on a step after the marker: the move it made is a line of its own, below it", () => {
   const spanning = handed(handoff(1, A1, 100), { state: "running", verifierThreadId: "thr_v", nudged: false, declined: [], checkout: null }, { state: "missed", at: 300, reviewerThreadId: null, reason: "no reviewer model" });
   const log: Logged[] = [{ at: 200, event: { kind: "log-began" } }, ...observed([[400, "verifying"]])];
-  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [spanning], finalChecks: [], decisions: [], events: [], log, comments: [] });
+  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [spanning], finalChecks: [], decisions: [], events: [], log, comments: [], capQuestions: [] });
   assert.deepEqual(glyphsOf(entries), [], "nothing at or above the marker shows a status, its round's later steps included");
   assert.deepEqual(
     entries.map((entry) => [entry.kind, timeOf(entry)]),
@@ -334,7 +335,7 @@ test("a round begun before the log shows no status on a step after the marker: t
 
 test("rows of the log written in one millisecond keep the order they were written: a status shows only on what came before it", () => {
   const log: Logged[] = [...observed([[2_000, "todo"]]), { at: 2_000, event: { kind: "closed", as: "canceled" } }, ...observed([[2_001, "canceled"]])];
-  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [] });
+  const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [], capQuestions: [] });
   assert.deepEqual(entries, [
     { kind: "created", at: 0, moved: "todo" },
     { kind: "logged", at: 2_000, event: { kind: "closed", as: "canceled" }, moved: "canceled" },
@@ -343,7 +344,7 @@ test("rows of the log written in one millisecond keep the order they were writte
 
 test("a row the log kept after its start sits below the marker even when the clock stepped back: as written, with its own time", () => {
   const log: Logged[] = [{ at: 5_000, event: { kind: "log-began" } }, ...observed([[4_500, "todo"]]), { at: 4_600, event: { kind: "edited", fields: ["title"] } }];
-  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [] });
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [], capQuestions: [] });
   assert.deepEqual(entries, [
     { kind: "created", at: 1_000, moved: null },
     { kind: "logged", at: 5_000, event: { kind: "log-began" }, moved: null },
@@ -354,7 +355,7 @@ test("a row the log kept after its start sits below the marker even when the clo
 
 test("a status shows only on what was written before it, even when the clock stepped back between them", () => {
   const log: Logged[] = [...observed([[3_000, "todo"], [5_000, "in-progress"]]), { at: 4_000, event: { kind: "edited", fields: ["title"] } }, ...observed([[4_100, "backlog"]])];
-  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [] });
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [], capQuestions: [] });
   assert.deepEqual(entries, [
     { kind: "created", at: 1_000, moved: "todo" },
     { kind: "moved", at: 5_000, status: "in-progress" },
@@ -372,7 +373,7 @@ test("comments show in the order posted among the other moments, under Discussio
     author,
   });
   const comments = [comment(1, 1_500, { kind: "user" }, null), comment(2, 1_600, { kind: "manager" }, 1), comment(3, 2_100, { kind: "agent", agentId: A1 }, 1)];
-  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [agent(A1, 2_000, null)], handed: [], finalChecks: [], decisions: [], events: [], log: observed([[1_700, "in-progress"]]), comments });
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [agent(A1, 2_000, null)], handed: [], finalChecks: [], decisions: [], events: [], log: observed([[1_700, "in-progress"]]), comments, capQuestions: [] });
 
   assert.deepEqual(
     entries.map((entry) => [entry.kind, timeOf(entry)]),

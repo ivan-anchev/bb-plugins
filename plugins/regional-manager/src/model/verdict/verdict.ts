@@ -300,6 +300,14 @@ export function failureText(reason: ReasonBesidesCriteria, judged: Judged): stri
   }
 }
 
+/** How a failed handoff's verdict reads, leading its headline: by the first of its reasons (firstFailure), so by its criteria only when nothing read before them failed it. */
+export function failureHeadline(verdict: Verdict): string {
+  const first = firstFailure(verdict);
+  if (first === null || first.kind === "criteria") return "✗ Failed verification";
+  const words = failureText(first, "handoff");
+  return `✗ ${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
 /** Each reason a verdict failed besides its criteria (`reasons`, failureReasons), as its phrase (failureText), in order. */
 export const failurePhrases = (reasons: readonly FailureReason[], judged: Judged): string[] =>
   reasons.filter(besidesCriteria).map((reason) => failureText(reason, judged));

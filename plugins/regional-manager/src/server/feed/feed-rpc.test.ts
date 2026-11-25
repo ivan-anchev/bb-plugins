@@ -131,7 +131,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
       by: { kind: "agent", agentId: "a1", status: "done", summary: "Retries land" },
       handed: { at: 3_000, moved: null },
       review: { state: "reported", step: { at: 3_200, moved: null }, findings: 1, confirmed: 1 },
-      verdict: { outcome: { kind: "fail", by: "criteria" }, results: ["fail"], fixRound: { round: 1, delivery: "sent" }, step: { at: 3_500, moved: null } },
+      verdict: { outcome: { kind: "fail", by: "criteria" }, results: ["fail"], fixRound: { round: 1, delivery: "sent" }, step: { at: 3_500, moved: null }, asked: null },
       outcome: { at: 3_600, moved: "in-progress" },
       inFlight: false,
     },

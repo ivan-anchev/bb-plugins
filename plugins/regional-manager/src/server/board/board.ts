@@ -61,7 +61,7 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
 
     /** What sits under Needs you on the board, from the same reads as the board's own: its decisions and its issues. */
     async needsYou(id: CoordinatorId): Promise<NeedsYou> {
-      return needsYou(store.decisions(id), (await readIssues(bb, store, id)).map((read) => read.view));
+      return needsYou(store.decisions(id), (await readIssues(bb, store, id)).map(({ view }) => ({ id: view.issue.id, status: view.status, needsYou: view.needsYou })));
     },
   };
 }

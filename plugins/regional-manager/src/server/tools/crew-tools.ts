@@ -8,6 +8,7 @@ import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
+import { capQuestionsOf } from "../../model/verdict/rounds/cap.ts";
 import type { BoardReader } from "../board/board.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import { boardText } from "../issues/issue-text.ts";
@@ -48,6 +49,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
       const readOf = (issueId: IssueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId) ?? null));
+      const decisions = store.decisions(id);
       const updates = updatesText(inbox.takeUnread(id), {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
@@ -58,8 +60,9 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
         // why the store when bb's thread list couldn't be read: there is no view for the record to agree with.
         record: (issueId) => readOf(issueId)?.record ?? store.record(id, issueId),
         view: (issueId) => readOf(issueId)?.view ?? null,
+        capQuestions: (issueId) => capQuestionsOf(decisions, issueId),
       });
-      return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
+      return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(decisions)}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
     }),
   });
 

@@ -3,7 +3,9 @@
 // board, crew_catch_up, issue_read, issue_update and the unblocked announcement all view issues
 // here, so a status has one derivation.
 import { issueBranch, type Agent } from "../../../model/agent/agent.ts";
-import type { Issue } from "../../../model/issue/issue.ts";
+import { isOpen, type Decision } from "../../../model/decision.ts";
+import type { Issue, IssueId } from "../../../model/issue/issue.ts";
+import { capQuestionsOf, openCapQuestion } from "../../../model/verdict/rounds/cap.ts";
 import { issueViews, type Handed, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import type { Store } from "../../store/store.ts";
@@ -33,7 +35,7 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
   // why archived ones too: an ended agent's branch still names its issue's pull request.
   const threads = await threadsById(bb, [...agents.flatMap(({ threadId }) => (threadId === null ? [] : [threadId])), ...verifiers.map(({ threadId }) => threadId)]);
   const threadOf = (agent: Agent): ListedThread | null => (agent.threadId === null ? null : (threads.get(agent.threadId) ?? null));
-  const openDecisions = new Set(store.decisions(coordinatorId).flatMap(({ issueId, answer }) => (issueId !== null && answer === null ? [issueId] : [])));
+  const decisions = store.decisions(coordinatorId);
 
   const reads = await Promise.all(
     issues.map(async (issue) => {
@@ -47,7 +49,7 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
         holder: await holderOf(bb, own, threadOf, record),
         ended: endedBy(latest, record),
         pr: branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null),
-        openDecision: openDecisions.has(issue.id),
+        openDecision: openDecisionOf(decisions, issue.id),
         finalCheck: store.finalChecks(coordinatorId, issue.id).at(-1) ?? null,
         verifierAsks: verifiers.some(({ issueId, threadId }) => issueId === issue.id && threads.get(threadId)?.hasPendingInteraction === true),
       };
@@ -57,6 +59,12 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
   );
   const views = issueViews(reads.map(({ facts }) => facts));
   return reads.map(({ agent, threadId, branch, record }, i) => ({ view: viewAt(views, i), agent, threadId, branch, record }));
+}
+
+/** The issue's open decision, the plugin's question at its cap told from another (see IssueFacts); null when none naming it is open. */
+function openDecisionOf(decisions: readonly Decision[], issueId: IssueId): IssueFacts["openDecision"] {
+  if (!decisions.some((decision) => decision.issueId === issueId && isOpen(decision))) return null;
+  return { cap: openCapQuestion(capQuestionsOf(decisions, issueId))?.cap ?? null };
 }
 
 /** The issue's holder, its thread while bb runs it, and its current handoff (its latest on `record`), judged only when its thread is idle. */

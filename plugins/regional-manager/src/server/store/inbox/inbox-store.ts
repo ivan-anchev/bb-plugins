@@ -17,6 +17,19 @@ export function insertEvent(db: Db, coordinatorId: CoordinatorId, event: InboxEv
   db().prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, ?)").run(coordinatorId, JSON.stringify(event), at);
 }
 
+/** Puts a decision to the user, flagging `issueId` Needs you until answered (null: none), and returns it with its id; `cap` as decision.ts says. Call inside the transaction that decides to ask. */
+export function insertDecision(db: Db, coordinatorId: CoordinatorId, { question, options, issueId, cap }: Pick<Decision, "question" | "options" | "issueId" | "cap">, at: number): Decision {
+  const row = db()
+    .prepare(`INSERT INTO decisions (coordinator_id, issue_id, question, options, asked_at, cap) VALUES (?, ?, ?, ?, ?, ?) RETURNING ${DECISION_COLUMNS}`)
+    .get(coordinatorId, issueId, question, JSON.stringify(options), at, cap);
+  return toDecision(row);
+}
+
+/** Every decision put to the user for the regional manager, in the order asked. */
+export function decisionsOf(db: Db, coordinatorId: CoordinatorId): Decision[] {
+  return db().prepare(`SELECT ${DECISION_COLUMNS} FROM decisions WHERE coordinator_id = ? ORDER BY id`).all(coordinatorId).map(toDecision);
+}
+
 export function inboxStore(db: Db) {
   /** The latest event about the regional manager's own working tree, with when it was recorded; null when none was. */
   function lastOwnTreeEvent(coordinatorId: CoordinatorId): { at: number; event: OwnTreeEvent } | null {
@@ -186,13 +199,8 @@ export function inboxStore(db: Db) {
       })();
     },
 
-    /** Puts a decision to the user for the regional manager, flagging `issueId` Needs you until answered (null: none), and returns it with its id. */
-    insertDecision(coordinatorId: CoordinatorId, { question, options, issueId }: Pick<Decision, "question" | "options" | "issueId">, at: number): Decision {
-      const row = db()
-        .prepare(`INSERT INTO decisions (coordinator_id, issue_id, question, options, asked_at) VALUES (?, ?, ?, ?, ?) RETURNING ${DECISION_COLUMNS}`)
-        .get(coordinatorId, issueId, question, JSON.stringify(options), at);
-      return toDecision(row);
-    },
+    /** Puts the regional manager's question to the user, flagging `issueId` Needs you until answered (null: none), and returns it with its id. */
+    insertDecision: (coordinatorId: CoordinatorId, asked: Pick<Decision, "question" | "options" | "issueId">, at: number): Decision => insertDecision(db, coordinatorId, { ...asked, cap: null }, at),
 
     /** A decision by its id, answered or not; null when there is none. */
     decision(id: DecisionId): Decision | null {
@@ -201,9 +209,7 @@ export function inboxStore(db: Db) {
     },
 
     /** Every decision the regional manager put to the user, in the order it asked them. */
-    decisions(coordinatorId: CoordinatorId): Decision[] {
-      return db().prepare(`SELECT ${DECISION_COLUMNS} FROM decisions WHERE coordinator_id = ? ORDER BY id`).all(coordinatorId).map(toDecision);
-    },
+    decisions: (coordinatorId: CoordinatorId): Decision[] => decisionsOf(db, coordinatorId),
 
     /**
      * Stores the user's answer to one of the regional manager's decisions, and records it for the
@@ -235,13 +241,14 @@ const toReminder = (row: unknown): Reminder => reminderRowSchema.parse(row);
 
 /** A decision's row id is its number: `d7` is row 7. */
 const rowIdOfDecision = (id: DecisionId): number => Number(id.slice(1));
-const DECISION_COLUMNS = "id, issue_id AS issueId, question, options, asked_at AS askedAt, answer, answered_at AS answeredAt";
+const DECISION_COLUMNS = "id, issue_id AS issueId, question, options, asked_at AS askedAt, answer, answered_at AS answeredAt, cap";
 const decisionRowSchema = z.object({
   id: z.number().int().transform((id) => decisionIdSchema.parse(`d${id}`)),
   issueId: issueIdSchema.nullable(),
   question: z.string(),
   options: json(z.array(z.string())),
   askedAt: z.number(),
+  cap: z.number().int().min(1).nullable(),
 });
 // why a union: the answer and its time are written together, or not at all.
 const answerColumnsSchema = z.union([
