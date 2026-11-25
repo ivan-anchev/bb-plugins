@@ -2,7 +2,7 @@
 // a file and line with a severity and its claim. The verifier triages them next (verdict-tool.ts).
 // The caller's role comes from the plugin's database by its thread id.
 import { z } from "zod";
-import { severitySchema } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, severitySchema } from "../../model/verdict/review.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Review } from "./review.ts";
@@ -15,7 +15,7 @@ const reviewInputSchema = z.object({
       z.object({
         file: z.string().min(1).max(500).describe("The file the finding is in, as the diff names it."),
         line: z.number().int().min(1).nullable().describe("The line in that file at the reviewed commit; null when the finding names no one line."),
-        severity: severitySchema.describe("must-fix: wrong, and must not merge as it is. should-fix: worth fixing before it merges. nit: a small improvement."),
+        severity: severitySchema.describe(`must-fix: wrong, and must not merge as it is; say in the claim what it breaks. should-fix: worth fixing before it merges. nit: a small improvement. ${ANCHOR_RULE}`),
         claim: z.string().trim().min(1).max(2_000).describe("What is wrong there, and why, in a few lines."),
       }),
     )
@@ -50,4 +50,4 @@ export function registerReviewTool(bb: ToolsBb, { store, review }: Deps): void {
 
 const NOT_RUNNING = `${REVIEW} is refused and nothing was saved: this review no longer waits for your findings (a newer handoff replaced it, or it ended without them). Stop here.`;
 
-const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} once, as your last action, then stop. Each finding names its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit) and its claim. [] when you found nothing. A verifier checks each finding, confirms or rejects it, and only confirmed ones go back to the agent in its automatic fix round. A turn that ends before you call it ends your review unheard, so run what you need in the foreground and don't end your turn to wait for it.`;
+const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} once, as your last action, then stop. Each finding names its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit) and its claim. [] when you found nothing. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} A verifier checks each finding: it rejects one that doesn't hold, anchors a must-fix to what it breaks, downgrades one that breaks none of the five, and confirms the rest. Every one that holds goes back to the agent in its automatic fix round. A turn that ends before you call it ends your review unheard, so run what you need in the foreground and don't end your turn to wait for it.`;

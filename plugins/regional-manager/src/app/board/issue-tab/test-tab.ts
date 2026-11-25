@@ -65,7 +65,7 @@ function round(number: number, agentId: typeof A1, at: number, results: Criterio
     number,
     handed: { at, moved: null },
     by: { kind: "agent", agentId, status: "done", summary: `Round ${number}: retries land with backoff` },
-    review: { state: "reported", step: { at: at + 100, moved: null }, findings: 2, confirmed: 1 },
+    review: { state: "reported", step: { at: at + 100, moved: null }, findings: 2, held: 1, downgraded: 0 },
     verdict: { outcome: failed ? { kind: "fail", by: "criteria" } : { kind: "pass" }, results, fixRound: fixRound === null ? null : { round: fixRound, delivery: "sent" }, step: { at: at + 500, moved: null }, asked: null },
     outcome: { at: at + 600, moved: null },
     inFlight: false,
@@ -119,7 +119,7 @@ export function bodyOf(n: number): RoundBody {
     handoff: { did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], report: null },
     verdict: verdictOf(n, results),
     findings: [
-      { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", triage: { result: "confirmed", reason: "Seen: it grows without bound." } },
+      { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", triage: { result: "anchored", anchor: "criterion", reason: "Seen: it grows without bound." } },
       { file: "src/retry.css", line: null, severity: "nit", claim: "The padding differs from the row's.", triage: { result: "rejected", reason: "It matches the row." } },
     ],
     reviewMissed: null,

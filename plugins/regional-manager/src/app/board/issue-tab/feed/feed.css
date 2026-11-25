@@ -648,8 +648,9 @@
 .rmi-triage b {
   font-weight: 500;
 }
-.rmi-triage[data-triage="confirmed"] b { color: var(--destructive-text); }
-.rmi-triage[data-triage="rejected"] b { color: var(--foreground); }
+/* why only an anchored finding in red: it alone fails the verdict; one confirmed, downgraded or rejected doesn't. */
+.rmi-triage[data-triage="anchored"] b { color: var(--destructive-text); }
+.rmi-triage b { color: var(--foreground); }
 
 /* The verdict on a round. */
 .rmi-verdict {

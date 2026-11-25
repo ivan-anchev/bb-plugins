@@ -42,7 +42,7 @@ test("each round folds to its number, its summary and its score; the latest is o
   const { tab, bodyReads } = await opened("WEB-1", WEB_1);
   const { card, head, open } = rounds(tab());
   assert.deepEqual(open(), [3]);
-  assert.deepEqual([1, 2, 3].map((n) => head(n).textContent), ["Round 1Round 1: retries land with backoff2 findings, 1 confirmedFailed: 1 of 3", "Round 2Round 2: retries land with backoff2 findings, 1 confirmedFailed: 2 of 3", "Round 3Round 3: retries land with backoff2 findings, 1 confirmedPassed: 3 of 3"]);
+  assert.deepEqual([1, 2, 3].map((n) => head(n).textContent), ["Round 1Round 1: retries land with backoff2 findings, 1 heldFailed: 1 of 3", "Round 2Round 2: retries land with backoff2 findings, 1 heldFailed: 2 of 3", "Round 3Round 3: retries land with backoff2 findings, 1 heldPassed: 3 of 3"]);
   await card(3).findByText("The backoff has no cap.");
   assert.deepEqual(bodyReads.flat(), [keyOf(3)], "a folded round reads nothing");
 });
@@ -61,8 +61,8 @@ test("an open round shows its steps: the handoff and its report, the reviewer's 
   assert.deepEqual(
     findings.map((finding) => [finding.querySelector(".rmi-triage b")?.textContent, finding.querySelector(".rmi-triage")?.textContent, finding.querySelector(".rmi-finding-claim s")?.textContent ?? null]),
     [
-      ["Confirmed", "Confirmed Seen: it grows without bound.", null],
-      ["Rejected", "Rejected It matches the row.", "The padding differs from the row's."],
+      ["Anchored, as it breaks a done-criterion.", "Anchored, as it breaks a done-criterion. Seen: it grows without bound.", null],
+      ["Rejected.", "Rejected. It matches the row.", "The padding differs from the row's."],
     ],
   );
 
@@ -71,25 +71,27 @@ test("an open round shows its steps: the handoff and its report, the reviewer's 
   assert.match(one.getByLabelText("Evidence for criterion 2").textContent ?? "", /1 failing: caps the backoff/);
   const passes = one.getByText("1 passed").closest("details") ?? assert.fail("no passes");
   assert.equal(passes.open, false, "the passes stay folded");
-  assert.match(one.getByText(/^Sent back to/).closest("p")?.textContent ?? "", /^Sent back to a1 as fix round 1, with the 1 confirmed finding/);
+  assert.match(one.getByText(/^Sent back to/).closest("p")?.textContent ?? "", /^Sent back to a1 as fix round 1, with the 1 finding that held/);
 });
 
-test("a finding reads as its place, severity and claim, its path byte for byte as the reviewer wrote it, a leading space, a zero-width character and a bidi mark kept; a rejected claim is struck, and each triage gives its reason", async () => {
+test("a finding reads as its place, severity and claim, its path byte for byte as the reviewer wrote it, a leading space, a zero-width character and a bidi mark kept; a rejected claim is struck, and each triage gives its word and reason: what an anchored one breaks, a downgraded one's new severity", async () => {
   const path = " src/\u200bretry\u200f\u202e.ts";
   const findings = [
-    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", triage: { result: "confirmed", reason: "Seen: it grows without bound." } },
+    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", triage: { result: "anchored", anchor: "brief", reason: "Seen: it grows without bound." } },
     { file: path, line: null, severity: "nit", claim: "The padding differs from the row's.", triage: { result: "rejected", reason: "It matches the row." } },
+    { file: path, line: 9, severity: "must-fix", claim: "The helper's name says nothing.", triage: { result: "downgraded", to: "nit", reason: "Breaks none of the five." } },
+    { file: path, line: 12, severity: "should-fix", claim: "The jitter is computed twice.", triage: { result: "confirmed", reason: "Both calls on line 12." } },
   ] satisfies ReturnType<typeof bodyOf>["findings"];
   const { tab } = await opened("WEB-1", WEB_1, { bodies: () => ({ ...bodyOf(3), findings }) });
   const three = rounds(tab()).card(3);
   const items = within(await three.findByRole("list", { name: "Findings" })).getAllByRole("listitem");
   assert.deepEqual(
     items.map((item) => item.querySelector(".rmi-finding-line")?.textContent),
-    [`${path}:4 (must-fix): The backoff has no cap.`, `${path} (nit): The padding differs from the row's.`],
+    [`${path}:4 (must-fix): The backoff has no cap.`, `${path} (nit): The padding differs from the row's.`, `${path}:9 (must-fix): The helper's name says nothing.`, `${path}:12 (should-fix): The jitter is computed twice.`],
   );
   assert.deepEqual(
     items.map((item) => item.querySelector(".rmi-finding-file")?.textContent),
-    [path, path],
+    [path, path, path, path],
     "the path as the reviewer wrote it, nothing trimmed or stripped",
   );
   const [first, second] = items.map((item) => item.querySelector<HTMLElement>(".rmi-finding-place") ?? assert.fail("no place"));
@@ -103,19 +105,19 @@ test("a finding reads as its place, severity and claim, its path byte for byte a
   assert.equal(three.getByRole("tooltip").textContent, path, "hovered, too");
   assert.deepEqual(
     items.map((item) => item.querySelector("s")?.textContent ?? null),
-    [null, "The padding differs from the row's."],
+    [null, "The padding differs from the row's.", null, null],
     "only the rejected claim is struck",
   );
   assert.deepEqual(
     items.map((item) => item.querySelector(".rmi-triage")?.textContent),
-    ["Confirmed Seen: it grows without bound.", "Rejected It matches the row."],
+    ["Anchored, as it breaks the issue's brief. Seen: it grows without bound.", "Rejected. It matches the row.", "Downgraded to nit. Breaks none of the five.", "Confirmed. Both calls on line 12."],
   );
 });
 
-test("before its verdict returns, a round's findings show with no triage; its rail and, folded, its line count the findings and none confirmed", async () => {
+test("before its verdict returns, a round's findings show with no triage; its rail and, folded, its line count the findings and none held", async () => {
   const verifying: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.review.state === "reported"
-      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, confirmed: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null, step: null, asked: null }, outcome: null, inFlight: true } }
+      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, held: null, downgraded: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null, step: null, asked: null }, outcome: null, inFlight: true } }
       : entry,
   );
   const running = { ...bodyOf(3), verdict: { state: "running", verifierThreadId: "thr_verifier_3" }, findings: bodyOf(3).findings.map((finding) => ({ ...finding, triage: null })) } satisfies ReturnType<typeof bodyOf>;
@@ -124,18 +126,18 @@ test("before its verdict returns, a round's findings show with no triage; its ra
     const { card, head } = rounds(tab());
     const findings = within(await card(3).findByRole("list", { name: "Findings" }));
     assert.equal(findings.getAllByRole("listitem").length, 2);
-    assert.equal(findings.queryByText(/^(Confirmed|Rejected)/), null, "no triage yet");
+    assert.equal(findings.queryByText(/^(Confirmed|Rejected|Anchored|Downgraded)/), null, "no triage yet");
     const step = card(3).getByText((_, element) => element?.classList.contains("rmi-step-title") === true && /^Reviewer · /.test(element.textContent ?? ""));
-    assert.match(step.textContent ?? "", /^Reviewer · 2 findings(?!, )/, "the rail counts the findings, none confirmed yet");
+    assert.match(step.textContent ?? "", /^Reviewer · 2 findings(?!, )/, "the rail counts the findings, none held yet");
     assert.equal(tab().queryByRole("button", { name: /^Round 3 .*findings/ }), null, "open, the count is the rail's alone");
     fireEvent.click(head(3));
     const folded = tab().getByRole("button", { name: /^Round 3 .* 2 findings Verifying…$/ });
-    assert.equal(folded.getAttribute("aria-expanded"), "false", "folded, the line counts the findings, none confirmed yet");
+    assert.equal(folded.getAttribute("aria-expanded"), "false", "folded, the line counts the findings, none held yet");
   });
 });
 
 test("a review that found nothing says so, on its rail and on its folded line", async () => {
-  const clean: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "reported", findings: 0, confirmed: 0, step: { at: 5_100, moved: null } } } } : entry));
+  const clean: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "reported", findings: 0, held: 0, downgraded: 0, step: { at: 5_100, moved: null } } } } : entry));
   await withFeedCss(async () => {
     const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: clean }), bodies: () => ({ ...bodyOf(3), findings: [] }) });
     const { card, head } = rounds(tab());
@@ -199,7 +201,7 @@ test("a round whose body fails to read says so beside its steps, and Retry reads
   const three = rounds(tab()).card(3);
   const alert = await three.findByRole("alert");
   assert.match(alert.textContent ?? "", /Could not read round 3: .*bb is restarting/);
-  assert.ok(three.getByText(/^Reviewer · 2 findings, 1 confirmed/), "the steps the feed already has stay");
+  assert.ok(three.getByText(/^Reviewer · 2 findings, 1 held/), "the steps the feed already has stay");
   fails = false;
   fireEvent.click(within(alert).getByRole("button", { name: "Retry" }));
   await three.findByText("The backoff has no cap.");
@@ -274,7 +276,7 @@ test("a round whose findings may have reached its agent, and whose failure asked
   const { card, head } = rounds(tab());
   fireEvent.click(head(1));
   const outcome = (await card(1).findByText(/sent back to/)).closest("p");
-  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 confirmed finding: at its cap, the plugin asked you \(d4\)/);
+  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 finding that held: at its cap, the plugin asked you \(d4\)/);
 });
 
 test("a round whose findings may or may not have reached its agent says so, and that the manager decides", async () => {
@@ -285,7 +287,7 @@ test("a round whose findings may or may not have reached its agent says so, and 
   const { card, head } = rounds(tab());
   fireEvent.click(head(1));
   const outcome = (await card(1).findByText(/sent back to/)).closest("p");
-  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 confirmed finding: the regional manager decides/);
+  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 finding that held: the regional manager decides/);
 });
 
 test("a cell shows its result by glyph, and its tooltip names it on focus and hover, until Escape, wherever focus is", async () => {
@@ -325,15 +327,15 @@ test("a round whose criteria all passed but CI failed leads its line with that r
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "ci" } } } } : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: ciFailed }) });
-  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 confirmedCI failed");
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldCI failed");
 });
 
-test("a round whose criteria all passed but whose must-fix finding the verifier confirmed leads with that reason, never its score", async () => {
+test("a round whose criteria all passed but whose must-fix finding the verifier anchored leads with that reason, never its score", async () => {
   const mustFix: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "must-fix" } } } } : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: mustFix }) });
-  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 confirmedMust-fix confirmed");
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldMust-fix upheld");
 });
 
 test("a final check whose own worktree was dirty says so, never that a claimed commit was missing", async () => {

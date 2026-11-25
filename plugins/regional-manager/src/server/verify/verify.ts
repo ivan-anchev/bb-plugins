@@ -101,6 +101,7 @@ type Deps = {
     | "prOfBranch"
     | "record"
     | "decisions"
+    | "issueDecisions"
   >;
   spawner: Pick<Spawner, "checker">;
   review: Pick<Review, "start" | "follow">;
@@ -215,7 +216,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       title: `Verify ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId: thread.environmentId },
       execution,
-      prompt: verifierBrief({ ...issue, brief: issue.brief }, check, checkout),
+      prompt: verifierBrief({ ...issue, brief: issue.brief, decisions: store.issueDecisions(coordinator.id, issue.id) }, check, checkout),
     };
   }
 

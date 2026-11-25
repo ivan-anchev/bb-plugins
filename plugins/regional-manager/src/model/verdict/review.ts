@@ -1,9 +1,10 @@
 // A done handoff's review: before its verifier starts, an independent reviewer reads the diff as
 // the regional manager's CREW.md instructs reviewers, and reports findings, each at a place in the
-// diff with a severity and its claim. The verifier then triages each one, confirmed or rejected
-// with a reason, beside its own check of the done-criteria. The plugin names no review of its own:
-// what the reviewer runs is CREW.md's. A review is stored on its check, beside the verdict; while
-// the verdict is queued and the review is to come, the issue is Reviewing.
+// diff with a severity and its claim. The verifier then triages each one, rejected, confirmed,
+// anchored to what it breaks, or downgraded, with a reason, beside its own check of the
+// done-criteria. The plugin names no review of its own: what the reviewer looks for is CREW.md's,
+// and what blocks is the anchor rule's (ANCHOR_RULE). A review is stored on its check, beside the
+// verdict; while the verdict is queued and the review is to come, the issue is Reviewing.
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
 import type { Verdict } from "./verdict.ts";
@@ -41,11 +42,45 @@ export const reviewSchema = z.discriminatedUnion("state", [
 export type Review = z.infer<typeof reviewSchema>;
 
 /**
- * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
- * review's order: confirmed, it holds and is worth fixing; rejected, it doesn't or isn't; with why,
- * in a line.
+ * What a must-fix can break, which is what lets it block the work: a done-criterion, the issue's
+ * brief text, a decision recorded on the issue, safety (data loss, a crash, a security hole), or
+ * existing behaviour, as a regression.
  */
-export const triageSchema = z.object({ result: z.enum(["confirmed", "rejected"]), reason: z.string().min(1) });
+const anchorSchema = z.enum(["criterion", "brief", "decision", "safety", "regression"]);
+type Anchor = z.infer<typeof anchorSchema>;
+
+/** What each anchor names, in the words every place gives it: "it breaks <words>". */
+const ANCHOR_WORDS: Record<Anchor, string> = {
+  criterion: "a done-criterion",
+  brief: "the issue's brief",
+  decision: "a recorded decision",
+  safety: "safety (data loss, a crash or a security hole)",
+  regression: "existing behaviour, as a regression",
+};
+
+/**
+ * What blocks the work, in the one wording each place a reviewer or a verifier reads gives it.
+ * why the brief defined: a reviewer reviews as CREW.md instructs, so without it a CREW.md or
+ * REVIEW.md rule would read as part of the brief.
+ */
+export const ANCHOR_RULE = `A must-fix blocks the work only when it breaks one of five things: ${anchorList()}. The brief is the issue's brief text: a CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion names it. Work that follows a recorded decision is never a finding.`;
+
+/**
+ * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
+ * review's order, each with why in a line: rejected, it doesn't hold or isn't worth fixing;
+ * confirmed, a should-fix or nit that holds; anchored, a must-fix that holds and breaks `anchor`;
+ * downgraded, one that holds at the lower severity `to`. why `common`: issue_verdict takes the
+ * same variants with the finding's number beside them (verdict-tool.ts). Stored rows from before
+ * the anchor rule are confirmed or rejected, and parse as they are.
+ */
+export const triageVariants = <Common extends z.ZodRawShape>(common: Common) =>
+  z.discriminatedUnion("result", [
+    z.object({ result: z.literal("rejected"), ...common }),
+    z.object({ result: z.literal("confirmed"), ...common }),
+    z.object({ result: z.literal("anchored"), anchor: anchorSchema, ...common }),
+    z.object({ result: z.literal("downgraded"), to: severitySchema, ...common }),
+  ]);
+export const triageSchema = triageVariants({ reason: z.string().min(1) });
 type Triage = z.infer<typeof triageSchema>;
 
 /**
@@ -56,8 +91,66 @@ type Triage = z.infer<typeof triageSchema>;
 export type Triaged = ReviewFinding & Triage;
 
 /** How a verifier triages the reviewer's findings, and what its triage does, in the one wording each place a verifier reads gives it. */
-export const TRIAGE_RULE =
-  "Confirmed: it holds, and is worth fixing. Rejected: it doesn't hold, or isn't worth fixing. Give each its reason in a line. Only confirmed findings go back to the agent in its automatic fix round. Confirming a must-fix finding fails the verdict as a failed criterion does, even when every criterion passes: confirm one only when what you ran or read shows it holds. Should-fix and nit findings never fail it.";
+export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and breaks one of the five things below; name which as its anchor. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that breaks none of the five is downgraded, never confirmed. Give each its reason in a line. Every finding that holds goes back to the agent in its automatic fix round; a rejected one never does. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and breaks what you name. ${ANCHOR_RULE}`;
+
+/**
+ * Why a verifier's triage of a finding can't be taken, in a phrase; null when it can: a must-fix
+ * that holds is anchored or downgraded, never just confirmed; only a must-fix is anchored; and a
+ * downgrade goes lower than the reviewer's severity. The one rule issue_verdict checks each entry with.
+ */
+export function triageProblem({ severity }: ReviewFinding, triage: Triage): string | null {
+  switch (triage.result) {
+    case "rejected":
+      return null;
+    case "confirmed":
+      return severity === "must-fix" ? "a must-fix that holds is anchored, naming what it breaks, or downgraded, never just confirmed" : null;
+    case "anchored":
+      return severity === "must-fix" ? null : `only a must-fix is anchored, and this one is a ${severity}: confirm it, or downgrade it`;
+    case "downgraded":
+      return SEVERITIES.indexOf(triage.to) > SEVERITIES.indexOf(severity) ? null : `a downgrade goes lower than the reviewer's ${severity}, and ${triage.to} isn't`;
+    default:
+      return triage satisfies never;
+  }
+}
+
+/** Whether a finding held, as the verifier triaged it: every one it didn't reject. The one rule for what goes back to the agent and what a round counts as held. */
+export function holds(triage: Triage): boolean {
+  switch (triage.result) {
+    case "rejected":
+      return false;
+    case "confirmed":
+    case "anchored":
+    case "downgraded":
+      return true;
+    default:
+      return triage satisfies never;
+  }
+}
+
+/** The verifier's word on a finding, in the one wording catch-up, a handed-over agent and the board give it: "Anchored, as it breaks the issue's brief", "Downgraded to should-fix". */
+export function triageText(triage: Triage): string {
+  switch (triage.result) {
+    case "rejected":
+      return "Rejected";
+    case "confirmed":
+      return "Confirmed";
+    case "anchored":
+      return `Anchored, as it breaks ${ANCHOR_WORDS[triage.anchor]}`;
+    case "downgraded":
+      return `Downgraded to ${triage.to}`;
+    default:
+      return triage satisfies never;
+  }
+}
+
+/** Severities, the most a finding can matter first. */
+const SEVERITIES = severitySchema.options;
+
+/** The anchors as a list in a sentence: "a done-criterion, the issue's brief, …, or existing behaviour, as a regression". */
+function anchorList(): string {
+  const words = anchorSchema.options.map((anchor) => ANCHOR_WORDS[anchor]);
+  return `${words.slice(0, -1).join(", ")}, or ${words.at(-1)}`;
+}
 
 /** The review a check starts with: queued for a reviewer when its verdict is queued for a verifier, else none. A final check's is none: it reviews no diff. */
 export const firstReview = (verdict: Verdict): Review => (verdict.state === "queued" ? { state: "queued" } : { state: "none" });
@@ -85,7 +178,10 @@ export function triaged(review: Review, triage: readonly Triage[]): Triaged[] {
 }
 
 /** A finding in a line: its place, its severity, then its claim. */
-export const findingText = ({ file, line, severity, claim }: ReviewFinding): string => `\`${file}${line === null ? "" : `:${line}`}\` (${severity}): ${claim}`;
+export const findingText = (finding: ReviewFinding): string => `${placeText(finding)} (${finding.severity}): ${finding.claim}`;
+
+/** Where in the diff a finding is, as code: its file, and its line when it names one. */
+export const placeText = ({ file, line }: Pick<ReviewFinding, "file" | "line">): string => `\`${file}${line === null ? "" : `:${line}`}\``;
 
 /** why throw: triaged checks the counts first. */
 function at(triage: readonly Triage[], i: number): Triage {

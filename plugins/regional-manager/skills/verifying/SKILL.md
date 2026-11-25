@@ -29,6 +29,11 @@ For a done handoff:
   finding's file and line, its severity (must-fix, should-fix or nit) and its
   claim. Or that it found nothing, or that no review was had, and why. An
   issue whose check began before reviews existed has no review section.
+- The issue's decisions, under "Decisions on" its id, when it has any: what
+  the user and the regional manager decided about it. They are part of the
+  work, as its brief is. The plugin's own question at the issue's cap of
+  failed verifications is left out: its answer allows a round, and decides
+  nothing about the work.
 
 For a final check:
 
@@ -64,17 +69,31 @@ For a final check:
 4. **Each of the reviewer's findings.** They are claims, not facts. Read the
    code at the place each names, and run what shows whether it holds. Then
    triage it:
-   - **confirmed**: it holds, and is worth fixing.
    - **rejected**: it doesn't hold, or isn't worth fixing.
+   - **confirmed**: a should-fix or nit that holds.
+   - **anchored**: a must-fix that holds and breaks one of five things,
+     named as its `anchor`: a done-criterion (`criterion`), the issue's brief
+     text (`brief`), a recorded decision (`decision`), safety, as data loss,
+     a crash or a security hole (`safety`), or existing behaviour, as a
+     regression (`regression`).
+   - **downgraded**: it holds, at a lower severity than the reviewer gave
+     it, named as `to`. A must-fix that breaks none of the five is
+     downgraded, never confirmed.
 
    Give each its reason in a line: what you ran or read that decides it. A
    finding never decides a criterion for you: when it breaks a criterion,
    fail that criterion on your own evidence.
 
-   **Confirming a must-fix finding fails the verdict** as a failed criterion
-   does, even when every criterion passes. Confirm one only when what you ran
-   or read shows it holds. Should-fix and nit findings never fail the verdict, confirmed or
-   not.
+   **Only an anchored must-fix fails the verdict**, as a failed criterion
+   does, even when every criterion passes. Anchor one only when what you ran
+   or read shows it holds and breaks what you name. CREW.md says what a
+   reviewer looks for; the anchor rule alone says what blocks. The brief is
+   the issue's brief text: a CREW.md or REVIEW.md rule anchors only when the
+   brief or a done-criterion names it. Work that follows a recorded decision
+   is never a finding.
+
+   `issue_verdict` refuses a must-fix triaged confirmed, an anchored
+   should-fix or nit, and a downgrade that isn't lower, naming the finding.
 
 ## Never
 
@@ -93,11 +112,12 @@ Call `issue_verdict` once, as your last action, then stop:
   (for a fail, the failing lines), up to 4,000 characters.
 - **findings**: problems no criterion covers, up to 20; `[]` for none.
 - **triage**: one entry per finding of the reviewer's, by its number:
-  `result` confirmed or rejected, and `reason`, in a line. `[]` when your
-  first message lists none.
+  `result` rejected, confirmed, anchored with its `anchor`, or downgraded
+  with `to`, and `reason`, in a line. `[]` when your first message lists
+  none.
 
 A failed verdict on a done handoff, whatever failed it (a criterion, a
-must-fix finding you confirmed, the plugin's read of the commit and the tree,
+must-fix finding you anchored, the plugin's read of the commit and the tree,
 or CI on its pull request), goes back to the agent as its one automatic fix
 round when:
 
@@ -107,8 +127,9 @@ round when:
 
 Then the plugin sends the agent what failed it: each criterion that didn't
 pass, with your evidence, the commit and the tree or CI when they failed it,
-your findings, and the reviewer's findings you confirmed, must-fix ones first,
-with your reasons, as a message from your thread (never one you rejected),
+your findings, and every finding of the reviewer's that held, the anchored
+ones first, with your word and reasons, as a message from your thread (never
+one you rejected),
 once your turn ends and your thread is stopped, which ends any command you
 left running in the background: the agent never works beside you. Any other
 failed verdict goes to the regional manager. A final check's verdict goes to

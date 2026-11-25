@@ -45,7 +45,7 @@ type ReviewBb = CatalogBb &
 
 type Deps = {
   bb: ReviewBb;
-  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "missReview" | "receiveReview">;
+  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "issueDecisions" | "missReview" | "receiveReview">;
   spawner: Pick<Spawner, "checker">;
   memory: MemoryRoot;
   turns: IssueTurns;
@@ -86,7 +86,11 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       title: `Review ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId } as const,
       execution,
-      prompt: reviewerBrief({ ...issue, brief: issue.brief, doneCriteria: check.criteria }, { ...check.subject, defaultBranch }, memory.of(check.coordinatorId).read(CREW_FILE).text),
+      prompt: reviewerBrief(
+        { ...issue, brief: issue.brief, doneCriteria: check.criteria, decisions: store.issueDecisions(check.coordinatorId, issue.id) },
+        { ...check.subject, defaultBranch },
+        memory.of(check.coordinatorId).read(CREW_FILE).text,
+      ),
     };
   }
 

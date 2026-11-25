@@ -6,6 +6,7 @@ import { laneOf } from "../../model/board/board-groups.ts";
 import { z } from "zod";
 import { handoffIdSchema } from "../../model/agent/handoff.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
+import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
@@ -1035,4 +1036,90 @@ test("a failure settled while a cap question is open, as when a person wakes the
   assert.deepEqual(kit.sent().slice(sentBefore).filter((args) => args.threadId === fresh), [], "sent to nobody, though a2's round is unspent");
   assert.equal(kit.store.agent(coordinatorId, a2)?.fixRounds, 0);
   assert.deepEqual(kit.store.decisions(coordinatorId).map(({ cap, answer }) => ({ cap, answer })), [{ cap: 3, answer: null }], "and asked nothing more");
+});
+
+/** The sections of a first message, each from its heading: what a test compares where a brief must not change. */
+const headingsOf = (prompt: string): string[] => prompt.split("\n\n").filter((part) => part.startsWith("#")).map((part) => part.split("\n")[0] ?? "");
+
+test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix and a downgrade to the same severity, each naming the finding, and stores an anchored and a downgraded entry", async () => {
+  const { kit, check, verifier, handOff } = await withAgent();
+  kit.reviewers.reportAtOnce = false;
+  const findings = [
+    { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
+    { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." },
+    { file: "src/retry.ts", line: null, severity: "must-fix", claim: "The helper's name says nothing about backoff." },
+  ];
+  await handOff();
+  const review = check().review;
+  const reviewer = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
+  await kit.call("issue_review", { findings }, reviewer);
+  await kit.idle(reviewer, "Reviewed.");
+  await settled();
+
+  const anchored = { finding: 1, result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." };
+  const confirmed = { finding: 2, result: "confirmed", reason: "Both calls sit on line 7." };
+  const downgraded = { finding: 3, result: "downgraded", to: "nit", reason: "A name breaks none of the five." };
+  const refusals = [
+    [[{ finding: 1, result: "confirmed", reason: anchored.reason }, confirmed, downgraded], "finding 1, the must-fix at `src/retry.ts:42`: a must-fix that holds is anchored, naming what it breaks, or downgraded, never just confirmed."],
+    [[anchored, { ...confirmed, result: "anchored", anchor: "criterion" }, downgraded], "finding 2, the should-fix at `src/retry.ts:7`: only a must-fix is anchored, and this one is a should-fix: confirm it, or downgrade it."],
+    [[anchored, confirmed, { ...downgraded, to: "must-fix" }], "finding 3, the must-fix at `src/retry.ts`: a downgrade goes lower than the reviewer's must-fix, and must-fix isn't."],
+  ] as const;
+  for (const [triage, why] of refusals) {
+    const refused = await kit.call("issue_verdict", { ...PASSES, triage }, verifier());
+    assert.ok(isRefusal(refused));
+    assert.equal(textOf(refused), `issue_verdict is refused and nothing was saved: ${why}`);
+    assert.equal(check().verdict.state, "running", "nothing was saved");
+  }
+
+  const verifierThreadId = verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [anchored, confirmed, downgraded] }, verifierThreadId)), /^Verdict recorded/);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  const stored = check().verdict;
+  assert.deepEqual(stored.state === "returned" && stored.triage, [
+    { ...findings[0], result: "anchored", anchor: "brief", reason: anchored.reason },
+    { ...findings[1], result: "confirmed", reason: confirmed.reason },
+    { ...findings[2], result: "downgraded", to: "nit", reason: downgraded.reason },
+  ]);
+});
+
+test("a verifier's first message holds the issue's decisions under a Decisions heading, a recorded one and an answered question, never the plugin's own answered question at the cap; one with no decisions has no such heading", async () => {
+  const plain = await withAgent();
+  await plain.handOff();
+  assert.doesNotMatch(plain.kit.thread(plain.verifier()).spawnedWith.prompt ?? assert.fail("no prompt"), /## Decisions/, "no decisions, no heading");
+
+  const { kit, threadId, coordinatorId, agentThreadId } = await withAgent();
+  const a2Thread = await toCap(kit, threadId, coordinatorId, "WEB-1", agentThreadId);
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d1"), answer: "One more round" });
+  await kit.call("crew_ask_user", { question: "Cap the backoff at five minutes?", options: ["Yes", "No"], issue: "WEB-1" }, threadId);
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d2"), answer: "Yes" });
+  await kit.call("issue_update", { id: "WEB-1", decision: "Keep the helper named retry: the user's call." }, threadId);
+  await kit.startTurn(a2Thread);
+  await kit.call("agent_handoff", DONE, a2Thread);
+  await kit.idle(a2Thread, "Handed off.");
+  await settled();
+
+  const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a2"))?.check?.verdict;
+  const prompt = kit.thread(verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier")).spawnedWith.prompt ?? assert.fail("no prompt");
+  const decisions = prompt.split("\n\n## ").find((part) => part.startsWith("Decisions on WEB-1")) ?? assert.fail("no Decisions heading");
+  assert.match(decisions, /^Decisions on WEB-1\n\nWhat the user and the regional manager decided about this issue\. They are part of the work, as its brief is: work that follows one is never a finding, and a must-fix that breaks one breaks a recorded decision\.\n\nOldest first; where two disagree, the later one wins\.\n\n/);
+  assert.match(decisions, /\n- [^\n]+: asked the user \(d2\): Cap the backoff at five minutes\? They answered at [^\n]+: Yes\n- [^\n]+: Keep the helper named retry: the user's call\.$/);
+  assert.doesNotMatch(decisions, /d1|One more round|failed verification/, "the question at the cap is no decision about the work");
+});
+
+test("a final check's first message is unchanged by its parent's decisions: no Decisions heading, the same sections", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const text = async (tool: string, input: object) => textOf(await kit.call(tool, input, threadId));
+  await text("issue_create", { title: "Card vault", description: "Cards live in a vault.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes"], kind: "build" });
+  await text("issue_create", { title: "Vault client", description: "A client.", brief: "Write it.", doneCriteria: ["npm test passes"], kind: "build", parent: "WEB-1" });
+  await text("issue_update", { id: "WEB-1", decision: "Use the hosted vault: the user's call." });
+  const builder = threadIn(await text("agent_start", { issue: "WEB-2" }));
+  kit.github.prs.set(kit.thread(builder).environmentBranchName ?? assert.fail("no branch"), { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.repo.origin.set("main", "b".repeat(40));
+  kit.clock.now += 10 * 60_000;
+  await kit.tick();
+
+  const verdict = kit.store.finalChecks(coordinatorId, i1).at(-1)?.verdict;
+  const prompt = kit.thread(verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the final check is ${verdict?.state}`)).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.deepEqual(headingsOf(prompt), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## Rules"]);
+  assert.doesNotMatch(prompt, /Decisions|hosted vault/);
 });

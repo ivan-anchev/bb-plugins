@@ -154,7 +154,7 @@ An issue's status is derived from what its agents did, never stored:
 | Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
-| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or it passed every criterion with no must-fix finding confirmed and waits for CI. |
+| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or it passed every criterion with no must-fix finding anchored and waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
 | Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
@@ -162,8 +162,8 @@ An issue's status is derived from what its agents did, never stored:
 **Needs you** is a flag on an open issue, shown above every status: its agent
 is blocked or gave up, waits for your answer or approval in its thread, its
 last turn failed, its work failed verification after its fix round ("✗ Failed
-verification after its fix round", "✗ A must-fix review finding confirmed"
-when every criterion passed but the verifier confirmed one, "✗ CI failed on
+verification after its fix round", "✗ A must-fix review finding upheld"
+when every criterion passed but the verifier anchored one, "✗ CI failed on
 #41", or "✗ Not the claimed commit on a clean tree" when the plugin's own read
 failed it), its findings
 may or may not have reached it, it couldn't be verified, bb never confirmed starting
@@ -620,11 +620,13 @@ before its verifier starts. The plugin starts a **reviewer**:
   nothing there but the agent's own model, no reviewer starts: the review is
   missed as having no independent reviewer model.
 - **What it runs**: what CREW.md tells reviewers to run. The plugin names no
-  review of its own. Its first message is the plugin's one line ("Review
-  this diff as CREW.md instructs reviewers, and report through
-  issue_review."), the diff (the claimed commit against origin's default
-  branch, and the pull request when the agent named one), the issue's brief
-  and done-criteria, and CREW.md whole, as agents get it.
+  review of its own. Its first message is the plugin's lines ("Review this
+  diff as CREW.md instructs reviewers, and report through issue_review.
+  CREW.md says what to look for; this rule alone says what blocks.", then
+  the anchor rule below), the diff (the claimed commit against origin's
+  default branch, and the pull request when the agent named one), the
+  issue's brief, done-criteria and decisions, and CREW.md whole, as agents
+  get it.
 - **What it reports**: `issue_review`, its findings, each with its file, its
   line, a severity (must-fix, should-fix or nit) and its claim; `[]` when it
   found nothing.
@@ -636,19 +638,37 @@ before its verifier starts. The plugin starts a **reviewer**:
   review as missed, and is stopped. Its verifier starts at once, told no
   review was had, and the verdict says so. Anything it asks a person is
   declined, as a verifier's is.
+- **Decisions**: the reviewer's and the verifier's first messages hold the
+  issue's decisions under "Decisions on" its id, as an agent's does, less
+  the plugin's own questions at the issue's cap; none when it has none. Work
+  that follows a decision is never a finding. A final check's first message
+  has none.
+- **The anchor rule**: CREW.md says what a reviewer looks for; this rule
+  alone says what blocks. A must-fix blocks only when it breaks a
+  done-criterion, the issue's brief text, a recorded decision, safety (data
+  loss, a crash or a security hole), or existing behaviour, as a regression.
+  A CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion
+  names it. The reviewer's first message, its rules and `issue_review`'s
+  instructions say so.
 - **Triage**: the verifier's first message lists the findings, numbered, as
-  claims to check; its verdict confirms or rejects each, with a reason in a
-  line. The manager's update lists the confirmed ones and the rejected ones,
-  each with its reason; a failed verdict that goes back to the agent carries
-  only the confirmed ones. A must-fix finding the verifier confirms fails the
-  verdict as a failed criterion does, even when every criterion passed: it
-  goes back to the agent while it has its fix round left, and the manager's
-  update names it as the cause. Confirmed should-fix and nit findings, and
-  rejected ones, never fail it.
+  claims to check; its verdict triages each, with a reason in a line:
+  rejected; confirmed, a should-fix or nit that holds; anchored, a must-fix
+  that holds, naming which of the five it breaks; or downgraded, to a lower
+  severity it names. `issue_verdict` refuses a must-fix triaged confirmed, an
+  anchored should-fix or nit, and a downgrade that isn't lower, naming the
+  finding. Only an anchored finding fails the verdict, as a failed
+  criterion does, even when every criterion passed: it goes back to the
+  agent while it has its fix round left, and the manager's update names it
+  as the cause. The manager's update counts how many it anchored,
+  downgraded, confirmed and rejected, then gives each finding with its
+  triage and reason; a failed verdict that goes back to the agent carries
+  every finding that held, the anchored ones first. A handed-over agent's
+  first message words each earlier finding with its triage too.
 - A check made before reviews existed has no review: its verifier starts as
-  before. A verdict that settled before a confirmed must-fix finding could
-  fail one keeps the outcome it settled with; one still to settle then
-  settles by the rule.
+  before. A verdict from before the anchor rule keeps its confirmed and
+  rejected findings as they were: one returned under the must-fix rule
+  still fails on a confirmed must-fix, and one that settled before that rule
+  keeps the outcome it settled with.
 
 ## Verification
 
@@ -705,8 +725,8 @@ a **verifier** for each one:
   passed on a nearby fact. A verdict that skips, repeats or invents a
   criterion is refused.
 - **Outcome**: derived, never stored. Verified only when the commit and the
-  tree were as claimed, every criterion passed, the verifier confirmed no
-  must-fix finding of the reviewer's, and CI didn't fail on the
+  tree were as claimed, every criterion passed, the verifier anchored no
+  finding of the reviewer's, and CI didn't fail on the
   commit when the issue has a pull request; an unverifiable criterion is not a
   pass. The manager's catch-up says which model checked it and why, as in
   "on claude-code opus, as named on BBP-1".
@@ -823,7 +843,7 @@ with `gh` on the machine running bb, on the same once-a-minute tick:
 - **A merge makes the issue Done**, whatever its agent is doing; a check still
   pending or failed then is never sent back.
 - **A verdict waits for CI**: a done handoff that passed every criterion, with
-  no must-fix finding confirmed, when
+  no must-fix finding anchored, when
   it names a pull request or one is known for the issue, waits under Verifying
   as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the pull
   request is seen) until CI finishes on the very commit the handoff claims;
@@ -1081,17 +1101,19 @@ of 6", "✗ 3 of 6", "Reviewing…", "Verifying…", "Waiting for CI…",
 "Couldn't verify", "Replaced", "Not verified", or "Blocked" or "Gave up" for a
 handoff nothing checks. A round whose criteria all passed shows ✓ only once
 its verdict is settled, and one they all passed that its checkout, a must-fix
-finding the verifier confirmed or CI failed leads with that: "✗ Not the claimed
-commit on a clean tree", "✗ Must-fix confirmed", "✗ CI failed". The latest round is open; any other opens when you
+finding the verifier anchored or CI failed leads with that: "✗ Not the claimed
+commit on a clean tree", "✗ Must-fix upheld", "✗ CI failed". The latest round is open; any other opens when you
 press it, and stays as you left it while the tab is open, also when a new
 round arrives, which opens as the new latest; a round you are reading in,
 having pressed or focused something inside it, stays open too. Open, a round shows its steps on a rail: who
 handed off and when, its summary, and its **Report** folded ("Report · 3 did
 · 2 evidence"), with a research handoff's report as Markdown beside the
 memory file it was saved to (such as `reports/BBP-2.md`), in its own box that
-scrolls; then the reviewer: "Reviewer found 4 issues, 2 confirmed", each
-finding with its severity, its place and its claim, and the verifier's
-**Confirmed** or **Rejected** with why (a rejected claim is struck through),
+scrolls; then the reviewer: "Reviewer · 4 findings, 3 held (1 downgraded)",
+each finding with its severity, its place and its claim, and the verifier's
+word with why: **Rejected** (the claim struck through), **Confirmed**,
+**Anchored, as it breaks** what it breaks (in red: it alone fails the
+verdict), or **Downgraded to** its new severity,
 or "No review" and why; then the verifier, with a link to its thread, its
 score and when: the commit checked; the plugin's own read when that commit
 wasn't checked out on a clean tree; what CI said when it failed, couldn't be

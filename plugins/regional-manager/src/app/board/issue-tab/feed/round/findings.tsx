@@ -1,7 +1,9 @@
 // The reviewer's findings in an open round: each its place in the diff, its severity and its claim,
-// then the verifier's triage, Confirmed or Rejected with why; a rejected claim struck through. And
-// how many there were, and how many the verifier confirmed, as the round's rail and fold count them.
+// then the verifier's triage with why: Rejected, Confirmed, Anchored with what it breaks, or
+// Downgraded with its new severity; a rejected claim struck through. And how many there were, how
+// many held and how many of those were downgraded, as the round's rail and fold count them.
 import type { Round, RoundBody } from "../../../../../model/feed/round.ts";
+import { triageText } from "../../../../../model/verdict/review.ts";
 import { useTip } from "./tip.ts";
 
 type Finding = RoundBody["findings"][number];
@@ -23,10 +25,11 @@ export function Findings({ findings }: { findings: readonly Finding[] }) {
   );
 }
 
-/** How many findings the review reported and, once the verdict triaged them, how many it confirmed: "2 findings, 1 confirmed". */
-export function findingsText({ findings, confirmed }: Reported): string {
+/** How many findings the review reported and, once the verdict triaged them, how many held and were downgraded: "3 findings, 2 held (1 downgraded)". */
+export function findingsText({ findings, held, downgraded }: Reported): string {
   const found = findings === 0 ? "No findings" : `${findings} ${findings === 1 ? "finding" : "findings"}`;
-  return confirmed === null || findings === 0 ? found : `${found}, ${confirmed} confirmed`;
+  if (held === null || findings === 0) return found;
+  return downgraded === null || downgraded === 0 ? `${found}, ${held} held` : `${found}, ${held} held (${downgraded} downgraded)`;
 }
 
 /**
@@ -65,18 +68,20 @@ function PlaceText({ file, line }: Pick<Finding, "file" | "line">) {
   );
 }
 
-/** The verifier's word on a finding and why; nothing for a result this bundle doesn't know, from a newer server. */
-function Triage({ result, reason }: NonNullable<Finding["triage"]>) {
-  switch (result) {
-    case "confirmed":
+/** The verifier's word on a finding (review.ts triageText) and why; nothing for a result this bundle doesn't know, from a newer server. */
+function Triage(triage: NonNullable<Finding["triage"]>) {
+  switch (triage.result) {
     case "rejected":
+    case "confirmed":
+    case "anchored":
+    case "downgraded":
       return (
-        <p className="rmi-triage" data-triage={result}>
-          <b>{result === "confirmed" ? "Confirmed" : "Rejected"}</b> {reason}
+        <p className="rmi-triage" data-triage={triage.result}>
+          <b>{triageText(triage)}.</b> {triage.reason}
         </p>
       );
     default:
-      result satisfies never;
+      triage satisfies never;
       return null;
   }
 }

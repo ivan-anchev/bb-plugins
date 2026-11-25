@@ -1,4 +1,4 @@
-// What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix confirmed,
+// What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix upheld,
 // Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so. Beside
 // it in the round's head only, the failure that put the cap question to the user says "3rd failed verification: asked you".
 import { createContext, useContext } from "react";
@@ -118,7 +118,7 @@ function failedByText(by: "checkout" | "must-fix" | "ci", round: Round["by"]): s
     case "ci":
       return "CI failed";
     case "must-fix":
-      return "Must-fix confirmed";
+      return "Must-fix upheld";
     case "checkout":
       return round.kind === "final" ? NOT_CLEAN_TREE : NOT_CLEAN;
     default:

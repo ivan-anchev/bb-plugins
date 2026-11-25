@@ -305,7 +305,7 @@ In progress, Reviewing, Verifying or In review.
 | Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff as CREW.md instructs reviewers, before its verifier starts. |
-| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or it passed every criterion with no must-fix finding confirmed and waits for CI on the claimed commit. A build parent: its final check is due or running. |
+| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or it passed every criterion with no must-fix finding anchored and waits for CI on the claimed commit. A build parent: its final check is due or running. |
 | In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
 | Done | A build issue: its pull request merged, or you accepted it; final. A build parent: its final check passed, or you accepted it. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
 | Canceled | You canceled it. |
@@ -544,19 +544,26 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   reviewer review its diff in the agent's environment, as CREW.md instructs
   reviewers: the plugin names no review of its own, so say in CREW.md what a
   reviewer runs. The issue sits in Reviewing. Then an independent verifier
-  checks it there, and triages each of the reviewer's findings, confirmed or
-  rejected with a reason: the issue sits in Verifying. A reviewer that can't
+  checks it there, and triages each of the reviewer's findings with a reason:
+  rejected, confirmed, anchored to what a must-fix breaks, or downgraded to
+  a lower severity. The issue sits in Verifying. Both get the issue's
+  decisions; work that follows one is never a finding. A reviewer that can't
   start, stalls or stops without reporting never holds the issue: the verifier
   starts anyway, and the verdict says no review was had. You hear of the
   handoff only with the verdict: each criterion pass, fail or unverifiable,
   with the output the verifier ran, and the model it ran on, then the review:
-  the confirmed findings and the rejected ones, each with the verifier's
-  reason. A must-fix finding the verifier confirmed fails the verdict as a
-  failed criterion does, even when every criterion passed, and your update
-  names it as the cause; confirmed should-fix and nit findings never fail it.
-  Only confirmed ones go back to the agent with a failed verdict. When the
-  issue has a pull request, a verdict that passed every criterion, with no
-  must-fix finding confirmed, also waits for CI on the claimed commit; CI
+  how many it anchored, downgraded, confirmed and rejected, then each finding
+  with the verifier's word and reason. A must-fix fails the verdict only when
+  the verifier anchors it to what it breaks: a done-criterion, the issue's
+  brief text, a recorded decision, safety (data loss, a crash, a security
+  hole) or existing behaviour, as a regression. It fails it as a failed
+  criterion does, even when every criterion passed, and your update names it
+  as the cause. A CREW.md or REVIEW.md rule anchors only when the brief or a
+  criterion names it: name the rules that must block in the brief.
+  Confirmed and downgraded findings never fail it. Every finding that held
+  goes back to the agent with a failed verdict. When the issue has a pull
+  request, a verdict that passed every criterion, with no must-fix finding
+  anchored, also waits for CI on the claimed commit; CI
   failing fails it.
   - **verified**: In review. Report it to the user as checked, naming what
     the verifier ran. Its pull request merging makes it Done; to accept it

@@ -49,7 +49,7 @@ function headlineOf({ by }: Round): string {
   }
 }
 
-/** What the round's reviewer reported and the verifier confirmed: "2 findings, 1 confirmed", or "No findings"; nothing without a review that reported. */
+/** What the round's reviewer reported and how much of it held: "3 findings, 2 held (1 downgraded)", or "No findings"; nothing without a review that reported. */
 function FoundCount({ review }: { review: Round["review"] }) {
   if (review.state !== "reported") return null;
   return <span className="rmi-round-found">{findingsText(review)}</span>;

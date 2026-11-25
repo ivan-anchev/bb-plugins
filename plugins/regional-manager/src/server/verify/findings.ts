@@ -1,40 +1,39 @@
 // What a verdict found, written for an agent: a checkout that wasn't the claimed commit on a clean
 // tree, as bb's git plugin read it, each done-criterion it didn't pass, with the verifier's
-// evidence, CI's failure on its pull request, its findings, and the reviewer's findings it
-// confirmed, must-fix ones first as they fail it, never one it rejected, or that no review was
-// had. It reaches the agent as the verifier's message when a failed verdict goes back for its fix
+// evidence, CI's failure on its pull request, its findings, and the reviewer's findings that
+// held, the ones that fail it first, never one it rejected, or that no review was had. It reaches the agent as the verifier's message when a failed verdict goes back for its fix
 // round. And what an earlier agent's
 // verdict found, whole and in the past tense, for the agent that takes its issue over.
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { findingText, type Review } from "../../model/verdict/review.ts";
-import { ciVerdictOf, confirmedFindings, failedCheckout, failureReasons, failureText, type CriterionResult, type FailureReason, type Verdict } from "../../model/verdict/verdict.ts";
+import { findingText, triageText, type Review } from "../../model/verdict/review.ts";
+import { ciVerdictOf, heldFindings, failedCheckout, failureReasons, failureText, type CriterionResult, type FailureReason, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
-/** The message an agent gets from its verifier when its done handoff failed and goes back to it, with what CI said about its commit and what of its review the verifier confirmed. */
+/** The message an agent gets from its verifier when its done handoff failed and goes back to it, with what CI said about its commit and what of its review held. */
 export function findingsMessage(review: Review, verdict: Returned, ci: CiVerdict): string {
   return [
     `## Verifier findings: ${notPassed(failureReasons(verdict, ci))}`,
     `A verifier checked your done handoff at commit \`${short(verdict.headSha)}\` and it doesn't pass yet. Fix what it found, commit, and call agent_handoff with done again: a new verifier checks the new commit. This is your one automatic fix round. If the next check fails too, your regional manager decides what happens next.`,
     ...whatFailed(verdict, ci),
-    ...confirmedPart(review, verdict),
+    ...heldPart(review, verdict),
   ].join("\n\n");
 }
 
 /**
- * The reviewer's findings the verifier confirmed, each with its reason, for the agent to fix: the
- * must-fix ones, which failed the verdict on their own, then the others; or that no review was had.
- * Nothing when none was confirmed, or the check had no review stage.
+ * The reviewer's findings that held, each with the verifier's word on it and its reason, for the
+ * agent to fix: those that failed the verdict on their own, then the others; or that no review was
+ * had. Nothing when none held, or the check had no review stage.
  */
-function confirmedPart(review: Review, verdict: Returned): string[] {
+function heldPart(review: Review, verdict: Returned): string[] {
   if (review.state === "missed") return [`### Review\n\nNo review was had: ${review.reason}.`];
-  const { failing: mustFix, others } = confirmedFindings(verdict);
-  const list = (findings: Returned["triage"]) => findings.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  The verifier: ${finding.reason}`).join("\n");
+  const { failing, others } = heldFindings(verdict);
+  const list = (findings: Returned["triage"]) => findings.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason}`).join("\n");
   return [
-    ...(mustFix.length === 0 ? [] : [`### Must-fix review findings the verifier confirmed\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${list(mustFix)}`]),
-    ...(others.length === 0 ? [] : [`### ${mustFix.length === 0 ? "Review findings" : "Other review findings"} the verifier confirmed\n\n${list(others)}`]),
+    ...(failing.length === 0 ? [] : [`### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${list(failing)}`]),
+    ...(others.length === 0 ? [] : [`### ${failing.length === 0 ? "Review findings" : "Other review findings"} that held\n\n${list(others)}`]),
   ];
 }
 
@@ -84,7 +83,7 @@ function reviewedPart(review: Review, verdict: Returned): string[] {
   if (review.state === "missed") return [`No review was had: ${review.reason}.`];
   if (review.state !== "reported") return [];
   if (review.findings.length === 0) return ["Its reviewer found nothing."];
-  const each = verdict.triage.map((finding) => `- ${findingText(finding)}\n  ${finding.result === "confirmed" ? "Confirmed" : "Rejected"}: ${finding.reason}`);
+  const each = verdict.triage.map((finding) => `- ${findingText(finding)}\n  ${triageText(finding)}: ${finding.reason}`);
   return [`Its reviewer's findings, as the verifier triaged them, in their words:\n\n${fenced(each.join("\n"))}`];
 }
 

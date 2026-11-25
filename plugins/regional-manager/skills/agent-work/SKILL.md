@@ -162,7 +162,7 @@ After a `done` handoff, two independent threads usually take your environment
 in turn once your turn ends, each on another model than yours. First a
 reviewer reviews your diff as CREW.md instructs reviewers; your issue is
 Reviewing meanwhile. Then a verifier checks your commit, rerunning what proves
-each criterion, and confirms or rejects each of the reviewer's findings: your
+each criterion, and triages each of the reviewer's findings: your
 issue is Verifying. Your regional manager hears of your handoff only with the
 verdict. Your thread is stopped each time your environment changes hands, as
 the reviewer starts, as the verifier starts and if it is reminded to return
@@ -170,15 +170,21 @@ its verdict, which ends any command you left running in the background; your
 handoff stands. Leave your environment as it is until you hear back from the
 verifier or your regional manager.
 
-A must-fix finding of the reviewer's that the verifier confirms fails your
-verdict, even when every done-criterion passes; should-fix and nit findings
-never do.
+Your brief, its done-criteria and your issue's decisions are what blocks.
+The verifier rejects a finding that doesn't hold, and anchors a must-fix
+that holds to what it breaks: a done-criterion, the brief, a recorded
+decision, safety (data loss, a crash, a security hole), or existing
+behaviour. A must-fix that breaks none of these is downgraded. Only an
+anchored must-fix fails your verdict, even when every done-criterion passes;
+a confirmed or downgraded finding never does. Work that follows a recorded
+decision is never a finding.
 
 If your first verdict fails, its findings come back to you, once the verifier
 has finished, as a message from the verifier thread, headed "Verifier findings": each criterion that didn't
 pass, with the verifier's evidence, what was wrong with the commit or the tree,
-the CI checks that failed, its other findings, and the reviewer's findings it
-confirmed, must-fix ones first, each with its reason; the ones it rejected aren't in it. Fix each one, commit, check
+the CI checks that failed, its other findings, and the reviewer's findings
+that held, the anchored ones first, each with the verifier's word and reason;
+the ones it rejected aren't in it. Fix each one, commit, check
 every criterion again, and call `agent_handoff` with `done` and your new
 commit. A new verifier checks it. This happens once: if that check fails too,
 your regional manager decides what happens next.
