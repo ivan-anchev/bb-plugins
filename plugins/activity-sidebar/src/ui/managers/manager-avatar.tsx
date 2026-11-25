@@ -1,70 +1,30 @@
 // A regional manager's avatar: a SIZE-square frame holding its still blob in its hue, drawn as the
 // Regional Manager plugin draws it, or, while its look is unknown, a plain disc filling the frame.
+// The row's text aligns to the frame, whatever the shape paints inside it.
 import { BlobAvatar } from "blob-avatar";
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import type { Avatar } from "../../model/manager-look.ts";
 import { HUE_COLORS } from "../../model/project-hue.ts";
 
 // why: the size the name's line and the reply's line span exactly, with the gap between them (app.css .as-manager-words).
 const SIZE = 36;
 
-const FRAME: CSSProperties = { width: SIZE, height: SIZE };
+// why: blob-avatar 2.2.0 draws in a 200-unit box centred on 0, and none of its 21 shapes, in any of its
+// 6 expressions, paints farther than 66.1 units from that centre (the cat's ears; the capsule reaches
+// 64.4 across). Measured with getBBox, still; check again when blob-avatar changes. Scaling 2 × REACH
+// units to the frame keeps every shape inside it, centred.
+const REACH = 67;
+const BOX = (SIZE * 200) / (2 * REACH);
 
-// why aria-hidden: the name beside it says who this is.
+const FRAME: CSSProperties = { width: SIZE, height: SIZE };
+const PLACE: CSSProperties = { position: "absolute", left: (SIZE - BOX) / 2, top: (SIZE - BOX) / 2 };
+
+// why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside it says who this is.
 export function ManagerAvatar({ avatar }: { avatar: Avatar | null }) {
   if (avatar === null) return <span className="as-avatar as-avatar-plain" style={FRAME} aria-hidden />;
   return (
     <span className="as-avatar" style={FRAME} aria-hidden>
-      <FittedBlob avatar={avatar} />
-    </span>
-  );
-}
-
-// ------------------------------------------------------------------ layer 2
-
-/** blob-avatar draws in a 200-unit box, centred on 0. */
-const VIEW = 200;
-
-/** A shape's painted extent in that box, as `getBBox` measures it: ears and points included. */
-type Painted = { x: number; y: number; width: number; height: number };
-
-/** Until measured: blob-avatar's body spans about 136 of its 200 units, centred. */
-const BODY: Painted = { x: -68, y: -68, width: 136, height: 136 };
-
-/**
- * The blob, scaled and placed so what it paints spans the frame top to bottom and sits centred across
- * it, whatever its shape: a bunny's ears or a capsule's ends meet the frame as a circle's edge does.
- * why paused: a still picture, as the Regional Manager plugin shows it.
- */
-function FittedBlob({ avatar }: { avatar: Avatar }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [painted, setPainted] = useState(BODY);
-
-  // why a layout effect: the shape's extent is known only once drawn; measured before paint, the first frame is already fitted.
-  useLayoutEffect(() => {
-    const svg = ref.current?.querySelector("svg");
-    if (!svg) return;
-    const { x, y, width, height } = svg.getBBox();
-    setPainted({ x, y, width, height });
-  }, [avatar.shape, avatar.expression]);
-
-  const scale = SIZE / painted.height;
-  const place: CSSProperties = {
-    position: "absolute",
-    left: SIZE / 2 - (painted.x + painted.width / 2 + VIEW / 2) * scale,
-    top: -(painted.y + VIEW / 2) * scale,
-  };
-  return (
-    <span ref={ref}>
-      <BlobAvatar
-        shape={avatar.shape}
-        color={HUE_COLORS[avatar.hue].fill}
-        expression={avatar.expression}
-        animation="idle"
-        paused
-        size={VIEW * scale}
-        style={place}
-      />
+      <BlobAvatar shape={avatar.shape} color={HUE_COLORS[avatar.hue].fill} expression={avatar.expression} animation="idle" paused size={BOX} style={PLACE} />
     </span>
   );
 }

@@ -12,6 +12,9 @@ import { REGIONAL_MANAGER } from "../../model/manager-look.ts";
 /** How many completed items one read of a thread's events asks for. */
 const PAGE = 50;
 
+/** After a failed read, how long until each read again, in turn; past the last, the next move of the thread or client read tries again. */
+const RETRY_MS = [2_000, 5_000, 15_000];
+
 type Deps = {
   threads: {
     list(args: OpenManagersOf): Promise<readonly { id: string }[]>;
@@ -54,6 +57,8 @@ export function openManagerLines({ threads, rpc, log }: Deps) {
   const life = new AbortController();
   /** Each manager read so far, by thread: its latest, read one step at a time, each chained on the last (`step`). */
   const known = new Map<string, Promise<Latest>>();
+  /** The managers whose last read failed: the read again set for each, and how many it has had. */
+  const retries = new Map<string, { timer: ReturnType<typeof setTimeout>; tries: number }>();
 
   return {
     /** The line of each open manager among `threadIds`; one never read is read now, and one whose last read failed is read again. */
@@ -78,6 +83,8 @@ export function openManagerLines({ threads, rpc, log }: Deps) {
     /** The plugin unloading: a read under way is abandoned. */
     dispose(): void {
       life.abort();
+      for (const { timer } of retries.values()) clearTimeout(timer);
+      retries.clear();
     },
   };
 
@@ -91,7 +98,31 @@ export function openManagerLines({ threads, rpc, log }: Deps) {
     const next = (was ?? Promise.resolve(UNREAD)).then((latest) => read(threadId, latest));
     known.set(threadId, next);
     if (was !== undefined) void announce(was, next);
+    void next.then((latest) => (latest.failed ? retryLater(threadId) : retried(threadId)));
     return next;
+  }
+
+  /** A failed read is read again by itself, RETRY_MS apart, until one succeeds or the tries run out. */
+  function retryLater(threadId: string): void {
+    const pending = retries.get(threadId);
+    if (pending !== undefined) clearTimeout(pending.timer);
+    const tries = pending?.tries ?? 0;
+    if (tries === RETRY_MS.length || life.signal.aborted) {
+      retries.delete(threadId);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (known.has(threadId)) void step(threadId, readOn);
+    }, RETRY_MS[tries]);
+    retries.set(threadId, { timer, tries: tries + 1 });
+  }
+
+  /** A read succeeded: any read again set for it is no longer needed. */
+  function retried(threadId: string): void {
+    const retry = retries.get(threadId);
+    if (retry === undefined) return;
+    clearTimeout(retry.timer);
+    retries.delete(threadId);
   }
 
   async function announce(was: Promise<Latest>, next: Promise<Latest>): Promise<void> {

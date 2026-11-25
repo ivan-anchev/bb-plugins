@@ -1,5 +1,6 @@
 // A regional manager's line in the Managers view: the first sentence of its own latest reply, as plain
 // words. Pure: a reply's markdown in, its first sentence out.
+import { lexer, type Token, type Tokens } from "marked";
 import { z } from "zod";
 
 /** One manager's line, keyed by its thread; a manager with none has no entry. */
@@ -7,16 +8,16 @@ export const managerLineSchema = z.object({ threadId: z.string().min(1), line: z
 export type ManagerLine = z.infer<typeof managerLineSchema>;
 
 /**
- * The first sentence of `markdown` as plain words: code blocks dropped, block and inline marks
- * stripped (a link keeps its text), whitespace collapsed. A sentence ends at ". ", "! " or "? ", or
- * at its line's end. Null when nothing readable is left.
+ * The first sentence of `markdown` as plain words: the text of its first block that has any (code,
+ * rules and HTML have none; a quote or a list is read into), links, images and emphasis reduced to
+ * their words, whitespace collapsed. A sentence ends at ". ", "! " or "? ", or at its line's end.
+ * Null when nothing readable is left.
  */
 export function firstSentence(markdown: string): string | null {
-  for (const raw of withoutCodeBlocks(markdown).split("\n")) {
-    const words = collapse(inlinePlain(blockPlain(raw)));
-    if (words !== "") return words.match(SENTENCE)?.[0] ?? words;
-  }
-  return null;
+  const text = firstText(lexer(markdown));
+  if (text === null) return null;
+  const line = collapse(text.split("\n").find((part) => part.trim() !== "") ?? "");
+  return line.match(SENTENCE)?.[0] ?? line;
 }
 
 /** `line` with each bb thread mention (`@thread:<id>`, perhaps to one message) named as bb shows it: by the thread's title, or "a thread" when the sidebar doesn't hold it. */
@@ -29,35 +30,62 @@ export function namingThreads(line: string, titleOf: (threadId: string) => strin
 /** A sentence: up to its first ".", "!" or "?" that a space follows. */
 const SENTENCE = /^.*?[.!?](?=\s)/;
 
-/** Fenced code blocks, ``` or ~~~, closed or running to the end. */
-const withoutCodeBlocks = (text: string): string => text.replace(/^ {0,3}(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^ {0,3}\1[^\n]*$|(?![\s\S]))/gm, "");
-
-/** A line's block marks: heading, quote, list bullet or number, task box; a rule leaves nothing. */
-function blockPlain(line: string): string {
-  if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) return "";
-  return line
-    .replace(/^\s*(>\s?)+/, "")
-    .replace(/^\s*#{1,6}\s+/, "")
-    .replace(/^\s*([-*+]|\d+[.)])\s+(\[[ xX]\]\s+)?/, "")
-    .replace(/\s+#+\s*$/, "");
+/** The words of the first of `blocks` that has any, a quote's or a list's read from their own blocks; null for none. */
+function firstText(blocks: readonly Token[]): string | null {
+  for (const block of blocks) {
+    const text = blockText(block);
+    if (text !== null && text.trim() !== "") return text;
+  }
+  return null;
 }
 
 /**
- * An inline link or image: its text, then its destination, which may be <bracketed>, hold balanced
- * parentheses (a wiki address), and carry a title.
+ * why `?? NONE` and the default: marked's tokens include extensions' generic ones, which may share a
+ * name and carry no children; a block it doesn't know has no words here.
  */
-const LINK = /!?\[([^\]]*)\]\((?:\s*<[^>]*>|(?:[^()\s]|\((?:[^()\s]|\([^()\s]*\))*\))*)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
-
-/** Inline marks: images and links keep their text, autolinks their address, code its words, emphasis loses its markers. */
-function inlinePlain(text: string): string {
-  return text
-    .replace(LINK, "$1")
-    .replace(/!?\[([^\]]*)\]\[[^\]]*\]/g, "$1")
-    .replace(/<((?:https?|mailto):[^>\s]+)>/g, "$1")
-    .replace(/`+([^`]+?)`+/g, "$1")
-    .replace(/(\*\*|__|~~)(?=\S)(.+?)(?<=\S)\1/g, "$2")
-    .replace(/(^|[^\w*])\*(?=\S)(.+?)(?<=\S)\*(?!\w)/g, "$1$2")
-    .replace(/(^|[^\w])_(?=\S)(.+?)(?<=\S)_(?!\w)/g, "$1$2");
+function blockText(block: Token): string | null {
+  switch (block.type) {
+    case "paragraph":
+    case "heading":
+    case "text":
+      return block.tokens === undefined ? block.text : words(block.tokens);
+    case "blockquote":
+      return firstText(block.tokens ?? NONE);
+    case "list":
+      return firstText(block.items.flatMap((item: Tokens.ListItem) => item.tokens));
+    default:
+      return null;
+  }
 }
+
+/** Inline tokens as the words they show: emphasis, links and images by their text, code by its content, HTML tags dropped. */
+function words(tokens: readonly Token[]): string {
+  return tokens.map(inlineText).join("");
+}
+
+function inlineText(token: Token): string {
+  switch (token.type) {
+    case "text":
+      return token.tokens === undefined ? token.text : words(token.tokens);
+    case "escape":
+    case "codespan":
+      return token.text;
+    case "strong":
+    case "em":
+    case "del":
+      return words(token.tokens ?? NONE);
+    // why: a label's own brackets ("[the [public] report]") are its nesting, not its words.
+    case "link":
+      return words(token.tokens ?? NONE).replace(/[[\]]/g, "");
+    case "image":
+      return token.text;
+    case "br":
+      return "\n";
+    default:
+      return "";
+  }
+}
+
+const NONE: readonly Token[] = [];
 
 const collapse = (text: string): string => text.replace(/\s+/g, " ").trim();

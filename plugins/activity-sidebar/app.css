@@ -206,7 +206,7 @@
   display: flex;
   padding-left: 8px;
 }
-/* The avatar's frame: the blob inside is placed against it (manager-avatar.tsx FittedBlob). */
+/* The avatar's frame: the blob is centred inside it, every shape within it (manager-avatar.tsx). */
 .as-avatar {
   position: relative;
   display: block;

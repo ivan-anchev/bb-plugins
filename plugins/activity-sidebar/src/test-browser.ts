@@ -42,8 +42,6 @@ const noMedia = (media: string): MediaQueryList =>
   Object.assign(new window.EventTarget(), { media, matches: false, onchange: null, addListener() {}, removeListener() {} }) as unknown as MediaQueryList;
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: StillResizeObserver, matchMedia: noMedia, __BB_PLUGIN_ID__: "activity-sidebar" });
 window.Element.prototype.scrollIntoView = () => {};
-// why: jsdom draws nothing, so an SVG paints nowhere; a drawn blob-avatar body spans 136 of its 200 units.
-window.SVGGraphicsElement.prototype.getBBox = () => new window.DOMRect(-68, -68, 136, 136);
 
 registerHooks({
   load(url, context, nextLoad) {

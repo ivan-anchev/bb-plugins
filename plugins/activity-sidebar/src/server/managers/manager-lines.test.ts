@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, mock, test } from "node:test";
 import { MANAGER_LINES_TAG } from "../../contract.ts";
 import { openManagerLines } from "./manager-lines.ts";
 
@@ -21,18 +21,23 @@ const toolCalls = (from: number, count: number): Row[] => Array.from({ length: c
 
 type Held = { events: Row[]; archived?: boolean };
 
+/** A read again after a failure: the first, then each later one (manager-lines.ts RETRY_MS). */
+const RETRIES = [2_000, 5_000, 15_000];
+
+afterEach(() => mock.timers.reset());
+
 function harness(held: Record<string, Held>) {
   const invalidated: string[] = [];
   const reads: { threadId: string; afterSeq?: string; beforeSeq?: string }[] = [];
-  let failing = false;
+  let failing = 0;
   const lines = openManagerLines({
     threads: {
       list: async ({ threadIds, archived }) => threadIds.filter((id) => held[id] !== undefined && (held[id].archived ?? false) === archived).map((id) => ({ id })),
       events: {
         list: async ({ threadId, types, order, afterSeq, beforeSeq, limit }) => {
           reads.push({ threadId, afterSeq, beforeSeq });
-          if (failing) {
-            failing = false;
+          if (failing > 0) {
+            failing -= 1;
             throw new Error("HTTP 503: bb is busy");
           }
           const rows = held[threadId].events.filter((row) => types.some((type) => type === row.type));
@@ -44,9 +49,10 @@ function harness(held: Record<string, Held>) {
     rpc: { experimental_invalidate: (tags) => void invalidated.push(...tags) },
     log: { warn: () => {} },
   });
-  const settled = () => new Promise((resolve) => setTimeout(resolve, 0));
-  const failNext = () => {
-    failing = true;
+  // why setImmediate: tests that mock setTimeout still let pending reads settle.
+  const settled = () => new Promise((resolve) => setImmediate(resolve));
+  const failNext = (times = 1) => {
+    failing = times;
   };
   return { lines, invalidated, reads, settled, failNext };
 }
@@ -149,6 +155,57 @@ test("a thread no client has read, or a change that rewrites nothing, reads noth
   lines.moved({ id: "thr_other" });
   lines.changed({ id: "thr_pr", changes: ["title-changed"] });
   lines.changed({ id: "thr_other", changes: ["history-rewritten"] });
+  await settled();
+  assert.equal(reads.length, before);
+});
+
+test("a read that fails on a manager's newest reply reads again by itself, and the new line reaches every client with no client read", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const held = { thr_pr: { events: [reply(1, "Old reply.")] } };
+  const { lines, invalidated, reads, settled, failNext } = harness(held);
+  await lines.read({ threadIds: ["thr_pr"] });
+
+  held.thr_pr.events.push(reply(2, "New reply."));
+  failNext();
+  lines.moved({ id: "thr_pr" });
+  await settled();
+  assert.deepEqual(invalidated, [], "the failed read changed nothing");
+
+  mock.timers.tick(RETRIES[0]);
+  await settled();
+  assert.deepEqual(invalidated, [MANAGER_LINES_TAG]);
+  const before = reads.length;
+  assert.deepEqual(await lines.read({ threadIds: ["thr_pr"] }), { lines: [{ threadId: "thr_pr", line: "New reply." }] });
+  assert.equal(reads.length, before, "the line was already read: the client's read reads nothing");
+});
+
+test("a manager whose reads keep failing is read again three times, then waits for its thread's next move", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const held = { thr_pr: { events: [reply(1, "Old reply.")] } };
+  const { lines, reads, settled, failNext } = harness(held);
+  await lines.read({ threadIds: ["thr_pr"] });
+  failNext(10);
+  lines.moved({ id: "thr_pr" });
+  await settled();
+  const afterMove = reads.length;
+  for (const wait of [...RETRIES, 60_000]) {
+    mock.timers.tick(wait);
+    await settled();
+  }
+  assert.equal(reads.length - afterMove, RETRIES.length);
+});
+
+test("unloading cancels a read again that is set", async () => {
+  mock.timers.enable({ apis: ["setTimeout"] });
+  const held = { thr_pr: { events: [reply(1, "Old reply.")] } };
+  const { lines, reads, settled, failNext } = harness(held);
+  await lines.read({ threadIds: ["thr_pr"] });
+  failNext();
+  lines.moved({ id: "thr_pr" });
+  await settled();
+  const before = reads.length;
+  lines.dispose();
+  mock.timers.tick(RETRIES[0]);
   await settled();
   assert.equal(reads.length, before);
 });

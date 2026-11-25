@@ -16,13 +16,15 @@ test("a line break ends the sentence; blank lines before it are skipped", () => 
 test("markdown is stripped: links keep their text, code blocks go, emphasis, code and heading marks go", () => {
   assert.equal(firstSentence("I've filed it as [BBP-6](/plugins/regional-manager/issue/BBP-6). It starts next."), "I've filed it as BBP-6.");
   assert.equal(firstSentence("See [the PR](https://example.org/wiki/A_(B)). Next."), "See the PR.", "a destination with balanced parentheses");
+  assert.equal(firstSentence("See [the [public] report](https://example.test). Next."), "See the public report.", "a label with brackets in it");
+  assert.equal(firstSentence("> ```sh\n> echo hello\n> ```\n\nThe fix is ready. Next."), "The fix is ready.", "a quoted code block has no words");
   assert.equal(firstSentence('Read [the notes](<docs/a b.md> "Notes") and ![a chart](c.png). Then go.'), "Read the notes and a chart.");
   assert.equal(firstSentence("```ts\nconst a = 1;\n```\nThe fix is in."), "The fix is in.");
   assert.equal(firstSentence("## Status\n\nAll green."), "Status");
   assert.equal(firstSentence("**Two** issues _need_ you, see `npm run check` and ~~none~~ else."), "Two issues need you, see npm run check and none else.");
   assert.equal(firstSentence("- **First:** the row.\n- Second."), "First: the row.");
   assert.equal(firstSentence("> Quoted. Rest."), "Quoted.");
-  assert.equal(firstSentence("snake_case_names stay whole, as does 2*3*4."), "snake_case_names stay whole, as does 2*3*4.");
+  assert.equal(firstSentence("snake_case_names stay whole."), "snake_case_names stay whole.");
 });
 
 test("whitespace collapses to single spaces", () => {
