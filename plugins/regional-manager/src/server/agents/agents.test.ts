@@ -6,7 +6,7 @@ import { agentIdSchema } from "../../model/agent/agent.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
+import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, ISSUE, newSubmission, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -562,6 +562,8 @@ test("while a cap question is open, agent_start and agent_message on its issue a
   const message = await kit.call("agent_message", { agent: "a2", text: "Try once more." }, threadId);
   assert.ok(isRefusal(message));
   assert.equal(textOf(message), `agent_message is refused and nothing was sent: ${why}`);
+  const toReplaced = await kit.call("agent_message", { agent: "a1", text: "Try once more." }, threadId);
+  assert.deepEqual([isRefusal(toReplaced), textOf(toReplaced)], [true, `agent_message is refused and nothing was sent: ${why}`], "a1, which a2 replaced, gets the same refusal, not a pointer to agent_start");
   const started = await start();
   assert.ok(isRefusal(started));
   assert.equal(textOf(started), `agent_start is refused: ${why}`);
@@ -571,6 +573,10 @@ test("while a cap question is open, agent_start and agent_message on its issue a
 
   const comment = await kit.call("issue_comment", { issue: "WEB-1", text: "WEB-1 failed verification 3 times: see d1 on the board." }, threadId);
   assert.ok(!isRefusal(comment), textOf(comment));
+  await kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse("WEB-1"), text: "Why is this stuck?", replyTo: null, submission: newSubmission() });
+  const update = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(update, /Don't relay it to an agent or start one: WEB-1 failed verification 3 times and the plugin asked the user \(d1\), so until they answer, agent_start and agent_message on WEB-1 are refused\./, "the user's comment is answered on the issue, naming the question");
+  assert.doesNotMatch(update, /relay it to a2 with agent_message/);
 
   await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d1"), answer: "One more round" });
   assert.match(textOf(await kit.call("agent_message", { agent: "a2", text: "Try once more." }, threadId)), /^(Sent to|Queued for) a2\./);
@@ -586,4 +592,7 @@ test("while a cap question is open, agent_stop still stops the agent, and the is
   const canceled = await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId);
   assert.ok(!isRefusal(canceled), textOf(canceled));
   assert.deepEqual((await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId], { decisions: 0, issues: 0 });
+  assert.equal(textOf(await start()), "agent_start is refused: WEB-1 is canceled, so no agent can start on it.", "a closed issue is refused as closed: its question no longer locks it");
+  const decisions = /## Decisions\n\n[^#]*/.exec(textOf(await kit.call("crew_catch_up", {}, threadId)))?.[0] ?? assert.fail("no decisions section");
+  assert.doesNotMatch(decisions, /d1/, "catch-up no longer lists the closed issue's question as waiting");
 });

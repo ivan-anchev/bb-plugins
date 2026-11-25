@@ -10,12 +10,13 @@ import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, failedVerification, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
+import { isClosed } from "../../model/issue/relations.ts";
 import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
-import { askedText, capMovesText, openCapQuestion, questionAskedBy, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
+import { askedQuestion, askedText, capLock, capMovesText, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { findingText, type Review } from "../../model/verdict/review.ts";
 import { checkInFlight, ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
@@ -68,7 +69,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     switch (subject.kind) {
       case "handoff": {
         const handed = handedOf(subject.handoffId, lookups);
-        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${failedNextStep(check, lookups)}` : "";
+        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${failedNextStep(check, event.asked, lookups)}` : "";
         return `### ${issueName(event.issueId, titles, subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
       }
       case "final":
@@ -82,7 +83,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   }
   if (event.kind === "comment-to-you") {
     const comment = commentOf(event.commentId, lookups);
-    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId), checkOnRecordInFlight(lookups.record(event.issueId)))}`;
+    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId), checkOnRecordInFlight(lookups.record(event.issueId)), lockOf(event.issueId, lookups))}`;
   }
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
@@ -156,8 +157,10 @@ export const checkOnRecordInFlight = (record: readonly Handed[]): boolean => rec
  * check on its record is in flight (`inFlight`). why the check, not only the status: a done handoff
  * queues its check while the agent's turn still runs, which the board shows as In progress.
  */
-function commentNextStep({ id, issueId }: Comment, view: IssueView | null, inFlight: boolean): string {
+function commentNextStep({ id, issueId }: Comment, view: IssueView | null, inFlight: boolean, lock: CapQuestion | null): string {
   const answer = `Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision)`;
+  // why first: while the cap question locks the issue, relaying to an agent or starting one is refused.
+  if (lock !== null) return `${answer}. Don't relay it to an agent or start one: ${issueId} failed verification ${lock.cap} times and the plugin asked the user (${lock.id}), so until they answer, agent_start and agent_message on ${issueId} are refused. If their comment bears on that question, point them at ${lock.id} on the board in your reply.`;
   // why issue_read, not another catch-up: this update comes only once, and the plugin's own record of the issue doesn't need bb's thread list.
   if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board${inFlight ? `, but a check on its record is in flight, so don't relay it to an agent now` : ""}. ${RELAY_WAIT}`;
   const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
@@ -181,6 +184,12 @@ export function commentsText(comments: readonly Comment[]): string {
   return comments.map(({ id, at, author, replyTo, text }) => `#### ${id}, ${whose(author)}, at ${new Date(at).toISOString()}${replyTo === null ? "" : `, answering ${replyTo}`}\n\n${text}`).join("\n\n");
 }
 
+/** What locks the issue now: its cap question the user hasn't answered while it is open (rounds/cap.ts capLock); a view bb's thread list couldn't give is taken as open. */
+function lockOf(issueId: IssueId, { capQuestions, view }: Pick<Lookups, "capQuestions" | "view">): CapQuestion | null {
+  const status = view(issueId)?.status ?? null;
+  return capLock(capQuestions(issueId), status !== null && isClosed(status));
+}
+
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */
 function answeredText({ id, question, options, answer }: Decision, when: string): string {
   if (answer === null) throw new Error(`The decision ${id} is announced as answered, but has no answer.`);
@@ -190,8 +199,8 @@ function answeredText({ id, question, options, answer }: Decision, when: string)
 }
 
 /** The decisions section of a catch-up: every decision still waiting for the user, oldest first. */
-export function openDecisionsText(decisions: readonly Decision[]): string {
-  const open = decisions.filter((decision) => decision.answer === null);
+/** The decisions still waiting for the user (`open`, board-groups.ts waitingDecisions), as catch-up lists them. */
+export function openDecisionsText(open: readonly Decision[]): string {
   if (open.length === 0) return "## Decisions\n\nNone waiting for the user. Ask one with crew_ask_user when only the user can decide.";
   const lines = open.map(({ id, question, options, askedAt }) => `- ${id}, asked ${new Date(askedAt).toISOString()}: ${question}${options.length === 0 ? "" : ` Options: ${options.map((option) => `"${option}"`).join(", ")}.`}`);
   return ["## Decisions\n\nWaiting for the user on the board, under Needs you. Their answer wakes you; don't ask again meanwhile.", ...lines].join("\n\n");
@@ -233,10 +242,9 @@ const MOVE_TO_AN_AGENT =
  * user at the issue's cap, if it did: decide, or, while the issue's cap question is open, only
  * what works then (rounds/cap.ts).
  */
-function failedNextStep(check: Check, { record, capQuestions }: Pick<Lookups, "record" | "capQuestions">): string {
-  const questions = capQuestions(check.issueId);
-  const asked = questionAskedBy(check, record(check.issueId), questions);
-  const open = openCapQuestion(questions);
+function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view">): string {
+  const asked = askedId === null ? null : askedQuestion(lookups.decision(askedId));
+  const open = lockOf(check.issueId, lookups);
   const led = asked === null ? "" : `This was ${askedText(check.issueId, asked)}, on the board. `;
   if (open === null) return `${led}${FAILED_IS_YOURS}`;
   const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;

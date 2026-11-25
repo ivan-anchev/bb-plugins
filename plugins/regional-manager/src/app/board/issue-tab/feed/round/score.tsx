@@ -1,7 +1,9 @@
 // What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix confirmed,
 // Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so. The
 // failure that put the cap question to the user adds "3rd failed verification: asked you".
-import { scoreOf, type Asked, type Round } from "../../../../../model/feed/round.ts";
+import { createContext, useContext } from "react";
+import type { DecisionId } from "../../../../../model/decision.ts";
+import { scoreOf, type Round } from "../../../../../model/feed/round.ts";
 import { ordinal } from "../../../../../model/verdict/rounds/cap.ts";
 import { NOT_CLEAN, NOT_CLEAN_TREE } from "../../../../../model/verdict/checkout.ts";
 import { ResultGlyph } from "./result-glyph.tsx";
@@ -50,12 +52,21 @@ export function Score({ round }: { round: Round }) {
   }
 }
 
+/**
+ * The count of failed verifications each cap question of the feed was asked at, by its id, from
+ * the question itself among the feed's decisions (feed.tsx): what a round's note reads its count from.
+ */
+export const CapCounts = createContext<ReadonlyMap<DecisionId, number>>(new Map());
+
 /** On the one round whose failure put the cap question to the user (round.ts), what it did: "3rd failed verification: asked you". */
-function AskedNote({ asked }: { asked: Asked }) {
+function AskedNote({ asked }: { asked: DecisionId | null }) {
+  const counts = useContext(CapCounts);
   if (asked === null) return null;
-  const text = `${ordinal(asked.failed)} failed verification: asked you`;
+  // why a neutral fallback: the question comes in the same feed read as its round, but a map can't promise the type checker its key.
+  const failed = counts.get(asked);
+  const text = failed === undefined ? "Failed verification: asked you" : `${ordinal(failed)} failed verification: asked you`;
   return (
-    <span className="rmi-score-text rmi-score-asked" title={`${text} on the board (${asked.decisionId})`}>
+    <span className="rmi-score-text rmi-score-asked" title={`${text} on the board (${asked})`}>
       <span aria-hidden="true">· </span>
       {text}
     </span>

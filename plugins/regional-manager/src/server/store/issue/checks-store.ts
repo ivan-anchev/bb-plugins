@@ -10,6 +10,7 @@ import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } fr
 import { doneCriteriaSchema, issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
 import type { Handed } from "../../../model/issue/status.ts";
+import type { DecisionId } from "../../../model/decision.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
 import { checkIdSchema, checkSubjectSchema, type Check, type CheckId, type FinalCheck } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
@@ -155,15 +156,16 @@ export function checksStore(db: Db) {
 
   /**
    * When the check just settled as one of the issue's counted failures, asks the user at its cap,
-   * as the one rule says (rounds/cap.ts capAsks), leading the question with why it failed. Call
-   * inside the settling transaction, after its writes, so the count includes it.
+   * as the one rule says (rounds/cap.ts capAsks), leading the question with why it failed; returns
+   * the question asked, for its `checked` event to record, or null. Call inside the settling
+   * transaction, after its settlement is written, so the count includes it.
    */
-  function askAtCap(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, at: number): void {
+  function askAtCap(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, at: number): DecisionId | null {
     const failures = countedFailures(handed("WHERE h.coordinator_id = ? AND h.issue_id = ? ORDER BY h.rowid", coordinatorId, issueId));
     const settled = failures.find(({ id }) => id === checkId)?.verdict;
-    if (settled?.state !== "returned") return;
+    if (settled?.state !== "returned") return null;
     const cap = capAsks(failures.length, capQuestionsOf(decisionsOf(db, coordinatorId), issueId));
-    if (cap !== null) insertDecision(db, coordinatorId, { issueId, question: capQuestionText(issueId, settled, cap), options: CAP_OPTIONS, cap }, at);
+    return cap === null ? null : insertDecision(db, coordinatorId, { issueId, question: capQuestionText(issueId, settled, cap), options: CAP_OPTIONS, cap }, at).id;
   }
 
   /** Inserts a check made of the handoff `handoffId` (null: a final check, made of none), with its first verdict. Call inside a transaction. */
@@ -244,7 +246,7 @@ export function checksStore(db: Db) {
           verdict,
         };
         insertCheck(made, id);
-        if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id }, at);
+        if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id, asked: null }, at);
         return made;
       })();
     },
@@ -274,7 +276,7 @@ export function checksStore(db: Db) {
           verdict: firstVerdict(verifies(coordinatorId), null, at),
         };
         insertCheck(made, null);
-        if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id }, at);
+        if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id, asked: null }, at);
         return made;
       })();
     },
@@ -350,7 +352,7 @@ export function checksStore(db: Db) {
       return db().transaction(() => {
         if (!moveVerdict(checkId, from, { state: "could-not-run", at, ...why })) return null;
         const { coordinatorId, issueId } = ownerOf(checkId);
-        insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId }, at);
+        insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId, asked: null }, at);
         return coordinatorId;
       })();
     },
@@ -402,15 +404,14 @@ export function checksStore(db: Db) {
         if (as.kind === "checked") {
           if (settlement.kind === "sending-back") countFixRound(db, coordinatorId, handingAgentOf(checkId), -1);
           writeSettlement(db, checkId, as);
-          insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId }, at);
-          askAtCap(coordinatorId, issueId, checkId, at);
+          insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId, asked: askAtCap(coordinatorId, issueId, checkId, at) }, at);
           return coordinatorId;
         }
         if (settlement.kind !== "sending-back") return null;
         const { round, ci } = settlement;
         writeSettlement(db, checkId, { kind: as.kind, round, ci });
-        insertEvent(db, coordinatorId, as.kind === "sent-back" ? { kind: "sent-back", issueId, agentId: handingAgentOf(checkId), checkId, round } : { kind: "checked", issueId, checkId }, at);
-        askAtCap(coordinatorId, issueId, checkId, at);
+        // why no ask on a sent-back one: it went back only because the cap allowed it (verify.ts stepOf).
+        insertEvent(db, coordinatorId, as.kind === "sent-back" ? { kind: "sent-back", issueId, agentId: handingAgentOf(checkId), checkId, round } : { kind: "checked", issueId, checkId, asked: askAtCap(coordinatorId, issueId, checkId, at) }, at);
         return coordinatorId;
       })();
     },

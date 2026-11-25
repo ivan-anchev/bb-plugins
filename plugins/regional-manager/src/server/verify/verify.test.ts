@@ -195,7 +195,7 @@ test("a verdict on a superseded or stale handoff, or of a stopped agent, sends n
     assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
   }
   for (const { kit, coordinatorId, check } of [stale, closed]) {
-    assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id }], "the regional manager decides");
+    assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }], "the regional manager decides");
   }
 });
 
@@ -402,7 +402,7 @@ test("an agent turn that starts after the verifier's model is looked up, before 
   assert.equal(answers, 1);
   assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), []);
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
-  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id }]);
+  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }]);
 });
 
 test("a verdict that passes every criterion is In review with ✓ and the models bb ran the verifier on", async () => {

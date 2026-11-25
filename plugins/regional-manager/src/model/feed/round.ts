@@ -4,7 +4,7 @@
 // share no field: the split is where the wire divides what folds from what opens.
 import { z } from "zod";
 import { agentIdSchema } from "../agent/agent.ts";
-import { decisionIdSchema } from "../decision.ts";
+import { decisionIdSchema, type DecisionId } from "../decision.ts";
 import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
 import { issueStatusSchema, type Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
@@ -55,8 +55,8 @@ export const roundSchema = z.object({
    * fix round its findings went back to its agent as once settled (null: none):
    * reached it, or may have (the plugin can't tell, so the verdict is its manager's); when it
    * returned or could not run (null: neither yet, or it never will); and, on the one round whose
-   * failure put the cap question to the user (rounds/cap.ts), that question and the count of failed
-   * verifications it was asked at (null on every other round).
+   * failure put the cap question to the user (rounds/cap.ts), that question's id (null on every
+   * other round). why no count: the question, among the issue's decisions, carries its cap.
    */
   verdict: z
     .object({
@@ -64,7 +64,7 @@ export const roundSchema = z.object({
       results: z.array(criterionResultSchema),
       fixRound: z.object({ round: z.number().int(), delivery: z.enum(["sent", "maybe"]) }).nullable(),
       step: stepSchema.nullable(),
-      asked: z.object({ decisionId: decisionIdSchema, failed: z.number().int().min(1) }).nullable(),
+      asked: decisionIdSchema.nullable(),
     })
     .nullable(),
   /** When its returned verdict was sent back or made final, from the inbox event that said so (null: not yet, or no verdict returned, which its verifier's step tells). */
@@ -85,11 +85,8 @@ export const roundBodySchema = z.object({
 });
 export type RoundBody = z.infer<typeof roundBodySchema>;
 
-/** What a round's failure asked the user at its cap (see roundSchema), or null. */
-export type Asked = NonNullable<Round["verdict"]>["asked"];
-
 /** The round a handoff and its check make, numbered `number`, its outcome announced at `outcomeAt` (null: not yet), and what its failure asked at the cap (null: nothing). */
-export function roundOf({ handoff, check }: Handed, number: number, outcomeAt: number | null, asked: Asked): Round {
+export function roundOf({ handoff, check }: Handed, number: number, outcomeAt: number | null, asked: DecisionId | null): Round {
   return {
     key: roundKeySchema.parse(`h-${handoff.id}`),
     number,
@@ -205,7 +202,7 @@ function confirmedOf(verdict: Verdict): number | null {
   return verdict.triage.filter(({ result }) => result === "confirmed").length;
 }
 
-function verdictOf(verdict: Verdict, asked: Asked): Round["verdict"] {
+function verdictOf(verdict: Verdict, asked: DecisionId | null): Round["verdict"] {
   switch (verdict.state) {
     case "returned":
       return { outcome: outcomeOf(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict), step: stepAt(verdict.at), asked };

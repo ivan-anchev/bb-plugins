@@ -1,11 +1,11 @@
 // The cap on an issue's failed verdicts: how many of its agents' done handoffs may fail verification
 // before the plugin stops sending failures back and asks the user. Nothing here is stored but the
-// count each question was asked at (decisions.cap): the failures are counted from the issue's
-// checks every time, those settled before the cap existed included, and the lock is an open cap
-// question naming the issue.
+// count each question was asked at (decisions.cap), and on the failure's `checked` event, the
+// question it asked: the failures are counted from the issue's checks every time, those settled
+// before the cap existed included, and the lock is an unanswered cap question naming an open issue.
 import type { Decision, DecisionId } from "../../decision.ts";
 import type { IssueId } from "../../issue/issue.ts";
-import type { Check, CheckId } from "../check.ts";
+import type { Check } from "../check.ts";
 import { failureHeadline, outcome, type Verdict } from "../verdict.ts";
 
 /** How many failed verdicts an issue gets, across all its agents, before the user is asked. */
@@ -14,7 +14,7 @@ export const MAX_FAILED_VERDICTS = 3;
 /** A question the plugin put to the user at an issue's cap, with `cap`, the count of failed verdicts it asked at. */
 export type CapQuestion = Decision & { cap: number };
 
-export const isCapQuestion = (decision: Decision): decision is CapQuestion => decision.cap !== null;
+const isCapQuestion = (decision: Decision): decision is CapQuestion => decision.cap !== null;
 
 /** The cap questions naming the issue, in the order asked. */
 export const capQuestionsOf = (decisions: readonly Decision[], issueId: IssueId): CapQuestion[] =>
@@ -29,10 +29,6 @@ export const capQuestionsOf = (decisions: readonly Decision[], issueId: IssueId)
 export const countedFailures = (record: readonly { check: Check | null }[]): Check[] =>
   record.flatMap(({ check }) => (check !== null && check.subject.kind === "handoff" && outcome(check.verdict) === "fail" ? [check] : []));
 
-/** The cap question the check's failure asked (see askedBy), from its issue's record and cap questions; null when it asked none. */
-export const questionAskedBy = (check: Pick<Check, "id">, record: readonly { check: Check | null }[], questions: readonly CapQuestion[]): CapQuestion | null =>
-  askedBy(countedFailures(record), questions).get(check.id) ?? null;
-
 /**
  * The one rule for the cap, deciding both whether a failure goes back to nobody and whether the
  * plugin asks: with `failed` failures counted, the count to ask the user at, or null. It asks once
@@ -44,18 +40,31 @@ export function capAsks(failed: number, questions: readonly Pick<CapQuestion, "c
   return questions.every(({ cap }) => cap < failed) ? failed : null;
 }
 
-/** The issue's cap question still waiting for the user's answer: while there is one, the issue is locked. null: none. */
-export const openCapQuestion = (questions: readonly CapQuestion[]): CapQuestion | null => questions.find(({ answer }) => answer === null) ?? null;
-
-/** Whether a failure about to settle as the issue's `failed`th may go back to its agent: never while a cap question is open, nor when it asks one. */
-export const mayGoBack = (failed: number, questions: readonly CapQuestion[]): boolean => openCapQuestion(questions) === null && capAsks(failed, questions) === null;
+/** The issue's cap question the user hasn't answered yet; null: none. */
+export const unansweredCapQuestion = (questions: readonly CapQuestion[]): CapQuestion | null => questions.find(({ answer }) => answer === null) ?? null;
 
 /**
- * The cap question each counted failure asked (`failures`, countedFailures, in order), by its
- * check: the nth failure asked the question asked at n. Failures that asked nothing are absent.
+ * The lock: the issue's unanswered cap question while the issue is open (`closed`: whether it is
+ * closed, Done or Canceled, as by a merge or a cancel); null when nothing locks it. why not on a
+ * closed issue: nothing is left for its answer to allow, and the question leaves Needs you.
  */
-export function askedBy(failures: readonly Check[], questions: readonly CapQuestion[]): Map<CheckId, CapQuestion> {
-  return new Map(failures.flatMap((check, i) => questions.filter(({ cap }) => cap === i + 1).map((question) => [check.id, question] as const)));
+export const capLock = (questions: readonly CapQuestion[], closed: boolean): CapQuestion | null => (closed ? null : unansweredCapQuestion(questions));
+
+/**
+ * Whether a decision still waits for the user: unanswered, and not a cap question whose issue closed
+ * meanwhile (`closed`: whether the issue it names is closed). The one rule the board, the rail badge
+ * and crew_catch_up read decisions by.
+ */
+export const stillWaits = (decision: Decision, closed: (issueId: IssueId) => boolean): boolean =>
+  decision.answer === null && !(isCapQuestion(decision) && decision.issueId !== null && closed(decision.issueId));
+
+/** Whether a failure about to settle as the issue's `failed`th may go back to its agent: never while a cap question is unanswered, nor when it asks one. */
+export const mayGoBack = (failed: number, questions: readonly CapQuestion[]): boolean => unansweredCapQuestion(questions) === null && capAsks(failed, questions) === null;
+
+/** The cap question a `checked` event names as asked. why throw: the event is recorded with its question, in one transaction, and only the plugin asks one. */
+export function askedQuestion(decision: Decision | null): CapQuestion {
+  if (decision === null || !isCapQuestion(decision)) throw new Error("A failure's cap question is missing.");
+  return decision;
 }
 
 /** Where an issue stands against its cap when it was asked at `cap` failures, leading its Needs you reason: "At its cap of 3 failed verifications". */

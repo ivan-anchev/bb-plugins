@@ -211,7 +211,7 @@ test("only the round whose failure asked the user at the cap says so by its scor
   const d4 = decisionIdSchema.parse("d4");
   const capped: Entry[] = FEED.entries.map((entry) => {
     if (entry.kind === "round" && entry.round.number === 2 && entry.round.verdict !== null) {
-      return { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: null, asked: { decisionId: d4, failed: 3 } } } };
+      return { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: null, asked: d4 } } };
     }
     return entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.answer === null ? { ...entry, decision: { ...entry.decision, id: d4, cap: 3 } } : entry;
   });

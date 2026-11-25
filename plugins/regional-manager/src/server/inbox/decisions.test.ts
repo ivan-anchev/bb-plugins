@@ -6,7 +6,7 @@ import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, doorbellOf, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, toCap } from "../test-harness.ts";
+import { coordinating, doorbellOf, failsVerification, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
@@ -205,9 +205,10 @@ test("a cap question whose issue's pull request merged leaves Needs you, on the 
   const counted = async () => (await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId];
   assert.deepEqual(await needsYouLane(), ["d1 WEB-1", "d2 WEB-2", "WEB-1", "WEB-2"]);
   assert.deepEqual(await counted(), { decisions: 2, issues: 2 });
-  const board = await boardOf(kit, coordinatorId);
-  assert.deepEqual(board.decisions.map((decision) => Object.keys(decision).sort()), [0, 1].map(() => ["answer", "askedAt", "cap", "id", "issueId", "options", "question"]));
-  assert.deepEqual(board.decisions.map(({ cap }) => cap), [3, 3]);
+  // why the RPC's own answer, unparsed: a parse would drop a key the payload must not carry.
+  const raw = await kit.rpc.board({ coordinatorId });
+  assert.deepStrictEqual(raw.decisions.map((decision) => Object.keys(decision).sort()), [0, 1].map(() => ["answer", "askedAt", "cap", "id", "issueId", "options", "question"]));
+  assert.deepStrictEqual(raw.decisions.map(({ cap }) => cap), [3, 3]);
 
   const web1 = kit.store.agents(coordinatorId).find(({ issueId, ended }) => issueId === "WEB-1" && ended === null) ?? assert.fail("no holder");
   const branch = kit.thread(web1.threadId ?? assert.fail("no thread")).environmentBranchName ?? assert.fail("no branch");
@@ -220,4 +221,32 @@ test("a cap question whose issue's pull request merged leaves Needs you, on the 
   assert.deepEqual(await needsYouLane(), ["d2 WEB-2", "WEB-2"], "WEB-1's question is on no lane; WEB-2's stays");
   assert.deepEqual(await counted(), { decisions: 1, issues: 1 });
   assert.equal(kit.store.decision(d1)?.answer, null, "nothing was written: the question is still unanswered");
+});
+
+test("a cap question asked while the board's host read is held arrives with its issue's reason: the badge counts the question and the issue from one read, as the board shows them", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, fresh);
+  await kit.idle(fresh, "Handed off.");
+  await settled();
+  const a2 = kit.store.agents(coordinatorId).find(({ threadId: agentThread }) => agentThread === fresh) ?? assert.fail("no a2");
+  const third = kit.store.latestHandoff(coordinatorId, a2.id)?.check ?? assert.fail("no check");
+  const running = third.verdict.state === "running" ? third.verdict : assert.fail(`the verdict is ${third.verdict.state}`);
+  const checkout = running.checkout ?? assert.fail("no checkout");
+
+  kit.threadLists.holding = true;
+  const badge = kit.rpc.needsYou({ keys: [coordinatorId] });
+  await settled();
+  // The third verdict returns and settles while the badge's host read is held, asking the user.
+  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
+  kit.store.settleReturned(third.id, { kind: "checked", refused: null, ci: { kind: "none" } }, Date.now());
+  kit.threadLists.holding = false;
+  for (const release of kit.threadLists.held.splice(0)) release();
+
+  assert.deepStrictEqual((await badge)[coordinatorId], { decisions: 1, issues: 1 }, "the question and its issue, never one without the other");
+  const board = await kit.rpc.board({ coordinatorId });
+  assert.deepStrictEqual([board.decisions.length, board.issues.map(({ needsYou }) => needsYou)], [1, ["At its cap of 3 failed verifications: ✗ Failed verification: Retries land with backoff"]]);
 });

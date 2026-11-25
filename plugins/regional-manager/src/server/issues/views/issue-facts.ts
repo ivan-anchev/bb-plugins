@@ -5,7 +5,7 @@
 import { issueBranch, type Agent } from "../../../model/agent/agent.ts";
 import { isOpen, type Decision } from "../../../model/decision.ts";
 import type { Issue, IssueId } from "../../../model/issue/issue.ts";
-import { capQuestionsOf, openCapQuestion } from "../../../model/verdict/rounds/cap.ts";
+import { capQuestionsOf, unansweredCapQuestion } from "../../../model/verdict/rounds/cap.ts";
 import { issueViews, type Handed, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import type { Store } from "../../store/store.ts";
@@ -28,7 +28,15 @@ export type FactsStore = Pick<Store, "issues" | "agents" | "decisions" | "record
 export type IssueRead = { view: IssueView; agent: Agent | null; threadId: string | null; branch: string | null; record: readonly Handed[] };
 
 /** Every issue of the regional manager, in the order filed, viewed now. */
-export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: CoordinatorId): Promise<IssueRead[]> {
+export const readIssues = async (bb: FactsBb, store: FactsStore, coordinatorId: CoordinatorId): Promise<IssueRead[]> => (await readBoard(bb, store, coordinatorId)).reads;
+
+/**
+ * Every issue of the regional manager, in the order filed, viewed now, with `decisions`, every
+ * decision put to the user as the views read them. why together: the board, the rail badge and
+ * crew_catch_up place questions and issues from one snapshot, so a cap question asked during the
+ * host read never shows without its issue's reason, nor the reason without the question.
+ */
+export async function readBoard(bb: FactsBb, store: FactsStore, coordinatorId: CoordinatorId): Promise<{ reads: IssueRead[]; decisions: Decision[] }> {
   const issues = store.issues(coordinatorId);
   const agents = store.agents(coordinatorId);
   const verifiers = store.openChecks().flatMap(({ coordinatorId: of, issueId, verdict }) => (of === coordinatorId && verdict.state === "running" ? [{ issueId, threadId: verdict.verifierThreadId }] : []));
@@ -58,13 +66,14 @@ export async function readIssues(bb: FactsBb, store: FactsStore, coordinatorId: 
     }),
   );
   const views = issueViews(reads.map(({ facts }) => facts));
-  return reads.map(({ agent, threadId, branch, record }, i) => ({ view: viewAt(views, i), agent, threadId, branch, record }));
+  return { reads: reads.map(({ agent, threadId, branch, record }, i) => ({ view: viewAt(views, i), agent, threadId, branch, record })), decisions };
 }
 
 /** The issue's open decision, the plugin's question at its cap told from another (see IssueFacts); null when none naming it is open. */
 function openDecisionOf(decisions: readonly Decision[], issueId: IssueId): IssueFacts["openDecision"] {
   if (!decisions.some((decision) => decision.issueId === issueId && isOpen(decision))) return null;
-  return { cap: openCapQuestion(capQuestionsOf(decisions, issueId))?.cap ?? null };
+  // why unanswered, not the lock: a closed issue's view never Needs you (status.ts finalOf), so its closure needn't be read here.
+  return { cap: unansweredCapQuestion(capQuestionsOf(decisions, issueId))?.cap ?? null };
 }
 
 /** The issue's holder, its thread while bb runs it, and its current handoff (its latest on `record`), judged only when its thread is idle. */

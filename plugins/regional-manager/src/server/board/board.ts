@@ -4,7 +4,7 @@ import type { Board, IssueRow } from "../../contract.ts";
 import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "../issues/views/issue-facts.ts";
+import { readBoard, type FactsBb, type FactsStore, type IssueRead } from "../issues/views/issue-facts.ts";
 import type { Store } from "../store/store.ts";
 
 type BoardStore = FactsStore & Pick<Store, "verifies" | "lastOwnTreeEvent">;
@@ -44,24 +44,25 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
   }
 
   return {
-    /** Every issue of the regional manager, viewed now. */
-    issues: (id: CoordinatorId): Promise<IssueRead[]> => readIssues(bb, store, id),
+    /** Every issue of the regional manager, viewed now, with the decisions of the same read (readBoard). */
+    issues: (id: CoordinatorId): ReturnType<typeof readBoard> => readBoard(bb, store, id),
 
-    /** The board as the user sees it: the verification switch, the warning of its own edits, why PR status is unavailable, the decisions, then every issue's row. */
+    /** The board as the user sees it: the verification switch, the warning of its own edits, why PR status is unavailable, the decisions, then every issue's row, the last two from one read (readBoard). */
     async read(id: CoordinatorId): Promise<Board> {
-      const reads = await readIssues(bb, store, id);
+      const { reads, decisions } = await readBoard(bb, store, id);
       return {
         verify: store.verifies(id),
         ownEdits: ownEdits(id),
         prUnavailable: prUnavailable(id, reads),
-        decisions: store.decisions(id),
+        decisions,
         issues: reads.map(rowOf),
       };
     },
 
-    /** What sits under Needs you on the board, from the same reads as the board's own: its decisions and its issues. */
+    /** What sits under Needs you on the board, from one read of its decisions and issues, as the board's own (readBoard). */
     async needsYou(id: CoordinatorId): Promise<NeedsYou> {
-      return needsYou(store.decisions(id), (await readIssues(bb, store, id)).map(({ view }) => ({ id: view.issue.id, status: view.status, needsYou: view.needsYou })));
+      const { reads, decisions } = await readBoard(bb, store, id);
+      return needsYou(decisions, reads.map(({ view }) => ({ id: view.issue.id, status: view.status, needsYou: view.needsYou })));
     },
   };
 }

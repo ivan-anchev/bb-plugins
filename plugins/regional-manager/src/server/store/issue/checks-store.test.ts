@@ -105,9 +105,9 @@ test("a done handoff no verifier will check is announced at once: verification o
   assert.equal(unread.verdict.state, "could-not-run");
   assert.deepEqual(events(store), [
     { kind: "verification-toggled", verify: false },
-    { kind: "checked", issueId: issue.id, checkId: waived.id },
+    { kind: "checked", issueId: issue.id, checkId: waived.id, asked: null },
     { kind: "verification-toggled", verify: true },
-    { kind: "checked", issueId: issue.id, checkId: unread.id },
+    { kind: "checked", issueId: issue.id, checkId: unread.id, asked: null },
   ]);
 });
 
@@ -149,7 +149,7 @@ test("a check starts running as its verifier's ticket binds, is nudged once, un-
   assert.equal(store.giveUpCheck(check.id, { state: "queued" }, gaveUp, 4_000), null, "it isn't queued any more");
   assert.equal(store.giveUpCheck(check.id, { state: "running", verifierThreadId: "thr_verifier" }, gaveUp, 4_000), MANAGER);
   assert.deepEqual(store.check(check.id)?.verdict, { state: "could-not-run", at: 4_000, ...gaveUp });
-  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: check.id }]);
+  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: check.id, asked: null }]);
 });
 
 test("a fix round claimed before its findings are sent survives a reload, and settles once, with the event that says it was sent back", () => {
@@ -207,7 +207,7 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
   store.claimFixRound(failed.id, { kind: "none" });
   assert.equal(store.settleReturned(failed.id, { kind: "checked", refused: "bb refused the message", ci: { kind: "none" } }, 4_100), MANAGER);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0);
-  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: failed.id }]);
+  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: failed.id, asked: null }]);
 });
 
 test("a done handoff that fails partway leaves no handoff, no check, the checks it would supersede waiting, and nothing told", () => {
@@ -322,7 +322,7 @@ test("a settlement as checked that fails before the manager is told keeps its ro
   assert.equal(store.settleReturned(check.id, CHECKED, 4_000), MANAGER);
   assert.deepEqual(settlementOf(), CHECKED);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0, "the claimed round released once");
-  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: check.id }], "the manager is told once");
+  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: check.id, asked: null }], "the manager is told once");
 });
 
 test("a verdict, a give-up or a CI result that arrives after its check settled or was superseded changes nothing", () => {
@@ -349,7 +349,7 @@ test("a verdict, a give-up or a CI result that arrives after its check settled o
   assert.equal(store.receiveVerdict(superseded.id, returned("thr_verifier_3", "pass"), 4_500), false);
   assert.equal(store.giveUpCheck(superseded.id, running(3), gaveUp(3), 4_300), null);
   assert.deepEqual([store.check(waiting.id)?.verdict, store.check(superseded.id)?.verdict], [{ ...waited, settlement: { kind: "superseded" } }, { state: "superseded" }]);
-  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: settled.id }]);
+  assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: settled.id, asked: null }]);
 });
 
 test("a review starts running as its reviewer's ticket binds, and takes its findings or its miss only from where it is, while its check waits", () => {
@@ -465,7 +465,7 @@ test("a final check made while verification is off is waived and announced at on
 
   const waived = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 5_000);
   assert.deepEqual(waived.verdict, { state: "waived" });
-  assert.deepEqual(events(store).slice(seen), [{ kind: "checked", issueId: parent.id, checkId: waived.id }]);
+  assert.deepEqual(events(store).slice(seen), [{ kind: "checked", issueId: parent.id, checkId: waived.id, asked: null }]);
   assert.equal(store.check(open.id)?.verdict.state, "superseded");
 });
 
@@ -498,4 +498,25 @@ test("a third failure that settles asks the user at the cap in the same transact
   assert.deepEqual(rest, { id: "d1", issueId: issue.id, options: ["One more round", "Cancel it"], askedAt: 4_600, answer: null, cap: 3 });
   assert.match(question, /^✗ Failed verification, 0 of 1 criteria passed\. WEB-1 has failed verification 3 times, its cap: /, "it leads with the failure's reason and how many criteria passed, then the count");
   assert.ok(question.length < 500);
+});
+
+test("the question stays with the failure whose settling asked it, whatever order the failures settle in: round 4 asks while round 3 waits on a failed write, and round 3's retry asks nothing", () => {
+  const { db, store, issue, agentId } = withAgent();
+  const returnedOnce = (n: number) => {
+    const check = runningCheck(store, issue.id, agentId, n);
+    store.receiveVerdict(check.id, returned(`thr_verifier_${n}`, "fail"), 4_000 + n);
+    return check;
+  };
+  for (const n of [1, 2]) store.settleReturned(returnedOnce(n).id, CHECKED, 4_500 + n);
+  const third = returnedOnce(3);
+  const restore = failWrites(db, "INSERT", "decisions");
+  assert.throws(() => store.settleReturned(third.id, CHECKED, 4_600), /forced failure/);
+  restore();
+  const fourth = returnedOnce(4);
+  assert.equal(store.settleReturned(fourth.id, CHECKED, 4_700), MANAGER, "round 4 settles as the third counted failure, and asks");
+  assert.equal(store.settleReturned(third.id, CHECKED, 4_800), MANAGER, "round 3's retry settles as the fourth, while the question is open");
+
+  assert.deepEqual(store.decisions(MANAGER).map(({ id, cap }) => [id, cap]), [["d1", 3]], "one question");
+  const asked = events(store).flatMap((event) => (event.kind === "checked" ? [[event.checkId, event.asked]] : []));
+  assert.deepEqual(asked.slice(-2), [[fourth.id, "d1"], [third.id, null]], "round 4's settling asked d1; round 3's asked nothing");
 });

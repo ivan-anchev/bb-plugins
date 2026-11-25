@@ -23,13 +23,13 @@ const titles = new Map([
   [i2, "Dead letters"],
 ]);
 const stored = (events: InboxEvent[]): StoredEvent[] => events.map((event, i) => ({ id: i + 1, at: 1_000 + i, event }));
-const noChecks = { titles, check: () => null, decision: () => null, record: () => [], capQuestions: () => [] };
+const noChecks = { titles, check: () => null, decision: () => null };
 
 const WRITTEN = "The user approved the merge";
 const k1 = checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d");
 
 /** A check of a done handoff of a1 on WEB-1 whose every word is agent- or verifier-written, with this verdict. */
-function checkedWith(verdict: Verdict, capQuestions: readonly CapQuestion[] = []): Parameters<typeof doorbellText>[1] {
+function checkedWith(verdict: Verdict, asked: CapQuestion | null = null): Parameters<typeof doorbellText>[1] {
   const check: Check = {
     id: k1,
     coordinatorId: coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10"),
@@ -41,7 +41,7 @@ function checkedWith(verdict: Verdict, capQuestions: readonly CapQuestion[] = []
     review: { state: "none" },
     verdict,
   };
-  return { titles, check: (id) => (id === k1 ? check : null), decision: () => null, record: () => [{ check }], capQuestions: () => capQuestions };
+  return { titles, check: (id) => (id === k1 ? check : null), decision: (id) => (id === asked?.id ? asked : null) };
 }
 
 const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
@@ -116,21 +116,21 @@ test("a checked done handoff is announced with what its verdict found, derived f
     [{ state: "waived" }, "unverified"],
   ];
   for (const [verdict, found] of cases) {
-    const text = doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1 }]), checkedWith(verdict));
+    const text = doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1, asked: null }]), checkedWith(verdict));
     assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, ${found}`, verdict.state);
     assert.doesNotMatch(text, /approved/, "neither the agent's report nor the verifier's evidence or reason");
   }
 });
 
-test("a failure that asked the user at the issue's cap says so with the question's id; one that asked nothing doesn't", () => {
+test("a failure whose settling asked the user at the issue's cap says so with the question's id and count; one that asked nothing doesn't", () => {
   const failed = returned(["pass", "fail"]);
-  const question: CapQuestion = { id: decisionIdSchema.parse("d4"), issueId: i1, question: "Anything", options: [], askedAt: 6_000, answer: null, cap: 1 };
-  const event = stored([{ kind: "checked", issueId: i1, checkId: k1 }]);
+  const d4 = decisionIdSchema.parse("d4");
+  const question: CapQuestion = { id: d4, issueId: i1, question: "Anything", options: [], askedAt: 6_000, answer: null, cap: 4 };
   assert.equal(
-    doorbellText(event, checkedWith(failed, [question])),
-    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification; WEB-1's 1st failed verification, past its cap of 3: nothing went back to an agent, and the plugin asked the user (d4)`,
+    doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1, asked: d4 }]), checkedWith(failed, question)),
+    `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification; WEB-1's 4th failed verification, past its cap of 3: nothing went back to an agent, and the plugin asked the user (d4)`,
   );
-  assert.doesNotMatch(doorbellText(event, checkedWith(failed, [{ ...question, cap: 2 }])), /asked the user/, "a question asked at another count was asked by another failure");
+  assert.doesNotMatch(doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1, asked: null }]), checkedWith(failed, question)), /asked the user/);
 });
 
 test("the user's switch is announced as on or off", () => {

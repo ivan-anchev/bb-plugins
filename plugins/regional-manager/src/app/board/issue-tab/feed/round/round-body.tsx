@@ -214,7 +214,7 @@ const confirmedOf = (review: Round["review"]): number => (review.state === "repo
  * a failure that asked the user at the issue's cap is theirs to decide, not the regional manager's.
  */
 function outcomeText({ outcome, results, asked }: NonNullable<Round["verdict"]>): string {
-  if (asked !== null) return `Not sent back: at its cap, the plugin asked you (${asked.decisionId})`;
+  if (asked !== null) return `Not sent back: at its cap, the plugin asked you (${asked})`;
   return outcome.kind === "superseded" && results.length > 0 ? "Replaced before CI was judged" : OUTCOME[outcome.kind];
 }
 

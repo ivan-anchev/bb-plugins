@@ -3,12 +3,12 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { agentIdSchema } from "../../agent/agent.ts";
 import { handoffIdSchema } from "../../agent/handoff.ts";
-import { decisionIdSchema } from "../../decision.ts";
+import { decisionIdSchema, type Decision } from "../../decision.ts";
 import { issueIdSchema } from "../../issue/issue.ts";
 import { coordinatorIdSchema } from "../../role.ts";
 import { checkIdSchema, type Check, type CheckSubject } from "../check.ts";
 import type { Verdict } from "../verdict.ts";
-import { askedBy, capAsks, countedFailures, mayGoBack, type CapQuestion } from "./cap.ts";
+import { capAsks, capLock, countedFailures, mayGoBack, stillWaits, type CapQuestion } from "./cap.ts";
 
 const ISSUE = issueIdSchema.parse("WEB-1");
 const A1 = agentIdSchema.parse("a1");
@@ -118,11 +118,16 @@ test("an issue five failures deep with no question, as one failing before the ca
   assert.equal(asksAfter(before, []), 6);
 });
 
-test("each question is marked on the failure it was asked at, by the order the failures were handed off", () => {
-  const record = [handed(FAILED, handoffBy(A1)), handed({ state: "superseded" }), handed(FAILED, handoffBy(A1)), handed(FAILED, handoffBy(A2)), handed(FAILED, handoffBy(A2))];
-  const asked = askedBy(countedFailures(record), [question(1, 3, true), question(2, 4, false)]);
+test("an unanswered cap question locks its issue only while the issue is open, and waits for the user only then", () => {
+  const open = question(1, 3, false);
+  assert.equal(capLock([question(1, 3, true), open], false)?.id, "d1");
+  assert.equal(capLock([open], true), null, "a closed issue, as by a merge or a cancel, is locked by nothing");
+  assert.equal(capLock([question(1, 3, true)], false), null, "an answered one locks nothing");
+  const closed = (issueId: string) => issueId === ISSUE;
+  const asked: Decision = { ...open, cap: null };
   assert.deepEqual(
-    record.map(({ check }) => asked.get(check.id)?.id ?? null),
-    [null, null, null, "d1", "d2"],
+    [stillWaits(open, () => false), stillWaits(open, closed), stillWaits(asked, closed), stillWaits(question(1, 3, true), () => false)],
+    [true, false, true, false],
+    "a cap question leaves once its issue closes; the manager's own question on a closed issue still waits; an answered one never does",
   );
 });
