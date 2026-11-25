@@ -1,7 +1,8 @@
 // Tests only: what the browser and bb's own menus do that jsdom and the SDK's test slot don't, as far
 // as the sidebar's tests need. Import it after test-browser.ts.
+import type { experimental_ThreadActionsContextMenu } from "@get-bb/plugin-sdk/app";
 import { installTestPluginRuntime } from "@get-bb/plugin-sdk/testing/app";
-import { createElement, useEffect, useState, type ReactNode } from "react";
+import { createElement, useEffect, useState, type ComponentProps } from "react";
 import { createPortal } from "react-dom";
 
 /**
@@ -39,18 +40,16 @@ export class PageResizeObserver implements ResizeObserver {
 
 // ------------------------------------------------------------------ layer 2
 
-type ThreadMenuProps = { children: ReactNode; dragging?: boolean; onOpenChange?(open: boolean): void; onCloseAutoFocus?(event: Event): void };
-
 /**
  * bb's thread menu as the host runs it (its desktop context menu): portaled to the page, outside the
- * row's panel; focus moves into it and, closed, back to where it was. `dragging` keeps it from opening
- * and closes it once open.
+ * row's panel; focus moves into it and, closed, back to where it was. `disabled` and `dragging` keep it
+ * from opening, and `dragging` closes it once open.
  */
-function HostThreadMenu({ children, dragging = false, onOpenChange, onCloseAutoFocus }: ThreadMenuProps) {
+function HostThreadMenu({ children, disabled = false, dragging = false, onOpenChange, onCloseAutoFocus }: ComponentProps<typeof experimental_ThreadActionsContextMenu>) {
   // why: open, it holds where focus was; closed, null.
   const [returnTo, setReturnTo] = useState<Element | null>(null);
   const show = () => {
-    if (dragging) return;
+    if (disabled || dragging) return;
     setReturnTo(document.activeElement);
     onOpenChange?.(true);
   };
@@ -63,7 +62,7 @@ function HostThreadMenu({ children, dragging = false, onOpenChange, onCloseAutoF
   };
   useEffect(() => {
     if (dragging && returnTo !== null) close();
-  });
+  }, [dragging, returnTo]);
   const menu = createElement("div", { role: "menu", tabIndex: -1, ref: (node: HTMLElement | null) => node?.focus() }, createElement("div", { role: "menuitem" }, "Archive"));
   return createElement(
     "div",

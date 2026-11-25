@@ -23,7 +23,7 @@ const { ListViewport } = await import("../list-viewport.tsx");
 const { ViewMenu } = await import("../view-menu.tsx");
 
 before(() => {
-  // why: jsdom lays nothing out, so the list would see no height and mount no row. A hidden panel's measure 0, as in a browser.
+  // why: jsdom lays nothing out, so the list would see no height and mount no row. A hidden panel measures 0, as in a browser.
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     configurable: true,
     get(this: HTMLElement) {
