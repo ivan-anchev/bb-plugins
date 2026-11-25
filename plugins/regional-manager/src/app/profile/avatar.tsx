@@ -9,9 +9,10 @@ const SIZES = { xs: 20, sm: 28, lg: 40 } as const;
 // larger, its overflow given back by negative margins, makes the body fill the size asked for.
 const BODY_SCALE = 200 / 136;
 
-// why: a white body on a light surface shows no edge; a hairline in the theme's border colour, hugging
-// its outline, gives it one. Each 0.5px shadow is one side; a blurred one would fade to nothing.
-const EDGE = ["0.5px 0", "-0.5px 0", "0 0.5px", "0 -0.5px"].map((offset) => `drop-shadow(${offset} 0 var(--border))`).join(" ");
+// why: a white body on a light surface shows no edge; a hairline in the colour of the theme's input
+// borders (--input, which reads on white where --border fades), hugging its outline,
+// gives it one. Each 0.5px shadow is one side; a blurred one would fade to nothing.
+const EDGE = ["0.5px 0", "-0.5px 0", "0 0.5px", "0 -0.5px"].map((offset) => `drop-shadow(${offset} 0 var(--input))`).join(" ");
 
 // why aria-hidden: the name beside it says who this is; the avatar only pictures it.
 export function AvatarBlob({ avatar, size }: { avatar: Avatar; size: keyof typeof SIZES }) {

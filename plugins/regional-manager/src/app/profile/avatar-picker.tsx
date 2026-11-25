@@ -33,7 +33,7 @@ export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next
         {(shape) => <AvatarBlob avatar={{ ...value, shape }} size="xs" />}
       </Choices>
       <Choices legend="Colour" options={HUE_NAMES} columns={6} chosen={value.hue} onChoose={(hue) => onChange({ ...value, hue })}>
-        {(hue) => <span className={`size-4 rounded-full ${hue === EDGED_HUE ? "ring-1 ring-inset ring-border" : ""}`} style={{ backgroundColor: HUES[hue] }} />}
+        {(hue) => <span className={`size-4 rounded-full ${hue === EDGED_HUE ? "ring-1 ring-inset ring-input" : ""}`} style={{ backgroundColor: HUES[hue] }} />}
       </Choices>
     </div>
   );

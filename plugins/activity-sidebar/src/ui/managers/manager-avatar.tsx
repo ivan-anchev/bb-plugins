@@ -18,10 +18,10 @@ const BOX = (SIZE * 200) / (2 * REACH);
 const FRAME: CSSProperties = { width: SIZE, height: SIZE };
 const PLACE: CSSProperties = { position: "absolute", left: (SIZE - BOX) / 2, top: (SIZE - BOX) / 2 };
 
-// why: a white body on a light surface shows no edge; a hairline in the theme's border colour, hugging
-// its outline, gives it one, as the Regional Manager plugin draws it. Each 0.5px shadow is one side; a
-// blurred one would fade to nothing.
-const EDGED: CSSProperties = { ...PLACE, filter: ["0.5px 0", "-0.5px 0", "0 0.5px", "0 -0.5px"].map((offset) => `drop-shadow(${offset} 0 var(--border))`).join(" ") };
+// why: a white body on a light surface shows no edge; a hairline in the colour of the theme's input
+// borders (--input, which reads on white where --border fades), hugging its outline, gives it one, as
+// the Regional Manager plugin draws it. Each 0.5px shadow is one side; a blurred one would fade to nothing.
+const EDGED: CSSProperties = { ...PLACE, filter: ["0.5px 0", "-0.5px 0", "0 0.5px", "0 -0.5px"].map((offset) => `drop-shadow(${offset} 0 var(--input))`).join(" ") };
 
 // why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside it says who this is.
 export function ManagerAvatar({ avatar }: { avatar: Avatar | null }) {
