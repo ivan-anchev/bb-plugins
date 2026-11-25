@@ -61,8 +61,8 @@ its thread too. An archived or deleted thread drops its manager off the list.
 
 Each regional manager has a profile: a **name**, up to 80 characters, an
 optional **description**, up to 500, and an **avatar**: a still blob, one of
-21 shapes in one of Zeron's 12 identity colours, with a friendly face. A new
-manager starts with a look no other manager has while one of the 252 is free,
+21 shapes in one of 11 colours, with a neutral face. A new manager starts
+with a look no other manager has while one of the 231 is free,
 picked as Create saves it, so it can differ from the preview New shows;
 **Shuffle** picks another such look, and the **Shape** and **Colour** pickers
 choose one by hand, even one another manager has.
@@ -1252,10 +1252,12 @@ and Memory read the new text on their next read.
 
 ## For other plugins: reading the managers
 
-One RPC method is published to other plugins: `coordinators`, discoverable
-with `bb.sdk.plugins.experimental_discoverRpc` and called with
-`bb.sdk.plugins.callRpc({ pluginId: "regional-manager", method:
-"coordinators", input: {}, outputSchema })`. It returns:
+Two RPC methods are published to other plugins, `coordinators` and
+`openIssues`, both discoverable with `bb.sdk.plugins.experimental_discoverRpc`
+and called with `bb.sdk.plugins.callRpc({ pluginId: "regional-manager",
+method, input, outputSchema })`.
+
+`coordinators` (input `{}`) returns:
 
 ```ts
 {
@@ -1272,22 +1274,51 @@ with `bb.sdk.plugins.experimental_discoverRpc` and called with
 }
 ```
 
-- **The contract:** `threadId`, `description` and `avatar` of each started
-  manager keep their names and shapes. The Activity Sidebar's Managers view
-  reads them, with its own copy of their schema; a test in this plugin pins
+- **The contract:** `id`, `threadId`, `description` and `avatar` of each
+  started manager keep their names and shapes. The Activity Sidebar's Managers
+  view reads them, with its own copy of their schema; a test in this plugin pins
   them (`src/published-contract.test.ts`).
 - **A manager's name** is its thread's title, so it isn't in the read.
 - **Open managers only?** The read doesn't filter by the thread's state: a
   reader that shows open managers keeps the `threadId`s bb's thread list
   returns as unarchived (the Activity Sidebar does).
 - **`avatar`:** `shape` is one of blob-avatar's 21 shapes, `hue` one of the
-  12 identity hues (violet, blue, emerald, sky, amber, rose, lime, teal,
-  orange, indigo, pink, cyan), and `expression` one of neutral, happy,
-  content, curious, attentive or determined.
+  11 hues (white, brown, red, orange, amber, green, teal, blue, purple, pink,
+  gray), and `expression` always neutral.
 - **Freshness:** the read is one-shot, so another plugin isn't told when a
   profile changes. Read again on a timer, or when a regional manager's thread
   is created, renamed or archived.
-- Every other method is the plugin's own app's, and may change without notice.
+
+`openIssues` (input `{ keys: string[] }`, each a started manager's `id`)
+returns each manager's open work, keyed by its id:
+
+```ts
+Record<string, {
+  // every issue under Needs you on its board, a flagged sub-issue included, in the order filed
+  needsYou: { id: string; title: string; status: IssueStatus; reason: string; parentId: string | null }[];
+  // every Verifying, Reviewing and In progress issue not under Needs you, in the board's order
+  underWay: { id: string; title: string; status: IssueStatus; parentId: string | null }[];
+  // the parent of a listed sub-issue, when it is in neither list itself
+  parents: { id: string; title: string; status: IssueStatus }[];
+  // the open decisions naming no listed issue
+  decisions: { id: string; question: string }[];
+}>
+// IssueStatus: backlog | todo | in-progress | reviewing | verifying | in-review | done | canceled
+```
+
+- **The contract:** every field above keeps its name and shape. The Activity
+  Sidebar's manager card reads them, with its own copy of their schema; the
+  same test pins them.
+- **Agrees with the Board:** it is read from the board's own rows, so an
+  issue's status and reason are the Board's. In review is left out: it waits on
+  a merge, not on work.
+- **An unknown id**, or one not started, has empty lists rather than a refusal.
+- **Freshness:** as for `coordinators`; read again when a manager's thread or
+  one of its children changes status, and on a timer.
+- An issue's tab opens at
+  `/plugins/regional-manager/regional-managers/issue/<id>/<issueId>`.
+
+Every other method is the plugin's own app's, and may change without notice.
 
 ## What it needs
 

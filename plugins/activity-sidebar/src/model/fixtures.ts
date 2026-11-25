@@ -1,6 +1,7 @@
 // Test rows: a valid PluginSidebarThread with the fields a test cares about overridden; and the
-// Regional Manager plugin's `coordinators` answers, well formed and not.
+// Regional Manager plugin's `coordinators` and `openIssues` answers, well formed and not.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { ManagerIssues } from "./manager-issues.ts";
 
 export function thread(id: string, overrides: Partial<PluginSidebarThread> = {}): PluginSidebarThread {
   return {
@@ -49,13 +50,13 @@ export function project(id: string, name: string): PluginSidebarProject {
 /** Working, as bb resolves a running turn. */
 export const WORKING = { indicator: "runtime", status: "active", runtimeStatus: "active" } as const satisfies Partial<PluginSidebarThread>;
 
-export const AVATAR = { kind: "blob", shape: "bear", hue: "violet", expression: "attentive" } as const;
+export const AVATAR = { kind: "blob", shape: "bear", hue: "purple", expression: "neutral" } as const;
 
 /** The Regional Manager plugin's answer, as it publishes it: more than the sidebar reads. */
 export const COORDINATORS = {
   coordinators: [
     { id: "mgr_1", threadId: "thr_pr", projectId: "prj_a", description: "Reviews every open pull request.", avatar: AVATAR },
-    { id: "mgr_2", threadId: "thr_sb", projectId: "prj_a", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "rose" } },
+    { id: "mgr_2", threadId: "thr_sb", projectId: "prj_a", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "red" } },
   ],
   notStarted: [{ id: "mgr_3", name: "Docs", description: null, avatar: AVATAR }],
 };
@@ -63,8 +64,27 @@ export const COORDINATORS = {
 /** Answers the sidebar's copy of the schema refuses: each must leave every manager on its fallback. */
 export const MALFORMED_COORDINATORS: readonly unknown[] = [
   { managers: [] },
-  { coordinators: [{ threadId: "thr_pr", description: null }] },
-  { coordinators: [{ threadId: "thr_pr", description: null, avatar: { ...AVATAR, shape: "octagon" } }] },
-  { coordinators: [{ thread: "thr_pr", description: null, avatar: AVATAR }] },
+  { coordinators: [{ id: "mgr_1", threadId: "thr_pr", description: null }] },
+  { coordinators: [{ id: "mgr_1", threadId: "thr_pr", description: null, avatar: { ...AVATAR, shape: "octagon" } }] },
+  { coordinators: [{ id: "mgr_1", thread: "thr_pr", description: null, avatar: AVATAR }] },
+  { coordinators: [{ threadId: "thr_pr", description: null, avatar: AVATAR }] },
   { coordinators: [COORDINATORS.coordinators[0], { ...COORDINATORS.coordinators[1], threadId: "thr_pr" }] },
+];
+
+/** The Regional Manager plugin's `openIssues` answer for mgr_1, as it publishes it. */
+export const OPEN_ISSUES: Record<string, ManagerIssues> = {
+  mgr_1: {
+    needsYou: [{ id: "WEB-5", title: "Schema version", status: "in-progress", reason: "Blocked: which schema version?", parentId: "WEB-4" }],
+    underWay: [{ id: "WEB-2", title: "Retry queue", status: "reviewing", parentId: null }],
+    parents: [{ id: "WEB-4", title: "Webhook schema", status: "todo" }],
+    decisions: [{ id: "d1", question: "Ship on Friday?" }],
+  },
+};
+
+/** `openIssues` answers the sidebar's copy of the schema refuses: each leaves every card without its list. */
+export const MALFORMED_OPEN_ISSUES: readonly unknown[] = [
+  { mgr_1: { needsYou: [] } },
+  { mgr_1: { ...OPEN_ISSUES.mgr_1, underWay: [{ id: "WEB-2", title: "Retry queue", status: "shipping", parentId: null }] } },
+  { mgr_1: { ...OPEN_ISSUES.mgr_1, needsYou: [{ id: "WEB-5", title: "Schema version", status: "in-progress", parentId: null }] } },
+  [OPEN_ISSUES.mgr_1],
 ];

@@ -25,7 +25,7 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-const COORDINATOR = { id: "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10", threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } };
+const COORDINATOR = { id: "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10", threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } };
 
 /** The tab of the regional manager's thread, over a plugin whose memory holds NOTES.md. */
 function mount() {

@@ -21,6 +21,11 @@ export type CardEdge = { left: number; top: number; bottom: number };
 export type Under = { point: Point; row: string | null; onCard: boolean };
 
 export type CardIntentDeps = {
+  /**
+   * Keyboard focus on a row shows its card at once, rather than after the rest the pointer takes. The
+   * Managers view's few rows open so (as its prototype did), so Tab right after ↓ goes into the card.
+   */
+  focusShowsAtOnce: boolean;
   probe(): Under;
   /** The shown card's edge; null while none is laid out. */
   cardEdge(): CardEdge | null;
@@ -103,11 +108,12 @@ export class CardIntent {
     if (this.passing !== null) this.settle();
   }
 
-  /** Keyboard focus came onto a row: it rests there as the pointer would. Focus handed back from the card does not. */
+  /** Keyboard focus came onto a row: it rests there as the pointer would, or shows its card at once (focusShowsAtOnce). Focus handed back from the card does not. */
   focusRow(row: string): void {
     const fromCard = this.focus === CARD;
     this.focus = row;
     if (fromCard) this.vacate();
+    else if (this.deps.focusShowsAtOnce) this.showNow(row);
     else this.rest(row);
   }
 
@@ -129,6 +135,11 @@ export class CardIntent {
   }
 
   // ---------------------------------------------------------------- layer 2
+
+  private showNow(row: string): void {
+    clearTimeout(this.graceTimer);
+    if (this.shown !== row) this.show(row);
+  }
 
   private rest(row: string): void {
     clearTimeout(this.graceTimer);

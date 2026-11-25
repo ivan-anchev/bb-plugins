@@ -27,7 +27,7 @@ afterEach(() => {
  * settles, as the server's does.
  */
 function mount({ started = false, replied = Promise.resolve() }: { started?: boolean; replied?: Promise<void> } = {}) {
-  const profileOf = { description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } } as const;
+  const profileOf = { description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } } as const;
   const stored: Coordinator = { id: COORDINATOR, threadId: "thr_1", projectId: PROJECT.id, ...profileOf };
   let waiting: NotStarted | null = started ? null : { id: COORDINATOR, name: "Scout", ...profileOf };
   const saves: Profile[] = [];
@@ -94,7 +94,7 @@ test("Edit opens the profile in place on the name, and Save sends the changed na
 });
 
 test("the editor pictures it with Shuffle, which never picks a look a manager has, or a shape and a colour, each a labelled radio group; Save stores the look picked", async (t) => {
-  // why 0: Shuffle then starts from the look this manager already has, circle in violet, and must step past it.
+  // why 0: Shuffle then starts from the look this manager already has, circle in purple, and must step past it.
   t.mock.method(Math, "random", () => 0);
   const { view, saves } = mount();
   fireEvent.click(await view.findByRole("button", { name: "Edit" }));
@@ -104,14 +104,20 @@ test("the editor pictures it with Shuffle, which never picks a look a manager ha
   const chosen = (group: HTMLElement) => radios(group).filter((radio) => radio.matches(":checked")).map((radio) => radio.getAttribute("aria-label"));
 
   assert.deepEqual(radios(shapes).map((radio) => radio.getAttribute("aria-label")), ["Circle", "Pebble", "Squircle", "Capsule", "Triangle", "Diamond", "Hexagon", "Star", "Cloud", "Droplet", "Heart", "Ghost", "Cat", "Bear", "Bunny", "Amoeba", "Flower", "Clover", "Leaf", "Gem", "Bubble"]);
-  assert.deepEqual(radios(colours).map((radio) => radio.getAttribute("aria-label")), ["Violet", "Blue", "Emerald", "Sky", "Amber", "Rose", "Lime", "Teal", "Orange", "Indigo", "Pink", "Cyan"]);
+  assert.deepEqual(radios(colours).map((radio) => radio.getAttribute("aria-label")), ["White", "Brown", "Red", "Orange", "Amber", "Green", "Teal", "Blue", "Purple", "Pink", "Gray"]);
+  // why rgb: jsdom reads a style's colour back so; these are the user's #FFFFFF, #996E42, #E84447, #E87031, #E9993A, #5AC078, #55B5A4, #3E82F4, #895DF3, #E74897 and #777777.
+  const swatches = radios(colours).map((radio) => radio.parentElement?.querySelector("span > span"));
+  assert.deepEqual(
+    swatches.map((swatch) => (swatch instanceof HTMLElement ? swatch.style.backgroundColor : null)),
+    ["rgb(255, 255, 255)", "rgb(153, 110, 66)", "rgb(232, 68, 71)", "rgb(232, 112, 49)", "rgb(233, 153, 58)", "rgb(90, 192, 120)", "rgb(85, 181, 164)", "rgb(62, 130, 244)", "rgb(137, 93, 243)", "rgb(231, 72, 151)", "rgb(119, 119, 119)"],
+  );
   // why one name each: native radios of one name are one tab stop that the arrow keys move through.
   for (const group of [shapes, colours]) assert.equal(new Set(radios(group).map((radio) => radio.getAttribute("name"))).size, 1);
-  assert.deepEqual([chosen(shapes), chosen(colours)], [["Circle"], ["Violet"]]);
+  assert.deepEqual([chosen(shapes), chosen(colours)], [["Circle"], ["Purple"]]);
 
   fireEvent.click(view.getByRole("button", { name: "Shuffle" }));
   const shuffled = [...chosen(shapes), ...chosen(colours)];
-  assert.notDeepEqual(shuffled, ["Circle", "Violet"], "Shuffle never picks a look a manager has");
+  assert.notDeepEqual(shuffled, ["Circle", "Purple"], "Shuffle never picks a look a manager has");
   await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
 
   const [saved] = saves;
@@ -154,7 +160,7 @@ test("an open edit an earlier release kept, with an icon this one can't draw, st
   assert.equal(name.value, "Scout v2");
   await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
 
-  assert.deepEqual(saves, [{ name: "Scout v2", description: "Half typed", avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } }]);
+  assert.deepEqual(saves, [{ name: "Scout v2", description: "Half typed", avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } }]);
 });
 
 test("Esc closes an edit nothing changed in, and keeps one that has changes", async () => {

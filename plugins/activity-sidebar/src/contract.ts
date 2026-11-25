@@ -1,8 +1,9 @@
 // The app <-> server contract and the records it carries: a thread's sleep, the Archived shelf's
-// count, and the regional managers' looks and lines. Shared by server.ts and the app: pure zod plus defineRpcContract.
+// count, and the regional managers' looks, lines and open work. Shared by server.ts and the app: pure zod plus defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { managerLineSchema } from "./model/manager-line.ts";
+import { managerIssuesSchema } from "./model/manager-issues.ts";
 import { managerLookSchema } from "./model/manager-look.ts";
 
 /**
@@ -40,6 +41,9 @@ export const MANAGER_LOOKS_TAG = "manager-looks";
 /** Every read of the managers' lines carries it; a manager's line changing invalidates it. */
 export const MANAGER_LINES_TAG = "manager-lines";
 
+/** Every read of a manager's open work carries it; a thread of the Regional Manager plugin's moving, and every minute, invalidate it. */
+export const MANAGER_ISSUES_TAG = "manager-issues";
+
 export const activitySidebarContract = defineRpcContract({
   /** Every sleep record, for the whole list at once. */
   sleeps: {
@@ -68,6 +72,15 @@ export const activitySidebarContract = defineRpcContract({
     input: z.object({ threadIds: z.array(z.string().min(1)).max(200) }),
     output: z.object({ lines: z.array(managerLineSchema) }),
     tags: () => [MANAGER_LINES_TAG],
+  },
+  /**
+   * Each of these regional managers' open work, keyed by the manager's id (its look's `id`): what
+   * its card lists. Null when the Regional Manager plugin can't be read: the card shows no list.
+   */
+  managerIssues: {
+    input: z.object({ keys: z.array(z.string().min(1)) }),
+    output: z.record(z.string(), managerIssuesSchema.nullable()),
+    keyTags: () => [MANAGER_ISSUES_TAG],
   },
   /** Sleep until a future time, wake now (`until` = now), or forget the record (null: opened after waking). */
   setSleep: {

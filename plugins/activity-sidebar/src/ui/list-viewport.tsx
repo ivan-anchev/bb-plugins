@@ -6,7 +6,7 @@ import type { ListItem, NoticeKey } from "../list/items.ts";
 import type { SectionKey } from "../model/activity.ts";
 import { layoutItems, METRICS, visibleKeys, type Layout, type LayoutEntry } from "../list/layout.ts";
 import type { Ghost } from "../list/motion-plan.ts";
-import { cardKeyOf, HoverCard, type CardData } from "./card/hover-card.tsx";
+import { cardKeyOf, ThreadCard, type CardData } from "./card/thread-card.tsx";
 import { usePanelShown } from "./portal-scope.ts";
 import { useLayoutMotion } from "./motion/use-layout-motion.ts";
 import { Row } from "./row/row.tsx";
@@ -32,7 +32,7 @@ export function ListViewport({ items, card, ...actions }: Props) {
   const shown = usePanelShown();
   const scroller = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<string, HTMLElement>()).current;
-  const height = useHeight(scroller);
+  const height = useHeight(scroller, shown);
   const [top, setTop] = useState(0);
   const layout = useMemo(() => layoutItems(items, height), [items, height]);
   const stopKeys = useMemo(() => stopsOf(layout).map((entry) => entry.key), [layout]);
@@ -78,7 +78,7 @@ export function ListViewport({ items, card, ...actions }: Props) {
         </div>
         {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does.
             Put away while the list's panel is hidden, as every overlay is (portal-scope.ts). */}
-        {card !== null && shown && <HoverCard scroller={scroller} entries={layout.entries} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
+        {card !== null && shown && <ThreadCard scroller={scroller} entries={layout.entries} data={card} listFocus={focus} onNavigate={actions.onNavigate} />}
       </div>
     </>
   );
@@ -223,16 +223,20 @@ function firstBelow(stops: readonly LayoutEntry[], scrollTop: number): LayoutEnt
   return stops.find((entry) => entry.y >= scrollTop) ?? stops[stops.length - 1];
 }
 
-/** The scroller's height, kept current by a ResizeObserver. */
-function useHeight(ref: RefObject<HTMLElement | null>): number {
+/**
+ * The scroller's height, kept current by a ResizeObserver while its panel shows. Hidden, it keeps the
+ * last height it showed at, and measures again as it shows, before it paints.
+ */
+function useHeight(ref: RefObject<HTMLElement | null>, shown: boolean): number {
   const [height, setHeight] = useState(0);
+  // why: a hidden panel measures 0, which would lay the list out for no room and drop its bottom shelves.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el === null) return;
+    if (el === null || !shown) return;
     setHeight(el.clientHeight);
     const observer = new ResizeObserver(() => setHeight(el.clientHeight));
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ref]);
+  }, [ref, shown]);
   return height;
 }

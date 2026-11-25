@@ -31,7 +31,7 @@ HTMLCanvasElement.prototype.getContext = () => null;
 
 export const { issueTab } = await import("./issue-tab.tsx");
 
-export const COORDINATOR = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } } as const;
+export const COORDINATOR = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } } as const;
 export const SHA = "4b1d9e0c2a7f3e5d6c8b9a0f1e2d3c4b5a697881";
 export const id = (raw: string) => issueIdSchema.parse(raw);
 export const agent = (raw: string) => ({ id: agentIdSchema.parse(raw), threadId: `thr_${raw}` });

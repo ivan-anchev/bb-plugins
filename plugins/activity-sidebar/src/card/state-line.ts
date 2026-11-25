@@ -11,7 +11,7 @@ export type StateLine = { glyph: { kind: "state"; state: ZState } | { kind: "asl
  * "Working · for 4m", "Completed · 5m ago", "Asleep · wakes at 9:00 AM", or "5m ago". `state` is the
  * one the row shows (an approval asked already applied); `underWaySince` when the list first saw it under way.
  */
-export function stateLine(row: RowModel, state: ZState | null, underWaySince: number, now: number): StateLine {
+export function stateLine(row: Pick<RowModel, "thread" | "asleepUntil">, state: ZState | null, underWaySince: number, now: number): StateLine {
   const wakes = row.asleepUntil === null ? null : `wakes at ${clock(row.asleepUntil)}`;
   if (state === null && wakes !== null) return { glyph: { kind: "asleep" }, lead: "Asleep", note: wakes };
   const moved = since(lastMoved(row.thread), now);

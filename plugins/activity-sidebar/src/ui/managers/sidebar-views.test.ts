@@ -20,15 +20,17 @@ const THREADS = createElement("div", { className: "as-scroller", tabIndex: 0, "d
 
 const manager = (id: string, createdAt: number): ManagerModel => ({
   thread: thread(id, { originPluginId: "regional-manager", createdAt, displayTitle: id }),
-  avatar: null,
+  look: null,
   line: null,
   current: false,
+  state: null,
+  project: "bb-plugins",
 });
 const PR = manager("PR Reviews", 1);
 const SIDEBAR = manager("Sidebar", 2);
 
 type Shown = { managers: readonly ManagerModel[]; view: View };
-const props = ({ managers, view }: Shown) => ({ managers, view, onView: () => {}, onNavigate: () => {}, threads: THREADS });
+const props = ({ managers, view }: Shown) => ({ managers, underWaySince: null, view, onView: () => {}, onNavigate: () => {}, threads: THREADS });
 
 function mount(shown: Shown) {
   const slot = renderSlot({ component: SidebarViews }, props(shown));

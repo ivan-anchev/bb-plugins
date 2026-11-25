@@ -15,7 +15,7 @@ const { NewCoordinator } = await import("./new-coordinator.tsx");
 
 const CREATED = "6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10";
 const TAKEN = "0b9c8e5d-7a3f-4e2b-9c1d-5f6a7b8c9d0e";
-const CIRCLE_IN_VIOLET = { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } as const;
+const CIRCLE_IN_WHITE = { kind: "blob", shape: "circle", hue: "white", expression: "neutral" } as const;
 
 afterEach(() => {
   cleanup();
@@ -32,7 +32,7 @@ function mount(read: { failing: boolean; others?: NotStarted[] } = { failing: fa
   const rpc = {
     coordinators: () => {
       if (read.failing) throw new Error("bb is restarting");
-      return { coordinators: [], notStarted: [{ id: TAKEN, name: "Scout", description: null, avatar: CIRCLE_IN_VIOLET }, ...(read.others ?? [])] };
+      return { coordinators: [], notStarted: [{ id: TAKEN, name: "Scout", description: null, avatar: CIRCLE_IN_WHITE }, ...(read.others ?? [])] };
     },
     createCoordinator: (input: unknown) => {
       creates.push(contract.createCoordinator.input.parse(input).profile);
@@ -91,7 +91,7 @@ test("a new manager's look the user didn't pick is a preview, which steps past t
   t.mock.method(Math, "random", () => 0);
   const page = mount();
   await page.named("Webhooks");
-  await waitFor(() => assert.notDeepEqual(page.chosen(), ["Circle", "Violet"]));
+  await waitFor(() => assert.notDeepEqual(page.chosen(), ["Circle", "White"]));
 
   await page.create();
 
@@ -151,7 +151,7 @@ test("while the other managers can't be read, a new one can still be created, it
 
 test("Shuffle waits while the other managers' looks can't be read, and says why; once Retry reads them, the focus Retry had moves to Shuffle, which picks a look none has", async (t) => {
   t.mock.method(Math, "random", () => 0);
-  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_VIOLET }));
+  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_WHITE }));
   const read = { failing: true };
   const page = mount(read);
   const shuffle = await page.view.findByRole("button", { name: "Shuffle" });
@@ -159,7 +159,7 @@ test("Shuffle waits while the other managers' looks can't be read, and says why;
   assert.match((await page.view.findByRole("alert")).textContent ?? "", /Could not read the other regional managers' looks, so Shuffle waits: .*bb is restarting/);
   assert.equal(shuffle.getAttribute("aria-disabled"), "true");
   fireEvent.click(shuffle);
-  assert.deepEqual(page.chosen(), ["Circle", "Violet"], "a Shuffle that can't know the taken looks picks none");
+  assert.deepEqual(page.chosen(), ["Circle", "White"], "a Shuffle that can't know the taken looks picks none");
 
   read.failing = false;
   const retry = page.view.getByRole("button", { name: "Retry" });
@@ -170,12 +170,12 @@ test("Shuffle waits while the other managers' looks can't be read, and says why;
   assert.ok(document.activeElement === shuffle, "the focus Retry had is on Shuffle");
   fireEvent.click(shuffle);
 
-  assert.notDeepEqual(page.chosen(), ["Circle", "Violet"], "Shuffle steps past Scout's look");
+  assert.notDeepEqual(page.chosen(), ["Circle", "White"], "Shuffle steps past Scout's look");
   assert.equal(page.view.queryByRole("alert"), null);
 });
 
 test("a later read of the managers that fails keeps their last list, but Shuffle waits and says why, since that list may lack a look taken since", async () => {
-  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_VIOLET }));
+  localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: CIRCLE_IN_WHITE }));
   const read = { failing: false };
   const page = mount(read);
   const shuffle = await page.listed();
@@ -193,19 +193,19 @@ test("a later read of the managers that fails keeps their last list, but Shuffle
 });
 
 test("a later read that fails keeps a new manager's fields and its preview, and Shuffle waits", async (t) => {
-  // why 0: the preview then starts from the look Scout has, and the list read moves it to the next, pebble in violet.
+  // why 0: the preview then starts from the look Scout has, and the list read moves it to the next, pebble in white.
   t.mock.method(Math, "random", () => 0);
   const read = { failing: false };
   const page = mount(read);
   await page.named("Webhooks");
-  await waitFor(() => assert.deepEqual(page.chosen(), ["Pebble", "Violet"], "the preview steps past Scout's look"));
+  await waitFor(() => assert.deepEqual(page.chosen(), ["Pebble", "White"], "the preview steps past Scout's look"));
 
   read.failing = true;
   await act(() => page.view.experimental_invalidateRpc([COORDINATORS_TAG]));
 
   assert.match((await page.view.findByRole("alert")).textContent ?? "", /so Shuffle waits: .*bb is restarting/);
   assert.equal(page.view.getByRole("button", { name: "Shuffle" }).getAttribute("aria-disabled"), "true");
-  assert.deepEqual(page.chosen(), ["Pebble", "Violet"], "the preview stays the one from the last list read");
+  assert.deepEqual(page.chosen(), ["Pebble", "White"], "the preview stays the one from the last list read");
   await page.create();
   assert.deepEqual(page.creates, [{ name: "Webhooks", description: null, avatar: { kind: "auto" } }], "the name typed before the failure is sent");
 });
@@ -240,7 +240,7 @@ test("fields an earlier release kept, with an icon this one can't draw, keep the
 });
 
 test("a new manager's preview moves on when a later read shows it taken, even after the name was typed; a look the user picked stays and Create sends it", async (t) => {
-  // why 0: the page then gives pebble in violet, the first look after Scout's, so the look picked below (a bunny) is never the one given.
+  // why 0: the page then gives pebble in white, the first look after Scout's, so the look picked below (a bunny) is never the one given.
   t.mock.method(Math, "random", () => 0);
   const read: { failing: boolean; others: NotStarted[] } = { failing: false, others: [] };
   const page = mount(read);
@@ -263,12 +263,12 @@ test("a new manager's preview moves on when a later read shows it taken, even af
   assert.deepEqual(page.creates.map(({ name, avatar }) => [name, avatar.kind === "blob" ? [avatar.shape, avatar.hue] : avatar.kind]), [["Webhooks", picked]]);
 });
 
-test("Shuffle never lands on a look another manager has while one is free: with 251 taken and its own the one free, it keeps it", async (t) => {
+test("Shuffle never lands on a look another manager has while one is free: with 230 taken and its own the one free, it keeps it", async (t) => {
   t.mock.method(Math, "random", () => 0);
   const looks = HUE_NAMES.flatMap((hue) => SHAPES.map((shape) => avatarSchema.parse({ kind: "blob", shape, hue, expression: "neutral" })));
   const [free] = looks.slice(-1);
   assert.ok(free);
-  // why 250 more: with Scout's circle in violet, every look but the last is taken.
+  // why 229 more: with Scout's circle in white, every look but the last is taken.
   const others = looks.slice(1, -1).map((avatar, n) => ({ id: coordinatorIdSchema.parse(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), name: `Manager ${n}`, description: null, avatar }));
   localStorage.setItem("coordinator-new-profile", JSON.stringify({ name: "Webhooks", description: "", avatar: free }));
   const page = mount({ failing: false, others });
