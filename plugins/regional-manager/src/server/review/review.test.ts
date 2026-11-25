@@ -730,13 +730,13 @@ async function secondRound() {
   return agent;
 }
 
-test("a later round's reviewer is told to review git diff from the last reviewed commit to the new one, limited to the branch's files and checked hunk by hunk against the branch's own diff, with that round's blocking findings numbered and the known ones listed; a first round's asks for the whole diff", async () => {
+test("a later round's reviewer is told to review git diff from the last reviewed commit to the new one, limited to the branch's files and leaving out only changes of commits merged in from the default branch, with that round's blocking findings numbered and the known ones listed; a first round's asks for the whole diff", async () => {
   const { kit, reviewer } = await secondRound();
   const prompt = kit.thread(reviewer()).spawnedWith.prompt ?? assert.fail("no prompt");
   const part = (heading: string) => prompt.split("\n\n## ").find((one) => one.startsWith(heading)) ?? assert.fail(`no ${heading}`);
   assert.equal(
     part("The diff"),
-    `The diff\n\nRound 1 was the last round reviewed, at \`${HEAD}\`. Review only what changed since then, up to \`${ROUND_2}\`, checked out in this environment: \`git diff ${HEAD} ${ROUND_2}\`, limited to the files this branch changes (\`git diff origin/main...${ROUND_2} --stat\`), so commits merged in from the default branch are not reviewed.\n\nA file this branch changes can also hold a change merged in from the default branch since round 1. Check each hunk of \`git diff ${HEAD} ${ROUND_2} -- <file>\` against \`git diff origin/main...${ROUND_2} -- <file>\`: review only the hunks the branch's own diff also shows, and leave out any it doesn't, as the default branch's.\n\nIf \`git cat-file -e ${HEAD}\` fails, that commit isn't in this environment: review the whole diff instead (\`git diff origin/main...${ROUND_2}\`), mark every finding new, and still answer each of round 1's blocking findings below.`,
+    `The diff\n\nRound 1 was the last round reviewed, at \`${HEAD}\`. Review only what changed since then, up to \`${ROUND_2}\`, checked out in this environment: \`git diff ${HEAD} ${ROUND_2}\`, limited to the files this branch changes (\`git diff origin/main...${ROUND_2} --stat\`), so commits merged in from the default branch are not reviewed.\n\nA file this branch changes can also hold a change merged in from the default branch since round 1. The commits merged in since then are the ones \`git log --oneline ${HEAD}..$(git merge-base ${ROUND_2} origin/main)\` lists (none when it lists none). Leave out of \`git diff ${HEAD} ${ROUND_2} -- <file>\` only a change one of those commits made, as \`git show <commit> -- <file>\` shows it. Review every other change in it: it is the branch's own, a removal of something the branch added before included, even when the branch's diff from the default branch no longer shows it.\n\nIf \`git cat-file -e ${HEAD}\` fails, that commit isn't in this environment: review the whole diff instead (\`git diff origin/main...${ROUND_2}\`), mark every finding new, and still answer each of round 1's blocking findings below.`,
   );
   assert.equal(
     part("Round 1's blocking findings"),
@@ -757,9 +757,13 @@ test("issue_review refuses an earlier that misses one of the earlier round's blo
   const MISSED_FINDING = { file: "src/retry.ts", line: 2, severity: "must-fix", claim: "The import order breaks REVIEW.md.", origin: "missed" } as const;
   const unanswered = await kit.call("issue_review", { findings: [MISSED_FINDING], earlier: [] }, reviewer());
   assert.ok(isRefusal(unanswered));
-  assert.equal(textOf(unanswered), "issue_review is refused and nothing was saved: answer every earlier blocking finding; missing 1 of 1 to 1.");
+  assert.equal(
+    textOf(unanswered),
+    `issue_review is refused and nothing was saved: answer every earlier blocking finding; missing 1 of 1 to 1. This review covers only the change since round 1, the last round reviewed, at \`${HEAD}\`. Its blocking findings, by number:\n\n1. \`src/retry.ts:42\` (must-fix): The backoff never caps, so a dead endpoint is retried every 2^n ms forever.\n\nCorrect that and call issue_review again.`,
+    "a reviewer whose first message gave no blocking findings, as one started before this release, learns them, and its scope, and calls again",
+  );
   const invented = await kit.call("issue_review", { findings: [], earlier: [1, 2].map((finding) => ({ finding, fixed: true, note: "Capped." })) }, reviewer());
-  assert.equal(textOf(invented), "issue_review is refused and nothing was saved: there is only 1 earlier blocking finding; 2 is not one.");
+  assert.equal(textOf(invented), `issue_review is refused and nothing was saved: there is only 1 earlier blocking finding; 2 is not one. This review covers only the change since round 1, the last round reviewed, at \`${HEAD}\`. Its blocking findings, by number:\n\n1. \`src/retry.ts:42\` (must-fix): The backoff never caps, so a dead endpoint is retried every 2^n ms forever.\n\nCorrect that and call issue_review again.`);
   assert.equal(review().state, "running", "nothing was saved");
 
   const answer = { finding: 1, fixed: false, note: "retry.ts:42 still doubles with no ceiling." };
@@ -775,9 +779,9 @@ test("issue_review refuses an earlier that misses one of the earlier round's blo
   await first.handOff();
   const missed = await first.kit.call("issue_review", { findings: [{ ...FINDINGS[0], origin: "missed" }] }, first.reviewer());
   assert.ok(isRefusal(missed));
-  assert.equal(textOf(missed), "issue_review is refused and nothing was saved: this is the issue's first reviewed round, so no earlier round reviewed any of this code: mark every finding new.");
+  assert.equal(textOf(missed), "issue_review is refused and nothing was saved: no earlier round qualifies as the review base, so none reviewed any of this code: mark every finding new.\n\nCorrect that and call issue_review again.");
   const early = await first.kit.call("issue_review", { findings: [], earlier: [{ finding: 1, fixed: true, note: "Fine." }] }, first.reviewer());
-  assert.equal(textOf(early), "issue_review is refused and nothing was saved: there are no earlier blocking findings to answer; pass [].");
+  assert.equal(textOf(early), "issue_review is refused and nothing was saved: there are no earlier blocking findings to answer; pass []. No earlier round qualifies as the review base: this review covers the whole diff, with nothing earlier to answer.\n\nCorrect that and call issue_review again.");
   assert.equal(first.review().state, "running");
 });
 
@@ -785,7 +789,7 @@ test("issue_review refuses an earlier that misses one of the earlier round's blo
 const mustFixes = (n: number, from = 1) => Array.from({ length: n }, (_, i) => ({ file: "src/retry.ts", line: from + i, severity: "must-fix", claim: `Blocker ${from + i}.` }));
 const anchoredAll = (n: number) => Array.from({ length: n }, (_, i) => ({ finding: i + 1, result: "anchored", anchor: "brief", reason: "Seen." }));
 
-test("every blocker carried forward unfixed stays triageable: 50 earlier blockers not fixed with one new finding pass through issue_review and issue_verdict; a report that would carry more than the verifier triages is refused, naming how many it can add", async () => {
+test("carried blockers never use up the reviewer's own 50 findings: 50 earlier blockers not fixed with one new finding, then 51 with 50 new, pass through issue_review and issue_verdict; a 51st finding of its own is refused", async () => {
   const { kit, check, reviewer, verifier, handOff } = await withAgent();
   const review = async (input: object) => {
     const threadId = reviewer();
@@ -813,10 +817,12 @@ test("every blocker carried forward unfixed stays triageable: 50 earlier blocker
 
   await handOff();
   const threadId = reviewer();
-  const over = await kit.call("issue_review", { findings: mustFixes(50, 200), earlier: notFixed(51) }, threadId);
-  assert.ok(isRefusal(over));
-  assert.equal(textOf(over), "issue_review is refused and nothing was saved: the verifier triages at most 100 findings, and 51 earlier blocking findings not fixed with your 50 come to 101: report at most 49 of your own, the ones that matter most.");
-  assert.match(textOf(await kit.call("issue_review", { findings: mustFixes(49, 200), earlier: notFixed(51) }, threadId)), /^Review recorded: 49 findings, and 51 earlier blocking findings not fixed\./, "its way forward works");
+  const tool = kit.tools().find(({ name }) => name === "issue_review") ?? assert.fail("no issue_review");
+  assert.equal(tool.parameters.safeParse({ findings: mustFixes(51, 200), earlier: notFixed(51) }).success, false, "its own findings stop at 50");
+  assert.match(textOf(await kit.call("issue_review", { findings: mustFixes(50, 200), earlier: notFixed(51) }, threadId)), /^Review recorded: 50 findings, and 51 earlier blocking findings not fixed\./, "all 51 carried beside its own 50");
+  await kit.idle(threadId, "Reviewed.");
+  await settled();
+  assert.match(await verdict(101), /^Verdict recorded/, "the verifier triages all 101");
 });
 
 test("a path holding a newline reaches the later round's reviewer and verifier byte for byte, in the blocking list, the unfixed list and the answered-fixed list", async () => {

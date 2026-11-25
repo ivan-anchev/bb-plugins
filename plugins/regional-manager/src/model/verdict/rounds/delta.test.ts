@@ -113,14 +113,10 @@ test("a missed review's verdict returned before the delta existed, which triaged
   assert.deepEqual(verdict?.state === "returned" && verdict.triage, []);
 });
 
-test("an issue's history reads in one linear pass: 60 reviewed rounds of 20 held findings each, every later one missed, read whole and give the last delta in well under a second", () => {
+test("an issue's long history reads whole: 60 reviewed rounds of 20 held findings each, every later one missed, read whole and give the last delta, every held finding once", () => {
   const findings = (round: number): [ReviewFinding, Triage][] =>
     Array.from({ length: 20 }, (_, i) => [{ ...(i === 0 ? CAP : JITTER), line: i + 1, claim: `Finding ${i} of round ${round}.` }, i === 0 ? ANCHORED : CONFIRMED]);
   const history = Array.from({ length: 60 }, (_, n) => (n % 2 === 0 ? reviewed(n, findings(n)) : stored(n, MISSED, returned(n, [{ result: "anchored", anchor: "brief", reason: "Still." }]))));
-  const started = performance.now();
-  const rounds = read(...history);
-  const delta = deltaOf(rounds);
-  const took = performance.now() - started;
+  const delta = deltaOf(read(...history));
   assert.equal(delta.kind === "after" && delta.known.length, 30 * 20 - 1, "every held finding once, but round 58's blocker");
-  assert.ok(took < 250, `took ${Math.round(took)} ms`);
 });

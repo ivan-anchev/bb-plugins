@@ -3,7 +3,7 @@
 // each of the earlier round's blocking findings. The verifier triages them next (verdict-tool.ts).
 // The caller's role comes from the plugin's database by its thread id.
 import { z } from "zod";
-import { ANCHOR_RULE, MAX_REPORTED, MAX_TRIAGED, MISSED_RULE, severitySchema } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, MAX_REPORTED, MISSED_RULE, severitySchema } from "../../model/verdict/review.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Review } from "./review.ts";
@@ -36,7 +36,6 @@ const reviewInputSchema = z.object({
         note: z.string().trim().min(1).max(1_000).describe("What you saw that shows it, in a line or two."),
       }),
     )
-    .max(MAX_TRIAGED)
     .default([])
     .describe("On a later round, one answer for every blocking finding of the earlier round your first message numbers, none skipped. One not fixed goes to the verifier again: don't report it again in findings. [] on a first round."),
 });
@@ -47,7 +46,7 @@ type Deps = { store: Pick<Store, "roleOfThread" | "check">; review: Pick<Review,
 export function registerReviewTool(bb: ToolsBb, { store, review }: Deps): void {
   bb.agents.registerTool({
     name: REVIEW,
-    description: "Your review of the diff your first message names: every finding, each with its file, line, severity and claim. Call it once, last, then stop.",
+    description: "Your review of the diff your first message names: every finding, each with its file, line, severity and claim. Call it last; when it refuses what you passed, correct that and call it again.",
     instructions: REVIEW_INSTRUCTIONS,
     presentation: { label: { pending: "Reporting the review", completed: "Reported the review" }, icon: { glyph: "Search" } },
     parameters: reviewInputSchema,
@@ -62,7 +61,7 @@ export function registerReviewTool(bb: ToolsBb, { store, review }: Deps): void {
       const received = await review.reported(check.id, threadId, input);
       if (received === "not-running") return failed(NOT_RUNNING);
       if (received === "recorded") return `Review recorded: ${recordedText(input)}. A verifier triages them next. Stop here; don't change anything in this environment.`;
-      if ("refused" in received) return failed(`${REVIEW} is refused and nothing was saved: ${received.refused}`);
+      if ("refused" in received) return failed(`${REVIEW} is refused and nothing was saved: ${received.refused}\n\nCorrect that and call ${REVIEW} again.`);
       return refusedBusy(REVIEW, received);
     },
   });
@@ -77,4 +76,4 @@ function recordedText({ findings, earlier }: ReviewInput): string {
 
 const NOT_RUNNING = `${REVIEW} is refused and nothing was saved: this review no longer waits for your findings (a newer handoff replaced it, or it ended without them). Stop here.`;
 
-const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} once, as your last action, then stop. Each finding names its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit), its claim and, on a later round, its origin: new, or missed when it sits on code an earlier round reviewed unchanged. [] when you found nothing. On a later round, earlier answers each blocking finding of the earlier round your first message numbers: fixed or not, with a note; [] on a first round. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} A verifier checks each finding: it rejects one that doesn't hold, anchors a must-fix to what it breaks, downgrades one that breaks none of the five, and confirms the rest. Every one that holds goes back to the agent in its automatic fix round. A turn that ends before you call it ends your review unheard, so run what you need in the foreground and don't end your turn to wait for it.`;
+const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} as your last action. When it refuses what you passed, nothing was saved: correct what it names and call it again. Stop once it records your review, or once it refuses because this review no longer waits for it. Each finding names its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit), its claim and, on a later round, its origin: new, or missed when it sits on code an earlier round reviewed unchanged. [] when you found nothing. On a later round, earlier answers each blocking finding of the earlier round your first message numbers: fixed or not, with a note; [] on a first round. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} A verifier checks each finding: it rejects one that doesn't hold, anchors a must-fix to what it breaks, downgrades one that breaks none of the five, and confirms the rest. Every one that holds goes back to the agent in its automatic fix round. A turn that ends before you call it ends your review unheard, so run what you need in the foreground and don't end your turn to wait for it.`;

@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { MAX_TRIAGED, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
+import { numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
@@ -35,7 +35,6 @@ const verdictInputSchema = z.object({
         reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five, or that it is marked missed."),
       }),
     )
-    .max(MAX_TRIAGED)
     .default([])
     .describe(`One entry for every finding of the reviewer's in your first message, none skipped, by its number. ${TRIAGE_RULE} [] when it lists none.`),
 });

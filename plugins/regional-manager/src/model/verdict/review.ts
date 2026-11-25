@@ -36,16 +36,13 @@ export const reviewFindingSchema = z.object({
 });
 export type ReviewFinding = z.infer<typeof reviewFindingSchema>;
 
-/** How many findings a reviewer reports at most, its own, in one review. */
-export const MAX_REPORTED = 50;
-
 /**
- * How many findings a check's verifier triages at most: a review's own and the earlier blocking
- * findings it answered not fixed, together. why its own limit: a round's blocking findings, each
- * answered and possibly carried on as unfixed, are at most this many, so every tool that takes them
- * by number takes this many (issue_review's earlier, issue_verdict's triage).
+ * How many findings a reviewer reports at most, its own, in one review. why only its own: the
+ * earlier blocking findings it answers, and carries on when not fixed, are as many as the earlier
+ * round had, so issue_review's earlier and issue_verdict's triage take the whole list, checked
+ * against it by number, and never use up these.
  */
-export const MAX_TRIAGED = 100;
+export const MAX_REPORTED = 50;
 
 /**
  * A later round's reviewer's answer on one of the earlier round's blocking findings, in their

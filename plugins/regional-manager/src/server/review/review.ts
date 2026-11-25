@@ -10,7 +10,7 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { sameModel, type Execution } from "../../model/agent/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
-import { MAX_TRIAGED } from "../../model/verdict/review.ts";
+import { numberedText } from "../../model/verdict/review.ts";
 import { unfixed } from "../../model/verdict/rounds/delta.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
 import { isRunning, listedThreads, stopThreads, type StopBb } from "../agents/threads.ts";
@@ -173,22 +173,29 @@ async function reviewerExecution(bb: CatalogBb, choice: VerifierChoice): Promise
  * A reviewer's report as its check stores it, or why it can't be taken: on a first round, every
  * finding new and no earlier answers; after a reviewed round, each of its blocking findings
  * answered once, by its number. Each answered not fixed joins the findings as unfixed, first, in
- * the blocking findings' order; with them, no more than the verifier triages (MAX_TRIAGED).
+ * the blocking findings' order. A refusal of the answers says what this review covers and lists
+ * the blocking findings, so a reviewer whose first message said otherwise, as one started before
+ * this release, can correct its report.
  */
 function reportOf({ findings, earlier }: ReviewInput, scope: Scope): ReviewReport | string {
   const blocking = scope.kind === "after" ? scope.blocking : [];
-  if (scope.kind === "first" && findings.some(({ origin }) => origin === "missed")) return "this is the issue's first reviewed round, so no earlier round reviewed any of this code: mark every finding new.";
+  if (scope.kind === "first" && findings.some(({ origin }) => origin === "missed")) return `no earlier round qualifies as the review base, so none reviewed any of this code: mark every finding new.`;
   const refused = numbersRefusal(
     earlier.map(({ finding }) => finding),
     blocking.length,
     { verb: "answer", each: "earlier blocking finding", all: "earlier blocking findings" },
   );
-  if (refused !== null) return refused;
+  if (refused !== null) return `${refused} ${scopeText(scope)}`;
   const answered = blocking.map((finding, i) => ({ finding, answer: answerTo(earlier, i + 1) }));
   const carried = answered.filter(({ answer }) => !answer.fixed).map(({ finding }) => unfixed(finding));
-  if (carried.length + findings.length > MAX_TRIAGED)
-    return `the verifier triages at most ${MAX_TRIAGED} findings, and ${carried.length} earlier blocking findings not fixed with your ${findings.length} come to ${carried.length + findings.length}: report at most ${MAX_TRIAGED - carried.length} of your own, the ones that matter most.`;
   return { findings: [...carried, ...findings], earlier: answered.map(({ answer }) => answer) };
+}
+
+/** What this review covers, and on a later round the blocking findings it answers, by number. */
+function scopeText(scope: Scope): string {
+  if (scope.kind === "first") return "No earlier round qualifies as the review base: this review covers the whole diff, with nothing earlier to answer.";
+  const blocking = scope.blocking.length === 0 ? "None of its findings failed its verdict." : `Its blocking findings, by number:\n\n${numberedText(scope.blocking)}`;
+  return `This review covers only the change since round ${scope.round}, the last round reviewed, at \`${scope.base.subject.headSha}\`. ${blocking}`;
 }
 
 /** The answer to the earlier blocking finding `number`. why throw: numbersRefusal refused a report that skips one. */

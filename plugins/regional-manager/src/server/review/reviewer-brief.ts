@@ -46,9 +46,9 @@ function wholeDiffText({ headSha, prUrl, defaultBranch }: Diff): string {
 
 /**
  * A later round's diff: only the change since round `round`'s commit, in the files this branch
- * changes, each hunk checked against the branch's own diff, so changes merged in from the default
- * branch are not reviewed; and what to do when that commit isn't in this environment, as after a
- * handover to a new branch.
+ * changes, leaving out only the changes of commits merged in from the default branch since then;
+ * every other change is the branch's own, a removal of its own earlier addition included. And what
+ * to do when that commit isn't in this environment, as after a handover to a new branch.
  */
 function deltaText({ headSha, prUrl, defaultBranch }: Diff, { round, base }: After): string {
   const baseSha = base.subject.headSha;
@@ -56,12 +56,23 @@ function deltaText({ headSha, prUrl, defaultBranch }: Diff, { round, base }: Aft
     defaultBranch === null
       ? "the files this branch changes against the default branch"
       : `the files this branch changes (\`git diff origin/${defaultBranch}...${headSha} --stat\`)`;
-  const own = defaultBranch === null ? "the branch's own diff against the default branch" : `\`git diff origin/${defaultBranch}...${headSha} -- <file>\``;
   return [
     `Round ${round} was the last round reviewed, at \`${baseSha}\`. Review only what changed since then, up to \`${headSha}\`, checked out in this environment: \`git diff ${baseSha} ${headSha}\`, limited to ${files}, so commits merged in from the default branch are not reviewed.${pullText(prUrl)}`,
-    `A file this branch changes can also hold a change merged in from the default branch since round ${round}. Check each hunk of \`git diff ${baseSha} ${headSha} -- <file>\` against ${own}: review only the hunks the branch's own diff also shows, and leave out any it doesn't, as the default branch's.`,
+    mergedText(baseSha, headSha, defaultBranch, round),
     `If \`git cat-file -e ${baseSha}\` fails, that commit isn't in this environment: review the whole diff instead${wholeCommand(headSha, defaultBranch)}, mark every finding new, and still answer each of round ${round}'s blocking findings below.`,
   ].join("\n\n");
+}
+
+/**
+ * How a later round's reviewer leaves out what the default branch changed: a file this branch
+ * changes can also hold a change merged in from it. Only a change shown to come from one of those
+ * merged commits is left out; every other is the branch's own, even one its own diff from the
+ * default branch no longer shows, as a removal of something it added before.
+ */
+function mergedText(baseSha: string, headSha: string, defaultBranch: string | null, round: number): string {
+  const own = "Review every other change in it: it is the branch's own, a removal of something the branch added before included, even when the branch's diff from the default branch no longer shows it.";
+  if (defaultBranch === null) return `A file this branch changes can also hold a change merged in from the default branch since round ${round}. Leave out only a change you can show came from a commit merged in from the default branch. ${own}`;
+  return `A file this branch changes can also hold a change merged in from the default branch since round ${round}. The commits merged in since then are the ones \`git log --oneline ${baseSha}..$(git merge-base ${headSha} origin/${defaultBranch})\` lists (none when it lists none). Leave out of \`git diff ${baseSha} ${headSha} -- <file>\` only a change one of those commits made, as \`git show <commit> -- <file>\` shows it. ${own}`;
 }
 
 /** What a later round's reviewer answers and marks: the earlier round's blocking findings, numbered, the findings already known, and how to mark its own. */
