@@ -60,7 +60,7 @@ test("another plugin reads each started manager's id, threadId, description and 
     const { threadId } = z.object({ threadId: z.string() }).parse(await loaded.callRpc("startCoordinator", { coordinatorId, request: newThreadRequest(goal) }));
     return { id: coordinatorId, threadId };
   };
-  const avatar = { kind: "blob", shape: "bear", hue: "violet", expression: "attentive" } as const;
+  const avatar = { kind: "blob", shape: "bear", hue: "purple", expression: "neutral" } as const;
   const described = await start({ ...profileNamed("PR Reviews"), description: "Reviews every open pull request.", avatar }, "Review the open pull requests");
   const bare = await start(profileNamed("Sidebar"), "Look after the sidebar");
 

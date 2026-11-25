@@ -61,8 +61,8 @@ its thread too. An archived or deleted thread drops its manager off the list.
 
 Each regional manager has a profile: a **name**, up to 80 characters, an
 optional **description**, up to 500, and an **avatar**: a still blob, one of
-21 shapes in one of Zeron's 12 identity colours, with a friendly face. A new
-manager starts with a look no other manager has while one of the 252 is free,
+21 shapes in one of 11 colours, with a neutral face. A new manager starts
+with a look no other manager has while one of the 231 is free,
 picked as Create saves it, so it can differ from the preview New shows;
 **Shuffle** picks another such look, and the **Shape** and **Colour** pickers
 choose one by hand, even one another manager has.
@@ -1283,9 +1283,8 @@ method, input, outputSchema })`.
   reader that shows open managers keeps the `threadId`s bb's thread list
   returns as unarchived (the Activity Sidebar does).
 - **`avatar`:** `shape` is one of blob-avatar's 21 shapes, `hue` one of the
-  12 identity hues (violet, blue, emerald, sky, amber, rose, lime, teal,
-  orange, indigo, pink, cyan), and `expression` one of neutral, happy,
-  content, curious, attentive or determined.
+  11 hues (white, brown, red, orange, amber, green, teal, blue, purple, pink,
+  gray), and `expression` always neutral.
 - **Freshness:** the read is one-shot, so another plugin isn't told when a
   profile changes. Read again on a timer, or when a regional manager's thread
   is created, renamed or archived.

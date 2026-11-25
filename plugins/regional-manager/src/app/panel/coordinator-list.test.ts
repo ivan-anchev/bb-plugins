@@ -14,7 +14,7 @@ const { CoordinatorList } = await import("./coordinator-list.tsx");
 
 afterEach(cleanup);
 
-const AVATAR = { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } as const;
+const AVATAR = { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } as const;
 const STARTED = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: AVATAR };
 const WAITING = { id: coordinatorIdSchema.parse("0b9c8e5d-7a3f-4e2b-9c1d-5f6a7b8c9d0e"), name: "Scout", description: null, avatar: AVATAR };
 

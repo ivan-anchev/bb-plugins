@@ -58,7 +58,7 @@ test("reads each started manager's id, thread, description and avatar from the R
   assert.deepEqual(await looks.read(), {
     looks: [
       { id: "mgr_1", threadId: "thr_pr", description: "Reviews every open pull request.", avatar: AVATAR },
-      { id: "mgr_2", threadId: "thr_sb", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "rose" } },
+      { id: "mgr_2", threadId: "thr_sb", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "red" } },
     ],
   });
   assert.deepEqual(calls, [{ pluginId: "regional-manager", method: "coordinators", input: {} }]);

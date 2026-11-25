@@ -1,12 +1,12 @@
-// Zeron's 12 identity hues: a project's tile hue, Zeron's hash of the project's key, and a regional
-// manager's avatar colour. bb's project has no repository identity, so the key is the project id, Zeron's own fallback.
+// Zeron's 12 identity hues: a project's tile hue, Zeron's hash of the project's key. bb's project has
+// no repository identity, so the key is the project id, Zeron's own fallback.
 
 // Zeron's order (DEFAULT_HUES), kept so a project's hue never changes.
 export const HUES = ["violet", "blue", "emerald", "sky", "amber", "rose", "lime", "teal", "orange", "indigo", "pink", "cyan"] as const;
 
 export type Hue = (typeof HUES)[number];
 
-/** Each hue's 500, which a tile and an avatar are filled with, and its 50, which a tile's initial is inked in (Zeron's palette). */
+/** Each hue's 500, which a tile is filled with, and its 50, which a tile's initial is inked in (Zeron's palette). */
 export const HUE_COLORS: Record<Hue, { fill: `#${string}`; ink: `#${string}` }> = {
   violet: { fill: "#9579ee", ink: "#f7f6fe" },
   blue: { fill: "#4b8ff3", ink: "#f2f7fe" },

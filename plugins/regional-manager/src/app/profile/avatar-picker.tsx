@@ -4,7 +4,7 @@
 // Shuffle waits while the other managers' looks aren't known (useTakenLooks): a look it picked then
 // could be theirs.
 import { useId, useMemo, useRef, type ReactNode } from "react";
-import { HUE_NAMES, HUES, randomStart, SHAPES, shuffledLook, type Avatar } from "../../model/profile/avatar.ts";
+import { EDGED_HUE, HUE_NAMES, HUES, randomStart, SHAPES, shuffledLook, type Avatar } from "../../model/profile/avatar.ts";
 import { Button } from "../ui/button.tsx";
 import { handFocusTo } from "../ui/focus-hand-off.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
@@ -33,7 +33,7 @@ export function AvatarPicker({ value, onChange }: { value: Avatar; onChange(next
         {(shape) => <AvatarBlob avatar={{ ...value, shape }} size="xs" />}
       </Choices>
       <Choices legend="Colour" options={HUE_NAMES} columns={6} chosen={value.hue} onChoose={(hue) => onChange({ ...value, hue })}>
-        {(hue) => <span className="size-4 rounded-full" style={{ backgroundColor: HUES[hue] }} />}
+        {(hue) => <span className={`size-4 rounded-full ${hue === EDGED_HUE ? "ring-1 ring-inset ring-input" : ""}`} style={{ backgroundColor: HUES[hue] }} />}
       </Choices>
     </div>
   );
@@ -48,8 +48,9 @@ type ChoicesProps<Option extends string> = { legend: string; options: readonly O
  * why each option a 44px cell around its 32px tile: a finger's tap target, with the tiles and the
  * artwork in them kept at their size; the cells' 6px edge, taken back by the grid's margin and the
  * legend's, keeps the tiles where they stood. why `columns`, the most a row holds: the 21 shapes in
- * three rows of seven and the 12 colours in two of six share one grid on a wide editor; a narrower
- * one fits fewer whole cells to a row, never a cell cut off at its edge.
+ * three rows of seven and the 11 colours in a row of six over one of five, as the user laid them out,
+ * share one grid on a wide editor; a narrower one fits fewer whole cells to a row, never a cell cut
+ * off at its edge.
  */
 function Choices<Option extends string>({ legend, options, columns, chosen, onChoose, children }: ChoicesProps<Option>) {
   const group = useId();
