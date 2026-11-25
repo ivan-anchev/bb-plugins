@@ -38,22 +38,24 @@ export function DecisionCard({ coordinatorId, decision, moved, status }: { coord
 
 /**
  * A question put to the user: open, a button per option that answers it; answered, its options with
- * the one chosen marked, and the answer. One component for both, so the card stays as the answer
- * lands, and focus on an option, which unmounts then, moves to the card, whoever answered: this
- * card, the Board, or another window.
+ * the one chosen marked, and the answer; lapsed, its options and why none takes an answer. One
+ * component for all three, so the card stays as the options go, and focus on an option, which
+ * unmounts then, moves to the card, whatever took them: an answer from this card, the Board or
+ * another window, or the issue's close.
  */
 function Question({ coordinatorId, decision, moved, status }: { coordinatorId: CoordinatorId; decision: Asked; moved: IssueStatus | null; status: IssueStatus }) {
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
   const card = useRef<HTMLElement>(null);
-  // Whether focus is on one of the options. why a ref: the answer that unmounts them fires no blur.
+  // Whether focus is on one of the options. why a ref: whatever unmounts them fires no blur.
   const onOption = useRef(false);
   const answered = decision.answer !== null;
+  const takesAnswer = stillWaits(decision, isClosed(status));
   // why an effect: focus is the browser's, and the option it was on is gone only once this commit lands.
   useLayoutEffect(() => {
-    if (!answered || !onOption.current) return;
+    if (takesAnswer || !onOption.current) return;
     onOption.current = false;
     if (document.activeElement === null || document.activeElement === document.body) card.current?.focus();
-  }, [answered]);
+  }, [takesAnswer]);
   return (
     <article ref={card} tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`}>
       <p className="rmi-decision-head">
@@ -65,7 +67,7 @@ function Question({ coordinatorId, decision, moved, status }: { coordinatorId: C
       <p className="rmi-decision-text">{decision.question}</p>
       {decision.answer !== null ? (
         <Answer decision={decision} answer={decision.answer} />
-      ) : stillWaits(decision, isClosed(status)) ? (
+      ) : takesAnswer ? (
         <Options decision={decision} sent={sent} send={send} onFocusChange={(focused) => (onOption.current = focused)} />
       ) : (
         <Lapsed decision={decision} status={status} />
