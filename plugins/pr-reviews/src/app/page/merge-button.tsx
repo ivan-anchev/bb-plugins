@@ -5,11 +5,13 @@
 // after a press held HOLD_MS, by pointer or by Enter or Space, as a wash fills it; a shorter press
 // asks to keep holding, in its tooltip, so the label never changes the button's width. While gh
 // runs, a spinner takes the glyph's place. A branch with conflicts can't merge: a warning takes
-// the glyph's place and the tooltip says why. GitHub's refusal shows under the button until
-// dismissed. Once GitHub has merged, the control says so until the re-read PR, now merged, drops it.
+// the glyph's place and the tooltip says why. A PR in a GitHub stack merges together with every
+// open PR below it, so its label counts them and its tooltip says where they land. GitHub's refusal
+// shows under the button until dismissed. Once GitHub has the merge, the control says what came of
+// it (merged, queued, or a stack merge still running on GitHub) until the re-read PR drops it.
 import { useState, type RefObject } from "react";
 import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
-import type { MergeMethod, PrDetail } from "../../contract.ts";
+import type { MergeMethod, MergeOutcome, PrDetail, PrStack } from "../../contract.ts";
 import { useLifetime } from "../lifetime.ts";
 import { useMergePr, type PrTarget } from "../queries.ts";
 import { buttonClass } from "../ui/button.tsx";
@@ -26,6 +28,12 @@ const METHODS = {
   rebase: { label: "Rebase and merge", description: "Adds the branch's commits to the base one by one, with no merge commit." },
 } as const satisfies Record<MergeMethod, { label: string; description: string }>;
 
+// What the control says once GitHub has the merge.
+const OUTCOMES = {
+  merged: { text: "Merged", icon: "Check" },
+  queued: { text: "Queued to merge", icon: "Clock" },
+  running: { text: "Merging on GitHub", icon: "Clock" },
+} as const satisfies Record<MergeOutcome, { text: string; icon: string }>;
 
 /** `focusAfter`: where focus goes once GitHub has merged, as the control is about to leave. */
 type MergeButtonProps = { target: PrTarget; pr: PrDetail; focusAfter: RefObject<HTMLElement | null> };
@@ -33,7 +41,7 @@ type MergeButtonProps = { target: PrTarget; pr: PrDetail; focusAfter: RefObject<
 export function MergeButton({ target, pr, focusAfter }: MergeButtonProps) {
   const [first, ...rest] = pr.mergeMethods;
   if (pr.state !== "OPEN" || first === undefined) return null;
-  return <MergeControl target={target} methods={[first, ...rest]} conflicting={pr.conflicting} headSha={pr.headSha} focusAfter={focusAfter} />;
+  return <MergeControl target={target} methods={[first, ...rest]} conflicting={pr.conflicting} headSha={pr.headSha} stack={pr.stack} focusAfter={focusAfter} />;
 }
 
 type MergeControlProps = {
@@ -42,37 +50,41 @@ type MergeControlProps = {
   conflicting: boolean;
   /** The head the page shows: GitHub merges only while the PR's head is still this one. */
   headSha: string;
+  stack: PrStack | null;
   focusAfter: RefObject<HTMLElement | null>;
 };
 
-function MergeControl({ target, methods, conflicting, headSha, focusAfter }: MergeControlProps) {
+function MergeControl({ target, methods, conflicting, headSha, stack, focusAfter }: MergeControlProps) {
   const [method, setMethod] = useState(methods[0]);
-  const [merged, setMerged] = useState(false);
+  const [outcome, setOutcome] = useState<MergeOutcome | null>(null);
   const merge = useMergePr();
   const life = useLifetime();
   const run = () => {
     if (merge.isPending) return;
     // The hook's error state reports a refusal; the rejection itself carries nothing more.
     merge.mutate({ ...target, method, headSha }).then(
-      life.bind(() => {
+      life.bind((merged) => {
         focusAfter.current?.focus();
-        setMerged(true);
+        setOutcome(merged.outcome);
       }),
       () => undefined,
     );
   };
   const hold = useHold(run);
 
-  if (merged) {
+  if (outcome !== null) {
+    const { text, icon } = OUTCOMES[outcome];
     return (
       <p role="status" className="flex h-7 items-center gap-1.5 px-1.5 text-xs text-muted-foreground">
-        <Icon name="Check" className="size-3.5 text-success-foreground" aria-hidden />
-        Merged
+        <Icon name={icon} className={`size-3.5 ${outcome === "merged" ? "text-success-foreground" : ""}`} aria-hidden />
+        {text}
       </p>
     );
   }
   const { label } = METHODS[method];
-  const hint = conflicting ? "This branch has conflicts to resolve before it can merge." : `${hold.nudged ? "Keep holding" : "Hold"} to ${label.toLowerCase()}`;
+  // Below the PR, the open PRs of its stack that merge with it.
+  const below = (stack?.merges.length ?? 1) - 1;
+  const hint = conflicting ? "This branch has conflicts to resolve before it can merge." : `${hold.nudged ? "Keep holding" : "Hold"} to ${label.toLowerCase()}${belowWords(below, stack)}`;
   return (
     <Popover
       open={merge.error !== null}
@@ -99,7 +111,7 @@ function MergeControl({ target, methods, conflicting, headSha, focusAfter }: Mer
                   className={`absolute inset-0 origin-left bg-pr-merged/20 transition-transform ${hold.holding ? "scale-x-100 ease-linear" : "scale-x-0 duration-150 ease-out"}`}
                 />
                 <MergeGlyph pending={merge.isPending} conflicting={conflicting} />
-                <span className="relative">{label}</span>
+                <span className="relative">{below > 0 ? `${label} ${below + 1} PRs` : label}</span>
               </button>
             )}
           </Tooltip>
@@ -122,6 +134,12 @@ function MergeControl({ target, methods, conflicting, headSha, focusAfter }: Mer
       </PopoverContent>
     </Popover>
   );
+}
+
+// The tooltip's words for the stacked PRs that merge with this one, and where they all land.
+function belowWords(below: number, stack: PrStack | null): string {
+  if (stack === null || below === 0) return "";
+  return ` this and the ${below === 1 ? "stacked pull request" : `${below} stacked pull requests`} below it into ${stack.base}`;
 }
 
 // The button's mark: the merge glyph, a spinner while gh runs, or a warning while conflicts block it.

@@ -2,16 +2,17 @@
 // PR's comments and timeline, posts the comments a reader chose to, writes their pending review,
 // changes or merges a PR, and maps every process failure to a refusal the app can show beside its
 // data or a kept draft.
+import { setTimeout as sleep } from "node:timers/promises";
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import type { CommentRequest } from "../comments/comment-schema.ts";
 import type { ReviewEvent } from "../comments/review-schema.ts";
 import type { ReviewThread } from "../comments/thread-schema.ts";
 import type { PrComments } from "../comments/timeline-schema.ts";
-import { MERGE_METHODS, type MergeMethod, type PrDetail, type PrSummary, type StateChange } from "../contract.ts";
+import { MERGE_METHODS, type MergeMethod, type MergeOutcome, type PrDetail, type PrStack, type PrSummary, type StateChange } from "../contract.ts";
 import { statusCheckRollupSchema } from "./checks.ts";
 import { commentApiArgs, conversationCommentApiArgs, replyApiArgs } from "./comment-args.ts";
-import { ghPostRefusalFor, ghRefusalFor, ghStateRefusalFor } from "./gh-refusal.ts";
+import { ghPostRefusalFor, ghRefusalFor, ghStackMergeRefusalFor, ghStateRefusalFor } from "./gh-refusal.ts";
 import { ghLabelSchema } from "./label.ts";
 import { parseHostCommandFailure, runHostCommand } from "./host-command.ts";
 import { INBOX_QUERY, inboxVariables, parseInboxSearch, parseStackContext, stackContextQuery, type FoundPr, type GitHubPr } from "./inbox-search.ts";
@@ -33,6 +34,7 @@ import {
 import { isReview, parseReviewCommentsPage, parseTimelinePage, REVIEW_COMMENTS_QUERY, TIMELINE_QUERY, toTimeline, type GhTimelineNode } from "./pr-timeline.ts";
 import type { Repo } from "./repo.ts";
 import { latestReviewsSchema, reviewRequestsSchema, toReviewers } from "./reviewers.ts";
+import { parsePrStack, parseStackMergeAnswer, pollMergeArgs, stacksArgs, submitMergeArgs, type StackMergeAnswer } from "./stack-merge.ts";
 import { mergeArgs, stateChangeArgs } from "./state-args.ts";
 
 const LIST_LIMIT = 200;
@@ -77,7 +79,7 @@ const ghDetailSchema = ghSummarySchema.extend({
 const ALLOWED_FIELDS = { merge: "mergeCommitAllowed", squash: "squashMergeAllowed", rebase: "rebaseMergeAllowed" } as const satisfies Record<MergeMethod, string>;
 const ghMergeSettingsSchema = z.record(z.enum(Object.values(ALLOWED_FIELDS)), z.boolean());
 
-const toDetail = (pr: z.infer<typeof ghDetailSchema>, settings: z.infer<typeof ghMergeSettingsSchema>): PrDetail => ({
+const toDetail = (pr: z.infer<typeof ghDetailSchema>, settings: z.infer<typeof ghMergeSettingsSchema>, stack: PrStack | null): PrDetail => ({
   ...toSummary(pr),
   createdAt: pr.createdAt,
   body: pr.body,
@@ -95,10 +97,17 @@ const toDetail = (pr: z.infer<typeof ghDetailSchema>, settings: z.infer<typeof g
   mergeMethods: MERGE_METHODS.filter((method) => settings[ALLOWED_FIELDS[method]]),
   // UNKNOWN: GitHub is still working it out, so the merge itself finds out.
   conflicting: pr.mergeable === "CONFLICTING",
+  stack,
 });
 
-/** `gh pr view --json` output for DETAIL_FIELDS and its repo's `gh repo view --json` merge settings, as the canonical PR. */
-export const parsePrDetail = (pr: unknown, settings: unknown): PrDetail => toDetail(ghDetailSchema.parse(pr), ghMergeSettingsSchema.parse(settings));
+/**
+ * `gh pr view --json` output for DETAIL_FIELDS, its repo's `gh repo view --json` merge settings and
+ * the stacks GitHub lists it in (stacksArgs; null where GitHub has no stacks), as the canonical PR.
+ */
+export function parsePrDetail(pr: unknown, settings: unknown, stacks: unknown): PrDetail {
+  const parsed = ghDetailSchema.parse(pr);
+  return toDetail(parsed, ghMergeSettingsSchema.parse(settings), stacks === null ? null : parsePrStack(stacks, parsed.number));
+}
 
 export async function listOpenPrs(repo: Repo): Promise<PrSummary[]> {
   const json = await runGh(["pr", "list", "-R", repo, "--state", "open", "--limit", String(LIST_LIMIT), "--json", SUMMARY_FIELDS.join(",")]);
@@ -119,11 +128,24 @@ export async function readInbox(repos: Repo[], now: number): Promise<{ found: Fo
 }
 
 export async function viewPr(repo: Repo, number: number): Promise<PrDetail> {
-  const [pr, settings] = await Promise.all([
+  const [pr, settings, stacks] = await Promise.all([
     runGh(["pr", "view", String(number), "-R", repo, "--json", DETAIL_FIELDS.join(",")]),
     runGh(["repo", "view", repo, "--json", Object.values(ALLOWED_FIELDS).join(",")]),
+    readStacks(repo, number),
   ]);
-  return parsePrDetail(JSON.parse(pr), JSON.parse(settings));
+  return parsePrDetail(JSON.parse(pr), JSON.parse(settings), stacks);
+}
+
+// why a 404 reads as no stacks: GitHub serves the stacks API only where stacks are on, so a host
+// without them, such as an older GitHub Enterprise Server, must not keep the PR from reading.
+async function readStacks(repo: Repo, number: number): Promise<unknown> {
+  try {
+    return JSON.parse(await runHostCommand("gh", stacksArgs(repo, number)));
+  } catch (error) {
+    const failure = parseHostCommandFailure(error);
+    if (failure.stderr.includes("(HTTP 404)")) return null;
+    throw ghRefusalFor(failure);
+  }
 }
 
 /** A PR's diff between the two commits it was read at. */
@@ -290,11 +312,51 @@ export async function changePrState(repo: Repo, number: number, change: StateCha
   }
 }
 
-/** Merges the PR by `method` as the reader's account, only while its head is still `headSha`. */
-export async function mergePr(repo: Repo, number: number, method: MergeMethod, headSha: string): Promise<void> {
+/**
+ * Merges the PR by `method` as the reader's account, only while its head is still `headSha`. A PR
+ * in a GitHub stack merges through the asynchronous merge API, with every open PR below it.
+ */
+export async function mergePr(repo: Repo, number: number, method: MergeMethod, headSha: string): Promise<MergeOutcome> {
+  // Read now, not taken from the page: the PR may have joined or left a stack since it loaded.
+  const stacks = await readStacks(repo, number);
+  if (stacks !== null && parsePrStack(stacks, number) !== null) return mergeStacked(repo, number, method, headSha);
   try {
     await runHostCommand("gh", mergeArgs(repo, number, method, headSha));
   } catch (error) {
     throw ghStateRefusalFor(parseHostCommandFailure(error));
   }
+  return "merged";
+}
+
+// How often to ask how a stack merge stands, and how long to wait for it: under the minute a gh
+// call gets, since the merge itself can take GitHub minutes. Past that it is left "running".
+const STACK_POLL_MS = 1_000;
+const STACK_WAIT_MS = 45_000;
+
+async function mergeStacked(repo: Repo, number: number, method: MergeMethod, headSha: string): Promise<MergeOutcome> {
+  const deadline = Date.now() + STACK_WAIT_MS;
+  let answer = await askStackMerge(submitMergeArgs(repo, number, method, headSha));
+  while (answer.kind === "pending") {
+    if (Date.now() >= deadline) return "running";
+    await sleep(STACK_POLL_MS);
+    answer = await askStackMerge(pollMergeArgs(repo, number, answer.uuid));
+  }
+  if (answer.kind === "failed") throw new Refusal({ code: "invalid", message: `GitHub didn't merge the stack, and merged none of it: ${answer.message}` });
+  return answer.outcome;
+}
+
+// A submit GitHub turns down still answers, on a failing gh's stdout.
+async function askStackMerge(args: string[]): Promise<StackMergeAnswer> {
+  let output: string;
+  try {
+    output = await runHostCommand("gh", args);
+  } catch (error) {
+    const failure = parseHostCommandFailure(error);
+    const answer = parseStackMergeAnswer(failure.stdout);
+    if (answer !== null) return answer;
+    throw ghStackMergeRefusalFor(failure);
+  }
+  const answer = parseStackMergeAnswer(output);
+  if (answer === null) throw new Refusal({ code: "invalid", message: "GitHub answered the stack merge in a way PR Reviews doesn't know. Refresh to see where it stands." });
+  return answer;
 }

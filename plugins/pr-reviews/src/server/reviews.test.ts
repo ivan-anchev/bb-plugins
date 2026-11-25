@@ -102,7 +102,7 @@ const PR: PrDetail = {
   baseRefName: "main",
   state: "OPEN",
   commits: ["head1", "head2"],
-  additions: 1, deletions: 1, checks: [], reviewers: [], labels: [], mergeMethods: ["merge"], conflicting: false,
+  additions: 1, deletions: 1, checks: [], reviewers: [], labels: [], mergeMethods: ["merge"], conflicting: false, stack: null,
 };
 const DIFF = "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\n";
 

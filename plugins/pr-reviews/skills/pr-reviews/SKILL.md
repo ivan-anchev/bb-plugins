@@ -166,6 +166,16 @@ review or check (branch protection), shows in GitHub's words under the button un
 Esc or click away. Once GitHub has merged, the button reads "Merged" until the badge turns
 purple Merged; the sidebar row follows as it does for a state change.
 
+A PR in a GitHub stack (made with `gh stack`) can't merge on its own: GitHub merges it only
+together with every open PR below it in the stack, all into the stack's base branch, in one step
+that lands all of them or none. So its button counts them ("Squash and merge 5 PRs"), and its
+tooltip says "Hold to squash and merge this and the 4 stacked pull requests below it into main".
+The bottom PR of a stack merges alone and reads as any other. The merge goes through GitHub's
+asynchronous merge API, which can take GitHub a while: the button waits up to about 45 seconds,
+then reads "Merging on GitHub" and the page catches up once GitHub is done. Where the base branch
+uses a merge queue, it reads "Queued to merge". When GitHub can't merge the stack, such as a draft
+or a failing rule anywhere in it, it says why in its own words and merged none of it.
+
 Under the header sit three tabs, **Summary**, **Changes** and **Guide**, as one segmented control:
 the selected tab is raised on a recessed track. A PR opens on Summary. The Changes tab carries the PR's lines added and removed,
 `Changes +A −D`, as GitHub counts them. The header and the tabs stay put, and each tab scrolls on its

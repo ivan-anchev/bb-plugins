@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { ghPostRefusalFor, ghRefusalFor, ghStateRefusalFor } from "./gh-refusal.ts";
+import { ghPostRefusalFor, ghRefusalFor, ghStackMergeRefusalFor, ghStateRefusalFor } from "./gh-refusal.ts";
 import { parseHostCommandFailure, type HostCommandFailure } from "./host-command.ts";
 import { experimental_PluginRpcRefusal as Refusal } from "@get-bb/plugin-sdk";
 
@@ -155,5 +155,14 @@ test("a comment on its own while the reader has a pending review says to add it 
   assert.deepEqual(refusalOf(recorded("comment-while-review-pending-422")), {
     code: "invalid",
     message: "You have a pending review on this pull request, so GitHub takes comments only into it. Add this to your review instead.",
+  });
+});
+
+test("a stack merge GitHub turns down without an answer says so in GitHub's words; one the timeout stopped may be merging", () => {
+  const refused = { code: 1, killed: false, stdout: JSON.stringify({ message: "Head sha didn't match current head", documentation_url: "https://docs.github.com/rest" }), stderr: "gh: Head sha didn't match current head (HTTP 422)\n" };
+  assert.deepEqual(refusalOf(ghStackMergeRefusalFor(parseHostCommandFailure(refused))), { code: "invalid", message: "GitHub refused the merge: Head sha didn't match current head" });
+  assert.deepEqual(refusalOf(ghStackMergeRefusalFor(recorded("timed-out"))), {
+    code: "invalid",
+    message: "GitHub didn't answer in time. The stack may be merging: Refresh to check before trying again.",
   });
 });
