@@ -29,8 +29,9 @@ const manager = (id: string, createdAt: number): ManagerModel => ({
 const PR = manager("PR Reviews", 1);
 const SIDEBAR = manager("Sidebar", 2);
 
-type Shown = { managers: readonly ManagerModel[]; view: View };
-const props = ({ managers, view }: Shown) => ({ managers, underWaySince: null, view, onView: () => {}, onNavigate: () => {}, threads: THREADS });
+/** `managers`: the list's rows; `pinned`: the grid's tiles, none unless given. */
+type Shown = { managers: readonly ManagerModel[]; pinned?: readonly ManagerModel[]; view: View };
+const props = ({ managers, pinned = [], view }: Shown) => ({ managers: { pinned, unpinned: managers }, underWaySince: null, view, onView: () => {}, onNavigate: () => {}, threads: THREADS });
 
 function mount(shown: Shown) {
   const slot = renderSlot({ component: SidebarViews }, props(shown));
@@ -196,4 +197,41 @@ test("a manager's row shows its name over its line, read out after its name; wit
   assert.equal(withLine.querySelector(".as-manager-line")?.textContent, "Two pull requests wait on you.");
   assert.equal(bare.querySelector(".as-manager-line"), null);
   assert.ok(slot.getByRole("link", { name: "PR Reviews, Two pull requests wait on you." }));
+});
+
+// ------------------------------------------------------------------ pinned managers
+
+const tiles = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLElement>(".as-pin"), (tile) => tile.getAttribute("aria-label"));
+const rows = (root: HTMLElement) => Array.from(root.querySelectorAll<HTMLElement>(".as-manager"), (row) => row.querySelector(".as-title-text")?.textContent);
+
+test("pinned managers stand as tiles in a Pinned group above the rows, each its avatar and its name, and leave the rows", () => {
+  const docs = manager("Docs", 3);
+  const { slot } = mount({ pinned: [docs, PR], managers: [SIDEBAR], view: "managers" });
+  const grid = slot.getByRole("group", { name: "Pinned" });
+  assert.deepEqual(tiles(grid), ["Docs", "PR Reviews"], "in the order given: bb's pin order");
+  assert.deepEqual(rows(slot.container), ["Sidebar"]);
+  const [first] = grid.querySelectorAll(".as-pin");
+  assert.deepEqual([first.querySelector(".as-avatar") !== null, first.querySelector(".as-pin-name")?.textContent], [true, "Docs"]);
+  const row = slot.container.querySelector(".as-manager");
+  assert.ok(row && grid.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING, "the grid comes first");
+});
+
+test("the open manager's tile is the current page; with nothing pinned there is no grid", async () => {
+  const { slot, show } = mount({ pinned: [{ ...PR, current: true }], managers: [SIDEBAR], view: "managers" });
+  assert.equal(slot.getByRole("link", { name: "PR Reviews" }).getAttribute("aria-current"), "page");
+
+  await show({ managers: [PR, SIDEBAR], view: "managers" });
+  assert.equal(slot.queryByRole("group", { name: "Pinned" }), null);
+  assert.deepEqual(rows(slot.container), ["PR Reviews", "Sidebar"]);
+});
+
+test("a focused manager pinned or unpinned (from its menu): focus follows it between its row and its tile", async () => {
+  const { slot, show } = mount({ managers: [PR, SIDEBAR], view: "managers" });
+  slot.getByRole("link", { name: "PR Reviews" }).focus();
+
+  await show({ pinned: [PR], managers: [SIDEBAR], view: "managers" });
+  assert.equal(document.activeElement, slot.container.querySelector(".as-pin"));
+
+  await show({ managers: [PR, SIDEBAR], view: "managers" });
+  assert.equal(document.activeElement, slot.getByRole("link", { name: "PR Reviews" }));
 });

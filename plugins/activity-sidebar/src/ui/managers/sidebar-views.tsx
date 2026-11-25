@@ -5,13 +5,13 @@
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { View } from "../../data/local-choice/choices.ts";
 import { OUT3 } from "../../list/motion-plan.ts";
-import type { ManagerModel } from "../../model/activity.ts";
+import type { Managers } from "../../model/activity.ts";
 import { ManagerList } from "./manager-list.tsx";
 import { PanelShown } from "../portal-scope.ts";
 import { panelId, tabId, ViewSegment } from "./view-segment.tsx";
 
 type Props = {
-  managers: readonly ManagerModel[];
+  managers: Managers;
   /** Since when each thread has worked, for a manager's card; null where no card shows (a compact viewport). */
   underWaySince: ReadonlyMap<string, number> | null;
   view: View;
@@ -28,7 +28,7 @@ const MOTION: CSSProperties & Record<"--as-ease-out", string> = { "--as-ease-out
 export function SidebarViews({ managers, underWaySince, view, onView, onNavigate, threads }: Props) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
-  const hasManagers = managers.length > 0;
+  const hasManagers = managers.pinned.length + managers.unpinned.length > 0;
   const focus = useFocusInside();
   const { shown, choose } = useShownView(hasManagers, view, onView, focus.inside);
   useFocusKeptWhenManagersGo(root, hasManagers, focus.inside);

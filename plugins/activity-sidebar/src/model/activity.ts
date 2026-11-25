@@ -57,11 +57,14 @@ export type ManagerModel = {
   project: string;
 };
 
+/** The open regional managers: those pinned in bb's pin order, shown only in the Managers view's grid; the rest oldest first. */
+export type Managers = { pinned: readonly ManagerModel[]; unpinned: readonly ManagerModel[] };
+
 /**
- * The sections; the open regional managers, oldest first; and the index of who hangs under whom they
- * were built from (the hover card's tree).
+ * The sections; the open regional managers; and the index of who hangs under whom they were built
+ * from (the hover card's tree).
  */
-export type ActivityModel = { sections: readonly Section[]; managers: readonly ManagerModel[]; index: ThreadIndex };
+export type ActivityModel = { sections: readonly Section[]; managers: Managers; index: ThreadIndex };
 
 export type ActivityInput = {
   threads: readonly PluginSidebarThread[];
@@ -126,19 +129,22 @@ export function buildActivity(input: ActivityInput): ActivityModel {
   const looks = new Map(input.looks.map((look) => [look.threadId, look]));
   const titles = new Map(input.threads.map((t) => [t.id, t.displayTitle]));
   const lines = new Map(input.lines.map((line) => [line.threadId, namingThreads(line.line, (id) => titles.get(id))]));
-  const managers = input.threads
-    .filter(isOpenManager)
-    .sort((a, b) => a.createdAt - b.createdAt || compare(a.id, b.id))
-    .map(
-      (thread): ManagerModel => ({
-        thread,
-        look: looks.get(thread.id) ?? null,
-        line: lines.get(thread.id) ?? null,
-        current: thread.id === input.activeThreadId || thread.id === currentRoot,
-        state: stateOf(index.liveState(thread), undefined, input.now),
-        project: projectNames.get(thread.projectId) ?? NO_PROJECT,
-      }),
-    );
+  const toManager = (thread: PluginSidebarThread): ManagerModel => ({
+    thread,
+    look: looks.get(thread.id) ?? null,
+    line: lines.get(thread.id) ?? null,
+    current: thread.id === input.activeThreadId || thread.id === currentRoot,
+    state: stateOf(index.liveState(thread), undefined, input.now),
+    project: projectNames.get(thread.projectId) ?? NO_PROJECT,
+  });
+  const open = input.threads.filter(isOpenManager);
+  const managers: Managers = {
+    pinned: open.filter((t) => t.isPinned).sort(byPinOrder).map(toManager),
+    unpinned: open
+      .filter((t) => !t.isPinned)
+      .sort((a, b) => a.createdAt - b.createdAt || compare(a.id, b.id))
+      .map(toManager),
+  };
   return { sections, managers, index };
 }
 
@@ -160,8 +166,8 @@ export function lastMoved(t: PluginSidebarThread): number {
 }
 
 /**
- * A regional manager not archived: listed among the managers, oldest first, so one started later joins
- * at the end and none above it ever moves.
+ * A regional manager not archived: listed among the managers. Unpinned, oldest first, so one started
+ * later joins at the end and none above it ever moves.
  */
 export function isOpenManager(t: PluginSidebarThread): boolean {
   return isListed(t) && isManagerThread(t) && !t.isArchived;

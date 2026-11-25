@@ -34,7 +34,7 @@ export function ManagerCardBody({ manager, underWaySince, onOpen }: Props) {
   return (
     <>
       <div className="as-card-head">
-        <ManagerAvatar avatar={look?.avatar ?? null} size={FACE} />
+        <ManagerAvatar avatar={look?.avatar ?? null} following="off" size={FACE} />
         <div className="as-card-title">{t.displayTitle}</div>
       </div>
       {look !== null && look.description !== null && <p className="as-card-desc">{look.description}</p>}

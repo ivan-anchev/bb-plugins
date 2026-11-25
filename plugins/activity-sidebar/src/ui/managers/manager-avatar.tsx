@@ -1,9 +1,11 @@
-// A regional manager's avatar: a SIZE-square frame holding its still blob in its hue, drawn as the
+// A regional manager's avatar: a SIZE-square frame holding its blob in its hue, drawn as the
 // Regional Manager plugin draws it, or, while its look is unknown, a plain disc filling the frame.
-// The row's text aligns to the frame, whatever the shape paints inside it.
+// The row's text aligns to the frame, whatever the shape paints inside it. Still, unless its row or
+// tile has the pointer (use-following.ts).
 import { BlobAvatar } from "blob-avatar";
 import type { CSSProperties } from "react";
 import { MANAGER_HUE_COLORS, type Avatar } from "../../model/manager-look.ts";
+import type { Following } from "./use-following.ts";
 
 // why: the size the name's line and the reply's line span exactly, with the gap between them (app.css .as-manager-words).
 const SIZE = 36;
@@ -20,17 +22,18 @@ const REACH = 67;
 const EDGE = ["0.5px 0", "-0.5px 0", "0 0.5px", "0 -0.5px"].map((offset) => `drop-shadow(${offset} 0 var(--input))`).join(" ");
 
 /**
- * why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside
- * it says who this is. `size`: the frame's side; a row's unless given (a card's is smaller).
+ * why paused: a still picture, as the Regional Manager plugin shows it, but while it follows the cursor
+ * or eases home from it: blob-avatar holds a paused blob still, its gaze included. why aria-hidden: the
+ * name beside it says who this is. `size`: the frame's side; a row's unless given (a tile's is larger, a card's smaller).
  */
-export function ManagerAvatar({ avatar, size = SIZE }: { avatar: Avatar | null; size?: number }) {
+export function ManagerAvatar({ avatar, following, size = SIZE }: { avatar: Avatar | null; following: Following; size?: number }) {
   const frame: CSSProperties = { width: size, height: size };
   if (avatar === null) return <span className="as-avatar as-avatar-plain" style={frame} aria-hidden />;
   const box = (size * 200) / (2 * REACH);
   const place: CSSProperties = { position: "absolute", left: (size - box) / 2, top: (size - box) / 2, filter: avatar.hue === "white" ? EDGE : undefined };
   return (
     <span className="as-avatar" style={frame} aria-hidden>
-      <BlobAvatar shape={avatar.shape} color={MANAGER_HUE_COLORS[avatar.hue]} expression={avatar.expression} animation="idle" paused size={box} style={place} />
+      <BlobAvatar shape={avatar.shape} color={MANAGER_HUE_COLORS[avatar.hue]} expression={avatar.expression} animation="idle" paused={following === "off"} gaze={following === "on"} size={box} style={place} />
     </span>
   );
 }

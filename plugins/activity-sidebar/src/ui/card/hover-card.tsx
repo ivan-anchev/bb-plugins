@@ -118,14 +118,16 @@ export function HoverCard({ scroller, listFocus, cardOf, focusShowsAtOnce }: Pro
 /**
  * The row's box, read each time Radix places the card. A new anchor when the row's place changes, so
  * Radix places the card again; it reads the row where its glide starts, not where it lands. The last
- * box read stands in once the row unmounts.
+ * box read stands in once the row unmounts. An item side by side with others (a tile in the Managers
+ * view's grid) spans its lane (`[data-card-lane]`) across, so its card stands where a row's does,
+ * beside the list and level with the item, never over its neighbours.
  */
 function RowAnchor({ scroller, cardKey, place }: { scroller: RefObject<HTMLElement | null>; cardKey: string; place: string }) {
   const anchor = useMemo(() => {
     let last = new DOMRect();
     const getBoundingClientRect = () => {
       const row = scroller.current?.querySelector(`[data-card="${CSS.escape(cardKey)}"]`);
-      if (row) last = row.getBoundingClientRect();
+      if (row) last = spanned(row);
       return last;
     };
     return { current: { getBoundingClientRect } };
@@ -264,6 +266,13 @@ function tabOut(e: ReactKeyboardEvent<HTMLElement>, listFocus: ListFocus) {
  */
 function tabStops(card: HTMLElement): HTMLElement[] {
   return Array.from(card.querySelectorAll<HTMLElement>('[tabindex="0"], button, a[href]')).filter((stop) => stop.checkVisibility());
+}
+
+/** The item's box, across its lane when it stands in one. */
+function spanned(item: Element): DOMRect {
+  const box = item.getBoundingClientRect();
+  const lane = item.closest("[data-card-lane]")?.getBoundingClientRect();
+  return lane === undefined ? box : new DOMRect(lane.left, box.top, lane.width, box.height);
 }
 
 function underPointer(point: Point): Under {
