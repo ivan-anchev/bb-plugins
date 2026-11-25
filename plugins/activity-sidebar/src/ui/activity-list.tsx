@@ -6,6 +6,7 @@ import { underWaySince } from "../card/under-way.ts";
 import { parseCompact, parseFilter, parseOpen, parseView } from "../data/local-choice/choices.ts";
 import { useLocalChoice } from "../data/local-choice/use-local-choice.ts";
 import { useArchivedCount } from "../data/use-archived-count.ts";
+import { useManagerLines } from "../data/use-manager-lines.ts";
 import { useManagerLooks } from "../data/use-manager-looks.ts";
 import { useMinute } from "../data/use-minute.ts";
 import { useSleepUpkeep } from "../data/use-sleep-upkeep.ts";
@@ -37,10 +38,12 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   // why: a project removed since the choice was made narrows nothing.
   const chosen = live.projects.find((p) => p.id === filter) ?? null;
   const archivedCount = useArchivedCount(chosen?.id ?? null);
-  const looks = useManagerLooks(live.threads.some(isOpenManager));
+  const hasManagers = live.threads.some(isOpenManager);
+  const looks = useManagerLooks(hasManagers);
+  const lines = useManagerLines(hasManagers);
   const model = useMemo(
-    () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, held, now, activeThreadId, filter: chosen?.id ?? null, looks }),
-    [live.threads, live.projects, sleeps.sleeps, held, now, activeThreadId, chosen, looks],
+    () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, held, now, activeThreadId, filter: chosen?.id ?? null, looks, lines }),
+    [live.threads, live.projects, sleeps.sleeps, held, now, activeThreadId, chosen, looks, lines],
   );
   const items = useMemo(
     () =>

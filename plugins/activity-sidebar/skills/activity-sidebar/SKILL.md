@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, a Managers | Threads segment at the top while there are regional managers (Managers lists each by its avatar, name and description, oldest first), the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what the Managers | Threads segment and the Managers view show, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, a Managers | Threads segment at the top while there are regional managers (Managers lists each by its avatar, name and the first sentence of its latest message, oldest first), the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what the Managers | Threads segment and the Managers view show, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -43,7 +43,13 @@ the sidebar, and each side owns the whole list under it.
 
 - **Managers** lists your regional managers, oldest first, so a new one joins
   at the end and none above it moves. A row shows only the manager's avatar,
-  its name (its thread's title) and its description, up to two lines: no
+  its name (its thread's title) and, under it, one line: the first sentence
+  of the manager's own latest reply, as plain text (markdown stripped), fading
+  at its end when it doesn't fit. Tool calls, empty replies, subagents' replies
+  and messages sent to the manager (yours, or the Regional Manager plugin's
+  wake-ups) never show there. A manager with no reply yet shows its name
+  alone, centred on its avatar. The line changes as soon as the manager posts
+  a new reply, and keeps its quiet colour when the row is selected. No
   agent, project, state, age, subthread count or pull request. Click a row to
   open the manager's thread; right-click it (or press the Menu key or
   Shift+F10) for bb's own thread menu, without Sleep. There is no hover card.
@@ -57,10 +63,10 @@ the sidebar, and each side owns the whole list under it.
 - With no open managers there is no segment, and the sidebar is the threads'
   list alone. When the first one starts while you're working in that list,
   Threads stays on screen until you pick Managers.
-- The avatar and description come from the Regional Manager plugin. They are
-  read again when a manager's thread is created, renamed or archived, and every
-  minute, so an edit shows within about a minute. If the plugin can't be read,
-  each manager shows with its name and a plain disc.
+- The avatar comes from the Regional Manager plugin. It is read again when a
+  manager's thread is created, renamed or archived, and every minute, so an
+  edit shows within about a minute. If the plugin can't be read, each manager
+  shows a plain disc.
 
 ## Folding, the project filter and Compact
 

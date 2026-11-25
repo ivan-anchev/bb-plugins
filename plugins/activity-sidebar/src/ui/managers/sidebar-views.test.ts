@@ -21,7 +21,7 @@ const THREADS = createElement("div", { className: "as-scroller", tabIndex: 0, "d
 const manager = (id: string, createdAt: number): ManagerModel => ({
   thread: thread(id, { originPluginId: "regional-manager", createdAt, displayTitle: id }),
   avatar: null,
-  description: null,
+  line: null,
   current: false,
 });
 const PR = manager("PR Reviews", 1);
@@ -182,4 +182,16 @@ test("focus outside the sidebar stays where it is when the last manager goes", a
   await show({ managers: [], view: "managers" });
   assert.equal(document.activeElement, elsewhere);
   elsewhere.remove();
+});
+
+test("a manager's row shows its name over its line, read out after its name; with no line, its name alone", () => {
+  const { slot } = mount({ managers: [{ ...PR, line: "Two pull requests wait on you." }, SIDEBAR], view: "managers" });
+  const [withLine, bare] = slot.container.querySelectorAll<HTMLElement>(".as-manager");
+  assert.deepEqual(
+    [withLine, bare].map((row) => Array.from(row.querySelectorAll(".as-title-text"), (text) => text.textContent)),
+    [["PR Reviews", "Two pull requests wait on you."], ["Sidebar"]],
+  );
+  assert.equal(withLine.querySelector(".as-manager-line")?.textContent, "Two pull requests wait on you.");
+  assert.equal(bare.querySelector(".as-manager-line"), null);
+  assert.ok(slot.getByRole("link", { name: "PR Reviews, Two pull requests wait on you." }));
 });

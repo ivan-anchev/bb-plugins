@@ -31,7 +31,7 @@ const THREADS = [
 ];
 
 function mount(view: View) {
-  const model = buildActivity({ threads: THREADS, projects: PROJECTS, sleeps: new Map(), held: new Set(), now: 100, activeThreadId: null, filter: null, looks: [] });
+  const model = buildActivity({ threads: THREADS, projects: PROJECTS, sleeps: new Map(), held: new Set(), now: 100, activeThreadId: null, filter: null, looks: [], lines: [] });
   const threads = createElement(ListViewport, {
     items: listItems(model.sections, listView()),
     card: { index: model.index, underWaySince: new Map() },

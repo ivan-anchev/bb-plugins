@@ -1,4 +1,4 @@
-// The regional managers' avatars and descriptions, as the server last read them from the Regional
+// The regional managers' avatars, as the server last read them from the Regional
 // Manager plugin; read again when a manager's thread changes and every minute (server/manager-looks.ts).
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { activitySidebarContract } from "../contract.ts";

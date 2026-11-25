@@ -1,10 +1,12 @@
 // A regional manager's avatar: its still blob in its hue, drawn as the Regional Manager plugin draws
-// it; or, while its look is unknown, a plain disc the same size.
+// it; or, while its look is unknown, a plain disc the same size. Every avatar is SIZE square.
 import { BlobAvatar } from "blob-avatar";
 import type { Avatar } from "../../model/manager-look.ts";
 import { HUE_COLORS } from "../../model/project-hue.ts";
 
-const SIZE = 28;
+// why: the name's line (18px), a 2px gap and the reply's line (16px) span it exactly, so the name's top
+// meets the avatar's and the line's bottom meets its bottom (app.css .as-manager-words).
+const SIZE = 36;
 
 // why: blob-avatar draws in a 200-unit box whose body spans about 136 of it, so a box this much
 // larger, its overflow given back by negative margins, makes the body fill the size asked for.
@@ -12,7 +14,7 @@ const BOX = Math.round(SIZE * (200 / 136));
 
 // why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside it says who this is.
 export function ManagerAvatar({ avatar }: { avatar: Avatar | null }) {
-  if (avatar === null) return <span className="as-avatar-plain" aria-hidden />;
+  if (avatar === null) return <span className="as-avatar-plain" style={{ width: SIZE, height: SIZE }} aria-hidden />;
   return (
     <BlobAvatar
       aria-hidden
