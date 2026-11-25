@@ -13,7 +13,7 @@ import { CardGlyph } from "../../card/card-glyphs.tsx";
 import { Line, StateLineView } from "../../card/card-lines.tsx";
 import { useFocusKept } from "../../card/use-focus-kept.ts";
 import { IssueSection } from "./issue-section.tsx";
-import { ManagerAvatar } from "../manager-avatar.tsx";
+import { ManagerAvatar } from "../avatar/manager-avatar.tsx";
 
 /** The card's avatar, beside the title's first line. */
 const FACE = 20;
@@ -34,7 +34,7 @@ export function ManagerCardBody({ manager, underWaySince, onOpen }: Props) {
   return (
     <>
       <div className="as-card-head">
-        <ManagerAvatar avatar={look?.avatar ?? null} size={FACE} />
+        <ManagerAvatar avatar={look?.avatar ?? null} following="off" size={FACE} />
         <div className="as-card-title">{t.displayTitle}</div>
       </div>
       {look !== null && look.description !== null && <p className="as-card-desc">{look.description}</p>}

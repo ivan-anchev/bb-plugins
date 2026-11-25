@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
-import { buildActivity, sleepersAskingForYou, type ActivityInput, type SectionKey } from "./activity.ts";
+import { buildActivity, sleepersAskingForYou, type ActivityInput, type ManagerModel, type SectionKey } from "./activity.ts";
 import { AVATAR, project, thread, WORKING } from "./fixtures.ts";
 
 const NOW = 10 * 3_600_000;
@@ -294,7 +294,7 @@ test("a row's detail says its machine and its branch, each when bb names one", (
 
 const MANAGER = { originPluginId: "regional-manager" } as const satisfies Partial<PluginSidebarThread>;
 
-const managerIds = (built: ReturnType<typeof model>): string[] => built.managers.map((m) => m.thread.id);
+const managerIds = (built: ReturnType<typeof model>): string[] => [...built.managers.pinned, ...built.managers.unpinned].map((m) => m.thread.id);
 
 test("an open regional manager leaves Activity, Working and Asleep, and every other section, for the managers", () => {
   const threads = [
@@ -307,7 +307,26 @@ test("an open regional manager leaves Activity, Working and Asleep, and every ot
   const built = model(threads, { sleeps: new Map([["sleeping", { threadId: "sleeping", until: NOW + 3_600_000 }]]) });
   assert.deepEqual(ids(built.sections, "activity"), ["plain"]);
   for (const key of ["pinned", "working", "asleep", "archived"] as const) assert.deepEqual(ids(built.sections, key), [], key);
-  assert.deepEqual(managerIds(built), ["idle", "working", "sleeping", "pinned"]);
+  assert.deepEqual(managerIds(built), ["pinned", "idle", "working", "sleeping"]);
+});
+
+test("pinned managers stand only among the pinned, in bb's pin order; the rest stay oldest first", () => {
+  const built = model([
+    thread("first-pinned", { ...MANAGER, createdAt: 1, isPinned: true, pinnedAt: 10 }),
+    thread("old", { ...MANAGER, createdAt: 2 }),
+    thread("latest-pinned", { ...MANAGER, createdAt: 3, isPinned: true, pinnedAt: 30 }),
+    thread("middle-pinned", { ...MANAGER, createdAt: 4, isPinned: true, pinnedAt: 20 }),
+    thread("new", { ...MANAGER, createdAt: 5 }),
+  ]);
+  const ids = (managers: readonly ManagerModel[]) => managers.map((m) => m.thread.id);
+  assert.deepEqual(ids(built.managers.pinned), ["latest-pinned", "middle-pinned", "first-pinned"], "the latest pin first, as bb orders pins");
+  assert.deepEqual(ids(built.managers.unpinned), ["old", "new"]);
+
+  const keyed = model([
+    thread("key-b", { ...MANAGER, createdAt: 1, isPinned: true, pinnedAt: 30, pinSortKey: "b" }),
+    thread("key-a", { ...MANAGER, createdAt: 2, isPinned: true, pinnedAt: 10, pinSortKey: "a" }),
+  ]);
+  assert.deepEqual(ids(keyed.managers.pinned), ["key-a", "key-b"], "the user's own order, by its keys");
 });
 
 test("an archived regional manager stays an ordinary row on Archived, not among the managers", () => {
@@ -341,20 +360,20 @@ test("a manager shows its look and its line; without them (unread, failed, or no
   const threads = [thread("known", { ...MANAGER, createdAt: 1, displayTitle: "PR Reviews" }), thread("unknown", { ...MANAGER, createdAt: 2, displayTitle: "Sidebar" })];
   const look = { id: "mgr_1", threadId: "known", description: "Reviews every open pull request.", avatar: AVATAR };
   const lines = [{ threadId: "known", line: "Two pull requests wait on you." }];
-  const [known, unknown] = model(threads, { looks: [look], lines, activeThreadId: "unknown" }).managers;
+  const [known, unknown] = model(threads, { looks: [look], lines, activeThreadId: "unknown" }).managers.unpinned;
   assert.deepEqual({ ...known, thread: known.thread.displayTitle }, { thread: "PR Reviews", look, line: "Two pull requests wait on you.", current: false, state: null, project: "bb-plugins" });
   assert.deepEqual({ ...unknown, thread: unknown.thread.displayTitle }, { thread: "Sidebar", look: null, line: null, current: true, state: null, project: "bb-plugins" });
 });
 
 test("a manager's card says its state, as a row would, and its project, or that it has none", () => {
-  const [working, elsewhere] = model([thread("working", { ...MANAGER, ...WORKING, createdAt: 1 }), thread("elsewhere", { ...MANAGER, createdAt: 2, projectId: "prj_gone" })]).managers;
+  const [working, elsewhere] = model([thread("working", { ...MANAGER, ...WORKING, createdAt: 1 }), thread("elsewhere", { ...MANAGER, createdAt: 2, projectId: "prj_gone" })]).managers.unpinned;
   assert.deepEqual([working.state, working.project], ["working", "bb-plugins"]);
   assert.deepEqual([elsewhere.state, elsewhere.project], [null, "No project"]);
 });
 
 test("with no managers there are none, and the sections are exactly as without them", () => {
   const built = model([thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1, ...WORKING })]);
-  assert.deepEqual(built.managers, []);
+  assert.deepEqual(built.managers, { pinned: [], unpinned: [] });
   assert.deepEqual(ids(built.sections, "activity"), ["a"]);
   assert.deepEqual(ids(built.sections, "working"), ["b"]);
 });

@@ -3,9 +3,10 @@ Experimental: it may break with a bb update.
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. While you have regional
-managers, a Managers | Threads segment tops it: Managers lists them oldest
-first by their avatar, name and the first sentence of their latest message,
-and Threads is the list without them. A filter narrows it to one
+managers, a Managers | Threads segment tops it: Managers shows the pinned
+ones as a grid of avatars above the rest, listed oldest first by their avatar,
+name and the first sentence of their latest message, and Threads is the list
+without them. A filter narrows it to one
 project, and rows are one line or two. Each row shows the thread's agent, its project's coloured initial, its
 title, its pull request, how many threads run under it, and its state or how
 long ago it last moved. Right-click a row for bb's own thread menu, with Sleep (or
@@ -20,6 +21,10 @@ its plan while it works, and a tree of its subthreads to open.
   the top that switches the whole list. Managers shows each regional manager
   by its avatar, its name and, under it, the first sentence of its latest
   message (one line), oldest first; a click opens its thread and right-click opens bb's thread menu.
+  Pinned managers leave that list for a grid of tiles above it, at most three
+  a row: each its avatar and its name, in bb's pin order, parted from the list
+  by a gap. A manager's avatar follows the pointer while it rests on its row
+  or tile.
   Threads is everything below, with the open managers taken out of every
   section but Archived. The choice is remembered in this browser; ← and →
   move between the tabs.

@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, a Managers | Threads segment at the top while there are regional managers (Managers lists each by its avatar, name and the first sentence of its latest message, oldest first), the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what the Managers | Threads segment and the Managers view show, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, a Managers | Threads segment at the top while there are regional managers (Managers shows pinned managers as a grid of avatar tiles, then lists the rest by avatar, name and the first sentence of the latest message, oldest first; an avatar follows the pointer while it is on its row or tile), the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what the Managers | Threads segment and the Managers view show, how pinned managers and their grid work, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -57,6 +57,24 @@ the sidebar, and each side owns the whole list under it.
   agent, project, state, age, subthread count or pull request. Click a row to
   open the manager's thread; right-click it (or press the Menu key or
   Shift+F10) for bb's own thread menu, without Sleep.
+- **Pinned managers** (Pin in that menu) leave the list for a grid at the
+  top of Managers, in bb's pin order (the latest pin first unless you
+  reordered pins in bb). A tile is the manager's avatar, a little larger than
+  a row's, with its name under it on one line: centred when it fits, fading at
+  its end when it doesn't, and running through to its end under the pointer or
+  with keyboard focus, as a row's name does. The grid has at most three tiles
+  a row, two when the sidebar is narrower than about 270px; one or two tiles
+  keep a column's width and sit at the left. Only a gap parts it from the
+  list: no title, no line. With nothing pinned there is no grid. A tile
+  behaves as a row does: a click opens the thread, right-click or the Menu key
+  opens bb's thread menu (Unpin sends it back to the list), and resting on it
+  opens the manager's card beside the list. Pinning or unpinning moves the
+  avatar between its row and its tile, growing or shrinking, while the rest
+  slide to their places; with Reduce motion on, it all changes at once.
+- **Avatars follow the pointer.** While the pointer is on a manager's row or
+  tile, that manager's blob turns its eyes to follow it, and eases them home
+  once the pointer leaves; every other avatar, and the one on the card, stays
+  still. Touch never sets it off, and with Reduce motion on, no avatar moves.
 - **A manager's card.** Rest the pointer on a manager's row, or move to it
   with ↑/↓ (the card opens at once from the keyboard), and its card opens
   beside it: its avatar and name, its description when it has one, its state
@@ -281,7 +299,9 @@ characters.
 - Tab to the list, then use ↑ and ↓ to move between rows and section titles.
   Enter opens a row or folds a title. The filter button is the next Tab stop.
   With managers, the segment's selected tab is the Tab stop before the list;
-  in Managers, ↑ and ↓ move between the managers.
+  in Managers, ← and → move along the pinned grid, and ↑ and ↓ move a grid
+  row at a time, then on through the managers' rows; from the first row, ↑
+  goes back to the grid.
 
 ## Switching back
 
