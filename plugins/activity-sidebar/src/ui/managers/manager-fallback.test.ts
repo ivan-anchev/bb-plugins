@@ -5,7 +5,7 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { cleanup } from "@testing-library/react";
 import { buildActivity } from "../../model/activity.ts";
 import { COORDINATORS, MALFORMED_COORDINATORS, project, thread } from "../../model/fixtures.ts";
-import { openManagerLooks } from "../../server/manager-looks.ts";
+import { openManagerLooks } from "../../server/managers/manager-looks.ts";
 
 // From the Regional Manager plugin's answer to the Managers view's rows: what each manager shows when
 // that answer is good, and that it falls back to its name and a plain avatar

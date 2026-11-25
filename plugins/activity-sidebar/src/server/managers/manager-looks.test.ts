@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, mock, test } from "node:test";
-import { MANAGER_LOOKS_TAG } from "../contract.ts";
-import { AVATAR, COORDINATORS as ANSWER, MALFORMED_COORDINATORS as MALFORMED } from "../model/fixtures.ts";
+import { MANAGER_LOOKS_TAG } from "../../contract.ts";
+import { AVATAR, COORDINATORS as ANSWER, MALFORMED_COORDINATORS as MALFORMED } from "../../model/fixtures.ts";
 import { openManagerLooks } from "./manager-looks.ts";
 
 type Thread = { originPluginId: string | null; parentThreadId: string | null; isArchived?: boolean };

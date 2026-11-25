@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MANAGER_LINES_TAG } from "../contract.ts";
+import { MANAGER_LINES_TAG } from "../../contract.ts";
 import { openManagerLines } from "./manager-lines.ts";
 
 // bb's events as a list per thread, answering `events.list` as bb does: only the types asked for,

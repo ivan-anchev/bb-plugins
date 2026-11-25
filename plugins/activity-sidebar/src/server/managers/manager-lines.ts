@@ -5,9 +5,9 @@
 // the manager's line.
 import type { BbPluginApi, PluginBbSdk } from "@get-bb/plugin-sdk";
 import { z } from "zod";
-import { MANAGER_LINES_TAG } from "../contract.ts";
-import { isManagerThread, REGIONAL_MANAGER } from "../model/manager-look.ts";
-import { firstSentence, type ManagerLine } from "../model/manager-line.ts";
+import { MANAGER_LINES_TAG } from "../../contract.ts";
+import { isManagerThread, REGIONAL_MANAGER } from "../../model/manager-look.ts";
+import { firstSentence, type ManagerLine } from "../../model/manager-line.ts";
 
 /** How many completed items one read of a thread's events asks for. */
 const PAGE = 50;

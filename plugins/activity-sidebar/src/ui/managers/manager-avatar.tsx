@@ -4,8 +4,7 @@ import { BlobAvatar } from "blob-avatar";
 import type { Avatar } from "../../model/manager-look.ts";
 import { HUE_COLORS } from "../../model/project-hue.ts";
 
-// why: the name's line (18px), a 2px gap and the reply's line (16px) span it exactly, so the name's top
-// meets the avatar's and the line's bottom meets its bottom (app.css .as-manager-words).
+// why: the size the name's line and the reply's line span exactly, with the gap between them (app.css .as-manager-words).
 const SIZE = 36;
 
 // why: blob-avatar draws in a 200-unit box whose body spans about 136 of it, so a box this much

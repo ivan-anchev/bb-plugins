@@ -3,8 +3,8 @@
 // plugin's own invalidations never reach this one, so a manager's thread created, renamed or archived
 // marks it stale, and so does every minute (an avatar edit renames nothing).
 import type { BbPluginApi, PluginBbSdk } from "@get-bb/plugin-sdk";
-import { MANAGER_LOOKS_TAG } from "../contract.ts";
-import { coordinatorsReadSchema, isManagerThread, REGIONAL_MANAGER, type ManagerLook } from "../model/manager-look.ts";
+import { MANAGER_LOOKS_TAG } from "../../contract.ts";
+import { coordinatorsReadSchema, isManagerThread, REGIONAL_MANAGER, type ManagerLook } from "../../model/manager-look.ts";
 
 /** The events besides creation that can add or remove a manager; server.ts hands each to `changed`. */
 export const MANAGER_EVENTS = ["thread.archived", "thread.unarchived", "thread.deleted"] as const;

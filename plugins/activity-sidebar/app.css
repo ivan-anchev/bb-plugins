@@ -216,6 +216,8 @@
   border-radius: 999px;
   background: var(--muted);
 }
+/* why: the name's 18px line, this 2px gap and the reply's 16px line make the avatar's 36px
+   (manager-avatar.tsx SIZE), so the name's top meets its top and the line's bottom its bottom. */
 .as-manager-words {
   flex: 1 1 auto;
   min-width: 0;

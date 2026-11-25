@@ -3,8 +3,8 @@
 import type { BbPluginApi, ExperimentalPluginRpcHandlersWithContext } from "@get-bb/plugin-sdk";
 import { activitySidebarContract, SLEEPS_TAG } from "../contract.ts";
 import type { ArchivedCounter } from "./archived-count.ts";
-import type { ManagerLines } from "./manager-lines.ts";
-import type { ManagerLooks } from "./manager-looks.ts";
+import type { ManagerLines } from "./managers/manager-lines.ts";
+import type { ManagerLooks } from "./managers/manager-looks.ts";
 import type { SleepStore } from "./sleep-store.ts";
 
 type Deps = { rpc: Pick<BbPluginApi["rpc"], "experimental_invalidate">; store: SleepStore; archived: Pick<ArchivedCounter, "read">; looks: Pick<ManagerLooks, "read">; lines: Pick<ManagerLines, "read"> };

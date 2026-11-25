@@ -3,8 +3,8 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { activitySidebarContract } from "./src/contract.ts";
 import { ARCHIVE_EVENTS, openArchivedCount } from "./src/server/archived-count.ts";
-import { openManagerLines } from "./src/server/manager-lines.ts";
-import { MANAGER_EVENTS, openManagerLooks } from "./src/server/manager-looks.ts";
+import { openManagerLines } from "./src/server/managers/manager-lines.ts";
+import { MANAGER_EVENTS, openManagerLooks } from "./src/server/managers/manager-looks.ts";
 import { createRpcHandlers } from "./src/server/rpc-handlers.ts";
 import { openSleepStore } from "./src/server/sleep-store.ts";
 
