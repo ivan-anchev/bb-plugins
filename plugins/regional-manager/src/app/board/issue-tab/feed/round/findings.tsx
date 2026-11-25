@@ -1,7 +1,8 @@
 // The findings in an open round: each its place in the diff, its severity, its origin (new, missed
-// or unfixed) and its claim, then the verifier's triage with why: Rejected, Confirmed, Anchored with what it breaks, or
-// Downgraded with its new severity; a rejected claim struck through. And how many there were, how
-// many held and how many of those were downgraded, as the round's rail and fold count them.
+// or unfixed) and its claim, then the verifier's triage with why: Rejected, Confirmed, Anchored
+// with what it breaks, or Downgraded with its new severity; a rejected claim struck through. And
+// how many there were, how many held and how many of those were downgraded, as the round's rail
+// and fold count them.
 import type { Round, RoundBody } from "../../../../../model/feed/round.ts";
 import { triageText } from "../../../../../model/verdict/review.ts";
 import { useTip } from "./tip.ts";
