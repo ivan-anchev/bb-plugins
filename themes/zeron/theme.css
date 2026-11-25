@@ -1,0 +1,1408 @@
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@100..900&family=Geist+Mono:wght@100..900&display=swap");
+
+/*
+ * Zeron: bb dressed as the Zeron desktop app (zeron.sh, v0.3.3).
+ *
+ * Values come from Zeron's own design system, read from
+ *   /Applications/Zeron.app/Contents/Resources/ui/ds/themes/zeron-{dark,light}.json
+ *   /Applications/Zeron.app/Contents/Resources/ui/ds/{motion,tokens,...}.luau
+ * or sampled from a capture of its window (Nov 13, 2026).
+ *
+ * Revert: bb theme reset
+ *
+ * The frame (dark), measured at 2x:
+ *   #0e0e10  window: title bar and the 5px gutters around the cards
+ *   #161618  the sidebar and the chat: two rounded (12px) cards set into it
+ *   #1a1a1d  composer, a pill, edge #c7d2de17
+ *
+ * Zeron's primary button is near-white; violet is only its accent (links,
+ * inline code, list markers, quote rail, caret, focus). bb drives both from
+ * --primary, so --primary is the white and --z-accent is the violet.
+ *
+ * What CSS can't copy: Zeron's window is glass over a blur of the desktop,
+ * bb's is opaque; Zeron's working ring is a shader and its streamed text
+ * fades in per character, both of which need JS.
+ */
+
+/* ---- Tokens shared by both schemes -------------------------------------- */
+:root,
+.light {
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "SF Mono", Menlo, monospace;
+  --font-terminal: "Geist Mono", "JetBrainsMono Nerd Font Mono", Menlo, monospace;
+
+  --radius: 0.5rem; /* radius.lg 8 */
+  --bb-sidebar-row-height: 1.875rem; /* session row, compact: 30 */
+
+  /* Motion (ds/motion.luau and each component) */
+  --z-ease: cubic-bezier(0.25, 0.1, 0.25, 1); /* motion.EASE, CSS ease */
+  --z-hover-ease: cubic-bezier(0.4, 0, 0.2, 1); /* HOVER_FADE */
+  --z-out3: cubic-bezier(0.33, 1, 0.68, 1); /* out(3) */
+  --z-out4: cubic-bezier(0.25, 1, 0.5, 1); /* out(4) */
+  --z-in2: cubic-bezier(0.11, 0, 0.5, 0); /* in(2) */
+  --z-inout2: cubic-bezier(0.45, 0, 0.55, 1); /* inOut(2) */
+  /* Spring 420/30 (switch knob), as a curve with a touch of give. */
+  --z-spring: cubic-bezier(0.3, 1.25, 0.5, 1);
+
+  /* Palette steps (ds/palette.luau) */
+  --z-violet-300: #c6bbfe;
+  --z-violet-400: #ad98fe;
+  --z-violet-600: #7c5fd0;
+  --z-red-300: #ffada6;
+  --z-red-400: #f9837b;
+  --z-red-600: #c54744;
+  --z-emerald-300: #91dab5;
+  --z-emerald-400: #5dc496;
+  --z-emerald-700: #03754f;
+  --z-green-400: #73c580;
+  --z-green-600: #329248;
+  --z-amber-300: #f5c283;
+  --z-amber-400: #e9a64b;
+  --z-amber-700: #905d02;
+}
+
+/* Type: Zeron's UI scale, 13 body (md 13/18, sm 12/16, lg 14/20). */
+@media not ((width <= 767px) and (pointer: coarse)) {
+  :root,
+  .light {
+    --text-xs: 0.75rem;
+    --text-xs--line-height: 1rem;
+    --text-sm: 0.8125rem;
+    --text-sm--line-height: 1.125rem;
+    --text-base: 0.875rem;
+    --text-base--line-height: 1.25rem;
+  }
+
+  /* Keep tab close controls square when tab button height rules overlap. */
+  [data-tab-pill] [data-tab-pill-close] {
+    height: calc(var(--spacing) * 4);
+  }
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Light (zeron-light.json) ------------------------------------------- */
+:root,
+.light {
+  --z-window: #eeeef0;
+  --z-card: #ffffff;
+  --z-accent: #7a55c4;
+  --canvas: #ffffff;
+  --ink: #1b1b1d;
+
+  --primary: #1b1b1d;
+  --primary-foreground: #ffffff;
+  --ring: color-mix(in srgb, var(--z-accent) 60%, transparent);
+  --sidebar-ring: var(--ring);
+
+  /* Muted text is the ink at less opacity, not a grey. */
+  --muted-foreground: color-mix(in srgb, var(--ink) 64%, transparent);
+  --subtle-foreground: color-mix(in srgb, var(--ink) 45%, transparent);
+  --readback-foreground: color-mix(in srgb, var(--ink) 52%, transparent);
+
+  --border: #00000017;
+  --border-hairline: #00000017;
+  --border-seam: #00000017;
+  --input: #00000024;
+  --secondary: #0000000a;
+  --accent: #0000000a;
+  --muted: #0000000a;
+  --sidebar: var(--z-window);
+  --sidebar-accent: #0000000a;
+  --sidebar-border: #00000017;
+  --state-hover: #0000000a;
+  --state-active: #00000012;
+  --surface-selected: #1a1a1a1a;
+  --surface-selected-border: #00000024;
+
+  --destructive: var(--z-red-600);
+  --destructive-text: var(--z-red-600);
+  --warning: var(--z-amber-400);
+  --warning-text: var(--z-amber-700);
+  --attention: var(--z-amber-400);
+  --success: var(--z-emerald-700);
+  --diff-added: var(--z-green-600);
+  --diff-removed: var(--z-red-600);
+  --pr-merged: var(--z-violet-600);
+  --file-accent: var(--z-accent);
+  --timeline-accent: var(--file-accent); /* file names, the NEW divider */
+
+  --z-composer: #ffffff;
+  --z-composer-edge: #00000017;
+  --z-composer-shadow: 0 12px 32px 0 #0000001a;
+  --z-user-bubble: #0000000a;
+  --z-code-block: #1b1b1d08;
+  --z-menu: color-mix(in srgb, #fcfcfd 92%, transparent);
+  --z-menu-solid: #fcfcfd;
+  --z-tooltip: #ffffff;
+  --z-control: #0000000f;
+  --z-control-hover: #00000017;
+  --z-selected: #1a1a1a1a;
+  --z-backdrop: #0000002e;
+
+  --shadow-2xs: 0 1px 2px 0 #0000000f;
+  --shadow-xs: 0 1px 2px 0 #0000000f;
+  --shadow-sm: 0 1px 2px 0 #0000000f;
+  --shadow: 0 1px 2px 0 #0000000f;
+  --shadow-md: 0 4px 12px 0 #00000014;
+  --shadow-lg: 0 12px 32px 0 #0000001f;
+  --shadow-xl: 0 20px 56px 0 #00000024;
+  --shadow-2xl: 0 24px 64px 0 #00000029;
+  --shadow-lift: 0 1px 3px 0 #0000000f;
+  --z-menu-shadow: 0 12px 32px 0 #0000001f;
+  --z-dialog-shadow: 0 24px 64px 0 #00000029;
+}
+
+/* ---- Dark (zeron-dark.json + the capture) ------------------------------- */
+.dark {
+  --z-window: #0e0e10;
+  --z-card: #161618;
+  --z-accent: #9277b0; /* the intro's dusk violet */
+  --canvas: #161618;
+  --ink: #ededef;
+
+  --primary: #ececee; /* zeron.button.primary */
+  --primary-foreground: #0b0b0c;
+
+  --muted-foreground: color-mix(in srgb, var(--ink) 60%, transparent);
+  --subtle-foreground: color-mix(in srgb, var(--ink) 42%, transparent);
+  --readback-foreground: color-mix(in srgb, var(--ink) 56%, transparent);
+
+  --background: var(--canvas);
+  --card: #1b1b1e;
+  --popover: #1c1c1f; /* zeron.menu.solid */
+  --surface-raised: #ffffff0f;
+  --surface-raised-solid: #1d1d20;
+  --surface-recessed: #ffffff0a;
+  --surface-scrim: color-mix(in srgb, #161618 88%, transparent);
+
+  /* Hairlines are white at low alpha: border 12, subtle 0a, strong 2e. */
+  --border: #ffffff12;
+  --border-hairline: #ffffff0d;
+  --border-seam: #ffffff0a;
+  --border-seam-vertical: var(--border-seam);
+  --input: #ffffff14; /* zeron.field.edge */
+
+  --secondary: #ffffff14; /* zeron.button.secondary */
+  --accent: #ffffff0d;
+  --muted: #ffffff0f;
+  --sidebar: var(--z-window);
+  --sidebar-accent: #ffffff0d; /* hover */
+  --sidebar-border: #ffffff0a;
+  --state-hover: #ffffff0d;
+  --state-active: #ffffff17; /* pressed */
+  --surface-selected: #ebebeb24; /* zeron.selected.flat */
+  --surface-selected-border: #ffffff14;
+
+  --destructive: #f87171;
+  --destructive-text: var(--z-red-300);
+  --warning: var(--z-amber-400);
+  --warning-text: var(--z-amber-300);
+  --attention: var(--z-amber-400);
+  --success: var(--z-emerald-400);
+  --diff-added: var(--z-emerald-400);
+  --diff-removed: var(--z-red-400);
+  --pr-merged: var(--z-violet-400);
+  --file-accent: var(--z-violet-300);
+  --timeline-accent: var(--file-accent);
+
+  --z-composer: #18181b; /* zeron.composer.solid */
+  --z-composer-edge: #c7d2de17;
+  --z-composer-shadow: 0 12px 32px 0 #00000066;
+  --z-user-bubble: #ffffff14;
+  --z-code-block: #ededef0a;
+  --z-menu: color-mix(in srgb, #1c1c1f 88%, transparent);
+  --z-menu-solid: #1c1c1f;
+  --z-tooltip: #2a2a2f; /* popover.bg */
+  --z-control: #ffffff14;
+  --z-control-hover: #ffffff1f;
+  --z-selected: #ebebeb24;
+  --z-backdrop: #00000059;
+
+  /* Dark reads depth by light: soft dark shadows, felt more than seen. */
+  --shadow-2xs: 0 1px 2px 0 #00000059;
+  --shadow-xs: 0 1px 2px 0 #00000059;
+  --shadow-sm: 0 1px 3px 0 #00000066; /* zeron.lift */
+  --shadow: 0 1px 3px 0 #00000066;
+  --shadow-md: 0 4px 12px 0 #00000066;
+  --shadow-lg: 0 12px 32px 0 #00000080;
+  --shadow-xl: 0 20px 56px 0 #00000052;
+  --shadow-2xl: 0 24px 64px 0 #00000080;
+  --shadow-lift: 0 1px 3px 0 #00000066;
+  --z-menu-shadow: 0 20px 56px 0 #00000052; /* zeron.menu.shadow */
+  --z-dialog-shadow: 0 24px 64px 0 #00000080; /* zeron.dialog.shadow */
+}
+
+/* Focus: a 2px ring of the accent at 60%, offset 1. */
+:root,
+.light,
+.dark {
+  --ring: color-mix(in srgb, var(--z-accent) 60%, transparent);
+  --sidebar-ring: var(--ring);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--z-accent) 34%, transparent);
+}
+
+:focus-visible {
+  outline-color: var(--ring);
+}
+
+/*
+ * bb focuses the question form itself so 1, 2, 3 pick an answer, and draws
+ * a ring round the whole card when it does. The card is a key target, not a
+ * control; its options and buttons keep their own rings.
+ */
+[data-question-form]:focus-visible {
+  box-shadow: none;
+}
+
+/* Scrollbars: no track, a thumb of the text's own ink. */
+* {
+  scrollbar-color: color-mix(in srgb, var(--ink) 26%, transparent) transparent;
+}
+
+/* ---- The frame: a dark window, the sidebar and chat as cards in it ------ */
+[data-testid="app-layout-root"][data-framed] {
+  --bb-frame-window-lip: 5px !important;
+  --bb-frame-card-radius: 12px !important;
+  background: var(--z-window) !important;
+}
+
+/* Sidebar bodies blend into the window, including plugin panels,
+ * Settings, Plugins and Skills. */
+[data-testid="app-layout-root"][data-framed] :is(
+  [data-testid="app-sidebar-body"],
+  [data-testid="plugin-sidebar-body"],
+  [data-testid="settings-sidebar-body"],
+  [data-testid="plugins-sidebar-body"],
+  [data-testid="skills-sidebar-body"]
+) {
+  --sidebar: var(--z-window);
+  background: transparent;
+  border-radius: 12px;
+  margin-right: 5px;
+  overflow: clip;
+}
+
+/*
+ * bb squares the body's bottom corners for the footer row beneath it. The
+ * body's parent is the inner div of bb's collapsible body; naming it beats
+ * :has(> body), which Chrome tries on every element and re-checks on every
+ * child change anywhere (a thread switch restyled the whole app).
+ */
+[data-testid="app-layout-root"][data-framed] [data-testid="nav-rail-sidebar-body"] > div {
+  clip-path: none !important;
+}
+
+[data-testid="app-layout-root"][data-framed] [data-sidebar="sidebar"] {
+  background: transparent;
+}
+
+/*
+ * Cards. bb cuts one card for everything right of the sidebar, with an 8px
+ * mask whose left corners stay square to meet the sidebar, and divides it
+ * with 1px rules. Zeron gives every surface its own 12px card, 5px apart.
+ * Each card here is a square strip on the window for the title bar (its
+ * header sits there) over a rounded fill: --z-card-top is the strip.
+ */
+[data-testid="app-layout-root"][data-framed] {
+  --z-card-ring: color-mix(in srgb, var(--ink) 6%, transparent);
+  --z-card-shape: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25'%3E%3Crect width='100%25' height='100%25' rx='12'/%3E%3C/svg%3E");
+}
+
+[data-testid="app-layout-root"][data-framed] :is(
+  [data-sidebar="inset"],
+  [data-split-pane-id][data-focused], /* a split pane: only those carry data-focused */
+  [data-panel-id="thread-detail-timeline-panel"],
+  [data-panel-id^="plugin-panel-main-pane"], /* a plugin's page in the main pane, as PR Reviews */
+  [data-panel-id="thread-detail-secondary-panel"]
+) {
+  --z-card-top: var(--bb-window-title-bar-height);
+  position: relative;
+  background: linear-gradient(var(--background) 0 0) 0 var(--z-card-top) / 100% calc(100% - var(--z-card-top)) no-repeat !important;
+  clip-path: none !important;
+  mask-image: linear-gradient(#000 0 0), var(--z-card-shape) !important;
+  mask-size: 100% var(--z-card-top), 100% calc(100% - var(--z-card-top)) !important;
+  mask-position: 0 0, 0 var(--z-card-top) !important;
+  mask-repeat: no-repeat !important;
+}
+
+/* The inset's own fill would square off the cards cut inside it. */
+[data-testid="app-layout-root"][data-framed] [data-sidebar="inset"]::before {
+  background: transparent !important;
+}
+
+/* With panes or a side panel open, the inset is only the window. */
+[data-testid="app-layout-root"][data-framed] [data-sidebar="inset"]:has(
+  [data-split-divider-hit-target],
+  [data-panel-resize-handle-id="thread-detail-secondary-panel-handle"]
+) {
+  background: none !important;
+  mask-image: none !important;
+}
+
+/* Panes below the top row have no title bar strip. */
+[data-testid="app-layout-root"][data-framed] [data-split-pane-id]:has(> [data-pane-focus-scrim]:not([class*="bb-window-frame-top"])) {
+  --z-card-top: 0px;
+}
+
+/* A thread's or a plugin page's panels inside a pane share the pane's card. */
+[data-testid="app-layout-root"][data-framed] [data-split-pane-id] :is(
+  [data-panel-id="thread-detail-timeline-panel"],
+  [data-panel-id^="plugin-panel-main-pane"],
+  [data-panel-id="thread-detail-secondary-panel"]
+) {
+  background: none !important;
+  mask-image: none !important;
+}
+
+/* The side panel is a card like the sidebar, not the window. */
+[data-testid="app-layout-root"][data-framed] [data-panel-id="thread-detail-secondary-panel"] {
+  --sidebar: var(--background);
+}
+
+/* Its tab row sits in the title bar, on the window, with no left rule. */
+/* .select-none: bb's tab row wrapper always has it, and Chrome then tries this only on such elements. */
+[data-testid="app-layout-root"][data-framed] [data-panel-id="thread-detail-secondary-panel"] .select-none:has(> [data-testid="thread-secondary-panel-top-chrome"]) {
+  background: transparent;
+}
+
+/* Its own fill would paint the title bar strip too: the panel's card draws the fill. */
+[data-testid="app-layout-root"][data-framed] [data-panel-id="thread-detail-secondary-panel"] > aside {
+  border-left-color: transparent;
+  background: transparent;
+}
+
+/* The rules between cards become 5px of window. */
+[data-testid="app-layout-root"][data-framed] [role="separator"]:has(> [data-split-divider-hit-target]),
+[data-testid="app-layout-root"][data-framed] [data-panel-resize-handle-id="thread-detail-secondary-panel-handle"] {
+  background: transparent !important;
+}
+
+[data-testid="app-layout-root"][data-framed] [role="separator"].w-px:has(> [data-split-divider-hit-target]),
+[data-testid="app-layout-root"][data-framed] [data-panel-resize-handle-id="thread-detail-secondary-panel-handle"]:not(.pointer-events-none) {
+  width: 5px !important;
+}
+
+[data-testid="app-layout-root"][data-framed] [role="separator"].h-px:has(> [data-split-divider-hit-target]) {
+  height: 5px;
+}
+
+[data-testid="app-layout-root"][data-framed] [data-panel-resize-handle-id="thread-detail-secondary-panel-handle"] > span:not([data-panel-resize-hit-target]) {
+  display: none;
+}
+
+/* Hide bb's square seams; the rounded cards carry their own inset ring. */
+[data-testid="app-layout-root"][data-framed] [data-sidebar="collapsible-body"],
+[data-testid="app-layout-root"][data-framed] [data-sidebar="inset"] > .pointer-events-none.absolute.border {
+  border-color: transparent !important;
+}
+
+/* An inset ring stays inside the card mask and leaves layout untouched. */
+[data-testid="app-layout-root"][data-framed] :is(
+  [data-sidebar="inset"],
+  [data-split-pane-id][data-focused],
+  [data-panel-id="thread-detail-timeline-panel"],
+  [data-panel-id="thread-detail-secondary-panel"]
+)::after {
+  content: "";
+  position: absolute;
+  inset: var(--z-card-top) 0 0 !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 12px;
+  background: transparent !important;
+  box-shadow: inset 0 0 0 0.5px var(--z-card-ring);
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* Only the visible card owns a ring, never its outer layout container. */
+[data-testid="app-layout-root"][data-framed] [data-sidebar="inset"]:has(
+  [data-split-pane-id][data-focused],
+  [data-panel-id="thread-detail-timeline-panel"],
+  [data-panel-id="thread-detail-secondary-panel"]
+)::after,
+[data-testid="app-layout-root"][data-framed] [data-split-pane-id] :is(
+  [data-panel-id="thread-detail-timeline-panel"],
+  [data-panel-id="thread-detail-secondary-panel"]
+)::after {
+  content: none;
+}
+
+/* The page header sits in the title bar, on the window, with no rule. */
+[data-testid="app-layout-root"][data-framed] header[class*="@container/page-header"] {
+  background: transparent;
+  border-bottom-color: transparent;
+  backdrop-filter: none;
+}
+
+/* ---- Sidebar: 30px rows, radius 8, chosen row a firmer wash -------------- */
+[data-sidebar="content"] {
+  --state-active: var(--z-selected);
+}
+
+[data-sidebar="menu-button"],
+[class*="group/thread-row"] {
+  border-radius: 8px;
+}
+
+/* Navigation icons in secondary ink, as in the side panel; full on hover. */
+[data-testid="app-sidebar-body"] button > [data-icon-root] {
+  color: var(--muted-foreground);
+  transition: color 150ms var(--z-hover-ease);
+}
+
+[data-testid="app-sidebar-body"] button:is(:hover, :focus-visible, [data-active="true"]) > [data-icon-root] {
+  color: var(--foreground);
+}
+
+/* Section titles: 11px medium, tertiary. */
+[data-sidebar="group-label"] {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--subtle-foreground);
+}
+
+/*
+ * A thread open in a split shows a 14px map of the layout: its own pane a
+ * solid block, the others outlines, all touching. Drawn as small rounded
+ * cards with a gap, as the panes themselves are: this thread's pane in ink,
+ * the focused one firmer, the rest hairlines. While the thread works, it
+ * breathes instead of running bb's shine sweep across the map.
+ */
+[data-sidebar-thread-trailing-indicator] svg[aria-label*="open in split"] {
+  shape-rendering: geometricPrecision;
+}
+
+[data-sidebar-thread-trailing-indicator] svg[aria-label*="open in split"] rect {
+  rx: 1.5px;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.84);
+}
+
+[data-sidebar-thread-trailing-indicator] svg[aria-label*="open in split"] rect[stroke-width="0"] {
+  fill: color-mix(in srgb, var(--ink) 50%, transparent);
+}
+
+[data-sidebar-thread-trailing-indicator] svg[aria-label*="open in split"] rect[stroke-width="0"][class*="fill-primary"] {
+  fill: color-mix(in srgb, var(--ink) 82%, transparent);
+}
+
+[data-sidebar-thread-trailing-indicator] svg[aria-label*="open in split"] rect:not([stroke-width="0"]) {
+  stroke: color-mix(in srgb, var(--ink) 32%, transparent);
+}
+
+[data-sidebar-thread-trailing-indicator] svg[aria-label*="open in split"].animate-shine-icon {
+  opacity: 1;
+  mask-image: none;
+  animation: z-breathe 1.8s var(--z-inout2) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sidebar-thread-trailing-indicator] svg[aria-label*="open in split"].animate-shine-icon {
+    animation: none;
+  }
+}
+
+/* ---- Side panel new tab: Zeron's open-menu, a centred 32px list -------- */
+
+/* The list sits in a centred column, mid-panel, until it outgrows it. */
+[data-panel-new-tab-page] {
+  justify-content: safe center;
+  align-items: center;
+  padding-block: 24px;
+}
+
+[data-panel-new-tab-page] > div {
+  width: 100%;
+  max-width: 440px;
+}
+
+/* Rows 32 tall, radius 8; an 18px icon 12px from 14/20 text (Zeron's 9:7). */
+[data-panel-new-tab-page] .group:has(> button[data-panel-new-tab-item]) {
+  min-height: 2rem;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+[data-panel-new-tab-page] button[data-panel-new-tab-item] {
+  gap: 12px;
+}
+
+[data-panel-new-tab-page] button[data-panel-new-tab-item] > span:first-child,
+[data-panel-new-tab-page] button[data-panel-new-tab-item] > span:first-child > :is(svg, img, span) {
+  width: 18px;
+  height: 18px;
+}
+
+[data-panel-new-tab-page] button[data-panel-new-tab-item]::after {
+  border-radius: 8px;
+}
+
+/* Section titles: 12px tertiary, a breath above each group. */
+[data-panel-new-tab-page] section > .items-baseline {
+  padding-top: 8px;
+  padding-bottom: 6px;
+  font-size: 0.75rem;
+  color: var(--subtle-foreground);
+}
+
+/* Search: 36 tall, radius 10, the same 18px icon on the same 8px inset. */
+[data-panel-new-tab-page] input[role="combobox"] {
+  height: 2.25rem;
+  padding-left: 38px;
+  border-radius: 10px;
+  border-color: var(--border);
+  font-size: 0.875rem;
+}
+
+[data-panel-new-tab-page] input[role="combobox"] ~ svg,
+[data-panel-new-tab-page] svg:has(+ input[role="combobox"]) {
+  left: 10px;
+  width: 18px;
+  height: 18px;
+}
+
+/* Recent and search results: what you open sits on a card, as Capy's
+ * overview does, apart from the bare list of actions above it. */
+[data-panel-new-tab-page] [role="listbox"] section > .flex-col {
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+}
+
+[data-panel-new-tab-page] [role="listbox"] [role="option"] {
+  min-height: 2rem;
+  padding: 0 8px;
+  gap: 12px;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+[data-panel-new-tab-page] [role="listbox"] [role="option"] > span:first-child,
+[data-panel-new-tab-page] [role="listbox"] [role="option"] > span:first-child > :is(svg, img, span) {
+  width: 18px;
+  height: 18px;
+}
+
+/* The keyboard's row is a hover wash, not the pressed fill. */
+[data-panel-new-tab-page] [role="option"]:is([aria-selected="true"], :hover) {
+  background: var(--state-hover);
+}
+
+/* The empty Recent box: radius 12, a softer dash. */
+[data-panel-new-tab-page] .border-dashed {
+  border-radius: 12px;
+  border-color: var(--border);
+  font-size: 0.8125rem;
+}
+
+/* ---- Composer: Zeron's pill, a darker wash with a cool hairline --------- */
+[data-promptbox] {
+  --background: var(--z-composer);
+  border-color: transparent;
+  border-radius: 26px;
+  box-shadow:
+    inset 0 0 0 1px var(--z-composer-edge),
+    var(--z-composer-shadow);
+}
+
+/*
+ * Caps above the composer (queue, model fallback, editing): bb tucks them
+ * 20px under the pill at full width, so their square sides show beside the
+ * pill's 26px corners. Draw them as a narrower sheet behind the pill, in its
+ * wash and hairline, the bottom hidden under its flat top edge.
+ */
+[class~="-mb-5"].rounded-b-none.border-b-0.bg-surface-raised-solid {
+  margin-inline: 18px;
+  background: var(--z-composer);
+  border-color: transparent;
+  border-radius: 16px 16px 0 0;
+  box-shadow: inset 0 0 0 1px var(--z-composer-edge);
+}
+
+/*
+ * The strips above the composer as chips (strips prototype, round 2): each
+ * strip bb stacks there (workflow, background commands, plan, to-do list,
+ * machine, child threads, thread context, model fallback) is a 28px capsule
+ * on the control wash, the capsules wrapping in one row; the queue keeps its
+ * own line, the cap tucked under the pill. A strip's list (bb's folding
+ * region) opens upward from its chip as a menu-glass popover, bb's own open
+ * and close driving it.
+ *
+ * Decided 2026-11-13 over four variants at worst-case content (all strips at
+ * once, 720 and 360px wide). Rejected: separate rounded boxes, one per strip
+ * (the old look; nine boxes when busy outgrow the composer); Tray, one sheet
+ * tucked under the pill with a row per strip (still grows a row per strip);
+ * Dock, Zeron's composer_dock with one floating glass pill and tabs (needs
+ * code, not a theme, and moves PR and git under the composer). Chips' limits:
+ * bb's own words stay ("Active child threads").
+ */
+[data-app-composer] > .grid:has(> section) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/*
+ * Anything else bb or a plugin puts here (the queue, a question, an
+ * approval) keeps its full-width line; only the strips above become chips.
+ */
+[data-app-composer] > .grid > *,
+[data-app-composer] > .grid > [data-bb-plugin-root] > * {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 28px !important;
+  overflow: visible;
+  background: var(--z-control);
+  border: 0;
+  border-radius: 14px;
+  box-shadow: none;
+  font-size: 0.78125rem;
+}
+
+/* A chip's row: bb's 32px strip header (its working fill and ring dropped). */
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) :is([class*="min-h-8"], [class*="bg-background/70"]) {
+  min-height: 28px;
+  gap: 7px;
+  padding-block: 0;
+  padding-inline: 11px;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 14px;
+  font-size: inherit;
+  line-height: 1rem;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) button:is([class*="min-h-8"], [class*="bg-background/70"]):hover {
+  background: var(--state-hover);
+}
+
+/* Long titles stop at a chip's width; the command's lead-in goes. */
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) .truncate {
+  max-width: 260px;
+}
+
+section[aria-label^="Background"] span.min-w-0.flex-1 > span.shrink-0.whitespace-nowrap:first-child {
+  display: none;
+}
+
+/*
+ * Thread context: each part its own chip (parent, PR, changed files, merge
+ * base, PR actions). The section and its row step aside (the row's children
+ * join the chip row), so bb's parts sit beside the other chips.
+ */
+[data-app-composer] > .grid > section[aria-label="Thread context before sending"] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 0 !important;
+  background: transparent;
+}
+
+section[aria-label="Thread context before sending"] > div:first-child {
+  display: contents;
+}
+
+section[aria-label="Thread context before sending"] > div:first-child :is(button, a, [data-promptbox-hide-compact]):not(:is(button, a, [data-promptbox-hide-compact]) *) {
+  min-height: 28px;
+  margin: 0;
+  padding-inline: 11px;
+  gap: 7px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--z-control);
+  font-size: inherit;
+  line-height: 1rem;
+  transition: background-color 150ms var(--z-hover-ease), color 150ms var(--z-hover-ease);
+}
+
+section[aria-label="Thread context before sending"] > div:first-child :is(button, a):not(:is(button, a, [data-promptbox-hide-compact]) *):hover {
+  background: var(--z-control-hover);
+  color: var(--foreground);
+}
+
+/*
+ * A split button (Merge and its method menu) is one chip: the group is the
+ * pill and its halves sit flat in it, a hairline between them. The halves
+ * would otherwise each take the chip rule above.
+ */
+section[aria-label="Thread context before sending"] > div:first-child div:has(> button[type="button"] + button[aria-haspopup="menu"]) {
+  border: 0;
+  border-radius: 14px;
+  background: var(--z-control);
+  box-shadow: none;
+}
+
+section[aria-label="Thread context before sending"] > div:first-child div:has(> button[type="button"] + button[aria-haspopup="menu"]) > button[type="button"] {
+  padding-inline: 11px 8px;
+  border-radius: 0;
+  background: transparent;
+}
+
+section[aria-label="Thread context before sending"] > div:first-child div:has(> button[type="button"] + button[aria-haspopup="menu"]) > button[type="button"] + button[type="button"] {
+  padding-inline: 6px 9px;
+  border-left: 1px solid var(--border);
+}
+
+section[aria-label="Thread context before sending"] > div:first-child div:has(> button[type="button"] + button[aria-haspopup="menu"]) > button[type="button"]:is(:hover, [data-state="open"]) {
+  background: var(--z-control-hover);
+}
+
+/* The merge base reads as its branch alone; the chip's own chevron stays. */
+section[aria-label="Thread context before sending"] [data-promptbox-hide-compact] > span.shrink-0:not(:has(*)) {
+  display: none;
+}
+
+section[aria-label="Thread context before sending"] [data-promptbox-hide-compact] > button {
+  color: var(--foreground);
+}
+
+/* The changed files' chevron shows only on hover in bb; a chip has no room for a ghost. */
+section[aria-label="Thread context before sending"] button[aria-controls] > span.ml-auto:last-child {
+  display: none;
+}
+
+/*
+ * A chip's list: a popover above it, in the menus' glass, fading in as it
+ * rises 4px (150ms out, the menus' entrance) rather than bb's fold; bb's
+ * open and close still drive it. The fold's own collapse row goes: the chip
+ * below it closes it.
+ */
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) [role="region"] {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 30;
+  width: max-content;
+  min-width: 280px;
+  max-width: min(440px, calc(100vw - 64px));
+  grid-template-rows: 1fr !important;
+  border: 0;
+  border-radius: 12px;
+  background: var(--z-menu);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: inset 0 0 0 1px var(--border-seam), var(--z-menu-shadow);
+  font-size: 0.8125rem;
+  transform-origin: bottom left;
+  transition: opacity 150ms var(--z-out3), translate 150ms var(--z-out3), visibility 0s;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) [role="region"][aria-hidden="true"] {
+  visibility: hidden;
+  translate: 0 4px;
+  transition: opacity 120ms var(--z-out3), translate 120ms var(--z-out3), visibility 0s 120ms;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) [role="region"] > div {
+  padding-block: 4px;
+  background: transparent;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) [role="region"] :is(button[aria-label^="Collapse"][aria-controls], div:has(> button[aria-label^="Collapse"][aria-controls]:only-child)) {
+  display: none;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) [role="region"] ul {
+  padding: 0 6px;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) [role="region"] li > :is(a, button, div) {
+  min-height: 28px;
+  padding-inline: 8px;
+  border-radius: 8px;
+  align-items: center;
+  font-size: 0.8125rem;
+  text-decoration: none;
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) [role="region"] li > :is(a, button):hover {
+  background: var(--state-hover);
+}
+
+[data-app-composer] > .grid > section:is([aria-label^="Workflow"], [aria-label^="Background"], [aria-label="Plan"], [aria-label="To-do list"], [aria-label="Machine status"], [aria-label="Child threads"], [aria-label="Thread context before sending"], [aria-label="Thread history"], [aria-label="Model fallback"]) :focus-visible {
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-app-composer] > .grid > section [role="region"] {
+    transition: none !important;
+  }
+}
+
+/*
+ * A queued message's actions show on hover over a solid surface-raised
+ * block (with a fade on its left) so they cover the text. The row itself
+ * takes no hover wash, so match the block to the cap's own wash.
+ */
+section[aria-label="Queued messages"],
+[class~="-mb-5"].rounded-b-none.border-b-0.bg-surface-raised-solid {
+  --surface-raised-solid: var(--z-composer);
+}
+
+/* Detached (while editing a queued message), the queue keeps the cap's wash. */
+section[aria-label="Queued messages"] {
+  background: var(--z-composer);
+}
+
+/* Draft text 14/22, caret the accent. */
+[data-promptbox] .ProseMirror {
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  caret-color: var(--z-accent);
+}
+
+/* Round controls: +, mic, send are circles. */
+[data-promptbox] [class*="group/send"],
+[data-promptbox] button:has(> svg:only-child) {
+  border-radius: 9999px;
+}
+
+/* + is a secondary pill: a white wash, full ink. */
+[data-promptbox] button[aria-label="Prompt actions"] {
+  background: var(--z-control);
+  color: var(--ink);
+}
+
+[data-promptbox] button[aria-label="Prompt actions"]:hover {
+  background: var(--z-control-hover);
+}
+
+/* Send and stop are the primary pill: near-white, dark ink; 0.4 when idle. */
+[data-promptbox] button[data-promptbox-submit-action] {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+[data-promptbox] button[data-promptbox-submit-action]:disabled {
+  opacity: 0.4;
+}
+
+/* Footer and picker chips: radius 8, tertiary ink brightening on hover. */
+[data-promptbox] button[aria-label^="Provider, model"] {
+  border-radius: 8px;
+}
+
+/* ---- Messages: prose at 14/22 ------------------------------------------ */
+[data-message-column] [data-markdown-preview] {
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+}
+
+/* Your messages: a soft pill, radius 16, no frame. */
+[data-message-column] .bg-surface-recessed.rounded-xl {
+  border-color: transparent;
+  border-radius: 16px;
+  background: var(--z-user-bubble);
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+}
+
+/* Links: accent ink, underline 4 below. */
+[data-markdown-preview] a[href]:not([data-prompt-mention]) {
+  color: var(--z-accent);
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  text-decoration-color: color-mix(in srgb, var(--z-accent) 45%, transparent);
+}
+
+/* Inline code: accent ink on its own faint wash. */
+[data-markdown-preview] :not(pre) > code {
+  background: color-mix(in srgb, var(--z-accent) 12%, transparent);
+  color: var(--z-accent);
+  border: 0;
+  border-radius: 4.5px;
+  padding: 0.0625rem 0.25rem;
+  font-size: 0.9em;
+}
+
+.dark [data-markdown-preview] :not(pre) > code {
+  color: color-mix(in srgb, var(--z-accent) 70%, var(--z-violet-300));
+}
+
+/*
+ * Code blocks: radius 12, a faint wash, a subtle hairline. bb draws a fenced
+ * block as a card (language header, then the pre); the card carries the
+ * frame and the pre inside it is bare, or the two nest as a box in a box.
+ */
+[data-markdown-preview] pre,
+[data-markdown-preview] div.overflow-hidden.border:has(> pre) {
+  background: var(--z-code-block);
+  border: 1px solid var(--border-seam);
+  border-radius: 12px;
+}
+
+[data-markdown-preview] pre {
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+[data-markdown-preview] div.overflow-hidden.border:has(> pre) > pre {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Lists: accent markers. */
+[data-markdown-preview] li::marker {
+  color: var(--z-accent);
+}
+
+/* Quotes: a 2px round rail in the accent, text secondary. */
+[data-markdown-preview] blockquote {
+  border-left: 2px solid color-mix(in srgb, var(--z-accent) 60%, transparent);
+  border-radius: 1px;
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+}
+
+/* Bold and headings are semibold. */
+[data-markdown-preview] :is(b, strong, h1, h2, h3, h4) {
+  font-weight: 600;
+}
+
+[data-markdown-preview] h1 {
+  letter-spacing: -0.3px;
+}
+
+/*
+ * Tables: a 12px rounded frame, header secondary, rows on subtle rules.
+ * bb wraps a table in a full-bleed band so a wide one can grow past the
+ * text column into the pane. Here every table keeps to the column, as code
+ * blocks do: the band is the column's width, the scroller fills it and
+ * carries the frame, and a wider table scrolls inside it.
+ */
+[data-message-column] [data-markdown-preview] div:has(> div > table) {
+  width: 100% !important;
+  margin-inline: 0 !important;
+}
+
+[data-message-column] [data-markdown-preview] div:has(> table) {
+  width: 100% !important;
+  min-width: 0 !important;
+  margin-inline: 0 !important;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+/* A table is a block of its own: 20px above and below, not the 8px of a line. */
+[data-message-column] [data-markdown-preview] div.my-2:is(:has(> table), :has(> div > table)) {
+  margin-block: 1.25rem !important;
+}
+
+/* The table fills the frame, as code does. */
+[data-message-column] [data-markdown-preview] table {
+  min-width: 100%;
+  border: 0;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+[data-message-column] [data-markdown-preview] :is(th, td) {
+  border-width: 0 0 1px;
+  border-color: var(--border-seam);
+  padding: 0.5rem 0.75rem;
+}
+
+[data-message-column] [data-markdown-preview] :is(th, td):first-child {
+  padding-left: 1rem;
+}
+
+[data-message-column] [data-markdown-preview] :is(th, td):last-child {
+  padding-right: 1rem;
+}
+
+[data-message-column] [data-markdown-preview] th {
+  color: var(--muted-foreground);
+  font-weight: 500;
+  background: transparent;
+  border-color: var(--border);
+}
+
+[data-message-column] [data-markdown-preview] tbody tr:last-child > td {
+  border-bottom-width: 0;
+}
+
+/* The unread divider: an 11px accent label on a faint accent rule. */
+[data-testid="thread-unread-divider"] {
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+}
+
+[data-testid="thread-unread-divider"] > [aria-hidden] {
+  background: color-mix(in srgb, var(--timeline-accent) 45%, transparent);
+}
+
+/* ---- Traces: an opened step group as a tree, as Zeron draws it ---------- */
+
+/*
+ * An opened "Ran 5 commands" group lists its steps flat. Hang them off a
+ * rail under the summary instead: a trunk down the left, and a rounded
+ * branch from it into each step; the trunk stops at the last branch.
+ * The line is opaque (ink mixed into the card, not ink at an alpha), so
+ * where the trunk and a branch's curve meet it draws once, not brighter.
+ */
+[data-timeline-row-list="bundle"] {
+  --z-trace-rail: color-mix(in srgb, var(--ink) 16%, var(--background));
+  --z-trace-mid: 14px; /* half a step row: where the branch lands */
+  --z-trace-r: 6px; /* the branch's bend */
+  padding-left: 22px;
+}
+
+[data-timeline-row-list="bundle"] > [data-timeline-items] > [data-timeline-row-id] {
+  position: relative;
+}
+
+[data-timeline-row-list="bundle"] > [data-timeline-items] > [data-timeline-row-id]::before,
+[data-timeline-row-list="bundle"] > [data-timeline-items] > [data-timeline-row-id]::after {
+  content: "";
+  position: absolute;
+  left: -18px;
+  pointer-events: none;
+}
+
+/* The trunk beside this step: through it, or down to its bend on the last. */
+[data-timeline-row-list="bundle"] > [data-timeline-items] > [data-timeline-row-id]::before {
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--z-trace-rail);
+}
+
+[data-timeline-row-list="bundle"] > [data-timeline-items] > [data-timeline-row-id]:last-child::before {
+  bottom: auto;
+  height: calc(var(--z-trace-mid) - var(--z-trace-r));
+}
+
+/* The branch: only the bend and the run into the row; the trunk is above it. */
+[data-timeline-row-list="bundle"] > [data-timeline-items] > [data-timeline-row-id]::after {
+  top: calc(var(--z-trace-mid) - var(--z-trace-r));
+  width: 12px;
+  height: var(--z-trace-r);
+  border-left: 1px solid var(--z-trace-rail);
+  border-bottom: 1px solid var(--z-trace-rail);
+  border-bottom-left-radius: var(--z-trace-r);
+}
+
+/* Steps are Zeron's 28px rows. */
+[data-timeline-row-list="bundle"] > [data-timeline-items] > [data-timeline-row-id] > div > :is(.group\/timeline-row > button, div.items-center:first-child) {
+  min-height: 28px;
+}
+
+/* What a step ran or read, in mono, as code is elsewhere. */
+:is([data-timeline-row-id*=":command:"], [data-timeline-row-id*=":file-"]):not([data-timeline-row-id*="work-summary"]) span[title] > span:nth-child(2) {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+/*
+ * A step that failed tints its glyph Zeron's danger (activity.luau: a
+ * failed tool's glyph is $danger). bb marks it only in words: an "error"
+ * after the line, and " (error)" closing the line's title.
+ */
+[data-timeline-row-id] svg[data-icon-root]:has(+ span[title$=" (error)"]) {
+  color: var(--destructive);
+}
+
+/*
+ * Live trace rows arrive as Zeron's do (ds/activity.luau). Two motions at
+ * once: the row fades in and drops from 6px above over 360ms on outExpo
+ * (its ENTER), while the tree makes room for it, the list's height easing
+ * open over 200ms on outQuart (the column's layout = "height"), so what's
+ * below glides down instead of jumping and the trunk reaches down to it.
+ * Here the row opens its own height from 0, clipped as it grows; the clip
+ * leaves its left open for the trunk and branch drawn beside it.
+ *
+ * bb mounts timeline rows on scroll too, so only rows that are live take
+ * it: a row whose label shines (still running). A finished transcript loads
+ * and scrolls still. (Steps of a running group that mount already finished
+ * pop in: matching them needed a selector under a :has() subject, which made
+ * every timeline change's style recalc ~1.7x as costly.)
+ */
+[data-timeline-row-id]:has(> div > .group\/timeline-row .animate-shine) {
+  interpolate-size: allow-keywords;
+  height: auto;
+  min-height: 0; /* a flex item's floor is its content; the row opens from 0 */
+  clip-path: inset(0 -100vw 0 -32px);
+  transition:
+    height 200ms cubic-bezier(0.25, 1, 0.5, 1),
+    opacity 360ms cubic-bezier(0.16, 1, 0.3, 1),
+    translate 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@starting-style {
+  [data-timeline-row-id]:has(> div > .group\/timeline-row .animate-shine) {
+    height: 0;
+    opacity: 0;
+    translate: 0 -6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-timeline-row-id] {
+    transition: none !important;
+  }
+}
+
+/* ---- Menus, popovers, selects: Zeron's menu glass ----------------------- */
+:is([role="menu"], [role="listbox"]) {
+  background: var(--z-menu);
+  backdrop-filter: blur(16px) saturate(1.2);
+  border-color: var(--border);
+  border-radius: 8px;
+  box-shadow: var(--z-menu-shadow);
+}
+
+/*
+ * A plugin's thread menu (Activity's rows) gets its submenus placed inside
+ * the menu itself. Blur would make the menu their containing block, so its
+ * overflow clip would hide them: while one is open, the menu goes unblurred.
+ */
+[role="menu"]:has(> [data-radix-popper-content-wrapper]) {
+  backdrop-filter: none;
+}
+
+/*
+ * A list inside a popover, a dialog or the side panel's new tab (the model
+ * picker's models, the palette's results, Recent) is part of that surface,
+ * not a menu of its own: its
+ * drop shadow would darken the popover below it, and sticky headers there
+ * show through as bright bands. A submenu placed inside its menu is still a
+ * menu of its own.
+ */
+:is([role="dialog"], .bg-popover, [data-panel-new-tab-page]) :is([role="menu"], [role="listbox"]):where(:not([role="menu"] > [data-radix-popper-content-wrapper] > *)) {
+  background: transparent;
+  backdrop-filter: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/*
+ * bb paints sticky section headers inside popovers (the model picker's
+ * "Model" and "Reasoning") with bg-background, assuming it equals the
+ * popover fill. Here the canvas differs, so point it back at the popover.
+ */
+.bg-popover,
+:is([role="menu"], [role="listbox"]) {
+  --background: var(--popover);
+}
+
+:is([role="menuitem"], [role="option"], [role="menuitemcheckbox"], [role="menuitemradio"]) {
+  border-radius: 4px;
+  min-height: 1.75rem; /* rows 28 */
+}
+
+:is([role="menu"], [role="listbox"]) [role="separator"] {
+  background-color: var(--border-seam);
+}
+
+/* Tooltips: lifted, opaque charcoal, 11px. */
+[role="tooltip"],
+[data-slot="tooltip-content"] {
+  background: var(--z-tooltip);
+  color: var(--ink);
+  border-color: transparent;
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+}
+
+/* Dialogs: menu glass, radius 16, deep shadow over a dim. */
+[role="dialog"]:not([data-vaul-drawer]),
+[role="alertdialog"] {
+  --background: var(--popover);
+  background-color: var(--popover);
+  border-color: var(--border);
+  border-radius: 16px;
+  box-shadow: var(--z-dialog-shadow);
+}
+
+[data-vaul-overlay],
+[data-slot="dialog-overlay"],
+[data-state="open"].fixed.inset-0.bg-black\/50,
+[data-state="open"].fixed.inset-0.bg-black\/80 {
+  background: var(--z-backdrop);
+}
+
+/* Toasts: menu glass, radius 12. */
+[data-sonner-toast] {
+  border-radius: 12px !important;
+  border-color: var(--border) !important;
+  box-shadow: var(--z-menu-shadow) !important;
+}
+
+/* ---- Controls ------------------------------------------------------------ */
+
+/* Keycaps: 18 tall, radius 4, a white wash, 11px medium. */
+kbd {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+/* Switch: a translucent track, accent at 78% when on, a white knob. */
+button[role="switch"] {
+  transition: background-color 180ms var(--z-ease);
+}
+
+button[role="switch"][data-state="unchecked"],
+button[role="switch"][aria-checked="false"] {
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+button[role="switch"][data-state="checked"],
+button[role="switch"][aria-checked="true"] {
+  background: color-mix(in srgb, var(--z-accent) 78%, transparent);
+}
+
+button[role="switch"] > span {
+  background: #ffffff;
+  box-shadow: 0 1px 2px 0 #00000059;
+  transition: transform 260ms var(--z-spring);
+}
+
+/* Checkbox: radius 4, accent when checked. */
+button[role="checkbox"] {
+  border-radius: 4px;
+}
+
+button[role="checkbox"]:is([data-state="checked"], [data-state="indeterminate"]) {
+  background: var(--z-accent);
+  border-color: var(--z-accent);
+  color: #ffffff;
+}
+
+button[role="checkbox"] [data-state] {
+  animation: z-check-in 220ms var(--z-spring);
+}
+
+/* Progress and accent marks. */
+[role="progressbar"] > * {
+  background: var(--z-accent);
+}
+
+/* ---- Motion: Zeron's timings on bb's animations ------------------------ */
+
+/*
+ * bb's popovers enter with tw-animate's `enter` keyframes. Zeron's menus
+ * and dropdowns barely animate (a 120ms fade on out(3), no scale);
+ * dialogs come in over 200ms out(3) from scale .98 and 4px low, and leave
+ * over 130ms in(2).
+ */
+.animate-in {
+  --tw-duration: 120ms;
+  --tw-ease: var(--z-out3);
+}
+
+.animate-in.zoom-in-95 {
+  --tw-enter-scale: 1;
+}
+
+.animate-in:is([class*="slide-in-from-top"], [class*="slide-in-from-bottom"]) {
+  --tw-enter-translate-y: 0;
+}
+
+.animate-in:is([class*="slide-in-from-left"], [class*="slide-in-from-right"]) {
+  --tw-enter-translate-x: 0;
+}
+
+.animate-out {
+  --tw-duration: 100ms;
+  --tw-ease: var(--z-in2);
+  --tw-exit-scale: 1;
+}
+
+[role="dialog"]:not([data-vaul-drawer]).animate-in,
+[role="alertdialog"].animate-in {
+  --tw-duration: 200ms;
+  --tw-ease: var(--z-out3);
+  --tw-enter-opacity: 0;
+  --tw-enter-scale: 0.98;
+}
+
+[role="dialog"]:not([data-vaul-drawer]).animate-out,
+[role="alertdialog"].animate-out {
+  --tw-duration: 130ms;
+  --tw-ease: var(--z-in2);
+  --tw-exit-scale: 0.98;
+}
+
+/* Hover washes fade over 150ms on Tailwind's ease (HOVER_FADE). */
+:is([data-sidebar="menu-button"], [class*="group/thread-row"], [role="menuitem"], [role="option"], [role="tab"]) {
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: var(--z-hover-ease);
+}
+
+/* Columns: the sidebar folds over 180ms on CSS ease. The side panel keeps bb's. */
+[data-sidebar="gap"],
+[data-sidebar="panel"] {
+  transition-duration: 180ms !important;
+  transition-timing-function: var(--z-ease) !important;
+}
+
+/* Skeletons breathe .55 to 1 over 900ms, in and out (skeleton.luau). */
+.animate-pulse {
+  animation: z-breathe 1.8s var(--z-inout2) infinite;
+}
+
+/* Toasts: in from 16px below over 260ms out(3). */
+[data-sonner-toast] {
+  transition-duration: 260ms !important;
+  transition-timing-function: var(--z-out3) !important;
+}
+
+@keyframes z-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes z-check-in {
+  from {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .animate-out {
+    --tw-enter-scale: 1;
+    --tw-exit-scale: 1;
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-duration: 120ms;
+  }
+
+  button[role="switch"] > span,
+  button[role="checkbox"] [data-state] {
+    transition: none;
+    animation: none;
+  }
+}
