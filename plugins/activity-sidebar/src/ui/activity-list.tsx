@@ -1,19 +1,21 @@
 // The slot component: reads the hooks, runs the two pure steps (model, items) and hands the items
-// to the viewport. Owns the reader's choices (folds, filter, density, how far Archived is unrolled), nothing derived.
+// to the viewport, under the Managers | Threads segment while there are regional managers. Owns the reader's choices (view, folds, filter, density, how far Archived is unrolled), nothing derived.
 import { experimental_useSidebarThreads, type PluginSidebarThread, type PluginThreadListProps } from "@get-bb/plugin-sdk/app";
 import { useMemo, useState } from "react";
 import { underWaySince } from "../card/under-way.ts";
-import { parseCompact, parseFilter, parseOpen } from "../data/local-choice/choices.ts";
+import { parseCompact, parseFilter, parseOpen, parseView } from "../data/local-choice/choices.ts";
 import { useLocalChoice } from "../data/local-choice/use-local-choice.ts";
 import { useArchivedCount } from "../data/use-archived-count.ts";
+import { useManagerLooks } from "../data/use-manager-looks.ts";
 import { useMinute } from "../data/use-minute.ts";
 import { useSleepUpkeep } from "../data/use-sleep-upkeep.ts";
 import { useSleeps } from "../data/use-sleeps.ts";
 import { useHandoffs } from "../handoff/use-handoffs.ts";
 import { ARCHIVED_FIRST, ARCHIVED_STEP, listItems, retryNotice, type NoticeKey } from "../list/items.ts";
-import { buildActivity, type SectionKey } from "../model/activity.ts";
+import { buildActivity, isOpenManager, type SectionKey } from "../model/activity.ts";
 import type { ThreadIndex } from "../model/thread-index.ts";
 import { ListViewport } from "./list-viewport.tsx";
+import { SidebarViews } from "./managers/sidebar-views.tsx";
 import { ViewMenu } from "./view-menu.tsx";
 
 // why: one read for both lifecycles, so the Archived shelf's first page has loaded by the time it opens.
@@ -28,15 +30,17 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   const [open, setOpen] = useLocalChoice("open-sections", parseOpen);
   const [filter, setFilter] = useLocalChoice("project-filter", parseFilter);
   const [compact, setCompact] = useLocalChoice("compact", parseCompact);
+  const [view, setView] = useLocalChoice("view", parseView);
   const [archivedShown, setArchivedShown] = useState(ARCHIVED_FIRST);
   useSleepUpkeep({ threads: live.threads, sleeps, now, activeThreadId });
 
   // why: a project removed since the choice was made narrows nothing.
   const chosen = live.projects.find((p) => p.id === filter) ?? null;
   const archivedCount = useArchivedCount(chosen?.id ?? null);
+  const looks = useManagerLooks(live.threads.some(isOpenManager));
   const model = useMemo(
-    () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, held, now, activeThreadId, filter: chosen?.id ?? null }),
-    [live.threads, live.projects, sleeps.sleeps, held, now, activeThreadId, chosen],
+    () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, held, now, activeThreadId, filter: chosen?.id ?? null, looks }),
+    [live.threads, live.projects, sleeps.sleeps, held, now, activeThreadId, chosen, looks],
   );
   const items = useMemo(
     () =>
@@ -62,15 +66,23 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
     retryNotice(notice, { sleeps: sleeps.refetch, archivedCount: archivedCount.refetch, archivedPage: () => void archive.fetchNextPage() });
 
   return (
-    <ListViewport
-      items={items}
-      card={card}
+    <SidebarViews
+      managers={model.managers}
+      view={view}
+      onView={setView}
       onNavigate={onNavigate}
-      sleep={{ sleep: sleeps.sleep, wake: sleeps.wake }}
-      onToggle={toggle}
-      onShowMoreArchived={showMoreArchived}
-      onRetry={retry}
-      viewMenu={<ViewMenu projects={live.projects} chosen={chosen} onChoose={setFilter} compact={compact} onCompact={setCompact} />}
+      threads={
+        <ListViewport
+          items={items}
+          card={card}
+          onNavigate={onNavigate}
+          sleep={{ sleep: sleeps.sleep, wake: sleeps.wake }}
+          onToggle={toggle}
+          onShowMoreArchived={showMoreArchived}
+          onRetry={retry}
+          viewMenu={<ViewMenu projects={live.projects} chosen={chosen} onChoose={setFilter} compact={compact} onCompact={setCompact} />}
+        />
+      }
     />
   );
 }

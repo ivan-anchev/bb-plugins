@@ -1,7 +1,9 @@
-// What the Activity sidebar shows, as data: every parent thread's row and the section it stands in.
-// Pure: the live threads, the sleeps and the clock in; rows and sections out.
+// What the Activity sidebar shows, as data: every parent thread's row and the section it stands in,
+// and the regional managers, who leave the sections for a view of their own while they're open.
+// Pure: the live threads, the sleeps, the managers' looks and the clock in; rows, sections and managers out.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
+import { isManagerThread, type Avatar, type ManagerLook } from "./manager-look.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
 import { wakesIn } from "./sleep.ts";
 import { baseState, NEEDS_YOU, stateOf, UNDER_WAY, type ZState } from "./state.ts";
@@ -36,8 +38,17 @@ export type RowDetail = { machine: string | null; branch: string | null };
 
 export type Section = { key: SectionKey; rows: readonly RowModel[] };
 
-/** The sections, and the index of who hangs under whom they were built from (the hover card's tree). */
-export type ActivityModel = { sections: readonly Section[]; index: ThreadIndex };
+/**
+ * A regional manager's row in the Managers view: its name is its thread's title. Its avatar and
+ * description are its look's, or null while that is unknown: then it shows a plain avatar and no description.
+ */
+export type ManagerModel = { thread: PluginSidebarThread; avatar: Avatar | null; description: string | null; current: boolean };
+
+/**
+ * The sections; the open regional managers, oldest first; and the index of who hangs under whom they
+ * were built from (the hover card's tree).
+ */
+export type ActivityModel = { sections: readonly Section[]; managers: readonly ManagerModel[]; index: ThreadIndex };
 
 export type ActivityInput = {
   threads: readonly PluginSidebarThread[];
@@ -47,13 +58,16 @@ export type ActivityInput = {
   held: ReadonlySet<string>;
   now: number;
   activeThreadId: string | null;
-  /** The project every section is narrowed to, or null for every project. */
+  /** The project every section is narrowed to, or null for every project. Never the managers: the filter is the threads' own. */
   filter: string | null;
+  /** The regional managers' avatars and descriptions, as far as they are known. */
+  looks: readonly ManagerLook[];
 };
 
 /**
  * Every section in SECTION_KEYS order, each holding its rows top to bottom: Pinned in bb's pin order,
- * Asleep soonest to wake first, the rest latest first.
+ * Asleep soonest to wake first, the rest latest first. An open regional manager stands in none of them,
+ * only among the managers; an archived one is an ordinary row on Archived.
  */
 export function buildActivity(input: ActivityInput): ActivityModel {
   const index = indexThreads(input.threads, input.held);
@@ -61,7 +75,7 @@ export function buildActivity(input: ActivityInput): ActivityModel {
   const projectNames = new Map(input.projects.map((p) => [p.id, p.name]));
 
   const placed = input.threads
-    .filter((t) => isListed(t) && (input.filter === null || t.projectId === input.filter))
+    .filter((t) => isListed(t) && !isOpenManager(t) && (input.filter === null || t.projectId === input.filter))
     .map((thread) => {
       const sleep = sleepOf(thread, input.sleeps);
       // why: an archived thread has left the work; its row says when it left, not what it last did.
@@ -93,7 +107,16 @@ export function buildActivity(input: ActivityInput): ActivityModel {
         : members.sort((a, b) => rankOf(b, key, input.now) - rankOf(a, key, input.now) || compare(a.thread.id, b.thread.id));
     return { key, rows: ordered.map(toRow) };
   });
-  return { sections, index };
+
+  const looks = new Map(input.looks.map((look) => [look.threadId, look]));
+  const managers = input.threads
+    .filter(isOpenManager)
+    .sort((a, b) => a.createdAt - b.createdAt || compare(a.id, b.id))
+    .map((thread): ManagerModel => {
+      const look = looks.get(thread.id);
+      return { thread, avatar: look?.avatar ?? null, description: look?.description ?? null, current: thread.id === input.activeThreadId || thread.id === currentRoot };
+    });
+  return { sections, managers, index };
 }
 
 /**
@@ -111,6 +134,14 @@ export function sleepersAskingForYou(input: Pick<ActivityInput, "threads" | "sle
 /** When the row last moved, as its corner says: archived, when it was archived; else when it came back. */
 export function lastMoved(t: PluginSidebarThread): number {
   return t.isArchived ? (t.archivedAt ?? t.updatedAt) : t.latestAttentionAt;
+}
+
+/**
+ * A regional manager not archived: listed among the managers, oldest first, so one started later joins
+ * at the end and none above it ever moves.
+ */
+export function isOpenManager(t: PluginSidebarThread): boolean {
+  return isListed(t) && isManagerThread(t) && !t.isArchived;
 }
 
 // ------------------------------------------------------------------ layer 2

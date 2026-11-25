@@ -1239,6 +1239,45 @@ of the file it started from:
 You can also edit the files in any editor on the server's disk; the thread
 and Memory read the new text on their next read.
 
+## For other plugins: reading the managers
+
+One RPC method is published to other plugins: `coordinators`, discoverable
+with `bb.sdk.plugins.experimental_discoverRpc` and called with
+`bb.sdk.plugins.callRpc({ pluginId: "regional-manager", method:
+"coordinators", input: {}, outputSchema })`. It returns:
+
+```ts
+{
+  // every started manager, newest first, its thread archived or deleted included
+  coordinators: {
+    id: string;           // the manager, keying its memory
+    threadId: string;     // its thread, which bb titles with its name
+    projectId: string;
+    description: string | null;
+    avatar: { kind: "blob"; shape: string; hue: string; expression: string };
+  }[];
+  // every manager not started yet: its profile, with no thread
+  notStarted: { id: string; name: string; description: string | null; avatar: Avatar }[];
+}
+```
+
+- **The contract:** `threadId`, `description` and `avatar` of each started
+  manager keep their names and shapes. The Activity Sidebar's Managers view
+  reads them, with its own copy of their schema; a test in this plugin pins
+  them (`src/published-contract.test.ts`).
+- **A manager's name** is its thread's title, so it isn't in the read.
+- **Open managers only?** The read doesn't filter by the thread's state: a
+  reader that shows open managers keeps the `threadId`s bb's thread list
+  returns as unarchived (the Activity Sidebar does).
+- **`avatar`:** `shape` is one of blob-avatar's 21 shapes, `hue` one of the
+  12 identity hues (violet, blue, emerald, sky, amber, rose, lime, teal,
+  orange, indigo, pink, cyan), and `expression` one of neutral, happy,
+  content, curious, attentive or determined.
+- **Freshness:** the read is one-shot, so another plugin isn't told when a
+  profile changes. Read again on a timer, or when a regional manager's thread
+  is created, renamed or archived.
+- Every other method is the plugin's own app's, and may change without notice.
+
 ## What it needs
 
 - **`gh`, signed in, on the machine running bb**, for pull requests and CI.

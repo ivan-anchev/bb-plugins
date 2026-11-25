@@ -1,4 +1,5 @@
-// The choices the reader makes on this list, as stored: the open sections, the project filter and the density.
+// The choices the reader makes on this list, as stored: the open sections, the project filter, the
+// density, and which view shows while there are regional managers.
 import { SECTION_KEYS, type SectionKey } from "../../model/activity.ts";
 
 /** Pinned and Activity open, the shelves folded: the list Zeron opens with. */
@@ -17,4 +18,12 @@ export function parseFilter(stored: unknown): string | null {
 /** A line a row (the prototype's default) unless two were chosen. */
 export function parseCompact(stored: unknown): boolean {
   return typeof stored === "boolean" ? stored : true;
+}
+
+/** What the sidebar shows while there are regional managers: them, or every other thread. */
+export type View = "managers" | "threads";
+
+/** The threads, as the sidebar opened before it had managers, unless the managers were chosen. */
+export function parseView(stored: unknown): View {
+  return stored === "managers" ? "managers" : "threads";
 }

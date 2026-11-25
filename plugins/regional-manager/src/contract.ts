@@ -152,13 +152,22 @@ export const typedText = ({ input }: Pick<ComposerRequest, "input">): string => 
 const memoryEntrySchema = z.object({ file: memoryFileSchema, preview: z.string(), modifiedAt: z.number() });
 export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 
-export const coordinatorContract = defineRpcContract({
+/**
+ * What other plugins may read, published to them as discoverable (server.ts). A cross-plugin contract:
+ * the Activity Sidebar reads each started manager's `threadId`, `description` and `avatar` to draw
+ * its Managers view, so those three keep their names and shapes (skills/crew-board/SKILL.md).
+ */
+export const publishedContract = defineRpcContract({
   /** Every regional manager whose thread exists, and every one not started yet, each newest first. */
   coordinators: {
     input: z.object({}),
     output: z.object({ coordinators: z.array(coordinatorSchema), notStarted: z.array(notStartedSchema) }),
     tags: () => [COORDINATORS_TAG],
   },
+});
+
+/** What only this plugin's own app calls. */
+export const privateContract = defineRpcContract({
   /** The machine running bb, which a new thread's worktree is made on (null before one has joined). */
   primaryHost: {
     input: z.object({}),
@@ -263,3 +272,6 @@ export const coordinatorContract = defineRpcContract({
     output: writeOutcomeSchema,
   },
 });
+
+/** Every method the app calls, published or not. */
+export const coordinatorContract = { ...publishedContract, ...privateContract };

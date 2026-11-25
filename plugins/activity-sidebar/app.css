@@ -37,6 +37,223 @@
   pointer-events: none;
 }
 
+/* --- With regional managers: the Managers | Threads segment over the view it shows (src/ui/managers) */
+.as-views {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.as-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* why: a hidden panel stays mounted, so its list keeps its scroll for the tab's return (the browser keeps a scroller's offset through display: none). */
+.as-panel[hidden] {
+  display: none;
+}
+.as-panel > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* Zeron's muted track and its flat selected thumb, inset to the nav icons' edge, 16 in. */
+.as-segment {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  box-sizing: border-box;
+  height: 28px;
+  margin: 0 16px 6px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--muted);
+  font-family: var(--font-sans);
+}
+/* why: the list's own ease-out (OUT3, src/list/motion-plan.ts, set as --as-ease-out), short: the thumb follows the press, never trails it. */
+.as-segment-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(50% - 2px);
+  height: 24px;
+  border-radius: 6px;
+  background: var(--surface-selected);
+  transition: transform 180ms var(--as-ease-out);
+}
+.as-segment[data-on="threads"] .as-segment-thumb {
+  transform: translateX(100%);
+}
+.as-segment > button {
+  all: unset;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+  transition: color 150ms ease;
+}
+.as-segment > button[aria-selected="true"] {
+  color: var(--foreground);
+}
+@media (hover: hover) {
+  .as-segment > button:hover {
+    color: var(--foreground);
+  }
+}
+/* why a 2px outline in the full ink, not the rows' --ring shadow: the ring falls under 3:1 on the selected
+   thumb and wash in Zeron, and a shadow vanishes in forced colors; an outline is kept there. */
+.as-segment > button:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: -2px;
+}
+/* why: forced colors drop the thumb's wash and the labels' two inks, the only marks of the chosen tab;
+   there it is filled in the system's Highlight instead. */
+@media (forced-colors: active) {
+  /* why: the fill and the label's HighlightText change at once, never the fill sliding under the wrong label. */
+  .as-segment-thumb,
+  .as-segment > button {
+    transition: none;
+  }
+  .as-segment-thumb {
+    forced-color-adjust: none;
+    background: Highlight;
+  }
+  .as-segment > button[aria-selected="true"] {
+    forced-color-adjust: none;
+    color: HighlightText;
+    outline-color: HighlightText;
+  }
+}
+/* why: on touch, each tab takes a 44px-tall press (24px drawn, 10px more above and below); the
+   segment is drawn the same. bb's sidebar clips what reaches above the plugin's top, so the segment
+   stands 10px lower there; raised so the press reaches over the list's top edge. */
+@media (pointer: coarse) {
+  .as-segment {
+    z-index: 1;
+    margin-top: 10px;
+  }
+  .as-segment > button::after {
+    content: "";
+    position: absolute;
+    inset: -10px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-segment-thumb,
+  .as-segment > button {
+    transition: none;
+  }
+}
+
+/* --- A regional manager's row: its avatar, its name, its description under it (src/ui/managers) -- */
+.as-managers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 4px 8px 8px;
+}
+.as-manager {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  min-height: 46px;
+  padding: 9px 0;
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+/* A name alone stands in the avatar's middle. */
+.as-manager[data-bare] {
+  align-items: center;
+}
+.as-manager[data-menu] {
+  background: var(--state-hover);
+}
+@media (hover: hover) {
+  .as-manager:hover {
+    background: var(--state-hover);
+  }
+}
+.as-manager:active {
+  background: var(--state-active);
+}
+.as-manager[aria-current="page"] {
+  background: var(--surface-selected);
+}
+/* why: as the segment's tabs: an outline in the full ink reads at 3:1 on every surface and in forced colors.
+   The Managers scroller is the view's one tab stop, so it shows focus the same way, in place of the threads' shadow. */
+.as-managers:focus-visible,
+.as-manager:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: -2px;
+}
+.as-managers:focus-visible {
+  box-shadow: none;
+}
+/* why: the avatar's left edge lines up with the section titles, bb's nav icons and the agent marks, 16 in. */
+.as-manager-face {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding-left: 8px;
+}
+.as-avatar {
+  flex: 0 0 auto;
+  pointer-events: none;
+}
+/* While its look is unknown: a plain disc on the segment's track. */
+.as-avatar-plain {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+.as-manager-words {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+}
+.as-manager .as-title {
+  flex: 0 0 auto;
+  color: var(--foreground);
+  font-weight: 500;
+  line-height: 18px;
+}
+/* why: on the selected wash, Zeron's muted ink falls under 4.5:1 in light; the full ink keeps it readable. */
+.as-manager[aria-current="page"] .as-manager-description {
+  color: var(--foreground);
+}
+.as-manager-description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
 /* --- A section's title: quiet small words, brighter under the pointer, no caret; folded, how many
    it holds at its end. Activity's carries the project filter after them. ----------------------- */
 .as-section-title,
@@ -380,11 +597,13 @@
   initial-value: 0px;
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .as-rowbox:hover .as-line .as-title[data-over] {
+  .as-rowbox:hover .as-line .as-title[data-over],
+  .as-manager:hover .as-title[data-over] {
     --as-fade-in: 12px;
     transition-delay: 500ms;
   }
-  .as-rowbox:hover .as-line .as-title[data-over] > .as-title-text {
+  .as-rowbox:hover .as-line .as-title[data-over] > .as-title-text,
+  .as-manager:hover .as-title[data-over] > .as-title-text {
     transform: translateX(calc(-1 * var(--as-travel)));
     transition: transform var(--as-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
   }
@@ -394,7 +613,7 @@
   font-weight: 500;
 }
 
-/* A project's tile: its initial on its hue's 500, inked in its 50 (Zeron's palette). */
+/* A project's tile: its initial on its hue's 500, inked in its 50 (Zeron's palette, src/model/project-hue.ts). */
 .as-tile {
   flex: 0 0 16px;
   display: flex;
@@ -403,25 +622,11 @@
   width: 16px;
   height: 16px;
   border-radius: 4px;
-  background: var(--as-tile-bg);
-  color: var(--as-tile-ink);
   font-size: 11px;
   line-height: 1;
   font-weight: 600;
   transform: translateY(-0.5px);
 }
-.as-tile[data-hue="violet"] { --as-tile-bg: #9579ee; --as-tile-ink: #f7f6fe; }
-.as-tile[data-hue="blue"] { --as-tile-bg: #4b8ff3; --as-tile-ink: #f2f7fe; }
-.as-tile[data-hue="emerald"] { --as-tile-bg: #27ac7a; --as-tile-ink: #effaf4; }
-.as-tile[data-hue="sky"] { --as-tile-bg: #149dd2; --as-tile-ink: #eff9fe; }
-.as-tile[data-hue="amber"] { --as-tile-bg: #d68d0a; --as-tile-ink: #fef6ec; }
-.as-tile[data-hue="rose"] { --as-tile-bg: #e25e76; --as-tile-ink: #fef4f5; }
-.as-tile[data-hue="lime"] { --as-tile-bg: #86b241; --as-tile-ink: #f4f9ef; }
-.as-tile[data-hue="teal"] { --as-tile-bg: #18aa99; --as-tile-ink: #effaf7; }
-.as-tile[data-hue="orange"] { --as-tile-bg: #e07434; --as-tile-ink: #fef5f0; }
-.as-tile[data-hue="indigo"] { --as-tile-bg: #7584f4; --as-tile-ink: #f4f6fe; }
-.as-tile[data-hue="pink"] { --as-tile-bg: #d6629e; --as-tile-ink: #fff3f8; }
-.as-tile[data-hue="cyan"] { --as-tile-bg: #09a6b7; --as-tile-ink: #eff9fb; }
 
 /* Its pull request: its glyph and number in its state's ink, on a 10% wash of it; never wraps, so the
    title fades before it. Dark inks are Zeron's PR hues (ds/palettes zeron.pr.*) at full strength; each

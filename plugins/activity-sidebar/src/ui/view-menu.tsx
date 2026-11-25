@@ -5,7 +5,7 @@ import { experimental_Icon as Icon, type PluginSidebarProject } from "@get-bb/pl
 import { CheckboxItem, Content, ItemIndicator, Portal, RadioGroup, RadioItem, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
 import { hueOf } from "../model/project-hue.ts";
-import { PORTAL_SCOPE } from "./portal-scope.ts";
+import { PORTAL_SCOPE, useOverlayOpen } from "./portal-scope.ts";
 import { ProjectTile } from "./project-tile.tsx";
 
 const ALL = "";
@@ -19,8 +19,9 @@ type Props = {
 };
 
 export function ViewMenu({ projects, chosen, onChoose, compact, onCompact }: Props) {
+  const [open, setOpen] = useOverlayOpen();
   return (
-    <Root>
+    <Root open={open} onOpenChange={setOpen}>
       <Trigger className="as-filter" aria-label={chosen === null ? "View options" : `View options, filtered to ${chosen.name}`} data-on={chosen !== null || undefined}>
         <Icon name="FilterHorizontal" aria-hidden />
       </Trigger>

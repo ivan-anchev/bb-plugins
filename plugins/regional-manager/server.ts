@@ -1,7 +1,7 @@
 // Composition root. Owns no logic: opens the store and the memory folder, and wires each module
 // to bb, through the SDK and the store bound to this instance of the plugin (lifetime.ts).
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { boardTag, COORDINATORS_TAG, coordinatorContract, issueTag, memoryTag } from "./src/contract.ts";
+import { boardTag, COORDINATORS_TAG, issueTag, memoryTag, privateContract, publishedContract } from "./src/contract.ts";
 import type { CoordinatorId, Role } from "./src/model/role.ts";
 import { registerAgentTools } from "./src/server/agents/agent-tools.ts";
 import { createAgents } from "./src/server/agents/agents.ts";
@@ -123,8 +123,12 @@ export default function plugin(host: BbPluginApi): void {
     await inbox.tick(Date.now());
   });
 
-  bb.rpc.register(coordinatorContract, {
-    coordinators: () => ({ coordinators: store.coordinators(), notStarted: store.notStarted() }),
+  bb.rpc.register(
+    publishedContract,
+    { coordinators: () => ({ coordinators: store.coordinators(), notStarted: store.notStarted() }) },
+    { experimental_discoverable: true, experimental_description: "Every regional manager: a started one's thread, project, description and avatar; one not started yet with its name." },
+  );
+  bb.rpc.register(privateContract, {
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
     ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }),
     ...boardHandlers({ store, board, inbox }),
