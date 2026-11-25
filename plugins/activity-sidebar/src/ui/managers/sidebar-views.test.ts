@@ -20,9 +20,11 @@ const THREADS = createElement("div", { className: "as-scroller", tabIndex: 0, "d
 
 const manager = (id: string, createdAt: number): ManagerModel => ({
   thread: thread(id, { originPluginId: "regional-manager", createdAt, displayTitle: id }),
-  avatar: null,
+  look: null,
   line: null,
   current: false,
+  state: null,
+  project: "bb-plugins",
 });
 const PR = manager("PR Reviews", 1);
 const SIDEBAR = manager("Sidebar", 2);

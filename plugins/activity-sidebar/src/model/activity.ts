@@ -4,12 +4,15 @@
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 import { namingThreads, type ManagerLine } from "./manager-line.ts";
-import { isManagerThread, type Avatar, type ManagerLook } from "./manager-look.ts";
+import { isManagerThread, type ManagerLook } from "./manager-look.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
 import { wakesIn } from "./sleep.ts";
 import { baseState, NEEDS_YOU, stateOf, UNDER_WAY, type ZState } from "./state.ts";
 import { indexThreads, type ThreadIndex } from "./thread-index.ts";
 import { ago } from "./time.ts";
+
+/** A thread's project when bb names none. */
+const NO_PROJECT = "No project";
 
 export type SectionKey = "pinned" | "activity" | "working" | "asleep" | "archived";
 
@@ -40,11 +43,19 @@ export type RowDetail = { machine: string | null; branch: string | null };
 export type Section = { key: SectionKey; rows: readonly RowModel[] };
 
 /**
- * A regional manager's row in the Managers view: its name is its thread's title. Its avatar is its
- * look's, null while that is unknown (a plain one shows); its line is the first sentence of its latest
- * reply, null with none (its name stands alone).
+ * A regional manager's row in the Managers view: its name is its thread's title. Its look (its id,
+ * avatar and description) is null while unknown: a plain avatar shows, and its card lists nothing. Its
+ * line is the first sentence of its latest reply, null with none (its name stands alone). Its card
+ * also says its state, which a row has, and its project.
  */
-export type ManagerModel = { thread: PluginSidebarThread; avatar: Avatar | null; line: string | null; current: boolean };
+export type ManagerModel = {
+  thread: PluginSidebarThread;
+  look: ManagerLook | null;
+  line: string | null;
+  current: boolean;
+  state: ZState | null;
+  project: string;
+};
 
 /**
  * The sections; the open regional managers, oldest first; and the index of who hangs under whom they
@@ -89,7 +100,7 @@ export function buildActivity(input: ActivityInput): ActivityModel {
 
   const toRow = ({ thread, sleep, state, section }: (typeof placed)[number]): RowModel => {
     const current = thread.id === input.activeThreadId || thread.id === currentRoot;
-    const name = projectNames.get(thread.projectId) ?? "No project";
+    const name = projectNames.get(thread.projectId) ?? NO_PROJECT;
     const asleepUntil = section === "asleep" && sleep !== undefined ? sleep.until : null;
     return {
       thread,
@@ -112,15 +123,22 @@ export function buildActivity(input: ActivityInput): ActivityModel {
     return { key, rows: ordered.map(toRow) };
   });
 
-  const looks = new Map(input.looks.map((look) => [look.threadId, look.avatar]));
+  const looks = new Map(input.looks.map((look) => [look.threadId, look]));
   const titles = new Map(input.threads.map((t) => [t.id, t.displayTitle]));
   const lines = new Map(input.lines.map((line) => [line.threadId, namingThreads(line.line, (id) => titles.get(id))]));
   const managers = input.threads
     .filter(isOpenManager)
     .sort((a, b) => a.createdAt - b.createdAt || compare(a.id, b.id))
-    .map((thread): ManagerModel => {
-      return { thread, avatar: looks.get(thread.id) ?? null, line: lines.get(thread.id) ?? null, current: thread.id === input.activeThreadId || thread.id === currentRoot };
-    });
+    .map(
+      (thread): ManagerModel => ({
+        thread,
+        look: looks.get(thread.id) ?? null,
+        line: lines.get(thread.id) ?? null,
+        current: thread.id === input.activeThreadId || thread.id === currentRoot,
+        state: stateOf(index.liveState(thread), undefined, input.now),
+        project: projectNames.get(thread.projectId) ?? NO_PROJECT,
+      }),
+    );
   return { sections, managers, index };
 }
 
