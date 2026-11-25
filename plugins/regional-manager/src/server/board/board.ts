@@ -66,9 +66,10 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
       return needsYou(decisions, reads.map(({ view }) => ({ id: view.issue.id, status: view.status, needsYou: view.needsYou })));
     },
 
-    /** Its open work, as another plugin reads it, from the board's own rows. */
+    /** Its open work, as another plugin reads it, from the board's own rows and decisions, of one read (readBoard). */
     async openIssues(id: CoordinatorId): Promise<OpenIssues> {
-      return openIssues(store.decisions(id), (await readIssues(bb, store, id)).map(rowOf));
+      const { reads, decisions } = await readBoard(bb, store, id);
+      return openIssues(decisions, reads.map(rowOf));
     },
   };
 }

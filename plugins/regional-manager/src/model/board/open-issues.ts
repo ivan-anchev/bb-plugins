@@ -3,10 +3,10 @@
 // listed themselves, and the open decisions that name no listed issue. Placed by the board's own
 // rule (board-groups.ts laneOf) from the board's own rows, so it never disagrees with the Board.
 import { z } from "zod";
-import { decisionIdSchema, isOpen, type Decision } from "../decision.ts";
+import { decisionIdSchema, type Decision } from "../decision.ts";
 import { issueIdSchema, type IssueId } from "../issue/issue.ts";
 import { issueStatusSchema, type IssueStatus } from "../issue/status.ts";
-import { laneOf } from "./board-groups.ts";
+import { laneOf, waitingDecisions } from "./board-groups.ts";
 
 /** The lanes of work under way, in the board's order. why not In review: it waits on a merge, not on work. */
 const UNDER_WAY: readonly IssueStatus[] = ["verifying", "reviewing", "in-progress"];
@@ -17,7 +17,7 @@ const listedSchema = z.object({ id: issueIdSchema, title: z.string(), status: is
  * One board's open work. `needsYou`: every issue under Needs you, a flagged sub-issue included, with
  * why, in the order filed. `underWay`: every Verifying, Reviewing and In progress issue not under
  * Needs you, in the board's order. `parents`: the parent of a listed sub-issue, when it is in
- * neither list. `decisions`: the open decisions whose issue (if any) is in neither list.
+ * neither list. `decisions`: the decisions waiting for the user (board-groups.ts waitingDecisions) whose issue (if any) is in neither list.
  */
 export const openIssuesSchema = z.object({
   needsYou: z.array(listedSchema.extend({ reason: z.string() })),
@@ -41,7 +41,7 @@ export function openIssues(decisions: readonly Decision[], rows: readonly Row[])
     needsYou,
     underWay,
     parents: rows.filter(({ id }) => parentIds.has(id)).map(({ id, title, status }) => ({ id, title, status })),
-    decisions: decisions.filter(isOpen).flatMap(({ id, issueId, question }) => (issueId !== null && isListed.has(issueId) ? [] : [{ id, question }])),
+    decisions: waitingDecisions(decisions, rows).flatMap(({ id, issueId, question }) => (issueId !== null && isListed.has(issueId) ? [] : [{ id, question }])),
   };
 }
 
