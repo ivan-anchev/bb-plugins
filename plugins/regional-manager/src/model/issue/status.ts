@@ -69,7 +69,7 @@ export type IssueView = {
   blockedBy: Related[];
   /** The open issues that depend on it, each with its status; none once it is closed itself, since a closed issue blocks nothing. Derived as blockedBy is. */
   blocks: Related[];
-  /** A parent's sub-issues: how many are Done, of how many; null for an issue with none. */
+  /** A parent's sub-issues: how many are Done, of how many not canceled (0 when every one is); null for an issue with none. why not canceled ones: nothing of them is left to do or was done. */
   subIssues: { done: number; total: number } | null;
   /** What closed it (null: it is open). */
   closedBy: Closure | null;
@@ -158,7 +158,8 @@ const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | nu
  */
 function parentView({ issue, openDecision, finalCheck, verifierAsks }: IssueFacts, subIssues: readonly Placed[]): Placed {
   const done = subIssues.filter(({ status }) => status === "done");
-  const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: subIssues.length }, finalCheckDue: null };
+  const counted = subIssues.filter(({ status }) => status !== "canceled");
+  const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: counted.length }, finalCheckDue: null };
   const final = finalOf(issue, null);
   if (final !== null) return { ...base, ...final, needsYou: null };
   const asked = openDecision ? ASKED : null;

@@ -92,7 +92,7 @@ const issueRowSchema = z.object({
   id: issueIdSchema,
   kind: kindSchema,
   parentId: issueIdSchema.nullable(),
-  subIssues: z.object({ done: z.number().int().nonnegative(), total: z.number().int().positive() }).nullable(),
+  subIssues: z.object({ done: z.number().int().nonnegative(), total: z.number().int().nonnegative() }).nullable(),
   blockedBy: z.array(issueIdSchema),
   blocks: z.array(issueIdSchema),
   title: z.string(),

@@ -8,7 +8,7 @@ import type { PrSnapshot } from "../verdict/pr.ts";
 import type { CriterionResult, Verdict } from "../verdict/verdict.ts";
 import { memoryFileSchema } from "../memory-file.ts";
 import { issueIdSchema, type Issue } from "./issue.ts";
-import { issueViews, placedByLeft, type Handed, type HolderThread, type IssueFacts, type IssueStatus } from "./status.ts";
+import { headlineText, issueViews, placedByLeft, type Handed, type HolderThread, type IssueFacts, type IssueStatus } from "./status.ts";
 
 const coordinatorId = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 const issue: Issue = {
@@ -206,6 +206,15 @@ test("a parent rolls up from its sub-issues: any started is In progress, any in 
   const { parent, subs } = family("build", [held(thread("idle"), { handoff: blocked, check: null }), resting("todo")]);
   assert.deepEqual([parent.status, parent.needsYou, parent.subIssues, parent.holder], ["in-progress", null, { done: 0, total: 2 }, null], "a flagged sub-issue flags itself, not its parent");
   assert.equal(subs[0]?.needsYou, "Blocked: Needs a staging key");
+});
+
+test("a parent counts its sub-issues Done of those not canceled: 7 Done, 3 open and 4 canceled read 7/10; every one canceled, 0/0", () => {
+  const times = <Item,>(n: number, item: Item): Item[] => Array.from({ length: n }, () => item);
+  const { parent, subs } = family("build", [...times(7, closedAs("accepted")), ...times(3, resting("todo")), ...times(4, closedAs("canceled"))]);
+  assert.deepEqual(subs.map(({ status }) => status), [...times(7, "done"), ...times(3, "todo"), ...times(4, "canceled")]);
+  assert.deepEqual(parent.subIssues, { done: 7, total: 10 });
+  assert.equal(headlineText(parent), "7/10 done", "catch-up prints the count the board shows");
+  assert.deepEqual(family("build", times(2, closedAs("canceled"))).parent.subIssues, { done: 0, total: 0 }, "still a parent, with nothing to count");
 });
 
 test("once every sub-issue is closed and one is Done: a research parent is Done, by its sub-issues' closes; a build parent's final check is due once all are merged", () => {

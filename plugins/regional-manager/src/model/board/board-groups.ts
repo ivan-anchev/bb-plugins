@@ -33,29 +33,36 @@ function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane;
 
 /**
  * A row on the board: a decision waiting for the user's answer; a top-level issue, with its
- * sub-issues under it (none: it has none), whatever their own lanes; or a sub-issue that waits on
- * the user, listed flat under Needs you as well as under its parent.
+ * sub-issues under it but its canceled ones (none: it has none), whatever their own lanes; a
+ * sub-issue that waits on the user, listed flat under Needs you as well as under its parent; or a
+ * canceled sub-issue, which lives under Canceled, apart from its parent.
  */
 export type BoardItem<Issue> =
   | { kind: "decision"; lane: "needs-you"; decision: OpenDecision }
   | { kind: "issue"; lane: Lane; issue: Issue; subIssues: Issue[] }
-  | { kind: "flagged-sub-issue"; lane: "needs-you"; issue: Issue };
+  | { kind: "flagged-sub-issue"; lane: "needs-you"; issue: Issue }
+  | { kind: "canceled-sub-issue"; lane: "canceled"; issue: Issue };
 
 /**
  * The board's rows in each lane that has any, in the board's order. A decision sits under Needs you
  * until the user answers it, first there, and then leaves the board: it stays among its issue's
  * decisions (issue-detail.tsx, issue_read). A top-level issue sits in its own lane, its sub-issues
  * under it; a flagged issue sits under Needs you only, never also in its status's lane, and a
- * flagged sub-issue under its parent too.
+ * flagged sub-issue under its parent too. A canceled sub-issue sits under Canceled, never under its
+ * parent: nothing of it is left to do or was done, so its parent doesn't count it either
+ * (status.ts parentView).
  * A lane counts its rows: its sub-issues are counted by their parent.
  */
 export function boardGroups<Issue extends Nested>(decisions: readonly Decision[], issues: readonly Issue[]): { lane: Lane; rows: BoardItem<Issue>[] }[] {
-  const subIssuesOf = (id: IssueId): Issue[] => issues.filter(({ parentId }) => parentId === id);
+  const subIssuesOf = (id: IssueId): Issue[] => issues.filter(({ parentId, status }) => parentId === id && status !== "canceled");
   return byLane<BoardItem<Issue>>([
     ...decisions.filter(isOpen).map((decision) => ({ kind: "decision", lane: "needs-you", decision }) as const),
     ...issues.flatMap((issue): BoardItem<Issue>[] => {
       if (issue.parentId === null) return [{ kind: "issue", lane: laneOf(issue), issue, subIssues: subIssuesOf(issue.id) }];
-      return issue.needsYou === null ? [] : [{ kind: "flagged-sub-issue", lane: "needs-you", issue }];
+      return [
+        ...(issue.status === "canceled" ? [{ kind: "canceled-sub-issue", lane: "canceled", issue } as const] : []),
+        ...(issue.needsYou === null ? [] : [{ kind: "flagged-sub-issue", lane: "needs-you", issue } as const]),
+      ];
     }),
   ]);
 }
