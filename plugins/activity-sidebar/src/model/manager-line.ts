@@ -19,6 +19,11 @@ export function firstSentence(markdown: string): string | null {
   return null;
 }
 
+/** `line` with each bb thread mention (`@thread:<id>`, perhaps to one message) named as bb shows it: by the thread's title, or "a thread" when the sidebar doesn't hold it. */
+export function namingThreads(line: string, titleOf: (threadId: string) => string | undefined): string {
+  return line.replace(/@thread:([\w-]+)(?:#msg=\d+)?/g, (_, threadId: string) => titleOf(threadId) ?? "a thread");
+}
+
 // ------------------------------------------------------------------ layer 2
 
 /** A sentence: up to its first ".", "!" or "?" that a space follows. */

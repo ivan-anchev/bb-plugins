@@ -3,7 +3,7 @@
 // Pure: the live threads, the sleeps, the managers' looks and lines and the clock in; rows, sections and managers out.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
-import type { ManagerLine } from "./manager-line.ts";
+import { namingThreads, type ManagerLine } from "./manager-line.ts";
 import { isManagerThread, type Avatar, type ManagerLook } from "./manager-look.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
 import { wakesIn } from "./sleep.ts";
@@ -113,7 +113,8 @@ export function buildActivity(input: ActivityInput): ActivityModel {
   });
 
   const looks = new Map(input.looks.map((look) => [look.threadId, look.avatar]));
-  const lines = new Map(input.lines.map((line) => [line.threadId, line.line]));
+  const titles = new Map(input.threads.map((t) => [t.id, t.displayTitle]));
+  const lines = new Map(input.lines.map((line) => [line.threadId, namingThreads(line.line, (id) => titles.get(id))]));
   const managers = input.threads
     .filter(isOpenManager)
     .sort((a, b) => a.createdAt - b.createdAt || compare(a.id, b.id))

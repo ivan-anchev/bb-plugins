@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { firstSentence } from "./manager-line.ts";
+import { firstSentence, namingThreads } from "./manager-line.ts";
 
 test("the first sentence ends at '. ', '! ' or '? ', keeping its mark", () => {
   assert.equal(firstSentence("BBP-3 is running now. BBP-6 waits on it."), "BBP-3 is running now.");
@@ -34,4 +34,10 @@ test("a reply with nothing readable has no sentence", () => {
   assert.equal(firstSentence("   \n\n"), null);
   assert.equal(firstSentence("```\nonly code\n```"), null);
   assert.equal(firstSentence("---"), null);
+});
+
+test("a bb thread mention reads as the thread's title, or as a thread the sidebar doesn't hold", () => {
+  const titles: Record<string, string> = { thr_yy5n7jt7zj: "Managers' Manager" };
+  assert.equal(namingThreads("Waiting on the board of @thread:thr_yy5n7jt7zj.", (id) => titles[id]), "Waiting on the board of Managers' Manager.");
+  assert.equal(namingThreads("See @thread:thr_gone#msg=42 for it.", (id) => titles[id]), "See a thread for it.");
 });

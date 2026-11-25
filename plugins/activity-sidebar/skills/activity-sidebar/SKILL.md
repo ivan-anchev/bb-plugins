@@ -44,7 +44,8 @@ the sidebar, and each side owns the whole list under it.
 - **Managers** lists your regional managers, oldest first, so a new one joins
   at the end and none above it moves. A row shows only the manager's avatar,
   its name (its thread's title) and, under it, one line: the first sentence
-  of the manager's own latest reply, as plain text (markdown stripped), fading
+  of the manager's own latest reply, as plain text (markdown stripped, a
+  mention of a thread shown as its title), fading
   at its end when it doesn't fit. Tool calls, empty replies, subagents' replies
   and messages sent to the manager (yours, or the Regional Manager plugin's
   wake-ups) never show there. A manager with no reply yet shows its name
