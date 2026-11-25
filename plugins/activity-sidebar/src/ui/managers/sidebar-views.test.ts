@@ -1,32 +1,106 @@
-import "../../test-tsx.ts";
+import "../../test-browser.ts";
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { afterEach, test } from "node:test";
+import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
+import { act, cleanup } from "@testing-library/react";
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import type { View } from "../../data/local-choice/choices.ts";
 import type { ManagerModel } from "../../model/activity.ts";
 import { thread } from "../../model/fixtures.ts";
 
-// What the sidebar shows around the threads' list, rendered as bb renders it. The threads' list
-// stands in as a marker: its own tests are list/items.test.ts and model/activity.test.ts.
+// The sidebar around the threads' list, mounted as bb mounts it. The threads' list stands in as its
+// scroller: its own tests are list/items.test.ts and model/activity.test.ts.
 
 const { SidebarViews } = await import("./sidebar-views.tsx");
 
-const THREADS = createElement("div", { "data-threads": "" });
-const MANAGER: ManagerModel = { thread: thread("thr_pr", { originPluginId: "regional-manager" }), avatar: null, description: null, current: false };
+afterEach(cleanup);
 
-function render(managers: readonly ManagerModel[], view: View): string {
-  return renderToStaticMarkup(createElement(SidebarViews, { managers, view, onView: () => {}, onNavigate: () => {}, threads: THREADS }));
+const THREADS = createElement("div", { className: "as-scroller", tabIndex: 0, "data-threads": "" });
+
+const manager = (id: string, createdAt: number): ManagerModel => ({
+  thread: thread(id, { originPluginId: "regional-manager", createdAt, displayTitle: id }),
+  avatar: null,
+  description: null,
+  current: false,
+});
+const PR = manager("PR Reviews", 1);
+const SIDEBAR = manager("Sidebar", 2);
+
+type Shown = { managers: readonly ManagerModel[]; view: View };
+const props = ({ managers, view }: Shown) => ({ managers, view, onView: () => {}, onNavigate: () => {}, threads: THREADS });
+
+function mount(shown: Shown) {
+  const slot = renderSlot({ component: SidebarViews }, props(shown));
+  const show = (next: Shown) => act(() => slot.lifecycle.rerender(createElement(SidebarViews, props(next))));
+  const threads = () => slot.container.querySelector<HTMLElement>("[data-threads]");
+  return { slot, show, threads };
 }
 
-test("with no regional managers there is no segment: the sidebar is the threads' list alone, as before managers", () => {
-  for (const view of ["threads", "managers"] as const) assert.equal(render([], view), renderToStaticMarkup(THREADS), view);
+test("with no regional managers there is no segment and no tab panel: the threads' list alone", () => {
+  const { slot, threads } = mount({ managers: [], view: "managers" });
+  assert.equal(slot.queryByRole("tablist"), null);
+  assert.equal(slot.queryByRole("tabpanel"), null);
+  assert.ok(threads(), "the threads' list shows, whatever view was chosen");
 });
 
 test("with managers, the Managers | Threads segment stands over the chosen view", () => {
-  const html = render([MANAGER], "threads");
-  assert.match(html, /role="tablist"/);
-  assert.match(html, /role="tab"[^>]*aria-selected="false"[^>]*>Managers</);
-  assert.match(html, /role="tab"[^>]*aria-selected="true"[^>]*>Threads</);
-  assert.match(html, /role="tabpanel"[^>]*><div data-threads=""><\/div><\/div>/);
+  const { slot, threads } = mount({ managers: [PR], view: "threads" });
+  assert.equal(slot.getByRole("tab", { name: "Threads" }).getAttribute("aria-selected"), "true");
+  assert.equal(slot.getByRole("tab", { name: "Managers" }).getAttribute("aria-selected"), "false");
+  assert.ok(slot.getByRole("tabpanel").contains(threads()));
+});
+
+test("a first manager started, or the last archived, never remounts the threads' list: its focus and scroll stay", async () => {
+  const { show, threads } = mount({ managers: [], view: "threads" });
+  const list = threads();
+  assert.ok(list);
+  list.focus();
+  list.scrollTop = 128;
+
+  await show({ managers: [PR], view: "threads" });
+  assert.equal(threads(), list, "the same list, not a new one");
+  assert.equal(document.activeElement, list);
+  assert.equal(list.scrollTop, 128);
+
+  await show({ managers: [], view: "threads" });
+  assert.equal(threads(), list);
+  assert.equal(document.activeElement, list);
+  assert.equal(list.scrollTop, 128);
+});
+
+test("the last manager archived while focus is on the segment or a manager's row: focus passes to the threads' list", async () => {
+  for (const focusOn of ["tab", "row"] as const) {
+    const { slot, show, threads } = mount({ managers: [PR], view: "managers" });
+    const target = focusOn === "tab" ? slot.getByRole("tab", { name: "Managers" }) : slot.getByRole("link", { name: "PR Reviews" });
+    target.focus();
+    assert.equal(document.activeElement, target);
+
+    await show({ managers: [], view: "managers" });
+    assert.equal(document.activeElement, threads(), focusOn);
+    cleanup();
+  }
+});
+
+test("a focused manager archived while others remain: focus passes to the next one, or the one before the last", async () => {
+  const { slot, show } = mount({ managers: [PR, SIDEBAR], view: "managers" });
+  slot.getByRole("link", { name: "PR Reviews" }).focus();
+
+  await show({ managers: [SIDEBAR], view: "managers" });
+  assert.equal(document.activeElement, slot.getByRole("link", { name: "Sidebar" }));
+
+  const third = manager("Docs", 3);
+  await show({ managers: [SIDEBAR, third], view: "managers" });
+  slot.getByRole("link", { name: "Docs" }).focus();
+  await show({ managers: [SIDEBAR], view: "managers" });
+  assert.equal(document.activeElement, slot.getByRole("link", { name: "Sidebar" }));
+});
+
+test("focus outside the sidebar stays where it is when the last manager goes", async () => {
+  const { show } = mount({ managers: [PR], view: "managers" });
+  const elsewhere = document.body.appendChild(document.createElement("button"));
+  elsewhere.focus();
+
+  await show({ managers: [], view: "managers" });
+  assert.equal(document.activeElement, elsewhere);
+  elsewhere.remove();
 });

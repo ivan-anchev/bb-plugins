@@ -37,7 +37,7 @@
   pointer-events: none;
 }
 
-/* --- With regional managers: the Managers | Threads segment over the view it shows (src/ui/managers/view-tabs.tsx) */
+/* --- With regional managers: the Managers | Threads segment over the view it shows (src/ui/managers) */
 .as-views {
   display: flex;
   flex-direction: column;
@@ -68,7 +68,7 @@
   background: var(--muted);
   font-family: var(--font-sans);
 }
-/* why: the list's own ease-out (OUT3, src/list/motion-plan.ts), short: the thumb follows the press, never trails it. */
+/* why: the list's own ease-out (OUT3, src/list/motion-plan.ts, set as --as-ease-out), short: the thumb follows the press, never trails it. */
 .as-segment-thumb {
   position: absolute;
   top: 2px;
@@ -77,7 +77,7 @@
   height: 24px;
   border-radius: 6px;
   background: var(--surface-selected);
-  transition: transform 180ms cubic-bezier(0.33, 1, 0.68, 1);
+  transition: transform 180ms var(--as-ease-out);
 }
 .as-segment[data-on="threads"] .as-segment-thumb {
   transform: translateX(100%);
@@ -191,6 +191,10 @@
   color: var(--foreground);
   font-weight: 500;
   line-height: 18px;
+}
+/* why: on the selected wash, Zeron's muted ink falls under 4.5:1 in light; the full ink keeps it readable. */
+.as-manager[aria-current="page"] .as-manager-description {
+  color: var(--foreground);
 }
 .as-manager-description {
   display: -webkit-box;

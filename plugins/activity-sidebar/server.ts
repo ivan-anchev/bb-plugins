@@ -12,9 +12,9 @@ export default function plugin(bb: BbPluginApi): void {
   const archived = openArchivedCount({ threads: bb.sdk.threads, rpc: bb.rpc });
   for (const event of ARCHIVE_EVENTS) bb.events.on(event, ({ thread }) => archived.changed(thread));
 
-  const looks = openManagerLooks({ plugins: bb.sdk.plugins, rpc: bb.rpc, log: bb.log });
+  const looks = openManagerLooks({ plugins: bb.sdk.plugins, threads: bb.sdk.threads, rpc: bb.rpc, log: bb.log });
   for (const event of MANAGER_EVENTS) bb.events.on(event, ({ thread }) => looks.changed(thread));
-  bb.onDispose(bb.sdk.subscribe({ event: "thread:changed", callback: looks.threadChanged }));
+  bb.onDispose(bb.sdk.subscribe({ event: "thread:changed", callback: (change) => void looks.threadChanged(change) }));
   bb.background.schedule("manager-looks", "* * * * *", looks.stale);
 
   bb.rpc.register(activitySidebarContract, createRpcHandlers({ rpc: bb.rpc, store, archived, looks }));

@@ -1,4 +1,5 @@
-// Test rows: a valid PluginSidebarThread with the fields a test cares about overridden.
+// Test rows: a valid PluginSidebarThread with the fields a test cares about overridden; and the
+// Regional Manager plugin's `coordinators` answers, well formed and not.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 
 export function thread(id: string, overrides: Partial<PluginSidebarThread> = {}): PluginSidebarThread {
@@ -47,3 +48,25 @@ export function project(id: string, name: string): PluginSidebarProject {
 
 /** Working, as bb resolves a running turn. */
 export const WORKING = { indicator: "runtime", status: "active", runtimeStatus: "active" } as const satisfies Partial<PluginSidebarThread>;
+
+export const AVATAR = { kind: "blob", shape: "bear", hue: "violet", expression: "attentive" } as const;
+
+/** The Regional Manager plugin's answer, as it publishes it: more than the sidebar reads. */
+export const COORDINATORS = {
+  coordinators: [
+    { id: "mgr_1", threadId: "thr_pr", projectId: "prj_a", description: "Reviews every open pull request.", avatar: AVATAR },
+    { id: "mgr_2", threadId: "thr_sb", projectId: "prj_a", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "rose" } },
+  ],
+  notStarted: [{ id: "mgr_3", name: "Docs", description: null, avatar: AVATAR }],
+};
+
+/** Answers the sidebar's copy of the schema refuses: each must leave every manager on its fallback. */
+export const MALFORMED_COORDINATORS: readonly unknown[] = [
+  { managers: [] },
+  { coordinators: [{ threadId: "thr_pr", description: null }] },
+  { coordinators: [{ threadId: "thr_pr", description: null, avatar: { ...AVATAR, shape: "octagon" } }] },
+  { coordinators: [{ thread: "thr_pr", description: null, avatar: AVATAR }] },
+  { coordinators: [{ threadId: "thr_pr", description: "", avatar: AVATAR }] },
+  { coordinators: [{ threadId: "thr_pr", description: "   ", avatar: AVATAR }] },
+  { coordinators: [{ threadId: "thr_pr", description: "x".repeat(501), avatar: AVATAR }] },
+];

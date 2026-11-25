@@ -23,8 +23,11 @@ const EXPRESSIONS = ["neutral", "happy", "content", "curious", "attentive", "det
 const avatarSchema = z.object({ kind: z.literal("blob"), shape: z.enum(SHAPES), hue: z.enum(HUES), expression: z.enum(EXPRESSIONS) });
 export type Avatar = z.infer<typeof avatarSchema>;
 
+/** A description as the Regional Manager plugin keeps it: trimmed, 1 to 500 characters; null for none. */
+const descriptionSchema = z.string().trim().min(1).max(500).nullable();
+
 /** What the Managers view reads of one started manager; the rest of the record is dropped. */
-export const managerLookSchema = z.object({ threadId: z.string().min(1), description: z.string().nullable(), avatar: avatarSchema });
+export const managerLookSchema = z.object({ threadId: z.string().min(1), description: descriptionSchema, avatar: avatarSchema });
 export type ManagerLook = z.infer<typeof managerLookSchema>;
 
 /** The `coordinators` read's output, as far as the Managers view reads it. */

@@ -3,12 +3,16 @@ import { test } from "node:test";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
 import { buildActivity, sleepersAskingForYou, type ActivityInput, type SectionKey } from "./activity.ts";
-import { project, thread, WORKING } from "./fixtures.ts";
+import { AVATAR, project, thread, WORKING } from "./fixtures.ts";
 
 const NOW = 10 * 3_600_000;
 
+function model(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
+  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: NOW, activeThreadId: null, filter: null, looks: [], ...extra });
+}
+
 function build(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
-  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: NOW, activeThreadId: null, filter: null, looks: [], ...extra }).sections;
+  return model(threads, extra).sections;
 }
 
 function ids(sections: ReturnType<typeof build>, key: SectionKey): string[] {
@@ -289,11 +293,8 @@ test("a row's detail says its machine and its branch, each when bb names one", (
 // ------------------------------------------------------------------ regional managers
 
 const MANAGER = { originPluginId: "regional-manager" } as const satisfies Partial<PluginSidebarThread>;
-const AVATAR = { kind: "blob", shape: "bear", hue: "violet", expression: "attentive" } as const;
 
-function managers(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
-  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: NOW, activeThreadId: null, filter: null, looks: [], ...extra }).managers;
-}
+const managerIds = (built: ReturnType<typeof model>): string[] => built.managers.map((m) => m.thread.id);
 
 test("an open regional manager leaves Activity, Working and Asleep, and every other section, for the managers", () => {
   const threads = [
@@ -303,66 +304,50 @@ test("an open regional manager leaves Activity, Working and Asleep, and every ot
     thread("pinned", { ...MANAGER, createdAt: 4, isPinned: true, pinnedAt: 1 }),
     thread("plain", { latestAttentionAt: 2 }),
   ];
-  const sleeps = new Map([["sleeping", { threadId: "sleeping", until: NOW + 3_600_000 }]]);
-  const sections = build(threads, { sleeps });
-  assert.deepEqual(ids(sections, "activity"), ["plain"]);
-  for (const key of ["pinned", "working", "asleep", "archived"] as const) assert.deepEqual(ids(sections, key), [], key);
-  assert.deepEqual(
-    managers(threads, { sleeps }).map((m) => m.thread.id),
-    ["idle", "working", "sleeping", "pinned"],
-  );
+  const built = model(threads, { sleeps: new Map([["sleeping", { threadId: "sleeping", until: NOW + 3_600_000 }]]) });
+  assert.deepEqual(ids(built.sections, "activity"), ["plain"]);
+  for (const key of ["pinned", "working", "asleep", "archived"] as const) assert.deepEqual(ids(built.sections, key), [], key);
+  assert.deepEqual(managerIds(built), ["idle", "working", "sleeping", "pinned"]);
 });
 
 test("an archived regional manager stays an ordinary row on Archived, not among the managers", () => {
-  const threads = [thread("open", MANAGER), thread("gone", { ...MANAGER, isArchived: true, archivedAt: 5 })];
-  assert.deepEqual(ids(build(threads), "archived"), ["gone"]);
-  assert.deepEqual(
-    managers(threads).map((m) => m.thread.id),
-    ["open"],
-  );
+  const built = model([thread("open", MANAGER), thread("gone", { ...MANAGER, isArchived: true, archivedAt: 5 })]);
+  assert.deepEqual(ids(built.sections, "archived"), ["gone"]);
+  assert.deepEqual(managerIds(built), ["open"]);
 });
 
 test("only the regional manager's own thread is a manager: its agents are subthreads, and other plugins' threads are threads", () => {
-  const threads = [thread("mgr", MANAGER), thread("agent", { ...MANAGER, parentThreadId: "mgr" }), thread("note", { originPluginId: "notes" })];
-  assert.deepEqual(ids(build(threads), "activity"), ["note"]);
-  assert.deepEqual(
-    managers(threads).map((m) => m.thread.id),
-    ["mgr"],
-  );
+  const built = model([thread("mgr", MANAGER), thread("agent", { ...MANAGER, parentThreadId: "mgr" }), thread("note", { originPluginId: "notes" })]);
+  assert.deepEqual(ids(built.sections, "activity"), ["note"]);
+  assert.deepEqual(managerIds(built), ["mgr"]);
 });
 
 test("managers stand oldest first, whatever they last did, so a new one joins at the end", () => {
-  const threads = [
+  const built = model([
     thread("newest", { ...MANAGER, createdAt: 300, latestAttentionAt: 1 }),
     thread("oldest", { ...MANAGER, createdAt: 100, latestAttentionAt: 3 }),
     thread("middle", { ...MANAGER, createdAt: 200, latestAttentionAt: 2, ...WORKING }),
-  ];
-  assert.deepEqual(
-    managers(threads).map((m) => m.thread.id),
-    ["oldest", "middle", "newest"],
-  );
+  ]);
+  assert.deepEqual(managerIds(built), ["oldest", "middle", "newest"]);
 });
 
 test("the project filter narrows the threads, never the managers", () => {
-  const threads = [thread("mgr", { ...MANAGER, projectId: "prj_b" }), thread("a", { projectId: "prj_a" }), thread("b", { projectId: "prj_b" })];
-  assert.deepEqual(ids(build(threads, { filter: "prj_a" }), "activity"), ["a"]);
-  assert.deepEqual(
-    managers(threads, { filter: "prj_a" }).map((m) => m.thread.id),
-    ["mgr"],
-  );
+  const built = model([thread("mgr", { ...MANAGER, projectId: "prj_b" }), thread("a", { projectId: "prj_a" }), thread("b", { projectId: "prj_b" })], { filter: "prj_a" });
+  assert.deepEqual(ids(built.sections, "activity"), ["a"]);
+  assert.deepEqual(managerIds(built), ["mgr"]);
 });
 
 test("a manager shows its look; without one (the read failed or doesn't know it), its name with a plain avatar and no description", () => {
   const threads = [thread("known", { ...MANAGER, createdAt: 1, displayTitle: "PR Reviews" }), thread("unknown", { ...MANAGER, createdAt: 2, displayTitle: "Sidebar" })];
   const looks = [{ threadId: "known", description: "Reviews every open pull request.", avatar: AVATAR }];
-  const [known, unknown] = managers(threads, { looks, activeThreadId: "unknown" });
+  const [known, unknown] = model(threads, { looks, activeThreadId: "unknown" }).managers;
   assert.deepEqual({ ...known, thread: known.thread.displayTitle }, { thread: "PR Reviews", avatar: AVATAR, description: "Reviews every open pull request.", current: false });
   assert.deepEqual({ ...unknown, thread: unknown.thread.displayTitle }, { thread: "Sidebar", avatar: null, description: null, current: true });
 });
 
 test("with no managers there are none, and the sections are exactly as without them", () => {
-  const threads = [thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1, ...WORKING })];
-  assert.deepEqual(managers(threads), []);
-  assert.deepEqual(ids(build(threads), "activity"), ["a"]);
-  assert.deepEqual(ids(build(threads), "working"), ["b"]);
+  const built = model([thread("a", { latestAttentionAt: 2 }), thread("b", { latestAttentionAt: 1, ...WORKING })]);
+  assert.deepEqual(built.managers, []);
+  assert.deepEqual(ids(built.sections, "activity"), ["a"]);
+  assert.deepEqual(ids(built.sections, "working"), ["b"]);
 });
