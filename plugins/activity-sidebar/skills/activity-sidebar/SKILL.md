@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, a Managers | Threads segment at the top while there are regional managers (Managers lists each by its avatar, name and description, oldest first), the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what the Managers | Threads segment and the Managers view show, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -34,6 +34,32 @@ commands and no settings.
 
   An empty shelf is left out. When the list is longer than the sidebar, the
   shelves follow Activity and you scroll down to them.
+
+## Managers and Threads
+
+While you have a regional manager open (one started by the Regional Manager
+plugin and not archived), a **Managers | Threads** segment sits at the top of
+the sidebar, and each side owns the whole list under it.
+
+- **Managers** lists your regional managers, oldest first, so a new one joins
+  at the end and none above it moves. A row shows only the manager's avatar,
+  its name (its thread's title) and its description, up to two lines: no
+  agent, project, state, age, subthread count or pull request. Click a row to
+  open the manager's thread; right-click it (or press the Menu key or
+  Shift+F10) for bb's own thread menu, without Sleep. There is no hover card.
+- **Threads** is the list described below, with the open managers taken out
+  of Activity, Pinned, Working and Asleep. An archived manager stays an
+  ordinary row on Archived.
+- The view menu (Compact and the project filter) sits on Activity's title, so
+  it shows in Threads only. The filter never hides a manager.
+- ← and → (and Home and End) move between the two tabs. The view you chose is
+  kept in this browser; Threads shows first until you pick Managers.
+- With no open managers there is no segment, and the sidebar is the threads'
+  list alone.
+- The avatar and description come from the Regional Manager plugin. They are
+  read again when a manager's thread is created, renamed or archived, and every
+  minute, so an edit shows within about a minute. If the plugin can't be read,
+  each manager shows with its name and a plain disc.
 
 ## Folding, the project filter and Compact
 
@@ -226,6 +252,8 @@ characters.
   split.
 - Tab to the list, then use ↑ and ↓ to move between rows and section titles.
   Enter opens a row or folds a title. The filter button is the next Tab stop.
+  With managers, the segment's selected tab is the Tab stop before the list;
+  in Managers, ↑ and ↓ move between the managers.
 
 ## Switching back
 

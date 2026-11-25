@@ -35,7 +35,7 @@ export function useRowActions(row: RowModel, sleep: RowSleep, sleepCustom: () =>
 }
 
 /** The fields bb's own actions read, copied from the sidebar row as bb's own list does. */
-function toActionTarget(t: PluginSidebarThread): PluginThreadActionTarget {
+export function toActionTarget(t: PluginSidebarThread): PluginThreadActionTarget {
   return {
     id: t.id,
     projectId: t.projectId,

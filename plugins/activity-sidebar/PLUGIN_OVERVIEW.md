@@ -2,7 +2,10 @@ Experimental: it may break with a bb update.
 
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
-Asleep and Archived shelves folded at its foot. A filter narrows it to one
+Asleep and Archived shelves folded at its foot. While you have regional
+managers, a Managers | Threads segment tops it: Managers lists them oldest
+first by their avatar, name and description, and Threads is the list without
+them. A filter narrows it to one
 project, and rows are one line or two. Each row shows the thread's agent, its project's coloured initial, its
 title, its pull request, how many threads run under it, and its state or how
 long ago it last moved. Right-click a row for bb's own thread menu, with Sleep (or
@@ -13,6 +16,13 @@ its plan while it works, and a tree of its subthreads to open.
 
 ## What you get
 
+- **Managers | Threads**, only while a regional manager is open: a segment at
+  the top that switches the whole list. Managers shows each regional manager
+  by its avatar, its name and its description (two lines at most), oldest
+  first; a click opens its thread and right-click opens bb's thread menu.
+  Threads is everything below, with the open managers taken out of every
+  section but Archived. The choice is remembered in this browser; ← and →
+  move between the tabs.
 - **Pinned** at the top, only while something is pinned, in bb's pin order.
 - **Activity** below it: every parent thread from every project, the one whose
   turn most recently ended first; opening or reading a thread doesn't move it.
@@ -75,6 +85,10 @@ updates exactly when bb's list would. Pull requests come from bb's GitHub PR
 Status plugin, one batched read for the rows on screen; a thread waiting for
 you is asked what it waits on (an approval or an answer) while its row is on
 screen. Sleep times are one small read from the
-plugin's own database, refreshed on every client when one changes. It draws only the rows on screen. The New
+plugin's own database, refreshed on every client when one changes. Managers'
+avatars and descriptions come from the Regional Manager plugin's published
+`coordinators` read, read again when a manager's thread is created, renamed or
+archived and every minute; without it, a manager shows its name and a plain
+disc. It draws only the rows on screen. The New
 thread button, search, navigation and footer stay bb's. To go back to bb's list,
 choose it under Settings → Appearance → Sidebar.

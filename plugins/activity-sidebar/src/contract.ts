@@ -1,7 +1,8 @@
-// The app <-> server contract and the records it carries: a thread's sleep, and the Archived shelf's
-// count. Shared by server.ts and the app: pure zod plus defineRpcContract.
+// The app <-> server contract and the records it carries: a thread's sleep, the Archived shelf's
+// count, and the regional managers' looks. Shared by server.ts and the app: pure zod plus defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { managerLookSchema } from "./model/manager-look.ts";
 
 /**
  * A thread put to sleep, keyed by thread id; `until` is epoch ms.
@@ -32,6 +33,9 @@ export type ArchivedCount = z.infer<typeof archivedCountSchema>;
 /** Every read of the archived count carries it; a parent archived, unarchived or deleted invalidates it. */
 export const ARCHIVED_COUNT_TAG = "archived-count";
 
+/** Every read of the managers' looks carries it; a regional manager's thread created, renamed or archived, and every minute, invalidate it. */
+export const MANAGER_LOOKS_TAG = "manager-looks";
+
 export const activitySidebarContract = defineRpcContract({
   /** Every sleep record, for the whole list at once. */
   sleeps: {
@@ -44,6 +48,12 @@ export const activitySidebarContract = defineRpcContract({
     input: z.object({}),
     output: archivedCountSchema,
     tags: () => [ARCHIVED_COUNT_TAG],
+  },
+  /** Each started regional manager's avatar and description; none when the Regional Manager plugin can't be read. */
+  managerLooks: {
+    input: z.object({}),
+    output: z.object({ looks: z.array(managerLookSchema) }),
+    tags: () => [MANAGER_LOOKS_TAG],
   },
   /** Sleep until a future time, wake now (`until` = now), or forget the record (null: opened after waking). */
   setSleep: {

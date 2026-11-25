@@ -178,7 +178,7 @@ function useRename(link: RefObject<HTMLAnchorElement | null>): Rename {
  * The Menu key or Shift+F10 on a focused row opens its menu under the row's start, as a right-click
  * would. bb's context menu opens only on `contextmenu`, which not every browser sends for these keys.
  */
-function openMenuFromKeyboard(e: KeyboardEvent<HTMLAnchorElement>) {
+export function openMenuFromKeyboard(e: KeyboardEvent<HTMLAnchorElement>) {
   if (e.key !== "ContextMenu" && !(e.shiftKey && e.key === "F10")) return;
   e.preventDefault();
   const r = e.currentTarget.getBoundingClientRect();
