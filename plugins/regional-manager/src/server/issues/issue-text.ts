@@ -26,8 +26,8 @@ const threadLink = (threadId: string | null): string => (threadId === null ? "no
 /**
  * The board section of a catch-up: every issue in its lane, each sub-issue under its parent's row,
  * with its agent, what blocks it and what it blocks, as the board's row says them, then the ready
- * ones; or why it couldn't be read. A flagged sub-issue is also listed under Needs you, as the board
- * shows it.
+ * ones; or why it couldn't be read. A flagged sub-issue is also listed under Needs you, and a
+ * canceled one under Canceled, not under its parent, as the board shows them.
  */
 export function boardText(reads: readonly IssueRead[] | { error: string }, pluginId: string): string {
   if ("error" in reads) return `## Board\n\nCould not read your agents' threads from bb: ${reads.error}. Call crew_catch_up again before relying on any issue's status.`;
@@ -37,7 +37,7 @@ export function boardText(reads: readonly IssueRead[] | { error: string }, plugi
   return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view), pluginId)].join("\n\n");
 }
 
-/** A row's lines in its lane: an issue's, each of its sub-issues indented under it. why no decision: catch-up lists them in their own section. */
+/** A row's lines in its lane: an issue's, each of its sub-issues indented under it; a sub-issue apart from its parent names it. why no decision: catch-up lists them in their own section. */
 function laneLines(item: BoardItem<IssueRead>, pluginId: string): string[] {
   switch (item.kind) {
     case "decision":
@@ -45,6 +45,7 @@ function laneLines(item: BoardItem<IssueRead>, pluginId: string): string[] {
     case "issue":
       return [rowLine(item.issue, pluginId), ...item.subIssues.map((sub) => `  ${rowLine(sub, pluginId)}`)];
     case "flagged-sub-issue":
+    case "canceled-sub-issue":
       return [rowLine(item.issue, pluginId)];
     default:
       return item satisfies never;

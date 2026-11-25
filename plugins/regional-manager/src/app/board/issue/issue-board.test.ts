@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, within } from "@testing-library/react";
+import { userEvent } from "@testing-library/user-event";
 import { createElement, type ComponentProps } from "react";
 import type { IssueRow } from "../../../contract.ts";
 import { agentIdSchema } from "../../../model/agent/agent.ts";
@@ -257,23 +258,22 @@ const SPLIT: IssueRow[] = [
   issue("WEB-5", { status: "todo", headline: "Not started", blocks: [issueIdSchema.parse("WEB-4")] }),
 ];
 
-/** The ids of the issue rows in a list, top level only, each with the ids of the rows hung under it. */
+/** The rows in a list, top level only, each with the rows hung under it: an issue's by its id, the completed row by its words. */
 const rowsIn = (list: HTMLElement): string[][] =>
-  [...list.children].map((item) => [...item.querySelectorAll<HTMLElement>(".rmi-row")].map((button) => /^WEB-\d+/.exec(button.getAttribute("aria-label") ?? "")?.[0] ?? "?"));
+  [...list.children].map((item) => [...item.querySelectorAll<HTMLElement>(".rmi-row")].map((button) => /^WEB-\d+/.exec(button.getAttribute("aria-label") ?? "")?.[0] ?? button.textContent ?? "?"));
 
-test("a parent's sub-issues hang under it in its lane on elbow rails, each with its own glyph, the parent counting them Done in a pill with no fold; a lane counts its top-level rows", () => {
+test("a parent's sub-issues hang under it in its lane on elbow rails, each with its own glyph, its Done ones behind a completed row while it is In progress, the parent counting them Done in a pill; a lane counts its top-level rows", () => {
   const { view } = mount(SPLIT, []);
   const headers = view.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
   assert.deepEqual(headers, ["Needs you1", "In progress1", "Todo1"], "the parent counts once in its lane, its sub-issues by its own count");
 
   const working = view.getByRole("region", { name: /^In progress/ });
-  assert.deepEqual(rowsIn(within(working).getAllByRole("list")[0] ?? assert.fail("no list")), [["WEB-1", "WEB-2", "WEB-3", "WEB-4"]], "all three under the parent, whatever their own status");
+  assert.deepEqual(rowsIn(within(working).getAllByRole("list")[0] ?? assert.fail("no list")), [["WEB-1", "WEB-3", "WEB-4", "+1 completed"]], "the open ones under the parent, whatever their own status, then the Done one folded");
   const subs = within(working).getAllByRole("list")[1] ?? assert.fail("no sub-issue list");
   const items = within(subs).getAllByRole("listitem");
   assert.deepEqual(
-    items.map((item) => shown(within(item).getByRole("button"))),
+    items.slice(0, 2).map((item) => shown(within(item).getByRole("button"))),
     [
-      { glyph: "Done", id: "WEB-2", title: "Issue WEB-2", pills: [], pr: null, ask: null },
       { glyph: "Needs you", id: "WEB-3", title: "Issue WEB-3", pills: [], pr: null, ask: null },
       { glyph: "Todo", id: "WEB-4", title: "Issue WEB-4", pills: ["blocked 1"], pr: null, ask: null },
     ],
@@ -283,14 +283,134 @@ test("a parent's sub-issues hang under it in its lane on elbow rails, each with 
   const rails = items.map((item) => item.querySelector(".rmi-rails path")?.getAttribute("d") ?? assert.fail("no rails"));
   assert.match(rails[0] ?? "", /^M14\.5 -8V11A4 4 0 0 0 18\.5 15H26M14\.5 11V30$/, "the first reaches up to the parent's glyph and runs on");
   assert.match(rails[1] ?? "", /^M14\.5 0V11A4 4 0 0 0 18\.5 15H26M14\.5 11V30$/);
-  assert.match(rails[2] ?? "", /^M14\.5 0V11A4 4 0 0 0 18\.5 15H26$/, "the last bends in and stops");
+  assert.match(rails[2] ?? "", /^M14\.5 0V11A4 4 0 0 0 18\.5 15H26$/, "the completed row is the last: it bends in and stops");
 
   const parent = row(view, "WEB-1");
   assert.deepEqual(shown(parent), { glyph: "In progress", id: "WEB-1", title: "Card vault", pills: ["count 1/3"], pr: null, ask: null });
-  assert.equal(boxOf(parent).querySelector("[aria-expanded]"), null, "the count is no fold: sub-issues always show");
   assert.equal(parent.getAttribute("aria-label"), "WEB-1: Card vault, In progress, 1 of 3 sub-issues done");
   assert.deepEqual(shown(row(view, "WEB-5")).pills, ["blocking 1"]);
   assert.equal(lane(view, /^Todo/).queryByRole("button", { name: /^WEB-4:/ }), null, "a Todo sub-issue sits in its parent's lane, not Todo");
+});
+
+/** The user's pointer and keys. why no hover on the way to a click: resting on a row opens its card after a beat, whose timers outlive the test. */
+const pressing = () => userEvent.setup({ skipHover: true });
+
+/** A parent's count, the button that folds its sub-issues. */
+const countOf = (view: View, id: string): HTMLElement => within(boxOf(row(view, id))).getByRole("button", { name: /^Sub-issues,/ });
+/** The ids of the issue rows under a parent, its own first; null when its sub-issues are folded away. */
+const underParent = (view: View, id: string): string[] | null => {
+  const item = boxOf(row(view, id)).parentElement ?? assert.fail("no item");
+  return item.querySelector(".rmi-sub-issues") === null ? null : rowsIn(item.parentElement ?? assert.fail("no list")).find(([first]) => first === id) ?? null;
+};
+
+test("a parent's count folds and unfolds its sub-issues and their rails, by click, Enter and Space, saying whether they show; the rest of the row still opens the issue", async () => {
+  const user = pressing();
+  const { view } = mount(SPLIT, []);
+  const count = countOf(view, "WEB-1");
+  assert.equal(count.tagName, "BUTTON");
+  assert.equal(count.querySelector(".rmi-chevron, [class*=chevron]"), null, "no chevron drawn");
+  assert.equal(count.textContent, "1/3");
+  assert.equal(count.getAttribute("aria-expanded"), "true", "sub-issues show at first, as they did before the count folded them");
+  assert.equal(document.getElementById(count.getAttribute("aria-controls") ?? "")?.className, "rmi-list rmi-sub-issues", "it names the list it folds");
+
+  await user.click(count);
+  assert.equal(count.getAttribute("aria-expanded"), "false");
+  assert.equal(count.hasAttribute("aria-controls"), false, "it names no list that isn't there");
+  assert.equal(underParent(view, "WEB-1"), null, "the sub-issues are gone");
+  assert.equal(boxOf(row(view, "WEB-1")).parentElement?.querySelector(".rmi-rails"), null, "and their rails with them");
+  assert.deepEqual(shown(row(view, "WEB-1")).pills, ["count 1/3"], "the folded parent still shows its count");
+  assert.ok(lane(view, /^Needs you/).getByRole("button", { name: /^WEB-3:/ }), "a flagged sub-issue still waits under Needs you");
+
+  await user.keyboard("{Enter}");
+  assert.equal(count.getAttribute("aria-expanded"), "true", "Enter unfolds them");
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "WEB-4", "+1 completed"]);
+  await user.keyboard(" ");
+  assert.equal(count.getAttribute("aria-expanded"), "false", "Space folds them");
+  assert.equal(underParent(view, "WEB-1"), null);
+  await user.keyboard(" ");
+  assert.equal(count.getAttribute("aria-expanded"), "true", "Space unfolds them");
+
+  assert.deepEqual(view.experimental_panelCalls, [], "folding opened no tab");
+  fireEvent.click(boxOf(row(view, "WEB-1")).querySelector(".rmi-row-id") ?? assert.fail("no id"));
+  assert.deepEqual(view.experimental_panelCalls, [issueTab("WEB-1", "Card vault")], "the rest of the row opens the issue");
+  assert.equal(count.getAttribute("aria-expanded"), "true", "and folds nothing");
+});
+
+test("a parent folded stays folded as its sub-issues change and it moves lanes; a parent whose every sub-issue is canceled shows no count", () => {
+  const { view, reread } = mount(SPLIT, []);
+  fireEvent.click(countOf(view, "WEB-1"));
+  act(() => reread(SPLIT.map((each) => (each.id === "WEB-1" ? { ...each, status: "in-review" as const } : each.id === "WEB-4" ? { ...each, status: "in-progress" as const } : each))));
+  assert.equal(countOf(view, "WEB-1").getAttribute("aria-expanded"), "false");
+  assert.equal(underParent(view, "WEB-1"), null);
+
+  const allCanceled = [issue("WEB-1", { status: "todo", subIssues: { done: 0, total: 0 }, headline: null }), issue("WEB-2", { parentId: I1, status: "canceled", headline: "Canceled" })];
+  act(() => reread(allCanceled));
+  assert.deepEqual(shown(row(view, "WEB-1")).pills, [], "no 0/0: nothing to count, nothing to fold");
+  assert.equal(within(boxOf(row(view, "WEB-1"))).queryByRole("button", { name: /^Sub-issues,/ }), null);
+  assert.equal(row(view, "WEB-1").getAttribute("aria-label"), "WEB-1: Issue WEB-1, Todo", "nor said");
+});
+
+test("canceled sub-issues are never listed under their parent, unfolded or not; each is its own row under Canceled, naming its parent", () => {
+  const canceled = (id: string) => issue(id, { parentId: I1, status: "canceled", headline: "Canceled" });
+  const { view } = mount([...SPLIT.map((each) => (each.id === "WEB-1" ? { ...each, subIssues: { done: 1, total: 3 } } : each)), canceled("WEB-6"), canceled("WEB-7")], []);
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "WEB-4", "+1 completed"]);
+  fireEvent.click(view.getByRole("button", { name: "1 completed sub-issues" }));
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "WEB-4", "+1 completed", "WEB-2"], "unfolded, the Done one shows; no canceled one");
+  assert.deepEqual(shown(row(view, "WEB-1")).pills, ["count 1/3"], "the count the read sends, which leaves them out (status.test.ts)");
+
+  const canceledLane = laneHeader(view, /^Canceled/);
+  assert.equal(canceledLane.textContent, "Canceled2", "each counts as its own row");
+  fireEvent.click(canceledLane);
+  const rows = lane(view, /^Canceled/).getAllByRole("button", { name: /^WEB-/ });
+  assert.deepEqual(rows.map((each) => [shown(each).id, shown(each).glyph]), [["WEB-1›WEB-6", "Canceled"], ["WEB-1›WEB-7", "Canceled"]], "each names its parent ahead of its id");
+  assert.match(rows[0]?.getAttribute("aria-label") ?? "", /^WEB-6: Issue WEB-6, sub-issue of WEB-1, Canceled/, "and says it");
+  fireEvent.click(rows[0] ?? assert.fail("no row"));
+  assert.deepEqual(view.experimental_panelCalls, [issueTab("WEB-6", "Issue WEB-6")], "and opens its issue");
+});
+
+test("while its parent isn't Done, its Done sub-issues fold behind one '+N completed' row at the end, which unfolds them in place with the count's semantics; a Done parent lists them all", async () => {
+  const user = pressing();
+  const family = (parent: Partial<IssueRow>) => [
+    issue("WEB-1", { title: "Card vault", status: "in-progress", subIssues: { done: 2, total: 3 }, headline: null, ...parent }),
+    issue("WEB-2", { parentId: I1, status: "done", headline: "Merged #12" }),
+    issue("WEB-3", { parentId: I1, status: "in-progress", headline: "Working" }),
+    issue("WEB-4", { parentId: I1, status: "done", headline: "Merged #14" }),
+    issue("WEB-5", { parentId: I1, status: "canceled", headline: "Canceled" }),
+  ];
+  const { view, reread } = mount(family({}), []);
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "+2 completed"], "one row for both, at the end");
+
+  const completed = view.getByRole("button", { name: "2 completed sub-issues" });
+  assert.equal(completed.getAttribute("aria-expanded"), "false");
+  assert.equal(completed.hasAttribute("aria-controls"), false);
+  assert.equal(completed.textContent, "+2 completed", "its words alone, no glyph");
+  assert.equal(within(completed).queryByRole("img"), null);
+  assert.equal(completed.querySelector(".rmi-slot"), null, "no glyph slot ahead of its words: they start where the sub-issues' glyphs do");
+  await user.click(completed);
+  assert.equal(completed.getAttribute("aria-expanded"), "true");
+  assert.equal(document.getElementById(completed.getAttribute("aria-controls") ?? ""), boxOf(row(view, "WEB-3")).closest("ul"), "it names the list they unfold in");
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "+2 completed", "WEB-2", "WEB-4"], "in place, under it");
+  assert.deepEqual(view.experimental_panelCalls, [], "it opens no tab");
+  await user.keyboard("{Enter}");
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "+2 completed"], "Enter folds them");
+  await user.keyboard(" ");
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "+2 completed", "WEB-2", "WEB-4"], "Space unfolds them");
+
+  act(() => reread(family({ status: "verifying", headline: "Final check running" })));
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-3", "+2 completed", "WEB-2", "WEB-4"], "still unfolded as the parent moves on, not yet Done");
+
+  act(() => reread(family({ status: "done", headline: "✓ Final check passed" })));
+  fireEvent.click(laneHeader(view, /^Done/));
+  assert.deepEqual(underParent(view, "WEB-1"), ["WEB-1", "WEB-2", "WEB-3", "WEB-4"], "a Done parent lists each, in order, no completed row, no canceled one");
+});
+
+test("focus on a completed row that goes, its last Done sub-issue reopened, moves to its parent's row", () => {
+  const rows = (status: IssueRow["status"]) => [issue("WEB-1", { status: "in-progress", subIssues: { done: 1, total: 2 }, headline: null }), issue("WEB-2", { parentId: I1, status }), issue("WEB-3", { parentId: I1, status: "in-progress" })];
+  const { view, reread } = mount(rows("done"), []);
+  view.getByRole("button", { name: "1 completed sub-issues" }).focus();
+  act(() => reread(rows("in-progress")));
+  assert.equal(view.queryByRole("button", { name: /completed sub-issues/ }), null);
+  assert.ok(document.activeElement === row(view, "WEB-1"), "on its parent's row, not the page");
 });
 
 test("a flagged parent asks under its title under Needs you, its sub-issues hanging from its glyph past that line", () => {

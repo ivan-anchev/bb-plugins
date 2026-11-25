@@ -4,8 +4,8 @@
 // carries what it waits on the user for, as that is what the user acts on; everywhere else the
 // headline is the hover card's (hover-card/), and the issue's own tab's. Pressing the row opens the
 // issue's tab beside the Board, or focuses it (issue-tab/open-issue.ts). Its pull request sits
-// outside the row's button, its own control. A sub-issue's row away from its parent names the parent
-// ahead of its id.
+// outside the row's button, its own control, and so does a parent's count of its sub-issues, which
+// folds them (pills.tsx). A sub-issue's row away from its parent names the parent ahead of its id.
 import "./issue-row.css";
 import type { HTMLAttributes, ReactNode, Ref } from "react";
 import type { IssueRow as Row } from "../../../../contract.ts";
@@ -15,7 +15,7 @@ import { useOpenIssue } from "../../issue-tab/open-issue.ts";
 import { PrBadge } from "../pr-badge.tsx";
 import { IssueGlyph } from "../status-glyph.tsx";
 import { FadingText } from "./fading-text.tsx";
-import { IssuePills } from "./pills.tsx";
+import { IssuePills, type SubIssueToggle } from "./pills.tsx";
 
 type IssueRowProps = {
   ref: Ref<HTMLButtonElement>;
@@ -24,13 +24,15 @@ type IssueRowProps = {
   under: IssueId | null;
   /** What it waits on the user for, shown under its title (under Needs you); else null. */
   ask: string | null;
+  /** On a parent's row with sub-issues under it, what its count folds; else null. */
+  toggle: SubIssueToggle | null;
   /** The pointer and focus events that open and close its hover card, on the whole row. */
   hover: HTMLAttributes<HTMLDivElement>;
   /** Its hover card, while it shows. */
   children?: ReactNode;
 };
 
-export function IssueRow({ ref, issue, under, ask, hover, children }: IssueRowProps) {
+export function IssueRow({ ref, issue, under, ask, toggle, hover, children }: IssueRowProps) {
   const open = useOpenIssue();
   return (
     <div className="rmi-rowbox" data-asks={ask !== null || undefined} {...hover}>
@@ -61,7 +63,7 @@ export function IssueRow({ ref, issue, under, ask, hover, children }: IssueRowPr
         )}
       </button>
       <span className="rmi-meta">
-        <IssuePills issue={issue} length="short" />
+        <IssuePills issue={issue} length="short" toggle={toggle} />
         {issue.pr !== null && <PrBadge pr={issue.pr} />}
       </span>
       {children}
@@ -87,7 +89,7 @@ const spoken = (issue: Row): string =>
     ...(issue.parentId === null ? [] : [`sub-issue of ${issue.parentId}`]),
     STATUS_LABELS[issue.status],
     ...(issue.needsYou === null ? [] : [`needs you: ${issue.needsYou}`]),
-    ...(issue.subIssues === null ? [] : [`${issue.subIssues.done} of ${issue.subIssues.total} sub-issues done`]),
+    ...(issue.subIssues === null || issue.subIssues.total === 0 ? [] : [`${issue.subIssues.done} of ${issue.subIssues.total} sub-issues done`]),
     ...listed("blocked by", issue.blockedBy),
     ...listed("blocks", issue.blocks),
     ...(issue.headline === null || issue.headline === issue.needsYou ? [] : [issue.headline]),

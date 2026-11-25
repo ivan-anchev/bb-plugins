@@ -207,8 +207,8 @@ A parent's status rolls up from its sub-issues, derived like any other:
 A flagged sub-issue flags itself, not its parent. A parent is canceled only
 once its sub-issues are closed, and a closed parent takes no new sub-issue.
 A parent's dependencies block each of its sub-issues. The manager's catch-up
-lists each sub-issue under its parent, and a flagged one under Needs you too,
-as the board shows them (see [The board](#the-board));
+lists each sub-issue under its parent but a canceled one, which is under
+Canceled, and a flagged one under Needs you too, as the board shows them (see [The board](#the-board));
 `issue_read` names an issue's parent and sub-issues.
 
 ### A build parent's final check
@@ -999,8 +999,9 @@ and ends with its [memory](#read-and-edit-memory):
   "Blocked: <summary>", the agent asking you for something). The row names
   no kind and no agent, and its headline is in its card and its tab. Done
   and Canceled rows read quieter.
-- **Pills**, after the title: a parent's sub-issues Done, a ring filling in
-  Done's violet with "3/7"; what blocks it, a red ⊘ with the blocker's id
+- **Pills**, after the title: a parent's sub-issues Done, of those not
+  canceled, a ring filling in Done's violet with "3/7" (none when every
+  sub-issue is canceled); what blocks it, a red ⊘ with the blocker's id
   ("⊘ BBP-6"), or how many when more than one does; and what it blocks, an
   amber →| with how many. What it blocks counts only the open issues that
   depend on it, and only while it is open itself: a Done or Canceled issue
@@ -1025,14 +1026,24 @@ and ends with its [memory](#read-and-edit-memory):
   the issue.
 - **Sub-issues** hang under their parent's row on rails, a hairline from
   under the parent's glyph bending into each, in the parent's lane whatever
-  their own status, each one line with everything a row has. They always
-  show: the parent's count is not a fold. The parent, which never has an
-  agent or a pull request, says how many are Done in its pill. The
-  catch-up leads a parent's line with the count ("1/3 done"). A flagged
-  sub-issue is also listed flat under Needs you, its parent's id ahead of
-  its own ("BBP-1›BBP-3"). A lane's count is its rows: a parent counts
-  once, its sub-issues by its own count. Folding a lane folds its parents
-  with their sub-issues.
+  their own status, each one line with everything a row has. They show at
+  first; the parent's count pill folds them and their rails away and back:
+  click it, or press Enter or Space on it. It draws no chevron, and a
+  folded parent keeps its pill; the rest of the row still opens the issue.
+  Which parents are folded lasts while the board is open, as its lanes'
+  folds do. While the parent isn't Done, its Done sub-issues fold behind
+  one "+N completed" row at the end of its list, which unfolds them in
+  place under it, and folds them again, as the pill does; a Done parent
+  lists each. A canceled sub-issue is never listed under its parent: it is
+  a row of its own under Canceled, its parent's id ahead of its own
+  ("BBP-1›BBP-5"). The parent, which never has an agent or a pull request,
+  says how many are Done, of those not canceled, in its pill. The catch-up
+  leads a parent's line with the same count ("1/3 done") and lists a
+  canceled sub-issue under Canceled too. A flagged sub-issue is also
+  listed flat under Needs you, its parent's id ahead of its own
+  ("BBP-1›BBP-3"). A lane's count is its rows: a parent counts once, its
+  sub-issues by its own count, and each canceled sub-issue as a row of
+  Canceled. Folding a lane folds its parents with their sub-issues.
 
 Pressing an issue, or Enter or Space on its row, opens it in its own tab in
 the same side panel, beside the Board, titled with its id and title; pressing

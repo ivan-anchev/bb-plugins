@@ -1,18 +1,30 @@
-// An issue's pills: how many of its sub-issues are Done, what blocks it and what it blocks, each a
-// glyph and words on a 10% wash of its token (issue-row.css `.rmi-pill`), as the PR badge beside
-// them. Two lengths of the same pills: short on a row ("◔ 3/7", "⊘ 1", "→| 2"), a count even for one
-// issue so the row keeps to its line; long in the hover card ("3 of 7 done", "Blocked by BBP-6,
-// BBP-7", "Blocks BBP-7, BBP-19"). Display only: the row speaks all of it, ids included, in its
-// label, so the pills are hidden from a screen reader.
+// An issue's pills: how many of its sub-issues are Done, of those not canceled, what blocks it and
+// what it blocks, each a glyph and words on a 10% wash of its token (issue-row.css `.rmi-pill`), as
+// the PR badge beside them. Two lengths of the same pills: short on a row ("◔ 3/7", "⊘ 1", "→| 2"),
+// a count even for one issue so the row keeps to its line; long in the hover card ("3 of 7 done",
+// "Blocked by BBP-6, BBP-7", "Blocks BBP-7, BBP-19"). A parent whose every sub-issue is canceled
+// has no count to show, so no count pill. Display only, hidden from a screen reader since the row
+// speaks all of it, ids included, in its label; but on a parent's row the count is also the button
+// that folds its sub-issues, with no chevron drawn.
 import type { ReactNode } from "react";
 import type { IssueRow } from "../../../../contract.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
+import { handFocusTo } from "../../../ui/focus-hand-off.ts";
 
 type Length = "short" | "long";
 
-type PillsProps = { issue: Pick<IssueRow, "subIssues" | "blockedBy" | "blocks">; length: Length };
+/** What folds a parent's sub-issues under its row: whether they show, the list they show in, and the fold. */
+export type SubIssueToggle = { open: boolean; controls: string; onToggle(): void };
 
-export function IssuePills({ issue: { subIssues, blockedBy, blocks }, length }: PillsProps) {
+type PillsProps = {
+  issue: Pick<IssueRow, "subIssues" | "blockedBy" | "blocks">;
+  length: Length;
+  /** On a parent's row, what its count folds; else null, and the count is display only. */
+  toggle: SubIssueToggle | null;
+};
+
+export function IssuePills({ issue, length, toggle }: PillsProps) {
+  const { subIssues, blockedBy, blocks } = issue;
   return (
     <>
       {blockedBy.length > 0 && (
@@ -25,18 +37,44 @@ export function IssuePills({ issue: { subIssues, blockedBy, blocks }, length }: 
           {length === "short" ? blocks.length : <Listed lead="Blocks" ids={blocks} />}
         </Pill>
       )}
-      {subIssues !== null && (
-        <Pill tone="count" glyph={<ProgressRing done={subIssues.done} total={subIssues.total} />}>
-          {length === "short" ? `${subIssues.done}/${subIssues.total}` : `${subIssues.done} of ${subIssues.total} done`}
-        </Pill>
-      )}
+      {subIssues !== null && subIssues.total > 0 && <CountPill count={subIssues} length={length} toggle={toggle} />}
     </>
   );
 }
 
+/** Whether the issue shows any pill: the hover card leaves out the line they'd sit on when it doesn't. */
+export const hasPills = ({ subIssues, blockedBy, blocks }: PillsProps["issue"]): boolean => (subIssues !== null && subIssues.total > 0) || blockedBy.length > 0 || blocks.length > 0;
+
 // ------------------------------------------------------------------ layer 2
 
 type Tone = "count" | "blocked" | "blocking";
+
+type Count = NonNullable<IssueRow["subIssues"]>;
+
+/** How many sub-issues are Done, of how many; with a toggle, the button that folds them, named for what it folds and stating whether they show. */
+function CountPill({ count: { done, total }, length, toggle }: { count: Count; length: Length; toggle: SubIssueToggle | null }) {
+  const glyph = <ProgressRing done={done} total={total} />;
+  const words = length === "short" ? `${done}/${total}` : `${done} of ${total} done`;
+  if (toggle === null) return <Pill tone="count" glyph={glyph}>{words}</Pill>;
+  return (
+    <button
+      ref={focusRowOnLeave}
+      type="button"
+      className="rmi-pill"
+      data-tone="count"
+      aria-label={`Sub-issues, ${done} of ${total} done`}
+      aria-expanded={toggle.open}
+      aria-controls={toggle.open ? toggle.controls : undefined}
+      onClick={toggle.onToggle}
+    >
+      {glyph}
+      <span>{words}</span>
+    </button>
+  );
+}
+
+/** Focus on the count as it goes (its last sub-issue not canceled was) moves to its row's button, never to the page body (REVIEW.md). */
+const focusRowOnLeave = handFocusTo((pill) => pill.closest(".rmi-rowbox")?.querySelector<HTMLElement>(".rmi-row"));
 
 function Pill({ tone, glyph, children }: { tone: Tone; glyph: ReactNode; children: ReactNode }) {
   return (

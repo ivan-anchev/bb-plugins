@@ -110,6 +110,14 @@
   position: relative;
   padding-left: 22px;
 }
+/* The row a parent's Done sub-issues fold behind (completed-row.tsx): its words across the row from
+   where a row's glyph starts (a 14 glyph centred in the 30 slot), quiet as a Done row's title. */
+.rmi-row-more {
+  grid-column: 1 / -1;
+  padding-inline: 8px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
 
 /* --- Pills: a glyph and words in their token on a 10% wash of it, the PR badge's metrics -------- */
 .rmi-pill {
@@ -143,6 +151,34 @@
 .rmi-pill[data-tone="count"]::before {
   background: var(--foreground);
   opacity: 0.06;
+}
+/* A parent's count on its row is the button that folds its sub-issues (pills.tsx): its wash deepens
+   under the pointer, as the PR badge's does, and the ring shows its focus. Its hit area runs the
+   row's height, as the tap target its 16 can't be. */
+button.rmi-pill {
+  margin: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  touch-action: manipulation;
+}
+button.rmi-pill::after {
+  content: "";
+  position: absolute;
+  inset: -7px -2px;
+}
+@media (hover: hover) {
+  button.rmi-pill:hover::before {
+    opacity: 0.12;
+  }
+}
+button.rmi-pill:active::before {
+  opacity: 0.16;
+}
+button.rmi-pill:focus-visible {
+  box-shadow: 0 0 0 1.5px var(--ring);
 }
 .rmi-pill[data-tone="blocked"] {
   color: var(--destructive-text);

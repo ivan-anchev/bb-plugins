@@ -15,7 +15,7 @@ import type { IssueRow as Row } from "../../../../contract.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import { FadingText } from "../row/fading-text.tsx";
-import { IssuePills } from "../row/pills.tsx";
+import { hasPills, IssuePills } from "../row/pills.tsx";
 import { Rails, type RailShape } from "../row/rails.tsx";
 import { IssueGlyph } from "../status-glyph.tsx";
 import type { CardPresence } from "./card-intent.ts";
@@ -88,9 +88,9 @@ export function Card({ issue, issues, presence, failure, attach, place, classNam
             <p className="rmi-card-headline">{issue.needsYou}</p>
           </div>
         )}
-        {(issue.subIssues !== null || issue.blockedBy.length > 0 || issue.blocks.length > 0) && (
+        {hasPills(issue) && (
           <div className="rmi-card-facts">
-            <IssuePills issue={issue} length="long" />
+            <IssuePills issue={issue} length="long" toggle={null} />
           </div>
         )}
         <SubIssues rows={issues.filter(({ parentId }) => parentId === issue.id)} />
