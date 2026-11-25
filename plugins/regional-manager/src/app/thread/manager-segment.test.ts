@@ -2,7 +2,8 @@ import "../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { BlobAvatar, type Expression } from "blob-avatar";
 import { createElement, Fragment, useState } from "react";
 import { COORDINATORS_TAG, coordinatorContract as contract, type Coordinator } from "../../contract.ts";
 import type { Avatar } from "../../model/profile/avatar.ts";
@@ -34,7 +35,7 @@ function ContextRow({ threadId }: { threadId: string }) {
  * The row of a thread, over a plugin with one started regional manager, thr_1's, which keeps every
  * profile it is sent, as setProfile does but for the title, which bb keeps, once `saved` settles.
  */
-function mount(threadId: string, saved: Promise<void> = Promise.resolve(), avatar: Avatar = { kind: "blob", shape: "bear", hue: "green", expression: "determined" }) {
+function mount(threadId: string, saved: Promise<void> = Promise.resolve(), avatar: Avatar = { kind: "blob", shape: "bear", hue: "green", expression: "neutral" }) {
   let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar };
   const saves: Profile[] = [];
   const rpc = {
@@ -59,7 +60,18 @@ test("a regional manager's thread shows its blob and its name, and not its descr
   assert.equal(view.queryByText("Moves webhooks off cron."), null);
 });
 
-test("a manager stored in a hue of the earlier palette still shows its blob, its shape and face kept, in the closest of the user's colours", async () => {
+/** The shapes a blob's SVG draws, its face's included: what tells one face from another. */
+const drawnPaths = (svg: Element | null | undefined) => [...(svg?.querySelectorAll("path") ?? [])].map((path) => path.getAttribute("d"));
+
+/** The paths blob-avatar itself draws for a still cat in purple with `expression`. */
+function catPaths(expression: Expression) {
+  const { container, unmount } = render(createElement(BlobAvatar, { shape: "cat", color: "#895df3", expression, animation: "idle", paused: true }));
+  const paths = drawnPaths(container.querySelector("svg"));
+  unmount();
+  return paths;
+}
+
+test("a manager stored in a hue and a face of the earlier releases still shows its blob, its shape kept, in the closest of the user's colours, with the neutral face", async () => {
   const { db, storage } = freshStore();
   db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify({ kind: "blob", shape: "cat", hue: "violet", expression: "happy" }), MANAGER);
   const stored = openStore(storage).coordinator(MANAGER);
@@ -68,8 +80,12 @@ test("a manager stored in a hue of the earlier palette still shows its blob, its
   const { view } = mount("thr_1", Promise.resolve(), stored.avatar);
 
   assert.ok(await view.findByText("Webhooks"));
-  assert.ok(view.container.querySelector('[fill="#895df3"]'), "its purple blob");
-  assert.deepEqual(stored.avatar, { kind: "blob", shape: "cat", hue: "purple", expression: "happy" });
+  const body = view.container.querySelector('[fill="#895df3"]');
+  assert.ok(body, "its purple blob");
+  assert.deepEqual(stored.avatar, { kind: "blob", shape: "cat", hue: "purple", expression: "neutral" });
+  const drawn = drawnPaths(body.closest("svg"));
+  assert.deepEqual(drawn, catPaths("neutral"), "the neutral face");
+  assert.notDeepEqual(drawn, catPaths("happy"), "a face the test can tell apart");
 });
 
 test("any other thread shows nothing", async () => {
@@ -96,7 +112,7 @@ test("pressing the blob and name opens the profile's editor on the name, and Sav
   await act(async () => fireEvent.click(view.getByRole("button", { name: "Save" })));
   await act(() => view.experimental_invalidateRpc([COORDINATORS_TAG]));
 
-  assert.deepEqual(saves, [{ name: "Webhooks v2", description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "cat", hue: "teal", expression: "determined" } }]);
+  assert.deepEqual(saves, [{ name: "Webhooks v2", description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "cat", hue: "teal", expression: "neutral" } }]);
   assert.equal(view.queryByRole("form", { name: "Edit profile" }), null);
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
   assert.ok(document.activeElement === toggle, "the focus goes back to the toggle");

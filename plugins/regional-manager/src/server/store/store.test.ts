@@ -102,7 +102,7 @@ test("of two icon managers whose ids seed the same look, the one created first k
   const looks = looksOf(openStore(storage));
 
   assert.deepEqual(looks.get(older), { kind: "blob", shape: "hexagon", hue: "green", expression: "neutral" });
-  assert.deepEqual(looks.get(newer), { kind: "blob", shape: "star", hue: "green", expression: "happy" });
+  assert.deepEqual(looks.get(newer), { kind: "blob", shape: "star", hue: "green", expression: "neutral" });
 });
 
 test("opening the store again changes no avatar: not the looks it gave, nor a look the user picked that another manager has", () => {
@@ -139,16 +139,16 @@ const NEW_HUE_OF_OLD: readonly (readonly [string, Avatar["hue"]])[] = [
   ["lime", "green"], ["teal", "teal"], ["orange", "orange"], ["indigo", "blue"], ["pink", "pink"], ["cyan", "teal"],
 ];
 
-/** A database as the release before the user's palette left it: one manager a blob in each hue it offered, in its own shape, created in that order. */
+/** A database as the release before the user's palette left it: one manager a blob in each hue it offered, in its own shape, with a curious face, created in that order. */
 function oldHueManagers() {
   const managers = NEW_HUE_OF_OLD.map(([old, hue], n) => ({ id: coordinatorIdSchema.parse(`00000000-0000-4000-8000-${String(n).padStart(12, "0")}`), old, hue, shape: SHAPES[n] }));
   const { db, storage, stored } = iconManagers(managers.map(({ id, old }) => [id, old]));
   for (const { id, old, shape } of managers) db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify({ kind: "blob", shape, hue: old, expression: "curious" }), id);
-  const expected = new Map(managers.map(({ id, hue, shape }): [CoordinatorId, Avatar] => [id, { kind: "blob", shape, hue, expression: "curious" }]));
+  const expected = new Map(managers.map(({ id, hue, shape }): [CoordinatorId, Avatar] => [id, { kind: "blob", shape, hue, expression: "neutral" }]));
   return { db, storage, stored, managers, expected };
 }
 
-test("a manager stored in a hue of the earlier palette keeps its shape and face as the store opens, in the closest of the user's colours, written back; a second opening changes nothing", () => {
+test("a manager stored in a hue and a face of the earlier releases keeps its shape as the store opens, in its hue or the closest of the user's colours, with the neutral face, written back; a second opening changes nothing", () => {
   const { storage, stored, expected } = oldHueManagers();
 
   const looks = looksOf(openStore(storage));
@@ -168,8 +168,8 @@ test("of two managers whose earlier hues become one colour in one shape, the one
 
   const looks = looksOf(openStore(storage));
 
-  assert.deepEqual(looks.get(MANAGER), { kind: "blob", shape: "circle", hue: "green", expression: "happy" });
-  assert.deepEqual(looks.get(OTHER_MANAGER), { kind: "blob", shape: "pebble", hue: "green", expression: "happy" });
+  assert.deepEqual(looks.get(MANAGER), { kind: "blob", shape: "circle", hue: "green", expression: "neutral" });
+  assert.deepEqual(looks.get(OTHER_MANAGER), { kind: "blob", shape: "pebble", hue: "green", expression: "neutral" });
 });
 
 test("a failed write recolours no manager of the earlier palette, and opening the store again recolours each as it would have", () => {
@@ -215,7 +215,7 @@ test("an icon manager whose id seeds the look an unreadable avatar is drawn with
   const store = openStore(storage);
 
   assert.deepEqual(store.notStarted().find(({ id }) => id === broken)?.avatar, { kind: "blob", shape: "bunny", hue: "brown", expression: "neutral" }, "drawn with the look its id seeds");
-  assert.deepEqual(store.coordinator(MANAGER)?.avatar, { kind: "blob", shape: "amoeba", hue: "brown", expression: "content" }, "the next free one after it");
+  assert.deepEqual(store.coordinator(MANAGER)?.avatar, { kind: "blob", shape: "amoeba", hue: "brown", expression: "neutral" }, "the next free one after it");
 });
 
 test("an avatar this release can't draw, as a kind a later one stored or text that isn't JSON, reads as the look its id seeds, stays stored, and the list still reads", () => {
@@ -228,7 +228,7 @@ test("an avatar this release can't draw, as a kind a later one stored or text th
 
   const drawn = new Map(store.coordinators().map(({ id, avatar }) => [id, avatar]));
   // why these: the looks MANAGER's and OTHER_MANAGER's ids seed.
-  assert.deepEqual(drawn, new Map([[MANAGER, { kind: "blob", shape: "bunny", hue: "brown", expression: "content" }], [OTHER_MANAGER, { kind: "blob", shape: "heart", hue: "blue", expression: "happy" }]]));
+  assert.deepEqual(drawn, new Map([[MANAGER, { kind: "blob", shape: "bunny", hue: "brown", expression: "neutral" }], [OTHER_MANAGER, { kind: "blob", shape: "heart", hue: "blue", expression: "neutral" }]]));
   const stored = db.prepare("SELECT avatar FROM coordinators ORDER BY created_at, rowid").all().map((row) => z.object({ avatar: z.string() }).parse(row).avatar);
   assert.deepEqual(stored, [later, "{not json"]);
 });
@@ -408,7 +408,7 @@ test("a 0.3.0 regional manager is a candidate of the upgrade until unheld: then 
 
   assert.deepEqual([store.upgradeCandidates(), store.coordinators()], [[], []]);
   // why that avatar: a 0.3.0 manager had the plugin's icon, which the store gives the first free look from its id as it opens.
-  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: { kind: "blob", shape: "bunny", hue: "brown", expression: "content" } }]);
+  assert.deepEqual(store.notStarted(), [{ id: MANAGER, name: "Webhooks", description: null, avatar: { kind: "blob", shape: "bunny", hue: "brown", expression: "neutral" } }]);
   assert.deepEqual(store.startOf(MANAGER), { kind: "not-started", ticket: "ticket-2", name: "Webhooks" });
   assert.equal(store.roleOfThread("thr_a"), null);
   assert.equal(store.roleFor("thr_a", "ticket-1"), null);

@@ -49,7 +49,7 @@ export function project(id: string, name: string): PluginSidebarProject {
 /** Working, as bb resolves a running turn. */
 export const WORKING = { indicator: "runtime", status: "active", runtimeStatus: "active" } as const satisfies Partial<PluginSidebarThread>;
 
-export const AVATAR = { kind: "blob", shape: "bear", hue: "purple", expression: "attentive" } as const;
+export const AVATAR = { kind: "blob", shape: "bear", hue: "purple", expression: "neutral" } as const;
 
 /** The Regional Manager plugin's answer, as it publishes it: more than the sidebar reads. */
 export const COORDINATORS = {

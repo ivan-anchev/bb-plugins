@@ -15,8 +15,6 @@ export function isManagerThread(t: { originPluginId: string | null; parentThread
 /** blob-avatar's 21 shapes, which the Regional Manager's picker offers. */
 const SHAPES = ["circle", "pebble", "squircle", "capsule", "triangle", "diamond", "hexagon", "star", "cloud", "droplet", "heart", "ghost", "cat", "bear", "bunny", "amoeba", "flower", "clover", "leaf", "gem", "bubble"] as const;
 
-/** The friendly faces a manager can wear. */
-const EXPRESSIONS = ["neutral", "happy", "content", "curious", "attentive", "determined"] as const;
 
 /** The hues a manager's blob comes in, as the Regional Manager names and stores them. */
 const MANAGER_HUES = ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"] as const;
@@ -36,8 +34,8 @@ export const MANAGER_HUE_COLORS: Record<(typeof MANAGER_HUES)[number], `#${strin
   gray: "#777777",
 };
 
-/** A still blob in one of the manager hues. */
-const avatarSchema = z.object({ kind: z.literal("blob"), shape: z.enum(SHAPES), hue: z.enum(MANAGER_HUES), expression: z.enum(EXPRESSIONS) });
+/** A still blob in one of the manager hues, with blob-avatar's neutral face, the only one the Regional Manager stores. */
+const avatarSchema = z.object({ kind: z.literal("blob"), shape: z.enum(SHAPES), hue: z.enum(MANAGER_HUES), expression: z.literal("neutral") });
 export type Avatar = z.infer<typeof avatarSchema>;
 
 /** What the Managers view reads of one started manager; the rest of the record is dropped. */

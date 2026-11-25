@@ -15,21 +15,25 @@ test("Shuffle picks a free look other than the current one while there is one", 
   assert.equal(lookKey(look), lookKey(other));
 });
 
-test("Shuffle never lands on a taken look while a free one is left: with 230 taken and the current one free, it keeps the current one, face and all", () => {
-  const [first, ...taken] = everyLook;
-  assert.ok(first);
-  const current = { ...first, expression: "determined" } as const;
+test("Shuffle never lands on a taken look while a free one is left: with 230 taken and the current one free, it keeps the current one", () => {
+  const [current, ...taken] = everyLook;
+  assert.ok(current);
 
   assert.deepEqual(shuffledLook(randomStart(), taken, current), current);
 });
 
-test("a free look is never one a manager has, whatever its face, and is a whole blob avatar", () => {
+test("a free look is never one a manager has, and is a whole blob avatar with the neutral face", () => {
   const start = randomStart();
   const seeded = freeLook(start, []);
-  const look = freeLook(start, [{ ...seeded, expression: seeded.expression === "happy" ? "neutral" : "happy" }]);
+  const look = freeLook(start, [seeded]);
 
   assert.notEqual(lookKey(look), lookKey(seeded));
   assert.deepEqual(avatarSchema.parse(look), look);
+  assert.equal(look.expression, "neutral");
+});
+
+test("a look with any face but the neutral one is not a manager's avatar", () => {
+  assert.equal(avatarSchema.safeParse({ kind: "blob", shape: "cat", hue: "teal", expression: "happy" }).success, false);
 });
 
 test("the same start gives the same look", () => {

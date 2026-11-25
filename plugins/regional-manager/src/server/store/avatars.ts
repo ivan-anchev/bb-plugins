@@ -1,29 +1,30 @@
 // Each regional manager's avatar as stored: a look chosen once (avatar.ts), as JSON in the avatar
-// column. Managers pictured by an older release's look, one of bb's icons or a blob in a retired hue,
-// get one of this release's as the store opens.
+// column. Managers pictured by an older release's look, one of bb's icons or a blob in a retired hue
+// or with another face than neutral, get one of this release's as the store opens.
 import { z } from "zod";
-import { avatarSchema, freeLook, randomStart, seedOf, startOf, type Avatar, type AvatarChoice } from "../../model/profile/avatar.ts";
+import { avatarSchema, freeLook, HUE_NAMES, randomStart, seedOf, startOf, type Avatar, type AvatarChoice } from "../../model/profile/avatar.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Db } from "./rows.ts";
 
 /**
  * Gives every regional manager still pictured by an older release's look one of this release's, in the
  * order they were created, so none shares a look with another, in one transaction: an icon manager the
- * first free look from its id's seed, and a blob in a retired hue the same shape and face in the hue
- * closest to it, or the next free look from there when another manager has that. Idempotent: a manager
- * with this release's look is never rewritten, so a second run changes nothing. why from the id, never
- * the name: the name is bb's thread title, and a rename must not change the avatar.
+ * first free look from its id's seed, and an older blob (a retired hue, or a face other than neutral)
+ * its shape in its hue, or the closest of this release's, with the neutral face, or the next free look
+ * from there when another manager has that. Idempotent: a manager with this release's look is never
+ * rewritten, so a second run changes nothing. why from the id, never the name: the name is bb's
+ * thread title, and a rename must not change the avatar.
  */
 export function upgradeOldLooks(db: Db): void {
   db().transaction(() => {
     const rows = db().prepare("SELECT id, avatar FROM coordinators ORDER BY created_at, rowid").all().map((row) => lookRowSchema.parse(row));
-    const oldLookOf = (json: string) => oldLookSchema.safeParse(decoded(json)).data ?? null;
+    const oldLookOf = (json: string) => (blobOf(json) === null ? (oldLookSchema.safeParse(decoded(json)).data ?? null) : null);
     const taken = rows.filter(({ avatar }) => oldLookOf(avatar) === null).map(({ id, avatar }) => visibleLook(id, avatar));
     const update = db().prepare("UPDATE coordinators SET avatar = ? WHERE id = ?");
     for (const { id, avatar } of rows) {
       const old = oldLookOf(avatar);
       if (old === null) continue;
-      const look = freeLook(old.kind === "icon" ? seedOf(id) : startOf({ ...old, hue: CLOSEST_HUE[old.hue] }), taken);
+      const look = freeLook(old.kind === "icon" ? seedOf(id) : startOf(old), taken);
       update.run(JSON.stringify(look), id);
       taken.push(look);
     }
@@ -73,10 +74,14 @@ const RETIRED_HUES = ["violet", "emerald", "sky", "rose", "lime", "indigo", "cya
 /** Each retired hue's closest of this release's. */
 const CLOSEST_HUE: Record<(typeof RETIRED_HUES)[number], Avatar["hue"]> = { violet: "purple", emerald: "green", sky: "teal", rose: "red", lime: "green", indigo: "blue", cyan: "teal" };
 
-/** A look an older release stored: one of bb's icons, from before blobs, or a blob in a retired hue. */
+/**
+ * A look an older release stored: one of bb's icons, from before blobs, or a blob in a hue or with a
+ * face of the releases before the user's palette and neutral faces. Read only where avatarSchema fails.
+ */
 const oldLookSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("icon") }),
-  avatarSchema.extend({ hue: z.enum(RETIRED_HUES) }),
+  // why the transform: a retired hue reads as its closest of this release's.
+  avatarSchema.extend({ hue: z.union([z.enum(HUE_NAMES), z.enum(RETIRED_HUES).transform((hue) => CLOSEST_HUE[hue])]), expression: z.string() }),
 ]);
 
 const lookRowSchema = z.object({ id: z.string(), avatar: z.string() });
