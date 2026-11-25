@@ -66,6 +66,7 @@ type InboxStore = Pick<
   | "announce"
   | "unread"
   | "markRead"
+  | "announcesUnread"
   | "doorbell"
   | "doorbells"
   | "clearDoorbell"
@@ -141,14 +142,15 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
   }
 
   /**
-   * Takes back a doorbell still waiting in bb's queue once every event is read: it would wake the
-   * thread for nothing. One left unread keeps it, as one recorded while a catch-up read bb: the
-   * doorbell may be all that announces it. If bb sent it meanwhile, the delete fails and nothing changes.
+   * Takes back a doorbell still waiting in bb's queue once every event it announced is read: it
+   * would wake the thread for nothing. One it announced left unread, as one recorded while a catch-up
+   * read bb, keeps it: the doorbell is all that announces it. If bb sent it meanwhile, the delete
+   * fails and nothing changes.
    */
   async function withdraw(id: CoordinatorId): Promise<void> {
     const queuedMessageId = store.doorbell(id);
     const coordinator = store.coordinator(id);
-    if (disposed || queuedMessageId === null || coordinator === null || store.unread(id).length > 0) return;
+    if (disposed || queuedMessageId === null || coordinator === null || store.announcesUnread(queuedMessageId)) return;
     try {
       await bb.sdk.threads.queuedMessages.delete({ threadId: coordinator.threadId, queuedMessageId });
     } catch (error) {
@@ -332,7 +334,7 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
 
     /**
      * Marks the events read, as a catch-up returned them whole. A doorbell still queued is taken back
-     * once nothing is left unread (see withdraw), which rings again for any event recorded since.
+     * once nothing it announced is left unread (see withdraw), which rings again for any event recorded since.
      */
     markRead(id: CoordinatorId, events: readonly StoredEvent[]): void {
       store.markRead(id, events.map((event) => event.id), Date.now());

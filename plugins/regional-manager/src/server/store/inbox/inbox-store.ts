@@ -101,11 +101,11 @@ export function inboxStore(db: Db) {
         .map((row) => z.object({ id: coordinatorIdSchema }).parse(row).id);
     },
 
-    /** Marks the events announced by a doorbell, and keeps the doorbell when bb queued it rather than sending it (null: sent), together. */
+    /** Marks the events announced by a doorbell, naming it when bb queued it rather than sending it (null: sent), and keeps a queued one, together. */
     announce(coordinatorId: CoordinatorId, eventIds: readonly number[], queuedMessageId: string | null, at: number): void {
       db().transaction(() => {
-        const mark = db().prepare("UPDATE events SET announced_at = ? WHERE id = ?");
-        for (const eventId of eventIds) mark.run(at, eventId);
+        const mark = db().prepare("UPDATE events SET announced_at = ?, doorbell = ? WHERE id = ?");
+        for (const eventId of eventIds) mark.run(at, queuedMessageId, eventId);
         if (queuedMessageId !== null) db().prepare("INSERT INTO doorbells (coordinator_id, queued_message_id) VALUES (?, ?)").run(coordinatorId, queuedMessageId);
       })();
     },
@@ -121,6 +121,11 @@ export function inboxStore(db: Db) {
         const mark = db().prepare("UPDATE events SET read_at = ? WHERE coordinator_id = ? AND id = ? AND read_at IS NULL");
         for (const eventId of eventIds) mark.run(at, coordinatorId, eventId);
       })();
+    },
+
+    /** Whether the queued doorbell with this message id announced an event that is still unread. */
+    announcesUnread(queuedMessageId: string): boolean {
+      return db().prepare("SELECT 1 FROM events WHERE doorbell = ? AND read_at IS NULL LIMIT 1").get(queuedMessageId) !== undefined;
     },
 
     /** The queued doorbell of a regional manager, or null when none is waiting. */
@@ -152,7 +157,7 @@ export function inboxStore(db: Db) {
         const row = db().prepare("DELETE FROM doorbells WHERE queued_message_id = ? RETURNING coordinator_id AS id").get(queuedMessageId);
         if (row === undefined) return;
         const { id } = z.object({ id: coordinatorIdSchema }).parse(row);
-        db().prepare("UPDATE events SET announced_at = NULL WHERE coordinator_id = ? AND read_at IS NULL").run(id);
+        db().prepare("UPDATE events SET announced_at = NULL, doorbell = NULL WHERE coordinator_id = ? AND read_at IS NULL").run(id);
       })();
     },
 

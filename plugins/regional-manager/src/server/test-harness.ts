@@ -1160,6 +1160,30 @@ export function doorbellOf(...lines: [string, ...string[]]): string {
 /** Lets every ring started in the background finish: each one awaits only the fake bb. */
 export const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Lets the fake bb answer until `done` holds, for at most `turns` turns of the event loop; whether it came to hold. */
+export async function turnsUntil(done: () => boolean, turns = 200): Promise<boolean> {
+  for (let turn = 0; turn < turns && !done(); turn++) await new Promise((resolve) => setImmediate(resolve));
+  return done();
+}
+
+/**
+ * Runs `start` with every read of bb's threads held, once `reads` of them are held: what it
+ * started, and the release of every read, held then or later. why bounded: a change that never
+ * reads bb fails here instead of stalling the run.
+ */
+export async function holdingThreadLists<T>(kit: ReturnType<typeof harness>, reads: number, start: () => T): Promise<{ started: T; release(): void }> {
+  kit.threadLists.holding = true;
+  const started = start();
+  if (!(await turnsUntil(() => kit.threadLists.held.length >= reads))) assert.fail(`${kit.threadLists.held.length} of ${reads} reads of bb's threads were held`);
+  return {
+    started,
+    release() {
+      kit.threadLists.holding = false;
+      for (const release of kit.threadLists.held.splice(0)) release();
+    },
+  };
+}
+
 /** The thread a tool's answer links to. */
 export const threadIn = (text: string): string => /@thread:(\w+)/.exec(text)?.[1] ?? assert.fail(`no thread link in: ${text}`);
 

@@ -6,7 +6,7 @@ import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, doorbellOf, newSubmission, failsVerification, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
+import { coordinating, doorbellOf, newSubmission, failsVerification, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap, holdingThreadLists, turnsUntil } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
@@ -312,20 +312,6 @@ async function askedWhileBusy() {
   return started;
 }
 
-/** Runs `start` with every host read of bb's threads held, once `calls` reads are held: what it started, and the release of every read. */
-async function holdingThreadLists<T>(kit: Awaited<ReturnType<typeof coordinating>>["kit"], calls: number, start: () => T): Promise<{ started: T; release(): void }> {
-  kit.threadLists.holding = true;
-  const started = start();
-  while (kit.threadLists.held.length < calls) await new Promise((resolve) => setImmediate(resolve));
-  return {
-    started,
-    release() {
-      kit.threadLists.holding = false;
-      for (const release of kit.threadLists.held.splice(0)) release();
-    },
-  };
-}
-
 const ANSWERED = /The user answered your question d1/;
 
 test("an answer that lands while crew_catch_up reads bb keeps its queued doorbell, which wakes the manager to the next catch-up that returns it", async () => {
@@ -344,13 +330,16 @@ test("an answer that lands while crew_catch_up reads bb keeps its queued doorbel
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), ANSWERED);
 });
 
-test("two catch-ups that overlap while they read bb return an answer once between them", async () => {
+test("a catch-up called while another reads bb returns an answer once between them", async () => {
   const { kit, threadId, coordinatorId } = await askedWhileBusy();
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "release/2" });
-  const { started: calls, release } = await holdingThreadLists(kit, 2, () => [kit.call("crew_catch_up", {}, threadId), kit.call("crew_catch_up", {}, threadId)]);
+  const { started: first, release } = await holdingThreadLists(kit, 1, () => kit.call("crew_catch_up", {}, threadId));
+  const second = kit.call("crew_catch_up", {}, threadId);
+  // why not required to read bb too: a catch-up that waits for the first to end reads it only after the release.
+  await turnsUntil(() => kit.threadLists.held.length === 2);
   release();
 
-  const texts = (await Promise.all(calls)).map(textOf);
+  const texts = (await Promise.all([first, second])).map(textOf);
   assert.equal(texts.filter((text) => ANSWERED.test(text)).length, 1);
 });
 

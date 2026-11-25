@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
-import { coordinating, doorbellOf, harness, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, harness, holdingThreadLists, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
@@ -77,6 +77,24 @@ test("an update recorded after a catch-up still rings once the doorbell is taken
   assert.equal(kit.queued(threadId).length, 1);
   await kit.dispatch(kit.queued(threadId)[0] ?? "");
   assert.equal(kit.doorbellsDelivered(threadId).at(-1), doorbellOf(`WEB-2 "Dead letters" (a2) handed off: gave-up`));
+});
+
+test("a queued doorbell whose updates a catch-up returned is taken back, even when an update that wakes nobody lands during the catch-up's read of bb", async () => {
+  const { kit, threadId, coordinatorId } = await withAgents("Add retries");
+  await kit.call("crew_catch_up", {}, threadId);
+  kit.thread(threadId).status = "active";
+  kit.inbox.ownTreeRead(coordinatorId, 2);
+  await settled();
+  assert.equal(kit.queued(threadId).length, 1, "the edit warning waits behind the busy turn");
+
+  const { started: caughtUp, release } = await holdingThreadLists(kit, 1, () => kit.call("crew_catch_up", {}, threadId));
+  kit.inbox.ownTreeRead(coordinatorId, 0);
+  release();
+  assert.match(textOf(await caughtUp), /2 files changed/);
+  await settled();
+
+  assert.deepEqual(kit.queued(threadId), [], "the doorbell announced only the warning, which was read");
+  assert.deepEqual(kit.store.unread(coordinatorId).map(({ event }) => event.kind), ["coordinator-tree-clean"], "the clean tree waits for the next catch-up, waking nobody");
 });
 
 test("crew_catch_up returns each update once", async () => {
