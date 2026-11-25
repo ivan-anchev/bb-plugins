@@ -208,16 +208,25 @@ test("a round whose body fails to read says so beside its steps, and Retry reads
 });
 
 test("only the round whose failure asked the user at the cap says so by its score: \"3rd failed verification: asked you\"", async () => {
-  const capped: Entry[] = FEED.entries.map((entry) =>
-    entry.kind === "round" && entry.round.number === 2 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, asked: { decisionId: decisionIdSchema.parse("d4"), failed: 3 } } } } : entry,
-  );
+  const d4 = decisionIdSchema.parse("d4");
+  const capped: Entry[] = FEED.entries.map((entry) => {
+    if (entry.kind === "round" && entry.round.number === 2 && entry.round.verdict !== null) {
+      return { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: null, asked: { decisionId: d4, failed: 3 } } } };
+    }
+    return entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.answer === null ? { ...entry, decision: { ...entry.decision, id: d4, cap: 3 } } : entry;
+  });
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: capped }) });
-  const { head } = rounds(tab());
+  const { card, head } = rounds(tab());
   assert.deepEqual(
     [1, 2, 3].map((n) => head(n).querySelector(".rmi-score-asked")?.textContent ?? null),
     [null, "· 3rd failed verification: asked you", null],
   );
   assert.equal(head(2).querySelector(".rmi-score-asked")?.getAttribute("title"), "3rd failed verification: asked you on the board (d4)");
+  fireEvent.click(head(2));
+  assert.equal((await card(2).findByText(/^Not sent back/)).textContent, "Not sent back: at its cap, the plugin asked you (d4)", "the user decides, not the regional manager");
+  const question = tab().getByRole("article", { name: "Question d4" });
+  assert.match(question.querySelector(".rmi-decision-head")?.textContent ?? "", /^The plugin asked you/);
+  assert.match(tab().getByRole("article", { name: "Question d1" }).querySelector(".rmi-decision-head")?.textContent ?? "", /^Regional manager asked you/);
 });
 
 test("a round whose findings may or may not have reached its agent says so, and that the manager decides", async () => {

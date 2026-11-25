@@ -208,8 +208,13 @@ function SentBack({ agent, round, delivery, confirmed }: { agent: ReactNode; con
 /** How many of the review's findings the verifier confirmed; 0 when it had no review, or none was confirmed. */
 const confirmedOf = (review: Round["review"]): number => (review.state === "reported" ? (review.confirmed ?? 0) : 0);
 
-/** What became of a verdict nothing went back to an agent from. why the results: one superseded after it returned waited for CI, so it was replaced before CI, not before its verdict. */
-function outcomeText({ outcome, results }: NonNullable<Round["verdict"]>): string {
+/**
+ * What became of a verdict nothing went back to an agent from. why the results: one superseded after
+ * it returned waited for CI, so it was replaced before CI, not before its verdict. why `asked` first:
+ * a failure that asked the user at the issue's cap is theirs to decide, not the regional manager's.
+ */
+function outcomeText({ outcome, results, asked }: NonNullable<Round["verdict"]>): string {
+  if (asked !== null) return `Not sent back: at its cap, the plugin asked you (${asked.decisionId})`;
   return outcome.kind === "superseded" && results.length > 0 ? "Replaced before CI was judged" : OUTCOME[outcome.kind];
 }
 

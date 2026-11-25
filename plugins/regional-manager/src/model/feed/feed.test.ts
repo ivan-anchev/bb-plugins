@@ -81,7 +81,7 @@ function bbp19(): FeedFacts {
   const three = handed(handoff(3, A2, 5_000), returned(["pass", "pass", "fail"], 5_500, { kind: "sent-back", round: 1, ci: { kind: "none" } }));
   const four = handed(handoff(4, A2, 5_800), returned(["pass", "pass", "pass"], 6_400, { kind: "checked", refused: null, ci: { kind: "pass", number: 219 } }));
   const decisions: IssueDecision[] = [
-    { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 } },
+    { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 }, cap: null },
     { kind: "recorded", text: "a1 loops: hand BBP-19 to a fresh agent.", at: 4_700 },
     { kind: "recorded", text: "Verified and merged.", at: 6_700 },
   ];

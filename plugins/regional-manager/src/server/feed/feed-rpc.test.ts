@@ -138,7 +138,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   );
   const asked = feed.entries.find((entry) => entry.kind === "decision" && entry.decision.kind === "asked");
   assert.ok(asked?.kind === "decision");
-  assert.deepStrictEqual(keysOf(asked.decision), ["answer", "at", "id", "kind", "options", "question"]);
+  assert.deepStrictEqual(keysOf(asked.decision), ["answer", "at", "cap", "id", "kind", "options", "question"]);
   assert.deepStrictEqual(
     feed.entries.flatMap((entry) => (entry.kind === "comment" ? [entry.comment] : [])),
     [
@@ -257,5 +257,6 @@ test("through the feed RPC, only the round whose failure asked at the cap carrie
   assert.deepStrictEqual(keysOf(verdicts[2]?.asked ?? assert.fail("not asked")), ["decisionId", "failed"]);
   const decision = feed.entries.find((entry) => entry.kind === "decision");
   assert.ok(decision?.kind === "decision" && decision.decision.kind === "asked" && decision.decision.id === "d1", "the question shows as the issue's decision entry");
-  assert.deepStrictEqual(keysOf(decision.decision), ["answer", "at", "id", "kind", "options", "question"]);
+  assert.deepStrictEqual(keysOf(decision.decision), ["answer", "at", "cap", "id", "kind", "options", "question"]);
+  assert.equal(decision.decision.cap, 3, "and it is told from a question the regional manager asked");
 });

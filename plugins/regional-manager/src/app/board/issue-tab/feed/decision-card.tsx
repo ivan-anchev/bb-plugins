@@ -55,7 +55,8 @@ function Question({ coordinatorId, decision, moved }: { coordinatorId: Coordinat
   return (
     <article ref={card} tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`}>
       <p className="rmi-decision-head">
-        <span className="rmi-actor">Regional manager</span> asked you
+        {/* why by its cap: the plugin itself asks at an issue's cap of failed verifications (rounds/cap.ts), not the regional manager. */}
+        <span className="rmi-actor">{decision.cap === null ? "Regional manager" : "The plugin"}</span> asked you
         <MovedTo status={moved} /> <When at={decision.at} />
         <span className="rmi-decision-id">{decision.id}</span>
       </p>
