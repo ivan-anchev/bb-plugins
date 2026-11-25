@@ -74,9 +74,9 @@ export const capText = (cap: number): string =>
 /** How a count of failed verifications stands against the cap, as catch-up and the question word it: "its cap", "past its cap of 3". */
 const pastCap = (cap: number): string => (cap === MAX_FAILED_VERDICTS ? "its cap" : `past its cap of ${MAX_FAILED_VERDICTS}`);
 
-/** What the regional manager can do while the cap question `questionId` locks `issueId`: only the moves that work then. */
-export const capMovesText = (issueId: IssueId, questionId: DecisionId): string =>
-  `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} on the board; or stop its agent with agent_stop and cancel ${issueId} with issue_update.`;
+/** What the regional manager can do while the cap question `questionId` locks `issueId`, which an agent holds or not (`held`): only the moves that work then. */
+export const capMovesText = (issueId: IssueId, questionId: DecisionId, held: boolean): string =>
+  `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} on the board; or ${held ? "stop its agent with agent_stop and " : ""}cancel ${issueId} with issue_update.`;
 
 /** What a failure that asked did, in a sentence: "BBP-2's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user (d4)". */
 export const askedText = (issueId: IssueId, { cap, id }: CapQuestion): string =>

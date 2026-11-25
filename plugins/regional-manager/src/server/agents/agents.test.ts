@@ -593,6 +593,26 @@ test("while a cap question is open, agent_stop still stops the agent, and the is
   assert.ok(!isRefusal(canceled), textOf(canceled));
   assert.deepEqual((await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId], { decisions: 0, issues: 0 });
   assert.equal(textOf(await start()), "agent_start is refused: WEB-1 is canceled, so no agent can start on it.", "a closed issue is refused as closed: its question no longer locks it");
-  const decisions = /## Decisions\n\n[^#]*/.exec(textOf(await kit.call("crew_catch_up", {}, threadId)))?.[0] ?? assert.fail("no decisions section");
-  assert.doesNotMatch(decisions, /d1/, "catch-up no longer lists the closed issue's question as waiting");
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.equal(caughtUp.match(/found nothing\.\n\nWEB-1 is Canceled now, so no agent can start on it and this failure needs nothing from you\.\n\n/g)?.length, 1, "a1's second failure, read after the cancel, says what is so now");
+  assert.match(caughtUp, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. WEB-1 is Canceled now, so no agent can start on it and this failure needs nothing from you; d1 left the board, as no round is left for an answer to allow\.\n\n/, "so does a2's, which asked");
+  assert.match(caughtUp, /so WEB-1 rests in Todo with no agent\. WEB-1 is Canceled now, so no agent can start on it\.\n\n/);
+  assert.doesNotMatch(caughtUp, /agent_start|agent_message/, "no move that a closed issue refuses");
+  const decisions = /## Decisions\n\n[^#]*/.exec(caughtUp)?.[0] ?? assert.fail("no decisions section");
+  assert.doesNotMatch(decisions, /\bd1\b/, "catch-up no longer lists the closed issue's question as waiting");
+});
+
+test("an issue whose agent was stopped at its cap is not ready while its question waits, and is once the user answers", async () => {
+  const { kit, threadId, coordinatorId, start } = await filed();
+  await toCap(kit, threadId, coordinatorId, "WEB-1", threadIn(textOf(await start())));
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a2" }, threadId)), /^a2 is stopped; it no longer holds WEB-1\./);
+  const ready = async () => /^Ready: .*$/m.exec(textOf(await kit.call("crew_catch_up", {}, threadId)))?.[0] ?? assert.fail("no ready line");
+
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(caughtUp, /so WEB-1 rests in Todo with no agent\. Until the user answers d1, the plugin's question at its cap, agent_start on WEB-1 is refused\. Wait for their answer, which crew_catch_up brings you; or reply on WEB-1 with issue_comment, pointing them at d1 on the board; or cancel WEB-1 with issue_update\./);
+  assert.match(/^Ready: .*$/m.exec(caughtUp)?.[0] ?? "", /^Ready: none /);
+  assert.ok(isRefusal(await start()), "and agent_start agrees");
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d1"), answer: "One more round" });
+  assert.match(await ready(), /^Ready: \[WEB-1\]/);
+  assert.match(textOf(await start()), /^Started a3 on WEB-1/);
 });

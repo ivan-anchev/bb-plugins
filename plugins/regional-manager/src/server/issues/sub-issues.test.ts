@@ -51,7 +51,7 @@ test("1: issue_create with a parent files a sub-issue, listed under its parent i
   assert.match(await text("issue_read", { id: "WEB-2" }), /### Relations\n\nParent: WEB-1 \(Todo\)\.\nSub-issues: none\./);
   assert.equal(
     await board(),
-    ['### Todo (1)\n- WEB-1 "Add retries" (Build; parent): 0/1 done\n  - WEB-2 "Pick a card vault" (Research; no agent, under WEB-1): Not started', "Ready: WEB-2 (in Todo, no sub-issues, and nothing they or their parent depend on is open)."].join("\n\n"),
+    ['### Todo (1)\n- WEB-1 "Add retries" (Build; parent): 0/1 done\n  - WEB-2 "Pick a card vault" (Research; no agent, under WEB-1): Not started', "Ready: WEB-2 (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user)."].join("\n\n"),
   );
 });
 

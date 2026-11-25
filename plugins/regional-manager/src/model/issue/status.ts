@@ -9,7 +9,8 @@ import type { Handoff, HandoffId } from "../agent/handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
 import { reviewPending } from "../verdict/review.ts";
-import { capText } from "../verdict/rounds/cap.ts";
+import type { Decision } from "../decision.ts";
+import { capLock, capQuestionsOf, capText, stillWaits, type CapQuestion } from "../verdict/rounds/cap.ts";
 import { ciVerdictOf, failureHeadline, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
@@ -47,8 +48,8 @@ export type IssueFacts = {
   ended: { how: EndedHow; left: Handed | null } | null;
   /** The pull request of its branch (agent.ts issueBranch) as last read (null: none seen). */
   pr: PrSnapshot | null;
-  /** An unanswered decision names it (null: none), with `cap` when one is the plugin's question at its cap of failed verdicts (rounds/cap.ts), the count it asked at; else null. */
-  openDecision: { cap: number | null } | null;
+  /** The unanswered decisions naming it, the plugin's questions at its cap of failed verdicts (rounds/cap.ts) among them. */
+  openDecisions: readonly Decision[];
   /** Its latest final check (null: none was made, as for every issue but a build parent whose work was all merged). */
   finalCheck: FinalCheck | null;
   /** The verifier of one of its running checks waits on an answer or an approval in its thread, which the plugin declines (verify.ts watchRunning). */
@@ -74,6 +75,8 @@ export type IssueView = {
   subIssues: { done: number; total: number } | null;
   /** What closed it (null: it is open). */
   closedBy: Closure | null;
+  /** The plugin's question at its cap of failed verdicts that locks it now: unanswered while it is open (rounds/cap.ts capLock), refusing agent_start and agent_message on it. null: nothing locks it. */
+  capLock: CapQuestion | null;
   /** A build parent whose final check is due: its Done build sub-issues, whose merged work the check judges. Null when none is due. */
   finalCheckDue: IssueId[] | null;
 };
@@ -92,7 +95,7 @@ export type Closure =
   | { by: "final-check"; checkId: CheckId };
 
 /** A view before its dependencies are read: where its own facts, or its sub-issues, place it. */
-type Placed = Omit<IssueView, "blockedBy" | "blocks">;
+type Placed = Omit<IssueView, "blockedBy" | "blocks" | "capLock">;
 
 type Placing = Pick<IssueView, "status" | "headline" | "needsYou">;
 
@@ -111,10 +114,11 @@ export function issueViews(all: readonly IssueFacts[]): IssueView[] {
   });
   const statuses = new Map(placed.map(({ issue, status }) => [issue.id, status]));
   const issues = new Map(all.map(({ issue }) => [issue.id, issue]));
-  return placed.map((view) => {
-    if (isClosed(view.status)) return { ...view, blockedBy: [], blocks: [] };
+  return placed.map((view, i) => {
+    const capLock = lockAt(at(all, i).openDecisions, view);
+    if (isClosed(view.status)) return { ...view, blockedBy: [], blocks: [], capLock };
     const parent = view.issue.parentId === null ? null : (issues.get(view.issue.parentId) ?? null);
-    return { ...view, blockedBy: blockedBy(view.issue, parent, (id) => statusIn(statuses, id)), blocks: openDependents(placed, view.issue.id) };
+    return { ...view, blockedBy: blockedBy(view.issue, parent, (id) => statusIn(statuses, id)), blocks: openDependents(placed, view.issue.id), capLock };
   });
 }
 
@@ -127,30 +131,39 @@ const ASKED = "Waiting on your answer to its decision";
 /** How the manager's two closing acts place an issue. */
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
-function issueView({ issue, holder, ended, pr, openDecision, verifierAsks }: IssueFacts): Placed {
+function issueView({ issue, holder, ended, pr, openDecisions, verifierAsks }: IssueFacts): Placed {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null, finalCheckDue: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
   if (holder !== null) {
     const placed = held(issue.kind, holder, { pr, verifierAsks });
-    return { ...base, ...placed, needsYou: waitingOn(placed.needsYou, openDecision), closedBy: handedOffClose(placed, holder.current) };
+    return { ...base, ...placed, needsYou: waitingOn(issue, placed, openDecisions), closedBy: handedOffClose(placed, holder.current) };
   }
   const left = ended?.left ?? null;
   const after = left === null ? null : placedByLeft(issue.kind, left, { pr, verifierAsks });
-  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: waitingOn(after.needsYou, openDecision), closedBy: handedOffClose(after, left) };
-  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: waitingOn(null, openDecision), closedBy: null };
+  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: waitingOn(issue, after, openDecisions), closedBy: handedOffClose(after, left) };
+  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: waitingOn(issue, { status: issue.rest, needsYou: null }, openDecisions), closedBy: null };
 }
 
 /**
- * Why the issue waits on the user: its own reason (`own`, null: none), else its open decision's;
- * at its cap, led by the cap, as the plugin's question there locks it (rounds/cap.ts). null: it
- * doesn't wait. why the headline never carries the cap: only the Needs you reason leads with it.
+ * Why the issue, placed at `status`, waits on the user: its own reason (`needsYou`, null: none),
+ * else a decision of `open` that still waits (rounds/cap.ts stillWaits, so never a cap question
+ * once the issue is closed); at its cap, led by the cap, as the plugin's question there locks it.
+ * null: it doesn't wait. why the headline never carries the cap: only the Needs you reason leads
+ * with it.
  */
-function waitingOn(own: string | null, open: IssueFacts["openDecision"]): string | null {
-  if (open === null) return own;
-  const reason = own ?? ASKED;
-  return open.cap === null ? reason : `${capText(open.cap)}: ${reason}`;
+function waitingOn(issue: Issue, { status, needsYou }: Pick<Placing, "status" | "needsYou">, open: readonly Decision[]): string | null {
+  if (!asksNow(issue, status, open)) return needsYou;
+  const reason = needsYou ?? ASKED;
+  const lock = lockAt(open, { issue, status });
+  return lock === null ? reason : `${capText(lock.cap)}: ${reason}`;
 }
+
+/** Whether a decision of `open` still waits for the user on the issue placed at `status` (rounds/cap.ts stillWaits). */
+const asksNow = (issue: Issue, status: IssueStatus, open: readonly Decision[]): boolean => open.some((decision) => stillWaits(decision, () => isClosed(status)));
+
+/** The cap question of `open` that locks the issue placed at `status` (rounds/cap.ts capLock). */
+const lockAt = (open: readonly Decision[], { issue, status }: Pick<Placed, "issue" | "status">): CapQuestion | null => capLock(capQuestionsOf(open, issue.id), isClosed(status));
 
 /** The handoff that placed the issue, as what closed it when that is Done; null for any other place. */
 const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | null): Closure | null =>
@@ -167,7 +180,7 @@ const handedOffClose = ({ status }: Pick<Placing, "status">, handed: Handed | nu
  * manager put it. Its headline says only what its count doesn't (headlineText joins the two): why
  * it is flagged, where its final check stands, or the manager's close; else none.
  */
-function parentView({ issue, openDecision, finalCheck, verifierAsks }: IssueFacts, subIssues: readonly Placed[]): Placed {
+function parentView({ issue, openDecisions, finalCheck, verifierAsks }: IssueFacts, subIssues: readonly Placed[]): Placed {
   const done = subIssues.filter(({ status }) => status === "done");
   const counted = subIssues.filter(({ status }) => status !== "canceled");
   const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: counted.length }, finalCheckDue: null };
@@ -179,11 +192,11 @@ function parentView({ issue, openDecision, finalCheck, verifierAsks }: IssueFact
     const unmerged = builds.filter(({ pr }) => pr?.state !== "merged").map(({ issue: sub }) => sub.id);
     if (unmerged.length > 0) return { ...base, ...flagged(`${unmerged.join(", ")} ${unmerged.length === 1 ? "isn't" : "aren't"} merged, so ${issue.id}'s work isn't all on the default branch`), closedBy: null };
     const placed = finalCheckPlaces(issue, finalCheck, builds.map(({ issue: sub }) => sub.id), verifierAsks);
-    return { ...base, ...placed, needsYou: waitingOn(placed.needsYou, openDecision) };
+    return { ...base, ...placed, needsYou: waitingOn(issue, placed, openDecisions) };
   }
   const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
   const status = started ? "in-progress" : subIssues.some(({ status }) => status === "todo") ? "todo" : issue.rest;
-  return { ...base, status, headline: openDecision === null ? null : ASKED, needsYou: waitingOn(null, openDecision), closedBy: null };
+  return { ...base, status, headline: asksNow(issue, status, openDecisions) ? ASKED : null, needsYou: waitingOn(issue, { status, needsYou: null }, openDecisions), closedBy: null };
 }
 
 /**
@@ -390,10 +403,10 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
 };
 
 /** why throw: issueViews places one view per facts, in order. */
-function at(views: readonly Placed[], i: number): Placed {
-  const view = views[i];
-  if (view === undefined) throw new Error(`No view for issue ${i}`);
-  return view;
+function at<Item>(items: readonly Item[], i: number): Item {
+  const item = items[i];
+  if (item === undefined) throw new Error(`No view for issue ${i}`);
+  return item;
 }
 
 /** why throw: a verified kind's done handoff is stored with its check, in one transaction. */

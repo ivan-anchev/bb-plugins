@@ -10,7 +10,7 @@ import type { Closure, IssueStatus, IssueView } from "./status.ts";
 type Shape = Pick<Issue, "id" | "dependsOn" | "parentId">;
 
 /** An issue as viewed: what the relations read of it. */
-type Viewed = Pick<IssueView, "status" | "blockedBy" | "subIssues"> & { issue: Shape };
+type Viewed = Pick<IssueView, "status" | "blockedBy" | "subIssues" | "capLock"> & { issue: Shape };
 
 /** The other issue of a relation, with its status now. */
 export type Related = { id: IssueId; status: IssueStatus };
@@ -33,8 +33,13 @@ export function blockedBy(issue: Pick<Shape, "dependsOn">, parent: Pick<Shape, "
   return [...dependencies].map((id) => ({ id, status: statusOf(id) })).filter(({ status }) => !isClosed(status));
 }
 
-/** Ready: in Todo, not blocked, and not a parent: a parent never has an agent, its sub-issues do. crew_catch_up lists the ready issues. */
-export const isReady = ({ status, blockedBy, subIssues }: Pick<IssueView, "status" | "blockedBy" | "subIssues">): boolean => status === "todo" && blockedBy.length === 0 && subIssues === null;
+/**
+ * Ready: in Todo, not blocked, not a parent (a parent never has an agent, its sub-issues do), and
+ * not locked at its cap, whose question refuses agent_start until the user answers it.
+ * crew_catch_up lists the ready issues.
+ */
+export const isReady = ({ status, blockedBy, subIssues, capLock }: Pick<IssueView, "status" | "blockedBy" | "subIssues" | "capLock">): boolean =>
+  status === "todo" && blockedBy.length === 0 && subIssues === null && capLock === null;
 
 /** The issues ready in `after` that were not in `before`: what a write between the two readings made ready. */
 export function newlyReady(before: readonly Viewed[], after: readonly Viewed[]): IssueId[] {

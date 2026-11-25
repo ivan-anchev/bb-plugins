@@ -11,12 +11,12 @@ import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, failedVerification, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { isClosed } from "../../model/issue/relations.ts";
-import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
+import { STATUS_LABELS, type Handed, type IssueStatus, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
-import { askedQuestion, askedText, capLock, capMovesText, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
+import { askedQuestion, askedText, capMovesText, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { findingText, type Review } from "../../model/verdict/review.ts";
 import { checkInFlight, ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
@@ -111,7 +111,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     case "pr":
       return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
     case "returned-to-todo":
-      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. Start one with agent_start, or plan it again with issue_update.`;
+      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. ${restingNextStep(event.issueId, lookups)}`;
     default:
       return event satisfies never;
   }
@@ -184,10 +184,25 @@ export function commentsText(comments: readonly Comment[]): string {
   return comments.map(({ id, at, author, replyTo, text }) => `#### ${id}, ${whose(author)}, at ${new Date(at).toISOString()}${replyTo === null ? "" : `, answering ${replyTo}`}\n\n${text}`).join("\n\n");
 }
 
-/** What locks the issue now: its cap question the user hasn't answered while it is open (rounds/cap.ts capLock); a view bb's thread list couldn't give is taken as open. */
-function lockOf(issueId: IssueId, { capQuestions, view }: Pick<Lookups, "capQuestions" | "view">): CapQuestion | null {
+/** What the regional manager can do about an issue left with no agent: start one, unless it closed since or its cap question locks it (lockOf). */
+function restingNextStep(issueId: IssueId, lookups: Pick<Lookups, "capQuestions" | "view">): string {
+  const closed = closedNow(issueId, lookups);
+  if (closed !== null) return `${issueId} is ${STATUS_LABELS[closed]} now, so no agent can start on it.`;
+  const lock = lockOf(issueId, lookups);
+  if (lock === null) return "Start one with agent_start, or plan it again with issue_update.";
+  return `Until the user answers ${lock.id}, the plugin's question at its cap, agent_start on ${issueId} is refused. ${capMovesText(issueId, lock.id, false)}`;
+}
+
+/** The issue's status when its view places it closed now, Done or Canceled; null when it is open, or bb's thread list couldn't give a view. */
+function closedNow(issueId: IssueId, { view }: Pick<Lookups, "view">): IssueStatus | null {
   const status = view(issueId)?.status ?? null;
-  return capLock(capQuestions(issueId), status !== null && isClosed(status));
+  return status !== null && isClosed(status) ? status : null;
+}
+
+/** What locks the issue now: its view's cap lock (IssueView capLock); when bb's thread list couldn't give a view, its unanswered cap question, as though it were open. */
+function lockOf(issueId: IssueId, { capQuestions, view }: Pick<Lookups, "capQuestions" | "view">): CapQuestion | null {
+  const read = view(issueId);
+  return read === null ? unansweredCapQuestion(capQuestions(issueId)) : read.capLock;
 }
 
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */
@@ -239,17 +254,24 @@ const MOVE_TO_AN_AGENT =
 
 /**
  * What a failed done handoff leaves the regional manager to do, led by what its failure asked the
- * user at the issue's cap, if it did: decide, or, while the issue's cap question is open, only
- * what works then (rounds/cap.ts).
+ * user at the issue's cap, if it did: nothing once the issue closed, as by a merge or a cancel;
+ * else decide, or, while the issue's cap question is open, only what works then (rounds/cap.ts).
  */
 function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view">): string {
   const asked = askedId === null ? null : askedQuestion(lookups.decision(askedId));
+  const led = asked === null ? "" : `This was ${askedText(check.issueId, asked)}. `;
+  const closed = closedNow(check.issueId, lookups);
+  // why first: a closed issue takes no agent, and its question no longer waits for the user.
+  if (closed !== null) return `${led}${closedText(check.issueId, closed, asked)}`;
   const open = lockOf(check.issueId, lookups);
-  const led = asked === null ? "" : `This was ${askedText(check.issueId, asked)}, on the board. `;
   if (open === null) return `${led}${FAILED_IS_YOURS}`;
   const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;
-  return `${led}${held}Until the user answers ${open.id}, agent_start and agent_message on ${check.issueId} are refused. ${capMovesText(check.issueId, open.id)}`;
+  return `${led}${held}Until the user answers ${open.id}, agent_start and agent_message on ${check.issueId} are refused. ${capMovesText(check.issueId, open.id, lookups.view(check.issueId)?.holder !== null)}`;
 }
+
+/** What a failure on an issue closed since (`status`, Done or Canceled) leaves to do: nothing; its question, if it asked one (`asked`), left the board. */
+const closedText = (issueId: IssueId, status: IssueStatus, asked: CapQuestion | null): string =>
+  `${issueId} is ${STATUS_LABELS[status]} now, so no agent can start on it and this failure needs nothing from you${asked === null ? "" : `; ${asked.id} left the board, as no round is left for an answer to allow`}.`;
 
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";

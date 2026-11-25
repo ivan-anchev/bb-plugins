@@ -47,6 +47,8 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id) => {
+      // why taken before the board is read: every event taken is then older than the read, so what is said of it (a failure's cap question, what locks its issue) is in the read. One recorded during the read waits for the next catch-up, whose doorbell it rings.
+      const unread = inbox.takeUnread(id);
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const read = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
       const issues = "error" in read ? read : read.reads;
@@ -54,7 +56,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
       // why the board's own read when there is one: its decisions and its issues are one snapshot. Without it, closed issues can't be told, so every unanswered decision is listed.
       const decisions = "error" in read ? store.decisions(id) : read.decisions;
       const waiting = "error" in read ? decisions.filter(isOpen) : waitingDecisions(decisions, read.reads.map(({ view }) => ({ id: view.issue.id, status: view.status })));
-      const updates = updatesText(inbox.takeUnread(id), {
+      const updates = updatesText(unread, {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
         check: store.check,

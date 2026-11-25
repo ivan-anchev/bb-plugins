@@ -95,6 +95,25 @@ test("a pull request the previous agent opened is the new agent's: no second ope
   assert.deepEqual(await row(), ["done", "Merged #44"]);
 });
 
+test("a merge seen while agent_start reads where the new agent would run refuses the start before it stops or takes back anything", async () => {
+  const { kit, coordinatorId, agentThreadId, handover, agent } = await handedTo();
+  const branch = kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch");
+  kit.leavesBackground(agentThreadId);
+  kit.environments.holding = true;
+  const started = handover();
+  while (kit.environments.held.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  kit.environments.holding = false;
+  kit.github.prs.set(branch, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 10 * 60_000;
+  await kit.tick();
+  kit.environments.held.splice(0).forEach((release) => release());
+
+  const answer = await started;
+  assert.deepEqual([isRefusal(answer), textOf(answer)], [true, "agent_start is refused: WEB-1 is Done (Merged #41), so no agent can start on it."]);
+  assert.equal(kit.thread(agentThreadId).background, 1, "a1's thread was not stopped");
+  assert.deepEqual([agent(a1).ended, kit.store.agents(coordinatorId).length], [null, 1], "a1 still holds WEB-1, and no agent was added");
+});
+
 test("from default starts clean from the default branch, and its first message still holds the earlier handoffs and verdicts", async () => {
   const { kit, coordinatorId, agentThreadId, handover, firstMessage, handOff } = await handedTo();
   await handOff(agentThreadId);
@@ -470,7 +489,7 @@ test("an accept whose read is answered just after a handover gives WEB-1 to a2 i
 
   kit.turnEvents.holding = true;
   const handingOver = kit.call("agent_start", { issue: "WEB-1" }, threadId);
-  for (const read of ["the decision's read of WEB-1", "a1's latest turn"]) {
+  for (const read of ["the decision's first read of WEB-1", "its read again once it knows where a2 runs", "a1's latest turn"]) {
     await settled();
     assert.equal(kit.turnEvents.held.length, 1, read);
     kit.turnEvents.held.shift()?.();

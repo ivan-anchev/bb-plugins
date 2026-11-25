@@ -157,7 +157,9 @@ and `dependsOn: { add: ["BBP-2"], remove: ["BBP-4"] }`.
 - **It informs, never refuses.** You decide what runs at once. `agent_start`
   on a blocked issue starts its agent, and its result says what blocks it, as
   in `BBP-3 is blocked by BBP-2 (In progress)`.
-- **Ready** issues are in Todo, not blocked, and have no sub-issues. `crew_catch_up` lists them
+- **Ready** issues are in Todo, not blocked, have no sub-issues, and no
+  question at their cap of failed verdicts waits for the user (see the
+  failed-verification update). `crew_catch_up` lists them
   after the board, as `Ready: BBP-3, BBP-5 (…)`; each blocked row ends with
   `blocked by BBP-2 (In progress)`.
 - **Unblocked.** When a pull request's merge or an agent's handoff closes the
@@ -593,7 +595,8 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     allows one more round: read their words for what they want. A failure
     made while the question is open (a person woke the agent) goes back to
     nobody and asks nothing. Once the issue closes, as by a merge or a
-    cancel, the question leaves Needs you.
+    cancel, the question leaves Needs you, and a failure you read after
+    that says the issue is closed and needs nothing from you.
   - **could not be verified**: under Needs you, with the reason: the
     verifier stopped without a verdict, showed no activity for 30 minutes,
     or asked a person something bb wouldn't let the plugin decline (a

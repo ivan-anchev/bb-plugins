@@ -4,8 +4,7 @@
 // here, so a status has one derivation.
 import { issueBranch, type Agent } from "../../../model/agent/agent.ts";
 import { isOpen, type Decision } from "../../../model/decision.ts";
-import type { Issue, IssueId } from "../../../model/issue/issue.ts";
-import { capQuestionsOf, unansweredCapQuestion } from "../../../model/verdict/rounds/cap.ts";
+import type { Issue } from "../../../model/issue/issue.ts";
 import { issueViews, type Handed, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import type { Store } from "../../store/store.ts";
@@ -57,7 +56,7 @@ export async function readBoard(bb: FactsBb, store: FactsStore, coordinatorId: C
         holder: await holderOf(bb, own, threadOf, record),
         ended: endedBy(latest, record),
         pr: branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null),
-        openDecision: openDecisionOf(decisions, issue.id),
+        openDecisions: decisions.filter((decision) => decision.issueId === issue.id && isOpen(decision)),
         finalCheck: store.finalChecks(coordinatorId, issue.id).at(-1) ?? null,
         verifierAsks: verifiers.some(({ issueId, threadId }) => issueId === issue.id && threads.get(threadId)?.hasPendingInteraction === true),
       };
@@ -67,13 +66,6 @@ export async function readBoard(bb: FactsBb, store: FactsStore, coordinatorId: C
   );
   const views = issueViews(reads.map(({ facts }) => facts));
   return { reads: reads.map(({ agent, threadId, branch, record }, i) => ({ view: viewAt(views, i), agent, threadId, branch, record })), decisions };
-}
-
-/** The issue's open decision, the plugin's question at its cap told from another (see IssueFacts); null when none naming it is open. */
-function openDecisionOf(decisions: readonly Decision[], issueId: IssueId): IssueFacts["openDecision"] {
-  if (!decisions.some((decision) => decision.issueId === issueId && isOpen(decision))) return null;
-  // why unanswered, not the lock: a closed issue's view never Needs you (status.ts finalOf), so its closure needn't be read here.
-  return { cap: unansweredCapQuestion(capQuestionsOf(decisions, issueId))?.cap ?? null };
 }
 
 /** The issue's holder, its thread while bb runs it, and its current handoff (its latest on `record`), judged only when its thread is idle. */

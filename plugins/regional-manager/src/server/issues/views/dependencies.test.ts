@@ -95,21 +95,21 @@ test("a research dependency's report unblocks its dependent with a wake; a messa
   const { report } = await research();
   await text("issue_create", { ...ISSUE, title: "Card vault schema", dependsOn: ["WEB-1"] });
   assert.match(await row("WEB-2"), /; blocked by WEB-1 \(In progress\)$/);
-  assert.equal(await readyLine(), "Ready: none (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
+  assert.equal(await readyLine(), "Ready: none (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user).");
 
   managerIdle();
   await report();
   assert.match(doorbells().at(-1) ?? assert.fail("no doorbell"), /\n- WEB-2 "Card vault schema" is unblocked: WEB-1 done$/);
   assert.match(await catchUp(), /### WEB-2 "Card vault schema" is unblocked: WEB-1 done\n\nAt [^\n]* WEB-1 was the last open issue blocking WEB-2, as its own dependency or its parent's\. Nothing of WEB-1 reaches WEB-2 on its own:/);
   assert.equal(await row("WEB-2"), '- WEB-2 "Card vault schema" (Build; no agent): Not started');
-  assert.equal(await readyLine(), "Ready: WEB-2 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
+  assert.equal(await readyLine(), "Ready: WEB-2 (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user).");
 
   await call("agent_message", { agent: "a1", text: "Add what KMS would cost." });
   assert.match(await row("WEB-2"), /; blocked by WEB-1 \(In progress\)$/);
-  assert.equal(await readyLine(), "Ready: none (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
+  assert.equal(await readyLine(), "Ready: none (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user).");
   await report({ ...RESEARCH_DONE, summary: "Vault fits; KMS costs more" });
   assert.deepEqual(await unblocked(), ["WEB-2 by WEB-1 done", "WEB-2 by WEB-1 done"]);
-  assert.equal(await readyLine(), "Ready: WEB-2 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
+  assert.equal(await readyLine(), "Ready: WEB-2 (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user).");
 });
 
 test("a handoff that closes nothing, or closes an issue nothing waits on, announces nothing", async () => {
@@ -146,7 +146,7 @@ test("a build dependency whose pull request merges unblocks its dependent once; 
   await kit.tick();
   await settled();
   assert.deepEqual(await unblocked(), ["WEB-3 by WEB-1 done"]);
-  assert.equal(await readyLine(), "Ready: WEB-2, WEB-3 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
+  assert.equal(await readyLine(), "Ready: WEB-2, WEB-3 (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user).");
 });
 
 test("two dependencies closing at once announce their dependent once, and its status is right", async () => {
@@ -205,7 +205,7 @@ test("catch-up's ready line lists the Todo issues nothing blocks: not a blocked 
   await text("issue_create", { ...ISSUE, title: "Alerts" });
   await text("agent_start", { issue: "WEB-4" });
   await text("issue_update", { id: "WEB-5", status: "canceled" });
-  assert.equal(await readyLine(), "Ready: WEB-1 (in Todo, no sub-issues, and nothing they or their parent depend on is open).");
+  assert.equal(await readyLine(), "Ready: WEB-1 (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user).");
 });
 
 /** Releases every bb answer held, until none is: a release can lead to another held read. */

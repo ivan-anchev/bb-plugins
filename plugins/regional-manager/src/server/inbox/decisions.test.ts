@@ -250,3 +250,33 @@ test("a cap question asked while the board's host read is held arrives with its 
   const board = await kit.rpc.board({ coordinatorId });
   assert.deepStrictEqual([board.decisions.length, board.issues.map(({ needsYou }) => needsYou)], [1, ["At its cap of 3 failed verifications: ✗ Failed verification: Retries land with backoff"]]);
 });
+
+test("a failure that asks at the cap while crew_catch_up's host read is held waits for the next catch-up, which tells it with its question and the lock", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, fresh);
+  await kit.idle(fresh, "Handed off.");
+  await settled();
+  const a2 = kit.store.agents(coordinatorId).find(({ threadId: agentThread }) => agentThread === fresh) ?? assert.fail("no a2");
+  const third = kit.store.latestHandoff(coordinatorId, a2.id)?.check ?? assert.fail("no check");
+  const running = third.verdict.state === "running" ? third.verdict : assert.fail(`the verdict is ${third.verdict.state}`);
+  const checkout = running.checkout ?? assert.fail("no checkout");
+
+  kit.turnEvents.holding = true;
+  const caughtUp = kit.call("crew_catch_up", {}, threadId);
+  while (kit.turnEvents.held.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  // The third verdict returns and settles while catch-up reads a2's turns, asking the user.
+  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
+  kit.store.settleReturned(third.id, { kind: "checked", refused: null, ci: { kind: "none" } }, Date.now());
+  kit.turnEvents.holding = false;
+  for (const release of kit.turnEvents.held.splice(0)) release();
+
+  const first = textOf(await caughtUp);
+  assert.doesNotMatch(first, /\bd1\b/, "neither the failure that asked nor its question: both are newer than this catch-up's read");
+  const next = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(next, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start and agent_message on WEB-1 are refused\./);
+  assert.match(/## Decisions\n\n[^#]*/.exec(next)?.[0] ?? assert.fail("no decisions section"), /- d1, asked /);
+});
