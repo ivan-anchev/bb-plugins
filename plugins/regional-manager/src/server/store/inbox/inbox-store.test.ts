@@ -46,12 +46,16 @@ test("a doorbell announces its events once; one that never reached its thread ma
   store.announce(MANAGER, [event!.id], "msg_1", 3_100);
   assert.deepEqual(store.coordinatorsToRing(), []);
   assert.deepEqual(store.doorbells(), [{ coordinatorId: MANAGER, threadId: "thr_manager_1", queuedMessageId: "msg_1" }]);
+  assert.equal(store.announcesUnread(MANAGER, "msg_1"), true);
 
   store.reopenDoorbell("msg_1");
   assert.equal(store.doorbell(MANAGER), null);
   assert.deepEqual(store.unannounced(MANAGER), [event]);
+  assert.equal(store.announcesUnread(MANAGER, "msg_1"), false, "the doorbell that never reached its thread announces nothing");
 
+  store.announce(MANAGER, [event!.id], "msg_2", 3_150);
   assert.deepEqual(takeUnread(store, MANAGER, 3_200), [event]);
+  assert.equal(store.announcesUnread(MANAGER, "msg_2"), false, "what it announced was read");
   assert.deepEqual(takeUnread(store, MANAGER, 3_300), []);
 });
 
@@ -86,6 +90,22 @@ test("a reopen that fails before its events are unannounced keeps the doorbell, 
   store.reopenDoorbell("msg_1");
   assert.equal(store.doorbell(MANAGER), null);
   assert.deepEqual(store.unannounced(MANAGER), [event]);
+});
+
+test("a catch-up whose marking fails on its last event leaves every event it returned unread, and retried marks them all read", () => {
+  const { db, store } = freshStore();
+  store.insertEvent(MANAGER, { kind: "coordinator-edited-files", fileCount: 2 }, 3_000);
+  store.insertEvent(MANAGER, { kind: "coordinator-tree-clean" }, 3_100);
+  const events = store.unread(MANAGER);
+  const last = events.at(-1) ?? assert.fail("no events");
+
+  const restore = failWrites(db, "UPDATE", "events", `OLD.id = ${last.id}`);
+  assert.throws(() => store.markRead(MANAGER, events.map(({ id }) => id), 3_200), /forced failure/);
+  assert.deepEqual(store.unread(MANAGER), events, "the first event's mark was undone with the failed one");
+
+  restore();
+  store.markRead(MANAGER, events.map(({ id }) => id), 3_300);
+  assert.deepEqual(store.unread(MANAGER), []);
 });
 
 test("a reminder fires once when due; a repeating one moves to its next time", () => {

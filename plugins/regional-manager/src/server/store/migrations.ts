@@ -262,6 +262,11 @@ export const MIGRATIONS: readonly string[] = [
   // (rounds/cap.ts); null for every question the regional manager asked. why the only stored fact
   // of the cap: the failures are counted from the checks, and the lock is the open question.
   `ALTER TABLE decisions ADD COLUMN cap INTEGER`,
+
+  // The queued message of the doorbell that announced the event while bb held it (null: none did,
+  // or bb sent it at once), written with announced_at. why kept: a catch-up takes a queued doorbell
+  // back only once no event it announced is unread (inbox.ts withdraw).
+  `ALTER TABLE events ADD COLUMN doorbell TEXT`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

@@ -118,9 +118,16 @@ export function issueViews(all: readonly IssueFacts[]): IssueView[] {
     const capLock = lockAt(at(all, i).openDecisions, view);
     if (isClosed(view.status)) return { ...view, blockedBy: [], blocks: [], capLock };
     const parent = view.issue.parentId === null ? null : (issues.get(view.issue.parentId) ?? null);
-    return { ...view, blockedBy: blockedBy(view.issue, parent, (id) => statusIn(statuses, id)), blocks: openDependents(placed, view.issue.id), capLock };
+    return { ...view, needsYou: ledByCap(capLock, view.needsYou), blockedBy: blockedBy(view.issue, parent, (id) => statusIn(statuses, id)), blocks: openDependents(placed, view.issue.id), capLock };
   });
 }
+
+/**
+ * An open issue's Needs you reason once placed (`needsYou`, null: none), led by its cap while the
+ * plugin's question there locks it (`lock`, null: nothing does). why after placement: every place an
+ * open issue can take, its own reason or a decision's, then reads the cap by one rule.
+ */
+const ledByCap = (lock: CapQuestion | null, needsYou: string | null): string | null => (lock === null ? needsYou : `${capText(lock.cap)}: ${needsYou ?? ASKED}`);
 
 /** The open issues that depend on `id` themselves, in the order filed. why not through a parent: a parent's dependent is the parent, as issue_read's relations name it. */
 const openDependents = (placed: readonly Placed[], id: IssueId): Related[] =>
@@ -148,16 +155,11 @@ function issueView({ issue, holder, ended, pr, openDecisions, verifierAsks }: Is
 /**
  * Why the issue, placed at `status`, waits on the user: its own reason (`needsYou`, null: none),
  * else a decision of `open` that still waits (rounds/cap.ts stillWaits, so never a cap question
- * once the issue is closed); at its cap, led by the cap, as the plugin's question there locks it.
- * null: it doesn't wait. why the headline never carries the cap: only the Needs you reason leads
- * with it.
+ * once the issue is closed). null: it doesn't wait. The cap leads it after placement (ledByCap);
+ * why the headline never carries the cap: only the Needs you reason leads with it.
  */
-function waitingOn(issue: Issue, { status, needsYou }: Pick<Placing, "status" | "needsYou">, open: readonly Decision[]): string | null {
-  if (!asksNow(issue, status, open)) return needsYou;
-  const reason = needsYou ?? ASKED;
-  const lock = lockAt(open, { issue, status });
-  return lock === null ? reason : `${capText(lock.cap)}: ${reason}`;
-}
+const waitingOn = (issue: Issue, { status, needsYou }: Pick<Placing, "status" | "needsYou">, open: readonly Decision[]): string | null =>
+  asksNow(issue, status, open) ? (needsYou ?? ASKED) : needsYou;
 
 /** Whether a decision of `open` still waits for the user on the issue placed at `status` (rounds/cap.ts stillWaits). */
 const asksNow = (issue: Issue, status: IssueStatus, open: readonly Decision[]): boolean => open.some((decision) => stillWaits(decision, isClosed(status)));

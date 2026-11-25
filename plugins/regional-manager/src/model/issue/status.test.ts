@@ -295,6 +295,14 @@ test("the plugin's question at its cap locks an open issue, and leaves Needs you
   assert.deepEqual([asked.status, asked.needsYou, asked.capLock], ["done", "Waiting on your answer to its decision", null]);
 });
 
+test("a capped build issue that became a parent keeps its cap leading its Needs you reason while a Done sub-issue isn't merged", () => {
+  const { parent } = family("build", [closedAs("accepted")], {}, asking(3));
+  assert.deepEqual(
+    [parent.status, parent.needsYou, parent.capLock?.id],
+    ["in-progress", "At its cap of 3 failed verifications: WEB-2 isn't merged, so WEB-1's work isn't all on the default branch", "d1"],
+  );
+});
+
 test("a sub-issue is blocked by its parent's dependencies, and its own", () => {
   const i9 = facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-9") } });
   const parent = facts({ issue: { ...issue, dependsOn: [issueIdSchema.parse("WEB-9")] } });
