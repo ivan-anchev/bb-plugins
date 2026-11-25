@@ -385,7 +385,7 @@ test("while its parent isn't Done, its Done sub-issues fold behind one '+N compl
   assert.equal(completed.hasAttribute("aria-controls"), false);
   assert.equal(completed.textContent, "+2 completed", "its words alone, no glyph");
   assert.equal(within(completed).queryByRole("img"), null);
-  assert.equal(completed.querySelector(".rmi-slot + .rmi-row-more")?.textContent, "+2 completed", "after the glyph's slot, kept empty, so the words line up with the sub-issues' ids");
+  assert.equal(completed.querySelector(".rmi-slot"), null, "no glyph slot ahead of its words: they start where the sub-issues' glyphs do");
   await user.click(completed);
   assert.equal(completed.getAttribute("aria-expanded"), "true");
   assert.equal(document.getElementById(completed.getAttribute("aria-controls") ?? ""), boxOf(row(view, "WEB-3")).closest("ul"), "it names the list they unfold in");

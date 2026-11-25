@@ -110,11 +110,11 @@
   position: relative;
   padding-left: 22px;
 }
-/* The row a parent's Done sub-issues fold behind (completed-row.tsx): its words where a row's id and
-   title go, quiet as a Done row's title. */
+/* The row a parent's Done sub-issues fold behind (completed-row.tsx): its words across the row from
+   where a row's glyph starts (a 14 glyph centred in the 30 slot), quiet as a Done row's title. */
 .rmi-row-more {
-  grid-column: 2 / -1;
-  padding-right: 8px;
+  grid-column: 1 / -1;
+  padding-inline: 8px;
   color: var(--muted-foreground);
   white-space: nowrap;
 }
