@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { z } from "zod";
 import plugin from "../server.ts";
 import { harness, newThreadRequest, profileNamed } from "./server/test-harness.ts";
+import type { Profile } from "./model/profile/profile.ts";
 
 const SIDEBAR = { kind: "plugin", pluginId: "activity-sidebar" } as const;
 
@@ -30,22 +31,29 @@ test("its published output names each started manager's threadId, description an
   }
 });
 
-test("another plugin reads a started manager's threadId, description and avatar", async () => {
+test("another plugin reads each started manager's threadId, description and avatar, an explicit null for no description", async () => {
   const loaded = harness().load(plugin);
+  const start = async (profile: Profile, goal: string) => {
+    const { coordinatorId } = z.object({ coordinatorId: z.string() }).parse(await loaded.callRpc("createCoordinator", { profile }));
+    return z.object({ threadId: z.string() }).parse(await loaded.callRpc("startCoordinator", { coordinatorId, request: newThreadRequest(goal) })).threadId;
+  };
   const avatar = { kind: "blob", shape: "bear", hue: "violet", expression: "attentive" } as const;
-  const { coordinatorId } = z.object({ coordinatorId: z.string() }).parse(await loaded.callRpc("createCoordinator", { profile: { ...profileNamed("PR Reviews"), description: "Reviews every open pull request.", avatar } }));
-  const { threadId } = z.object({ threadId: z.string() }).parse(await loaded.callRpc("startCoordinator", { coordinatorId, request: newThreadRequest("Review the open pull requests") }));
+  const described = await start({ ...profileNamed("PR Reviews"), description: "Reviews every open pull request.", avatar }, "Review the open pull requests");
+  const bare = await start(profileNamed("Sidebar"), "Look after the sidebar");
 
   // why: the Activity Sidebar's own schema for this read, as it parses it (its src/model/manager-look.ts).
   const sidebarRead = z.object({
     coordinators: z.array(
       z.object({
         threadId: z.string().min(1),
-        description: z.string().nullable(),
+        description: z.string().trim().min(1).max(500).nullable(),
         avatar: z.object({ kind: z.literal("blob"), shape: z.string(), hue: z.string(), expression: z.string() }),
       }),
     ),
   });
   const read = sidebarRead.parse(await loaded.callRpc("coordinators", {}, { experimental_caller: SIDEBAR }));
-  assert.deepEqual(read.coordinators, [{ threadId, description: "Reviews every open pull request.", avatar }]);
+  const byThread = new Map(read.coordinators.map((look) => [look.threadId, look]));
+  assert.equal(read.coordinators.length, 2);
+  assert.deepEqual(byThread.get(described), { threadId: described, description: "Reviews every open pull request.", avatar });
+  assert.deepEqual(byThread.get(bare), { threadId: bare, description: null, avatar: profileNamed("Sidebar").avatar });
 });

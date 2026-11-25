@@ -13,18 +13,27 @@ export const MANAGER_EVENTS = ["thread.archived", "thread.unarchived", "thread.d
  * A new manager's thread exists before the Regional Manager plugin binds its profile to it, so the read
  * its creation brings can miss it: read again this long after, at most this many times, until it shows.
  */
-export const BIND_RETRY_MS = 2_000;
+const BIND_RETRY_MS = 2_000;
 const BIND_RETRIES = 2;
+
+/** bb's thread list takes at most this many thread ids a call. */
+const IDS_PER_LIST = 200;
 
 type Deps = {
   plugins: Pick<PluginBbSdk["plugins"], "callRpc">;
-  threads: { get(args: { threadId: string; signal: AbortSignal }): Promise<ManagerTest> };
+  threads: {
+    get(args: { threadId: string; signal: AbortSignal }): Promise<ManagerTest>;
+    list(args: OpenManagersOf): Promise<readonly { id: string }[]>;
+  };
   rpc: Pick<BbPluginApi["rpc"], "experimental_invalidate">;
   log: Pick<BbPluginApi["log"], "warn">;
 };
 
 /** What tells a manager's thread from any other (model/manager-look.ts `isManagerThread`). */
 type ManagerTest = { originPluginId: string | null; parentThreadId: string | null };
+
+/** bb's thread list narrowed to the open (existing, unarchived) managers among `threadIds`. */
+type OpenManagersOf = { threadIds: string[]; originPluginId: typeof REGIONAL_MANAGER; hasParent: false; archived: false; signal: AbortSignal };
 
 /** What `thread:changed` says of a thread: which, and what about it changed. */
 type ThreadChange = { id?: string; changes: readonly string[] };
@@ -41,7 +50,7 @@ export function openManagerLooks({ plugins, threads, rpc, log }: Deps) {
 
   return {
     /**
-     * Every started manager's look; none when the plugin is missing, fails, or answers in a shape this
+     * Every open manager's look; none when the plugin is missing, fails, or answers in a shape this
      * copy of its schema doesn't know. A manager without a look shows its name and a plain avatar.
      */
     async read(): Promise<{ looks: ManagerLook[] }> {
@@ -83,44 +92,65 @@ export function openManagerLooks({ plugins, threads, rpc, log }: Deps) {
     },
   };
 
+  /** The open managers' looks: the Regional Manager plugin keeps archived and deleted ones' too, which no client shows. */
   async function readLooks(): Promise<ManagerLook[]> {
+    const { signal } = life;
     try {
-      return (await plugins.callRpc({ pluginId: REGIONAL_MANAGER, method: "coordinators", input: {}, outputSchema: coordinatorsReadSchema })).coordinators;
+      const { coordinators } = await plugins.callRpc({ pluginId: REGIONAL_MANAGER, method: "coordinators", input: {}, outputSchema: coordinatorsReadSchema, signal });
+      const open = await openThreadIds(coordinators.map((look) => look.threadId));
+      return coordinators.filter((look) => open.has(look.threadId));
     } catch (error) {
-      log.warn(`Couldn't read the regional managers' avatars and descriptions; they show with their names only: ${messageOf(error)}`);
+      if (!signal.aborted) log.warn(`Couldn't read the regional managers' avatars and descriptions; they show with their names only: ${messageOf(error)}`);
       return [];
     }
+  }
+
+  async function openThreadIds(ids: readonly string[]): Promise<Set<string>> {
+    const open = new Set<string>();
+    for (let at = 0; at < ids.length; at += IDS_PER_LIST) {
+      const page = await threads.list({ threadIds: ids.slice(at, at + IDS_PER_LIST), originPluginId: REGIONAL_MANAGER, hasParent: false, archived: false, signal: life.signal });
+      for (const thread of page) open.add(thread.id);
+    }
+    return open;
   }
 }
 
 // ------------------------------------------------------------------ layer 2
 
 /**
- * The new managers whose look hasn't shown yet, each with the reads again it has left. After each read,
- * one still missing asks for another BIND_RETRY_MS later, until it shows or its tries run out.
+ * The new managers whose look hasn't shown yet, each with the reads again it has left. A read that
+ * misses one sets a timer, if none is set; each firing spends one try of every manager still waiting
+ * and asks for a read. A look showing, or the plugin unloading, ends the wait.
  */
 function bindWatch(stale: () => void, signal: AbortSignal) {
   const waiting = new Map<string, number>();
   let timer: ReturnType<typeof setTimeout> | null = null;
-  signal.addEventListener("abort", () => {
+  const stop = () => {
     if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  signal.addEventListener("abort", () => {
+    stop();
     waiting.clear();
   });
+
+  const fire = () => {
+    timer = null;
+    for (const [threadId, left] of waiting) {
+      if (left === 1) waiting.delete(threadId);
+      else waiting.set(threadId, left - 1);
+    }
+    stale();
+  };
 
   return {
     expect(threadId: string): void {
       waiting.set(threadId, BIND_RETRIES);
     },
     seen(looks: readonly ManagerLook[]): void {
-      for (const [threadId, left] of waiting) {
-        if (left === 0 || looks.some((look) => look.threadId === threadId)) waiting.delete(threadId);
-        else waiting.set(threadId, left - 1);
-      }
-      if (waiting.size === 0 || timer !== null || signal.aborted) return;
-      timer = setTimeout(() => {
-        timer = null;
-        stale();
-      }, BIND_RETRY_MS);
+      for (const look of looks) waiting.delete(look.threadId);
+      if (waiting.size === 0) stop();
+      else if (timer === null && !signal.aborted) timer = setTimeout(fire, BIND_RETRY_MS);
     },
   };
 }

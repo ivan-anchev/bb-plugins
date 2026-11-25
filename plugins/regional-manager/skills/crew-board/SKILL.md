@@ -1248,7 +1248,7 @@ with `bb.sdk.plugins.experimental_discoverRpc` and called with
 
 ```ts
 {
-  // every manager whose thread exists, newest first
+  // every started manager, newest first, its thread archived or deleted included
   coordinators: {
     id: string;           // the manager, keying its memory
     threadId: string;     // its thread, which bb titles with its name
@@ -1266,6 +1266,9 @@ with `bb.sdk.plugins.experimental_discoverRpc` and called with
   reads them, with its own copy of their schema; a test in this plugin pins
   them (`src/published-contract.test.ts`).
 - **A manager's name** is its thread's title, so it isn't in the read.
+- **Open managers only?** The read doesn't filter by the thread's state: a
+  reader that shows open managers keeps the `threadId`s bb's thread list
+  returns as unarchived (the Activity Sidebar does).
 - **`avatar`:** `shape` is one of blob-avatar's 21 shapes, `hue` one of the
   12 identity hues (violet, blue, emerald, sky, amber, rose, lime, teal,
   orange, indigo, pink, cyan), and `expression` one of neutral, happy,

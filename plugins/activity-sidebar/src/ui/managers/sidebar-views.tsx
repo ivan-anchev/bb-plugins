@@ -1,6 +1,7 @@
 // What the sidebar shows: with regional managers, the Managers | Threads segment over a panel per tab,
-// the chosen one shown; with none, the threads' list alone. The threads' list keeps one place in the
-// tree either way, so a manager started or archived never remounts it: its scroll and its focus stay.
+// the chosen one shown; with none, the threads' list alone. Each list stays mounted in one place in the
+// tree, the other tab's hidden, so neither a tab switch nor a manager started or archived remounts one:
+// its scroll and its focus stay.
 import { useId, useLayoutEffect, useRef, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { View } from "../../data/local-choice/choices.ts";
 import { OUT3 } from "../../list/motion-plan.ts";
@@ -27,7 +28,7 @@ export function SidebarViews({ managers, view, onView, onNavigate, threads }: Pr
   const hasManagers = managers.length > 0;
   const shown: View = hasManagers ? view : "threads";
   const focus = useFocusKeptAcrossSegment(root, hasManagers);
-  // why: only the shown panel holds its view, so the sidebar keeps one keyboard stop, the shown scroller.
+  // why: a hidden panel is out of the tab order, so the sidebar keeps one keyboard stop, the shown scroller.
   const panel = (of: View) => (hasManagers ? { role: "tabpanel", id: panelId(id, of), "aria-labelledby": tabId(id, of), hidden: shown !== of } : {});
 
   return (
@@ -35,11 +36,11 @@ export function SidebarViews({ managers, view, onView, onNavigate, threads }: Pr
       {hasManagers && <ViewSegment id={id} view={view} onChange={onView} />}
       {hasManagers && (
         <div className="as-panel" {...panel("managers")}>
-          {shown === "managers" && <ManagerList managers={managers} onNavigate={onNavigate} />}
+          <ManagerList managers={managers} onNavigate={onNavigate} />
         </div>
       )}
       <div className="as-panel" {...panel("threads")}>
-        {shown === "threads" && threads}
+        {threads}
       </div>
     </div>
   );
@@ -49,8 +50,8 @@ export function SidebarViews({ managers, view, onView, onNavigate, threads }: Pr
 
 /**
  * The first manager started or the last archived brings or takes the segment and, with Managers
- * chosen, swaps the shown list. Focus held in what went (or in a menu it opened; React bubbles its
- * focus here) passes to the list now shown instead of dropping to the page.
+ * chosen, swaps the shown list. Focus held in what went or hid (or in a menu it opened; React bubbles
+ * its focus here) passes to the list now shown instead of dropping to the page or staying unseen.
  */
 function useFocusKeptAcrossSegment(root: RefObject<HTMLDivElement | null>, hasManagers: boolean) {
   const inside = useRef(false);
@@ -60,8 +61,8 @@ function useFocusKeptAcrossSegment(root: RefObject<HTMLDivElement | null>, hasMa
     const crossed = had.current !== hasManagers;
     had.current = hasManagers;
     const active = document.activeElement;
-    const dropped = active === null || active === document.body || !active.isConnected;
-    if (crossed && inside.current && dropped) root.current?.querySelector<HTMLElement>(".as-panel:not([hidden]) .as-scroller")?.focus({ preventScroll: true });
+    const lost = active === null || active === document.body || !active.isConnected || active.closest(".as-panel[hidden]") !== null;
+    if (crossed && inside.current && lost) root.current?.querySelector<HTMLElement>(".as-panel:not([hidden]) .as-scroller")?.focus({ preventScroll: true });
   }, [hasManagers, root]);
 
   return {

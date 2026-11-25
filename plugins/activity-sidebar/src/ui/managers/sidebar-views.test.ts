@@ -53,10 +53,13 @@ test("with managers, each tab controls its own panel, labelled by it; only the c
       assert.equal(panel.getAttribute("aria-labelledby"), tab.id);
       const chosen = tab.getAttribute("aria-selected") === "true";
       assert.equal(panel.hidden, !chosen, `${tab.textContent} panel hidden unless chosen`);
-      assert.equal(panel.querySelectorAll(".as-scroller").length, chosen ? 1 : 0);
+      assert.equal(panel.querySelectorAll(".as-scroller").length, 1, "each panel keeps its list, shown or not");
     }
     assert.equal(slot.getByRole("tab", { selected: true }).textContent, view === "threads" ? "Threads" : "Managers");
-    const stops = Array.from(slot.container.querySelectorAll<HTMLElement>("[tabindex='0']")).map((el) => el.getAttribute("role") ?? el.className);
+    // why: a hidden panel's contents are out of the browser's tab order; jsdom doesn't know, so they're left out here.
+    const stops = Array.from(slot.container.querySelectorAll<HTMLElement>("[tabindex='0']"))
+      .filter((el) => el.closest("[hidden]") === null)
+      .map((el) => el.getAttribute("role") ?? el.className);
     assert.deepEqual(stops, ["tab", view === "threads" ? "as-scroller" : "as-scroller as-managers"], "the chosen tab, then the shown list");
     cleanup();
   }
@@ -86,8 +89,22 @@ test("the first manager started with Managers chosen, while the threads' list he
   assert.equal(document.activeElement, threads());
 
   await show({ managers: [PR], view: "managers" });
-  assert.equal(threads(), null, "Managers is shown");
+  assert.ok(threads()?.closest("[hidden]"), "Managers is shown, the threads' list hidden");
   assert.equal(document.activeElement, slot.container.querySelector(".as-managers"));
+});
+
+test("Threads → Managers → Threads brings back the same threads' list, scrolled where it was left", async () => {
+  const { slot, show, threads } = mount({ managers: [PR], view: "threads" });
+  const list = threads();
+  assert.ok(list);
+  list.scrollTop = 128;
+
+  await show({ managers: [PR], view: "managers" });
+  assert.equal(slot.getByRole("tab", { selected: true }).textContent, "Managers");
+  await show({ managers: [PR], view: "threads" });
+  assert.equal(threads(), list, "the same list, not a new one");
+  assert.equal(list.closest("[hidden]"), null);
+  assert.equal(list.scrollTop, 128);
 });
 
 test("the last manager archived while focus is on the segment or a manager's row: focus passes to the threads' list", async () => {

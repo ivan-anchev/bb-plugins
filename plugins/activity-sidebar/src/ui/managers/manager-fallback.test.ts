@@ -24,7 +24,7 @@ const THREADS = [
 function looksRead(answer: () => Promise<unknown>) {
   return openManagerLooks({
     plugins: { callRpc: async ({ outputSchema }) => outputSchema.parse(await answer()) },
-    threads: { get: async () => ({ originPluginId: null, parentThreadId: null }) },
+    threads: { get: async () => ({ originPluginId: null, parentThreadId: null }), list: async ({ threadIds }) => threadIds.map((id) => ({ id })) },
     rpc: { experimental_invalidate: () => {} },
     log: { warn: () => {} },
   });
