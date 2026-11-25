@@ -133,6 +133,16 @@ test("a failure whose settling asked the user at the issue's cap says so with th
   assert.doesNotMatch(doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1, asked: null }]), checkedWith(failed, question)), /asked the user/);
 });
 
+test("a failure that asked at the cap while its findings may have reached its agent says that, not that nothing went back", () => {
+  const failed = returned(["pass", "fail"]);
+  const maybe: Verdict = failed.state === "returned" ? { ...failed, settlement: { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } } } : assert.fail("not returned");
+  const d1 = decisionIdSchema.parse("d1");
+  const question: CapQuestion = { id: d1, issueId: i1, question: "Anything", options: [], askedAt: 6_000, answer: null, cap: 3 };
+  const text = doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1, asked: d1 }]), checkedWith(maybe, question));
+  assert.match(text, /WEB-1's 3rd failed verification, its cap: its findings may have reached its agent, as the plugin stopped while sending them; nothing more goes back to one, and the plugin asked the user \(d1\)$/);
+  assert.doesNotMatch(text, /nothing went back/);
+});
+
 test("the user's switch is announced as on or off", () => {
   const text = doorbellText(stored([{ kind: "verification-toggled", verify: false }, { kind: "verification-toggled", verify: true }]), noChecks);
   assert.match(text, /- The user turned verification of done handoffs off\n- The user turned verification of done handoffs on$/);

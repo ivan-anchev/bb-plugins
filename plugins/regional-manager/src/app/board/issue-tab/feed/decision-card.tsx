@@ -3,7 +3,9 @@
 // issue. An open question's options are buttons that answer it here, as on the Board.
 import { useLayoutEffect, useRef } from "react";
 import type { IssueDecision } from "../../../../model/decision.ts";
-import type { IssueStatus } from "../../../../model/issue/status.ts";
+import { isClosed } from "../../../../model/issue/relations.ts";
+import { STATUS_LABELS, type IssueStatus } from "../../../../model/issue/status.ts";
+import { stillWaits } from "../../../../model/verdict/rounds/cap.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { Button } from "../../../ui/button.tsx";
 import { useAnswer } from "../../use-answer.ts";
@@ -12,11 +14,11 @@ import { ResultGlyph } from "./round/result-glyph.tsx";
 
 type Asked = Extract<IssueDecision, { kind: "asked" }>;
 
-/** `moved`: the status the issue moved to after it (null: none). */
-export function DecisionCard({ coordinatorId, decision, moved }: { coordinatorId: CoordinatorId; decision: IssueDecision; moved: IssueStatus | null }) {
+/** `moved`: the status the issue moved to after it (null: none); `status`: the issue's status now. */
+export function DecisionCard({ coordinatorId, decision, moved, status }: { coordinatorId: CoordinatorId; decision: IssueDecision; moved: IssueStatus | null; status: IssueStatus }) {
   switch (decision.kind) {
     case "asked":
-      return <Question coordinatorId={coordinatorId} decision={decision} moved={moved} />;
+      return <Question coordinatorId={coordinatorId} decision={decision} moved={moved} status={status} />;
     case "recorded":
       return (
         <article className="rmi-decision" aria-label="Decision">
@@ -40,7 +42,7 @@ export function DecisionCard({ coordinatorId, decision, moved }: { coordinatorId
  * lands, and focus on an option, which unmounts then, moves to the card, whoever answered: this
  * card, the Board, or another window.
  */
-function Question({ coordinatorId, decision, moved }: { coordinatorId: CoordinatorId; decision: Asked; moved: IssueStatus | null }) {
+function Question({ coordinatorId, decision, moved, status }: { coordinatorId: CoordinatorId; decision: Asked; moved: IssueStatus | null; status: IssueStatus }) {
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
   const card = useRef<HTMLElement>(null);
   // Whether focus is on one of the options. why a ref: the answer that unmounts them fires no blur.
@@ -61,10 +63,12 @@ function Question({ coordinatorId, decision, moved }: { coordinatorId: Coordinat
         <span className="rmi-decision-id">{decision.id}</span>
       </p>
       <p className="rmi-decision-text">{decision.question}</p>
-      {decision.answer === null ? (
+      {decision.answer !== null ? (
+        <Answer decision={decision} answer={decision.answer} />
+      ) : stillWaits(decision, isClosed(status)) ? (
         <Options decision={decision} sent={sent} send={send} onFocusChange={(focused) => (onOption.current = focused)} />
       ) : (
-        <Answer decision={decision} answer={decision.answer} />
+        <Lapsed decision={decision} status={status} />
       )}
       {sent !== null && !answered && (
         <p role="status" className="rmi-verdict-meta">
@@ -101,6 +105,24 @@ function Options({ decision, sent, send, onFocusChange }: OptionsProps) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A question at the issue's cap that the issue's close left unanswered: its options, none to press, and why. */
+function Lapsed({ decision, status }: { decision: Asked; status: IssueStatus }) {
+  return (
+    <>
+      {decision.options.length > 0 && (
+        <ul aria-label="Options" className="rmi-options">
+          {decision.options.map((option) => (
+            <li key={option} className="rmi-option">
+              {option}
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="rmi-verdict-meta">Not answered: the issue is {STATUS_LABELS[status]}, so no round is left for an answer to allow.</p>
+    </>
   );
 }
 

@@ -190,7 +190,7 @@ function restingNextStep(issueId: IssueId, lookups: Pick<Lookups, "capQuestions"
   if (closed !== null) return `${issueId} is ${STATUS_LABELS[closed]} now, so no agent can start on it.`;
   const lock = lockOf(issueId, lookups);
   if (lock === null) return "Start one with agent_start, or plan it again with issue_update.";
-  return `Until the user answers ${lock.id}, the plugin's question at its cap, agent_start on ${issueId} is refused. ${capMovesText(issueId, lock.id, false)}`;
+  return `Until the user answers ${lock.id}, the plugin's question at its cap, agent_start on ${issueId} is refused. ${capMovesText(issueId, lock.id, lookups.view(issueId))}`;
 }
 
 /** The issue's status when its view places it closed now, Done or Canceled; null when it is open, or bb's thread list couldn't give a view. */
@@ -259,14 +259,14 @@ const MOVE_TO_AN_AGENT =
  */
 function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view">): string {
   const asked = askedId === null ? null : askedQuestion(lookups.decision(askedId));
-  const led = asked === null ? "" : `This was ${askedText(check.issueId, asked)}. `;
+  const led = asked === null ? "" : `This was ${askedText(check.issueId, asked, mayHaveReachedAgent(check.verdict))}. `;
   const closed = closedNow(check.issueId, lookups);
   // why first: a closed issue takes no agent, and its question no longer waits for the user.
   if (closed !== null) return `${led}${closedText(check.issueId, closed, asked)}`;
   const open = lockOf(check.issueId, lookups);
   if (open === null) return `${led}${FAILED_IS_YOURS}`;
   const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;
-  return `${led}${held}Until the user answers ${open.id}, agent_start and agent_message on ${check.issueId} are refused. ${capMovesText(check.issueId, open.id, lookups.view(check.issueId)?.holder !== null)}`;
+  return `${led}${held}Until the user answers ${open.id}, agent_start and agent_message on ${check.issueId} are refused. ${capMovesText(check.issueId, open.id, lookups.view(check.issueId))}`;
 }
 
 /** What a failure on an issue closed since (`status`, Done or Canceled) leaves to do: nothing; its question, if it asked one (`asked`), left the board. */

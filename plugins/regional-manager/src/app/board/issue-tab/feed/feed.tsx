@@ -83,7 +83,7 @@ function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onTo
     case "round":
       return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} onEngage={() => onEngage(entry.round)} />;
     case "decision":
-      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} />;
+      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} status={issue.status} />;
     case "comment": {
       const { replyTo } = entry.comment;
       return <CommentCard coordinatorId={coordinatorId} entry={entry} answered={replyTo === null ? null : (comments.get(replyTo) ?? null)} agents={agents} />;

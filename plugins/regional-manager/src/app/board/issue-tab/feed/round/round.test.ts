@@ -229,6 +229,54 @@ test("only the round whose failure asked the user at the cap says so by its scor
   assert.match(tab().getByRole("article", { name: "Question d1" }).querySelector(".rmi-decision-head")?.textContent ?? "", /^Regional manager asked you/);
 });
 
+/** The feed with round 2's failure asking question d4 at the cap, the latest round; round 3 not yet handed off. */
+function cappedAtRound2(): Entry[] {
+  const d4 = decisionIdSchema.parse("d4");
+  return FEED.entries.flatMap((entry): Entry[] => {
+    if (entry.kind === "round" && entry.round.number === 3) return [];
+    if (entry.kind === "round" && entry.round.number === 2 && entry.round.verdict !== null) {
+      return [{ ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: null, asked: d4 } } }];
+    }
+    return [entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.answer === null ? { ...entry, decision: { ...entry.decision, id: d4, cap: 3 } } : entry];
+  });
+}
+
+test("the count of failed verifications is the asking round's head alone: the grid's latest score and the round's verifier step carry none", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
+  const { card, head } = rounds(tab());
+  assert.equal(head(2).querySelector(".rmi-score-asked")?.textContent, "· 3rd failed verification: asked you");
+  const grid = tab().getByText(/^2 rounds · latest/);
+  assert.match(grid.textContent ?? "", /Failed: 2 of 3$/, "the grid's latest score, and nothing after it");
+  await card(2).findByText(/^Not sent back/);
+  const verifier = card(2).getByText((_, element) => element?.classList.contains("rmi-step-title") === true && /^Verifier/.test(element.textContent ?? ""));
+  assert.doesNotMatch(verifier.textContent ?? "", /asked you/);
+});
+
+test("the plugin's question at the cap takes an answer while its issue is open; once the issue is Done its options are no buttons, and it says why", async () => {
+  const open = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
+  const asking = within(open.tab().getByRole("article", { name: "Question d4" }));
+  assert.ok(asking.getAllByRole("button").length > 0, "open: each option answers it");
+  cleanup();
+
+  const done = await opened("WEB-1", [issue("WEB-1", { status: "done", headline: "Merged #41" })], { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
+  const lapsed = within(done.tab().getByRole("article", { name: "Question d4" }));
+  assert.deepEqual(lapsed.queryAllByRole("button"), [], "nothing to press");
+  assert.ok(lapsed.getByText("Not answered: the issue is Done, so no round is left for an answer to allow."));
+  assert.ok(lapsed.getByRole("list", { name: "Options" }), "its options stay, as what was asked");
+});
+
+test("a round whose findings may have reached its agent, and whose failure asked at the cap, says the user decides", async () => {
+  const d4 = decisionIdSchema.parse("d4");
+  const maybe: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 1 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: { round: 1, delivery: "maybe" }, asked: d4 } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: maybe }) });
+  const { card, head } = rounds(tab());
+  fireEvent.click(head(1));
+  const outcome = (await card(1).findByText(/sent back to/)).closest("p");
+  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 confirmed finding: at its cap, the plugin asked you \(d4\)/);
+});
+
 test("a round whose findings may or may not have reached its agent says so, and that the manager decides", async () => {
   const maybe: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 1 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: { round: 1, delivery: "maybe" } } } } : entry,

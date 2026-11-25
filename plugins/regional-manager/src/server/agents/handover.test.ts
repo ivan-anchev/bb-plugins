@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { takeUnread } from "../store/test-store.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const a2 = agentIdSchema.parse("a2");
@@ -58,7 +59,7 @@ test("a handover stops the holder without archiving it, ends it as replaced, and
   assert.deepEqual(agent(a2).base, { kind: "joined", from: "a1" });
   assert.deepEqual(agent(a2).checkout, { environmentId, branch: "bb/thr_2", head: HEAD }, "a2 inherits a1's checkout as its handoff read it");
   assert.deepEqual(await row(), ["in-progress", "Working"]);
-  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).filter(({ event }) => event.kind === "returned-to-todo"), [], "nothing returned to Todo");
+  assert.deepEqual(takeUnread(kit.store, coordinatorId, Date.now()).filter(({ event }) => event.kind === "returned-to-todo"), [], "nothing returned to Todo");
 
   const message = firstMessage(next);
   assert.match(message, /^# WEB-1: Add retries\n\nYou are agent a2, working on issue WEB-1\. [^\n]* Your work is this issue: its brief and done-criteria below\. Do it where an earlier agent left it: see Where you work\.\n/);
@@ -79,7 +80,7 @@ test("a pull request the previous agent opened is the new agent's: no second ope
   pr("OPEN");
   await handOff(agentThreadId, { ...DONE, prUrl: "https://github.com/acme/webhooks/pull/44" });
   await kit.tick();
-  const opened = () => kit.store.takeUnread(coordinatorId, Date.now()).filter(({ event }) => event.kind === "pr");
+  const opened = () => takeUnread(kit.store, coordinatorId, Date.now()).filter(({ event }) => event.kind === "pr");
   assert.equal(opened().length, 1, "a1's pull request was seen once");
 
   const result = textOf(await handover());

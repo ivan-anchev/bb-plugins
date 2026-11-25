@@ -500,6 +500,24 @@ test("a third failure that settles asks the user at the cap in the same transact
   assert.ok(question.length < 500);
 });
 
+test("a third failure whose send-back a reload cut short settles as maybe sent back and still asks at the cap, its fix round kept", () => {
+  const { store, issue, agentId } = withAgent();
+  const returnedOnce = (n: number) => {
+    const check = runningCheck(store, issue.id, agentId, n);
+    store.receiveVerdict(check.id, returned(`thr_verifier_${n}`, "fail"), 4_000 + n);
+    return check;
+  };
+  for (const n of [1, 2]) store.settleReturned(returnedOnce(n).id, CHECKED, 4_500 + n);
+  const third = returnedOnce(3);
+  store.claimFixRound(third.id, { kind: "none" });
+  assert.equal(store.settleReturned(third.id, { kind: "maybe-sent-back" }, 4_600), MANAGER);
+
+  const settled = store.check(third.id)?.verdict;
+  assert.deepEqual(settled?.state === "returned" && settled.settlement, { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
+  assert.deepEqual(store.decisions(MANAGER).map(({ id, cap }) => [id, cap]), [["d1", 3]]);
+  assert.deepEqual(events(store).at(-1), { kind: "checked", issueId: issue.id, checkId: third.id, asked: "d1" });
+});
+
 test("the question stays with the failure whose settling asked it, whatever order the failures settle in: round 4 asks while round 3 waits on a failed write, and round 3's retry asks nothing", () => {
   const { db, store, issue, agentId } = withAgent();
   const returnedOnce = (n: number) => {

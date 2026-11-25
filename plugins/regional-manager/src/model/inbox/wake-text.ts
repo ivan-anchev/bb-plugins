@@ -92,7 +92,7 @@ function checkedLine(check: Check, asked: CapQuestion | null, titles: ReadonlyMa
   const { subject, issueId } = check;
   switch (subject.kind) {
     case "handoff":
-      return `${issueName(issueId, titles, subject.agentId)} handed off: done, ${checkedAs(check)}${asked === null ? "" : `; ${askedText(issueId, asked)}`}`;
+      return `${issueName(issueId, titles, subject.agentId)} handed off: done, ${checkedAs(check)}${asked === null ? "" : `; ${askedText(issueId, asked, mayHaveReachedAgent(check.verdict))}`}`;
     case "final":
       return `${titled(issueId, titles)} final check: ${finalCheckedAs(check)}`;
     default:

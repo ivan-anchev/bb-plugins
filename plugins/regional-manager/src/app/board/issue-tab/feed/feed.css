@@ -379,6 +379,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The round's head only: what its failure did at the issue's cap, beside its score, in the failure's colour. */
+.rmi-score-asked {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--destructive-text);
+}
 .rmi-score[data-result="pass"] { color: var(--success); }
 .rmi-score[data-result="fail"],
 .rmi-score[data-tone="failed"] { color: var(--destructive-text); }

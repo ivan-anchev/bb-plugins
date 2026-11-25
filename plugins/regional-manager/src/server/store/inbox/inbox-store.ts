@@ -110,13 +110,17 @@ export function inboxStore(db: Db) {
       })();
     },
 
-    /** Every unread event, marked read as it is returned, in the order recorded. */
-    takeUnread(coordinatorId: CoordinatorId, at: number): StoredEvent[] {
-      return db()
-        .prepare("UPDATE events SET read_at = ? WHERE coordinator_id = ? AND read_at IS NULL RETURNING id, at, event")
-        .all(at, coordinatorId)
-        .map(toEvent)
-        .sort((a, b) => a.id - b.id);
+    /** Every unread event, in the order recorded; nothing is marked read (markRead). */
+    unread(coordinatorId: CoordinatorId): StoredEvent[] {
+      return db().prepare("SELECT id, at, event FROM events WHERE coordinator_id = ? AND read_at IS NULL ORDER BY id").all(coordinatorId).map(toEvent);
+    },
+
+    /** Marks these events of the regional manager read at `at`, together; one already read keeps its time. */
+    markRead(coordinatorId: CoordinatorId, eventIds: readonly number[], at: number): void {
+      db().transaction(() => {
+        const mark = db().prepare("UPDATE events SET read_at = ? WHERE coordinator_id = ? AND id = ? AND read_at IS NULL");
+        for (const eventId of eventIds) mark.run(at, coordinatorId, eventId);
+      })();
     },
 
     /** The queued doorbell of a regional manager, or null when none is waiting. */

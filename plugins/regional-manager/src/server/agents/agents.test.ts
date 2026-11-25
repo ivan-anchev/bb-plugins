@@ -593,13 +593,29 @@ test("while a cap question is open, agent_stop still stops the agent, and the is
   assert.ok(!isRefusal(canceled), textOf(canceled));
   assert.deepEqual((await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId], { decisions: 0, issues: 0 });
   assert.equal(textOf(await start()), "agent_start is refused: WEB-1 is canceled, so no agent can start on it.", "a closed issue is refused as closed: its question no longer locks it");
+  await assert.rejects(async () => kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d1"), answer: "One more round" }), /^.*d1 no longer takes an answer: WEB-1 is Canceled, so no round is left for it to allow\.$/);
+  assert.equal(kit.store.decisions(coordinatorId).find(({ id }) => id === "d1")?.answer, null, "a late press stores nothing");
   const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.doesNotMatch(caughtUp, /The user answered/, "and wakes nobody");
   assert.equal(caughtUp.match(/found nothing\.\n\nWEB-1 is Canceled now, so no agent can start on it and this failure needs nothing from you\.\n\n/g)?.length, 1, "a1's second failure, read after the cancel, says what is so now");
   assert.match(caughtUp, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. WEB-1 is Canceled now, so no agent can start on it and this failure needs nothing from you; d1 left the board, as no round is left for an answer to allow\.\n\n/, "so does a2's, which asked");
   assert.match(caughtUp, /so WEB-1 rests in Todo with no agent\. WEB-1 is Canceled now, so no agent can start on it\.\n\n/);
   assert.doesNotMatch(caughtUp, /agent_start|agent_message/, "no move that a closed issue refuses");
   const decisions = /## Decisions\n\n[^#]*/.exec(caughtUp)?.[0] ?? assert.fail("no decisions section");
   assert.doesNotMatch(decisions, /\bd1\b/, "catch-up no longer lists the closed issue's question as waiting");
+});
+
+test("a capped issue that became a parent is refused by its cap first, with no cancel offered while its sub-issue is open", async () => {
+  const { kit, threadId, coordinatorId, start } = await filed();
+  await toCap(kit, threadId, coordinatorId, "WEB-1", threadIn(textOf(await start())));
+  assert.match(textOf(await kit.call("agent_stop", { agent: "a2" }, threadId)), /^a2 is stopped; it no longer holds WEB-1\./);
+  assert.ok(!isRefusal(await kit.call("issue_create", { ...ISSUE, title: "Split out the retry budget", parent: "WEB-1" }, threadId)));
+  const why =
+    "WEB-1 failed verification 3 times, so the plugin asked the user (d1) whether it gets another round, and until they answer no agent starts on WEB-1 and none is messaged on it. Wait for their answer, which crew_catch_up brings you; or reply on WEB-1 with issue_comment, pointing them at d1 on the board. WEB-1 can't be canceled while sub-issues of it are open.";
+
+  assert.equal(textOf(await start()), `agent_start is refused: ${why}`);
+  assert.equal(textOf(await kit.call("agent_message", { agent: "a2", text: "Try once more." }, threadId)), `agent_message is refused and nothing was sent: ${why}`);
+  assert.ok(isRefusal(await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId)), "as the refusal says, a cancel is refused while WEB-2 is open");
 });
 
 test("an issue whose agent was stopped at its cap is not ready while its question waits, and is once the user answers", async () => {

@@ -286,7 +286,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    * turn (issue-turns.ts), so it decides on facts no other operation on the issue changes before it
    * is done. The order keeps a sandbox alive, where nothing waits once the last live thread is
    * archived (SH5):
-   * 1. refuse a closed issue, or one locked at its cap (capRefusal); else decide where it runs and
+   * 1. refuse a closed issue, one locked at its cap (capRefusal) or a parent; else decide where it runs and
    *    on what, from what bb has now; a refusal changes nothing. A move
    *    reads the previous agent's environment, and its pull request when it cuts through origin;
    * 2. quiet the issue for the new agent (see quietIssue): take back what the plugin queued for any
@@ -330,13 +330,10 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
   async function decide(coordinatorId: CoordinatorId, { issueId, from, execution, placement }: StartRequest, prove: Prove): Promise<Decided | { refused: string }> {
     const filed = store.issue(coordinatorId, issueId);
     if (filed === null) return { refused: `You have no issue ${issueId}. crew_catch_up lists your issues.` };
-    // why before anything is read: a parent never has an agent, so nothing its earlier agents left, their environments or pull requests, bears on it.
-    const parent = parentText(filed, store.issues(coordinatorId));
-    if (parent !== null) return { refused: parent };
-    // why next, before where it would run is read: a closed issue takes no agent, and one locked at its cap none until the user answers.
+    // why first, before where it would run is read: a closed issue takes no agent, one locked at its cap none until the user answers, which leads a parent's refusal too, and a parent never has one, so nothing its earlier agents left, their environments or pull requests, bears on it.
     const { view } = await readIssue(bb, store, filed);
-    const closedOrCapped = finalText(filed, view) ?? capRefusal(view);
-    if (closedOrCapped !== null) return { refused: closedOrCapped };
+    const refused = finalText(filed, view) ?? capRefusal(view) ?? parentText(filed, store.issues(coordinatorId));
+    if (refused !== null) return { refused };
     const named = placement === undefined ? null : placementOf(placement, await placementFacts(coordinatorId));
     if (named !== null && "refused" in named) return named;
     const asked: Asked = { kind: filed.kind, from, placement: named };
@@ -615,9 +612,10 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
  * holds. null: nothing locks it, as on a closed issue. Call in the issue's turn, before anything is
  * quieted or started, with no await between the view's read and this.
  */
-function capRefusal({ issue: { id }, capLock, holder }: IssueView): string | null {
+function capRefusal(view: IssueView): string | null {
+  const { issue: { id }, capLock } = view;
   if (capLock === null) return null;
-  return `${id} failed verification ${capLock.cap} times, so the plugin asked the user (${capLock.id}) whether it gets another round, and until they answer no agent starts on ${id} and none is messaged on it. ${capMovesText(id, capLock.id, holder !== null)}`;
+  return `${id} failed verification ${capLock.cap} times, so the plugin asked the user (${capLock.id}) whether it gets another round, and until they answer no agent starts on ${id} and none is messaged on it. ${capMovesText(id, capLock.id, view)}`;
 }
 
 function finalText(issue: Issue, view: IssueView): string | null {

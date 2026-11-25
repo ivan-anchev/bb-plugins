@@ -5,6 +5,7 @@
 // before the cap existed included, and the lock is an unanswered cap question naming an open issue.
 import type { Decision, DecisionId } from "../../decision.ts";
 import type { IssueId } from "../../issue/issue.ts";
+import type { IssueView } from "../../issue/status.ts";
 import type { Check } from "../check.ts";
 import { failureHeadline, outcome, type Verdict } from "../verdict.ts";
 
@@ -51,12 +52,12 @@ export const unansweredCapQuestion = (questions: readonly CapQuestion[]): CapQue
 export const capLock = (questions: readonly CapQuestion[], closed: boolean): CapQuestion | null => (closed ? null : unansweredCapQuestion(questions));
 
 /**
- * Whether a decision still waits for the user: unanswered, and not a cap question whose issue closed
- * meanwhile (`closed`: whether the issue it names is closed). The one rule the board, the rail badge
- * and crew_catch_up read decisions by.
+ * Whether a decision still waits for the user: unanswered, and not a cap question whose issue is
+ * closed (`issueClosed`: whether the issue it names is closed, Done or Canceled, as by a merge or a
+ * cancel). The one rule the board, the rail badge, crew_catch_up, the issue's feed and the answer
+ * RPC read decisions by.
  */
-export const stillWaits = (decision: Decision, closed: (issueId: IssueId) => boolean): boolean =>
-  decision.answer === null && !(isCapQuestion(decision) && decision.issueId !== null && closed(decision.issueId));
+export const stillWaits = ({ answer, cap }: Pick<Decision, "answer" | "cap">, issueClosed: boolean): boolean => answer === null && !(cap !== null && issueClosed);
 
 /** Whether a failure about to settle as the issue's `failed`th may go back to its agent: never while a cap question is unanswered, nor when it asks one. */
 export const mayGoBack = (failed: number, questions: readonly CapQuestion[]): boolean => unansweredCapQuestion(questions) === null && capAsks(failed, questions) === null;
@@ -74,13 +75,29 @@ export const capText = (cap: number): string =>
 /** How a count of failed verifications stands against the cap, as catch-up and the question word it: "its cap", "past its cap of 3". */
 const pastCap = (cap: number): string => (cap === MAX_FAILED_VERDICTS ? "its cap" : `past its cap of ${MAX_FAILED_VERDICTS}`);
 
-/** What the regional manager can do while the cap question `questionId` locks `issueId`, which an agent holds or not (`held`): only the moves that work then. */
-export const capMovesText = (issueId: IssueId, questionId: DecisionId, held: boolean): string =>
-  `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} on the board; or ${held ? "stop its agent with agent_stop and " : ""}cancel ${issueId} with issue_update.`;
+/**
+ * What the regional manager can do while the cap question `questionId` locks `issueId`, placed as
+ * `view` (null: bb's thread list couldn't give it): only the moves that work then. Cancelling is one
+ * only while no sub-issue of it is open, which a cancel requires (plan.ts), after stopping the agent
+ * that holds it, if one does.
+ */
+export function capMovesText(issueId: IssueId, questionId: DecisionId, view: Pick<IssueView, "holder" | "subIssues"> | null): string {
+  const wait = `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} on the board`;
+  const openSubIssues = view?.subIssues != null && view.subIssues.done < view.subIssues.total;
+  if (openSubIssues) return `${wait}. ${issueId} can't be canceled while sub-issues of it are open.`;
+  return `${wait}; or ${view?.holder === null ? "" : "stop its agent with agent_stop and "}cancel ${issueId} with issue_update.`;
+}
 
-/** What a failure that asked did, in a sentence: "BBP-2's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user (d4)". */
-export const askedText = (issueId: IssueId, { cap, id }: CapQuestion): string =>
-  `${issueId}'s ${ordinal(cap)} failed verification, ${pastCap(cap)}: nothing went back to an agent, and the plugin asked the user (${id})`;
+/**
+ * What a failure that asked did, in a sentence: "BBP-2's 3rd failed verification, its cap: nothing
+ * went back to an agent, and the plugin asked the user (d4)". `mayHaveReached`: its findings were
+ * being sent back when the plugin stopped, so whether they reached the agent is unknown
+ * (verdict.ts mayHaveReachedAgent), and only what goes back after it is held.
+ */
+export function askedText(issueId: IssueId, { cap, id }: CapQuestion, mayHaveReached: boolean): string {
+  const held = mayHaveReached ? "its findings may have reached its agent, as the plugin stopped while sending them; nothing more goes back to one" : "nothing went back to an agent";
+  return `${issueId}'s ${ordinal(cap)} failed verification, ${pastCap(cap)}: ${held}, and the plugin asked the user (${id})`;
+}
 
 /** The options a cap question offers; any answer allows one more round, and the regional manager reads the words. */
 export const CAP_OPTIONS = ["One more round", "Cancel it"];

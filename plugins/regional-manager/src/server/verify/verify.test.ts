@@ -10,6 +10,7 @@ import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
 import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, failsVerification, levels, settled, startedAgent, textOf, threadIn, toCap, withoutLinks, type SendFailure } from "../test-harness.ts";
+import { takeUnread } from "../store/test-store.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("WEB-1");
@@ -195,7 +196,7 @@ test("a verdict on a superseded or stale handoff, or of a stopped agent, sends n
     assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
   }
   for (const { kit, coordinatorId, check } of [stale, closed]) {
-    assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }], "the regional manager decides");
+    assert.deepEqual(takeUnread(kit.store, coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }], "the regional manager decides");
   }
 });
 
@@ -326,7 +327,7 @@ test("a crash before the findings leave, then an unrelated turn in the agent's t
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the claim is kept");
   assert.deepEqual(doorbells(), [doorbellOf(MAYBE_SENT)], "the regional manager is woken");
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read the issue with issue_read before you message the agent/);
-  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()), [], "told once");
+  assert.deepEqual(takeUnread(kit.store, coordinatorId, Date.now()), [], "told once");
   await kit.tick();
   await settled();
   assert.deepEqual([kit.sent().filter((args) => args.threadId === agentThreadId).length, kit.store.unannounced(coordinatorId)], [0, []], "settled once");
@@ -402,7 +403,7 @@ test("an agent turn that starts after the verifier's model is looked up, before 
   assert.equal(answers, 1);
   assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), []);
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
-  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }]);
+  assert.deepEqual(takeUnread(kit.store, coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }]);
 });
 
 test("a verdict that passes every criterion is In review with ✓ and the models bb ran the verifier on", async () => {
@@ -889,7 +890,7 @@ test("a second done handoff supersedes the first verdict and stops its verifier,
   await settled();
   assert.equal(doorbells().length, 1, "only the newer handoff is announced");
   assert.deepEqual(
-    kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event.kind === "checked" && event.checkId),
+    takeUnread(kit.store, coordinatorId, Date.now()).map(({ event }) => event.kind === "checked" && event.checkId),
     [check().id],
   );
 });
@@ -949,7 +950,7 @@ test("no registered tool can change whether a regional manager verifies, whoever
     for (const caller of callers) for (const input of inputs) await kit.call(name, input, caller).catch(() => undefined);
   }
   assert.equal(kit.store.verifies(coordinatorId), true);
-  assert.ok(!kit.store.takeUnread(coordinatorId, Date.now()).some(({ event }) => event.kind === "verification-toggled"));
+  assert.ok(!takeUnread(kit.store, coordinatorId, Date.now()).some(({ event }) => event.kind === "verification-toggled"));
 });
 
 test("a done handoff's verifier runs on the verifier named on its issue, and the verdict says so", async () => {

@@ -6,7 +6,7 @@ import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, doorbellOf, failsVerification, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
+import { coordinating, doorbellOf, newSubmission, failsVerification, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
@@ -279,4 +279,23 @@ test("a failure that asks at the cap while crew_catch_up's host read is held wai
   const next = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(next, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start and agent_message on WEB-1 are refused\./);
   assert.match(/## Decisions\n\n[^#]*/.exec(next)?.[0] ?? assert.fail("no decisions section"), /- d1, asked /);
+});
+
+test("a catch-up whose call is aborted while it reads bb leaves its updates unread: the next catch-up returns them", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  await startedAgent(kit, threadId);
+  textOf(await kit.call("crew_catch_up", {}, threadId));
+  await kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse("WEB-1"), text: "Use the staging key.", replyTo: null, submission: newSubmission() });
+
+  const aborted = new AbortController();
+  kit.threadLists.holding = true;
+  const caughtUp = kit.call("crew_catch_up", {}, threadId, aborted.signal);
+  while (kit.threadLists.held.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  aborted.abort();
+  kit.threadLists.holding = false;
+  for (const release of kit.threadLists.held.splice(0)) release();
+  assert.match(textOf(await caughtUp), /Use the staging key\./, "the answer nobody receives still holds it");
+
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### The user commented on WEB-1[^\n]*\n\n[^\n]*In their own words:\n\nUse the staging key\./);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Nothing new since your last catch-up/, "an answered catch-up marks it read");
 });

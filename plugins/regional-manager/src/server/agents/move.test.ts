@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { takeUnread } from "../store/test-store.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const a2 = agentIdSchema.parse("a2");
@@ -162,7 +163,7 @@ test("criterion 3: bb refusing the base errors a2 in provisioning; the issue isn
   const failed = threadIn(textOf(await call({ placement: WORKTREE })));
   await settled();
   assert.deepEqual([kit.thread(failed).status, kit.thread(failed).environmentId, kit.thread(failed).environmentBranchName], ["error", null, null], "bb's worktree add failed: invalid reference");
-  const woken = kit.store.takeUnread(coordinatorId, Date.now()).filter(({ event }) => event.kind === "failed");
+  const woken = takeUnread(kit.store, coordinatorId, Date.now()).filter(({ event }) => event.kind === "failed");
   assert.equal(woken.length, 1, "the manager is woken failed, today's path");
   await kit.tick();
   assert.ok(kit.github.runs.at(-1)?.some((arg) => arg.includes(branch)), "the PR watch still reads a1's branch: the failed cut hides nothing");

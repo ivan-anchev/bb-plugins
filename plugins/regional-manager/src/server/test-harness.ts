@@ -391,7 +391,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const memoryWrites: CoordinatorId[] = [];
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), openedStore, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
-  const tools = new Map<string, { parameters: z.ZodType; instructions: string | null; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
+  const tools = new Map<string, { parameters: z.ZodType; instructions: string | null; run(input: unknown, threadId: string, signal: AbortSignal): Promise<PluginAgentToolResult> }>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
   const handlers: Partial<Handlers> = {};
   // why a generic function: it keeps each event's handlers typed by that event.
@@ -694,7 +694,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   } satisfies SpawnBb["sdk"]["threads"] & ManagerBb["sdk"]["threads"] & HeldBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
-      tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
+      tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId, signal) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal }) });
     },
     configure(provider) {
       configure = provider;
@@ -851,7 +851,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     if (review?.state !== "running") throw new Error(`The review of ${checkId} isn't running as its reviewer binds.`);
     const tool = tools.get("issue_review");
     if (tool === undefined) throw new Error("No tool issue_review");
-    await tool.run({ findings: [] }, review.reviewerThreadId);
+    await tool.run({ findings: [] }, review.reviewerThreadId, new AbortController().signal);
     await idle(review.reviewerThreadId, "Reviewed.");
   }
 
@@ -1124,11 +1124,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** Every tool the plugin registered, by name, with its parameters and the instructions bb injects with it (null: none). */
     tools: () => [...tools].map(([name, { parameters, instructions }]) => ({ name, parameters, instructions })),
-    /** Calls the tool as the thread's agent would. */
-    async call(tool: string, input: unknown, threadId: string): Promise<PluginAgentToolResult> {
+    /** Calls the tool as the thread's agent would; `signal` aborts as bb's does when the call is cancelled or the thread stopped. */
+    async call(tool: string, input: unknown, threadId: string, signal: AbortSignal = new AbortController().signal): Promise<PluginAgentToolResult> {
       const registered = tools.get(tool);
       if (registered === undefined) throw new Error(`No tool ${tool}`);
-      return registered.run(input, threadId);
+      return registered.run(input, threadId, signal);
     },
   };
 }
@@ -1263,3 +1263,4 @@ export async function toCap(kit: ReturnType<typeof harness>, threadId: string, c
   await failsVerification(kit, coordinatorId, fresh);
   return fresh;
 }
+

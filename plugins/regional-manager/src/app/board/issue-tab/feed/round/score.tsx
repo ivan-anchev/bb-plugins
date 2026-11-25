@@ -1,6 +1,6 @@
 // What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix confirmed,
-// Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so. The
-// failure that put the cap question to the user adds "3rd failed verification: asked you".
+// Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so. Beside
+// it in the round's head only, the failure that put the cap question to the user says "3rd failed verification: asked you".
 import { createContext, useContext } from "react";
 import type { DecisionId } from "../../../../../model/decision.ts";
 import { scoreOf, type Round } from "../../../../../model/feed/round.ts";
@@ -34,7 +34,6 @@ export function Score({ round }: { round: Round }) {
               {failedByText(score.by, round.by)}
             </span>
           )}
-          <AskedNote asked={round.verdict?.asked ?? null} />
         </span>
       );
     case "pending":
@@ -58,15 +57,19 @@ export function Score({ round }: { round: Round }) {
  */
 export const CapCounts = createContext<ReadonlyMap<DecisionId, number>>(new Map());
 
-/** On the one round whose failure put the cap question to the user (round.ts), what it did: "3rd failed verification: asked you". */
-function AskedNote({ asked }: { asked: DecisionId | null }) {
+/**
+ * On the one round whose failure put the cap question to the user (round.ts), what it did, in its
+ * head beside its score (round-card.tsx): "3rd failed verification: asked you". why not in Score:
+ * the grid's latest and the verifier's step show the score too, and the count is the round's alone.
+ */
+export function AskedNote({ asked }: { asked: DecisionId | null }) {
   const counts = useContext(CapCounts);
   if (asked === null) return null;
   // why a neutral fallback: the question comes in the same feed read as its round, but a map can't promise the type checker its key.
   const failed = counts.get(asked);
   const text = failed === undefined ? "Failed verification: asked you" : `${ordinal(failed)} failed verification: asked you`;
   return (
-    <span className="rmi-score-text rmi-score-asked" title={`${text} on the board (${asked})`}>
+    <span className="rmi-score-asked" title={`${text} on the board (${asked})`}>
       <span aria-hidden="true">· </span>
       {text}
     </span>

@@ -64,7 +64,8 @@ type InboxStore = Pick<
   | "unannounced"
   | "coordinatorsToRing"
   | "announce"
-  | "takeUnread"
+  | "unread"
+  | "markRead"
   | "doorbell"
   | "doorbells"
   | "clearDoorbell"
@@ -325,11 +326,16 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
       recorded(id);
     },
 
-    /** Every unread event, whole, marked read as it is returned. A doorbell still queued then announces nothing unread, so it is taken back. */
-    takeUnread(id: CoordinatorId): StoredEvent[] {
-      const events = store.takeUnread(id, Date.now());
+    /** Every unread event, whole, oldest first, left unread until a catch-up that returned them marks them read (markRead). */
+    unread: (id: CoordinatorId): StoredEvent[] => store.unread(id),
+
+    /**
+     * Marks the events read, as a catch-up returned them whole. A doorbell still queued then announces
+     * nothing unread, so it is taken back; withdraw rings again for any event recorded since.
+     */
+    markRead(id: CoordinatorId, events: readonly StoredEvent[]): void {
+      store.markRead(id, events.map((event) => event.id), Date.now());
       withdraw(id).catch((error: unknown) => bb.log.warn(`Could not take back the doorbell of ${id}: ${messageOf(error)}`));
-      return events;
     },
 
     /**

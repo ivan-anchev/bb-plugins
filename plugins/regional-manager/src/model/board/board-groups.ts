@@ -33,7 +33,7 @@ export const laneOf = ({ status, needsYou }: Placed): Lane => (needsYou === null
  */
 export function waitingDecisions(decisions: readonly Decision[], issues: readonly Pick<Nested, "id" | "status">[]): OpenDecision[] {
   const closed = new Set(issues.flatMap(({ id, status }) => (isClosed(status) ? [id] : [])));
-  return decisions.filter(isOpen).filter((decision) => stillWaits(decision, (issueId) => closed.has(issueId)));
+  return decisions.filter(isOpen).filter((decision) => stillWaits(decision, decision.issueId !== null && closed.has(decision.issueId)));
 }
 
 /** The rows in each lane that has any, in the board's order; rows keep their order. */

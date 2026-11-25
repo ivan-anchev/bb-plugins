@@ -123,10 +123,9 @@ test("an unanswered cap question locks its issue only while the issue is open, a
   assert.equal(capLock([question(1, 3, true), open], false)?.id, "d1");
   assert.equal(capLock([open], true), null, "a closed issue, as by a merge or a cancel, is locked by nothing");
   assert.equal(capLock([question(1, 3, true)], false), null, "an answered one locks nothing");
-  const closed = (issueId: string) => issueId === ISSUE;
   const asked: Decision = { ...open, cap: null };
   assert.deepEqual(
-    [stillWaits(open, () => false), stillWaits(open, closed), stillWaits(asked, closed), stillWaits(question(1, 3, true), () => false)],
+    [stillWaits(open, false), stillWaits(open, true), stillWaits(asked, true), stillWaits(question(1, 3, true), false)],
     [true, false, true, false],
     "a cap question leaves once its issue closes; the manager's own question on a closed issue still waits; an answered one never does",
   );

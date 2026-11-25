@@ -160,7 +160,7 @@ function waitingOn(issue: Issue, { status, needsYou }: Pick<Placing, "status" | 
 }
 
 /** Whether a decision of `open` still waits for the user on the issue placed at `status` (rounds/cap.ts stillWaits). */
-const asksNow = (issue: Issue, status: IssueStatus, open: readonly Decision[]): boolean => open.some((decision) => stillWaits(decision, () => isClosed(status)));
+const asksNow = (issue: Issue, status: IssueStatus, open: readonly Decision[]): boolean => open.some((decision) => stillWaits(decision, isClosed(status)));
 
 /** The cap question of `open` that locks the issue placed at `status` (rounds/cap.ts capLock). */
 const lockAt = (open: readonly Decision[], { issue, status }: Pick<Placed, "issue" | "status">): CapQuestion | null => capLock(capQuestionsOf(open, issue.id), isClosed(status));

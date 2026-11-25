@@ -591,12 +591,15 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     verifications". While that question is open, `agent_start` and
     `agent_message` on the issue are refused, naming it: wait for the
     answer, reply on the issue with `issue_comment` pointing the user at its
-    id, or stop the agent with `agent_stop` and cancel the issue. Any answer
+    id, or stop the agent with `agent_stop` and cancel the issue (not while a
+    sub-issue of it is open, which a cancel refuses). Any answer
     allows one more round: read their words for what they want. A failure
     made while the question is open (a person woke the agent) goes back to
     nobody and asks nothing. Once the issue closes, as by a merge or a
-    cancel, the question leaves Needs you, and a failure you read after
-    that says the issue is closed and needs nothing from you.
+    cancel, the question leaves Needs you and takes no answer, and a failure
+    you read after that says the issue is closed and needs nothing from you.
+    When a failure at the cap was being sent back as the plugin stopped, its
+    update says its findings may have reached the agent.
   - **could not be verified**: under Needs you, with the reason: the
     verifier stopped without a verdict, showed no activity for 30 minutes,
     or asked a person something bb wouldn't let the plugin decline (a
