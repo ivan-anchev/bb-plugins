@@ -72,13 +72,17 @@
   background: var(--muted);
   font-family: var(--font-sans);
 }
-/* why: the list's own ease-out (OUT3, src/list/motion-plan.ts, set as --as-ease-out), short: the thumb follows the press, never trails it. */
+/* why: the list's own ease-out (OUT3, src/list/motion-plan.ts, set as --as-ease-out), short: the thumb follows the press, never trails it.
+   why the ring: the flat wash alone is about 1.2:1 on the track, and forced colors drop it; the muted ink's
+   ring marks the chosen tab at 3:1 or more in both modes, and forced colors keep a border. */
 .as-segment-thumb {
   position: absolute;
   top: 2px;
   left: 2px;
   width: calc(50% - 2px);
   height: 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--muted-foreground);
   border-radius: 6px;
   background: var(--surface-selected);
   transition: transform 180ms var(--as-ease-out);
@@ -114,6 +118,15 @@
 .as-segment > button:focus-visible {
   outline: 2px solid var(--foreground);
   outline-offset: -2px;
+}
+/* why: on touch, each tab is a 44px target; a mouse keeps the prototype's 28px segment. */
+@media (pointer: coarse) {
+  .as-segment {
+    height: 48px;
+  }
+  .as-segment-thumb {
+    height: 44px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .as-segment-thumb,

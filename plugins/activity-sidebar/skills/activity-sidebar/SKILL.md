@@ -55,7 +55,8 @@ the sidebar, and each side owns the whole list under it.
 - ← and → (and Home and End) move between the two tabs. The view you chose is
   kept in this browser; Threads shows first until you pick Managers.
 - With no open managers there is no segment, and the sidebar is the threads'
-  list alone.
+  list alone. When the first one starts while you're working in that list,
+  Threads stays on screen until you pick Managers.
 - The avatar and description come from the Regional Manager plugin. They are
   read again when a manager's thread is created, renamed or archived, and every
   minute, so an edit shows within about a minute. If the plugin can't be read,

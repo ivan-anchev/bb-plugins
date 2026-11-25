@@ -16,6 +16,11 @@ for (const name of Object.getOwnPropertyNames(window)) {
   Object.defineProperty(globalThis, name, { configurable: true, get: () => window[name as keyof typeof window] });
 }
 
+// why: node has its own Event and CustomEvent, which jsdom's dispatchEvent refuses; menus (Radix) make theirs with the global ones.
+for (const name of ["Event", "CustomEvent"] as const) {
+  Object.defineProperty(globalThis, name, { configurable: true, get: () => window[name] });
+}
+
 // why: jsdom lays nothing out, so nothing resizes and nothing scrolls into view.
 class StillResizeObserver {
   observe(): void {}

@@ -2,16 +2,17 @@ import "../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { act, cleanup } from "@testing-library/react";
+import { act, cleanup, fireEvent } from "@testing-library/react";
 import { createElement } from "react";
 import type { View } from "../../data/local-choice/choices.ts";
 import type { ManagerModel } from "../../model/activity.ts";
-import { thread } from "../../model/fixtures.ts";
+import { project, thread } from "../../model/fixtures.ts";
 
 // The sidebar around the threads' list, mounted as bb mounts it. The threads' list stands in as its
 // scroller: its own tests are list/items.test.ts and model/activity.test.ts.
 
 const { SidebarViews } = await import("./sidebar-views.tsx");
+const { ViewMenu } = await import("../view-menu.tsx");
 
 afterEach(cleanup);
 
@@ -83,14 +84,53 @@ test("a first manager started, or the last archived, never remounts the threads'
   assert.equal(list.scrollTop, 128);
 });
 
-test("the first manager started with Managers chosen, while the threads' list held focus: focus passes to the managers' list", async () => {
+test("the first manager started with Managers chosen, while the reader works in the threads' list: the threads stay, and so does focus", async () => {
   const { slot, show, threads } = mount({ managers: [], view: "managers" });
-  threads()?.focus();
-  assert.equal(document.activeElement, threads());
+  const list = threads();
+  assert.ok(list);
+  list.focus();
 
   await show({ managers: [PR], view: "managers" });
-  assert.ok(threads()?.closest("[hidden]"), "Managers is shown, the threads' list hidden");
-  assert.equal(document.activeElement, slot.container.querySelector(".as-managers"));
+  assert.equal(list.closest("[hidden]"), null, "the threads' list still shows");
+  assert.equal(document.activeElement, list);
+  assert.equal(slot.getByRole("tab", { selected: true }).textContent, "Threads");
+
+  act(() => slot.getByRole("tab", { name: "Managers" }).click());
+  assert.ok(list.closest("[hidden]"), "picking Managers shows them");
+});
+
+test("the first manager started while the threads' view menu is open: the menu stays open over the threads, its focus kept", async () => {
+  const projects = [project("prj_a", "bb-plugins")];
+  const menu = createElement(ViewMenu, { projects, chosen: null, onChoose: () => {}, compact: true, onCompact: () => {} });
+  const withMenu = createElement("div", { className: "as-scroller", tabIndex: 0, "data-threads": "" }, menu);
+  const at = (managers: readonly ManagerModel[]) => ({ ...props({ managers, view: "managers" }), threads: withMenu });
+  const slot = renderSlot({ component: SidebarViews }, at([]));
+  await act(async () => fireEvent.keyDown(slot.getByRole("button", { name: "View options" }), { key: "Enter" }));
+  const compact = await slot.findByRole("menuitemcheckbox");
+  act(() => compact.focus());
+  assert.equal(document.activeElement, compact);
+
+  await act(async () => slot.lifecycle.rerender(createElement(SidebarViews, at([PR]))));
+  assert.ok(compact.isConnected, "the menu is still open");
+  assert.equal(document.activeElement, compact);
+  assert.equal(slot.container.querySelector("[data-threads]")?.closest("[hidden]"), null, "over the threads, still shown");
+});
+
+test("the first manager started while focus is outside the sidebar: the chosen Managers view shows", async () => {
+  const { slot, show } = mount({ managers: [], view: "managers" });
+  await show({ managers: [PR], view: "managers" });
+  assert.equal(slot.getByRole("tab", { selected: true }).textContent, "Managers");
+  assert.equal(slot.container.querySelector("[data-threads]")?.closest("[hidden]") !== null, true);
+});
+
+test("a tab clicked where the browser doesn't focus buttons (Safari) takes focus from the panel it hides", () => {
+  let view: View = "threads";
+  const slot = renderSlot({ component: SidebarViews }, { ...props({ managers: [PR], view }), onView: (next: View) => (view = next) });
+  slot.container.querySelector<HTMLElement>("[data-threads]")?.focus();
+  // why: fireEvent.click dispatches the click alone, without the focus a click gives a button elsewhere.
+  fireEvent.click(slot.getByRole("tab", { name: "Managers" }));
+  assert.equal(view, "managers");
+  assert.equal(document.activeElement, slot.getByRole("tab", { name: "Managers" }));
 });
 
 test("Threads → Managers → Threads brings back the same threads' list, scrolled where it was left", async () => {

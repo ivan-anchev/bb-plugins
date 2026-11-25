@@ -39,7 +39,11 @@ export function ViewSegment({ id, view, onChange }: { id: string; view: View; on
           aria-selected={tab.view === view}
           aria-controls={panelId(id, tab.view)}
           tabIndex={tab.view === view ? 0 : -1}
-          onClick={() => onChange(tab.view)}
+          onClick={() => {
+            onChange(tab.view);
+            // why: Safari doesn't focus a clicked button, and focus left in the panel now hidden would be lost.
+            tabs.get(tab.view)?.focus();
+          }}
           onKeyDown={onKeyDown}
         >
           {tab.label}
