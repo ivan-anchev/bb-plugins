@@ -1199,7 +1199,7 @@ test("issue_verdict refuses an anchored finding the reviewer marked missed, with
 });
 
 test("after a failed round, a round whose review was missed gives its verifier that round's blocking findings as unfixed, to triage each; anchoring one fails the verdict", async () => {
-  const { kit, row, verdict, verifier, reviewer, opened } = await afterBlockedRound();
+  const { kit, threadId, row, verdict, verifier, reviewer, opened } = await afterBlockedRound();
   await kit.idle(reviewer(), "Done reviewing."); // it ends its turn without issue_review
   await settled();
 
@@ -1219,6 +1219,11 @@ test("after a failed round, a round whose review was missed gives its verifier t
   assert.deepEqual(stored.state === "returned" && stored.triage, [{ ...CAP_FINDING, origin: "unfixed", result: "anchored", anchor: "brief", reason: "retry.ts:42 still doubles with no ceiling." }]);
   const issue = await row();
   assert.deepEqual([issue.lane, issue.headline], ["needs-you", "✗ A must-fix review finding upheld after its fix round: Retries land with backoff"], "every criterion passed, and the unfixed blocker failed it");
+  assert.match(
+    textOf(await kit.call("crew_catch_up", {}, threadId)),
+    /Review: no review was had, as its reviewer ended its turn without reporting, so the verifier triaged the 1 earlier blocking finding as unfixed; the verifier anchored 1, downgraded 0, confirmed 0 and rejected 0\. None of them went to the agent\.\n\n- `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n {2}Anchored, as it breaks the issue's brief: retry\.ts:42 still doubles with no ceiling\./,
+    "the manager reads the unfixed finding that failed it",
+  );
   const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");
   assert.deepEqual(round.round.review.state, "missed");
   assert.deepEqual(round.body.findings.map(({ origin, triage }) => [origin, triage?.result]), [["unfixed", "anchored"]], "its tab shows the unfixed finding under the missed review");

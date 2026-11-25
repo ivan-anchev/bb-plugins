@@ -191,7 +191,7 @@ function reportOf({ findings, earlier }: ReviewInput, scope: Scope): ReviewRepor
 }
 
 /** The answer to the earlier blocking finding `number`. why throw: numbersRefusal refused a report that skips one. */
-function answerTo(earlier: ReviewInput["earlier"], number: number): { fixed: boolean; note: string } {
+function answerTo(earlier: ReviewInput["earlier"], number: number): ReviewReport["earlier"][number] {
   const answer = earlier.find(({ finding }) => finding === number);
   if (answer === undefined) throw new Error(`Earlier blocking finding ${number} has no answer.`);
   return { fixed: answer.fixed, note: answer.note };

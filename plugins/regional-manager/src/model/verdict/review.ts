@@ -19,7 +19,7 @@ type Severity = z.infer<typeof severitySchema>;
  * the verdict, whatever it breaks; `unfixed`, an earlier round's blocking finding not fixed. Every
  * finding of a first round is new.
  */
-export const originSchema = z.enum(["new", "missed", "unfixed"]);
+const originSchema = z.enum(["new", "missed", "unfixed"]);
 type Origin = z.infer<typeof originSchema>;
 
 /**
@@ -42,7 +42,6 @@ export type ReviewFinding = z.infer<typeof reviewFindingSchema>;
  * `unfixed` finding of the review, for the verifier to triage.
  */
 const earlierAnswerSchema = z.object({ fixed: z.boolean(), note: z.string() });
-export type EarlierAnswer = z.infer<typeof earlierAnswerSchema>;
 
 const reviewerThreadIdSchema = z.string().min(1);
 
