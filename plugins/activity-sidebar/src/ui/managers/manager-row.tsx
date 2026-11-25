@@ -1,5 +1,6 @@
-// A regional manager's row in the Managers view: its avatar, its name and its description, nothing
-// else. A click opens its thread; right-click (or the Menu key) opens bb's own thread menu.
+// A regional manager's row in the Managers view: its avatar, its name, and under it one line, the first
+// sentence of its latest reply; nothing else. A click opens its thread; right-click (or the Menu key)
+// opens bb's own thread menu.
 import { experimental_ThreadActionsContextMenu as ThreadActionsContextMenu, experimental_useSidebarThreadSplit as useSidebarThreadSplit } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";
 import type { ManagerModel } from "../../model/activity.ts";
@@ -13,7 +14,7 @@ export function ManagerRow({ manager, onNavigate }: { manager: ManagerModel; onN
   const { splitProps } = useSidebarThreadSplit(t.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const shown = usePanelShown();
-  const spoken = manager.description === null ? t.displayTitle : `${t.displayTitle}, ${manager.description}`;
+  const spoken = manager.line === null ? t.displayTitle : `${t.displayTitle}, ${manager.line}`;
 
   // why: tabIndex -1: the list is one tab stop and ↑/↓ move between rows, as in the threads' list.
   // The host routes a plain click on href in place; onNavigate closes the mobile drawer.
@@ -25,7 +26,6 @@ export function ManagerRow({ manager, onNavigate }: { manager: ManagerModel; onN
         className="as-manager"
         tabIndex={-1}
         data-menu={menuOpen || undefined}
-        data-bare={manager.description === null || undefined}
         aria-current={manager.current ? "page" : undefined}
         aria-label={spoken}
         onClick={onNavigate}
@@ -37,7 +37,11 @@ export function ManagerRow({ manager, onNavigate }: { manager: ManagerModel; onN
         </span>
         <span className="as-manager-words">
           <FadingTitle text={t.displayTitle} />
-          {manager.description !== null && <span className="as-manager-description">{manager.description}</span>}
+          {manager.line !== null && (
+            <span className="as-manager-line">
+              <FadingTitle text={manager.line} />
+            </span>
+          )}
         </span>
       </a>
     </ThreadActionsContextMenu>

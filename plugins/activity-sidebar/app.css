@@ -154,7 +154,8 @@
   }
 }
 
-/* --- A regional manager's row: its avatar, its name, its description under it (src/ui/managers) -- */
+/* --- A regional manager's row: its avatar, its name, its latest reply's first sentence under it
+   (src/ui/managers). The two lines span the avatar exactly, top to bottom; a name alone sits in its middle. */
 .as-managers {
   display: flex;
   flex-direction: column;
@@ -165,20 +166,15 @@
 .as-manager {
   flex: 0 0 auto;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   box-sizing: border-box;
-  min-height: 46px;
-  padding: 9px 0;
+  padding: 5px 0;
   border-radius: 8px;
   color: inherit;
   text-decoration: none;
   cursor: pointer;
   user-select: none;
   outline: none;
-}
-/* A name alone stands in the avatar's middle. */
-.as-manager[data-bare] {
-  align-items: center;
 }
 .as-manager[data-menu] {
   background: var(--state-hover);
@@ -208,22 +204,22 @@
 .as-manager-face {
   flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  height: 28px;
   padding-left: 8px;
 }
+/* The avatar's frame: the blob is centred inside it, every shape within it (manager-avatar.tsx). */
 .as-avatar {
+  position: relative;
+  display: block;
   flex: 0 0 auto;
   pointer-events: none;
 }
-/* While its look is unknown: a plain disc on the segment's track. */
+/* While its look is unknown: a plain disc on the segment's track, filling the frame. */
 .as-avatar-plain {
-  display: block;
-  width: 28px;
-  height: 28px;
   border-radius: 999px;
   background: var(--muted);
 }
+/* why: the name's 18px line, this 2px gap and the reply's 16px line make the avatar's 36px
+   (manager-avatar.tsx SIZE), so the name's top meets its top and the line's bottom its bottom. */
 .as-manager-words {
   flex: 1 1 auto;
   min-width: 0;
@@ -232,26 +228,18 @@
   gap: 2px;
   padding: 0 8px;
 }
-.as-manager .as-title {
+.as-manager-words > .as-title {
   flex: 0 0 auto;
   color: var(--foreground);
   font-weight: 500;
   line-height: 18px;
 }
-/* why: on the selected wash, Zeron's muted ink falls under 4.5:1 in light; the full ink keeps it readable. */
-.as-manager[aria-current="page"] .as-manager-description {
-  color: var(--foreground);
-}
-.as-manager-description {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  color: var(--muted-foreground);
+/* One line, fading at its end like every title; muted on the selected row too (the user's call). */
+.as-manager-line {
+  display: flex;
+  min-width: 0;
   font-size: 12px;
   line-height: 16px;
-  overflow-wrap: anywhere;
-  text-wrap: pretty;
 }
 
 /* --- A section's title: quiet small words, brighter under the pointer, no caret; folded, how many
@@ -598,12 +586,12 @@
 }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .as-rowbox:hover .as-line .as-title[data-over],
-  .as-manager:hover .as-title[data-over] {
+  .as-manager:hover > .as-manager-words > .as-title[data-over] {
     --as-fade-in: 12px;
     transition-delay: 500ms;
   }
   .as-rowbox:hover .as-line .as-title[data-over] > .as-title-text,
-  .as-manager:hover .as-title[data-over] > .as-title-text {
+  .as-manager:hover > .as-manager-words > .as-title[data-over] > .as-title-text {
     transform: translateX(calc(-1 * var(--as-travel)));
     transition: transform var(--as-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
   }

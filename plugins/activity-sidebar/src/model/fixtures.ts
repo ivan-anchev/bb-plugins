@@ -66,8 +66,5 @@ export const MALFORMED_COORDINATORS: readonly unknown[] = [
   { coordinators: [{ threadId: "thr_pr", description: null }] },
   { coordinators: [{ threadId: "thr_pr", description: null, avatar: { ...AVATAR, shape: "octagon" } }] },
   { coordinators: [{ thread: "thr_pr", description: null, avatar: AVATAR }] },
-  { coordinators: [{ threadId: "thr_pr", description: "", avatar: AVATAR }] },
-  { coordinators: [{ threadId: "thr_pr", description: "   ", avatar: AVATAR }] },
-  { coordinators: [{ threadId: "thr_pr", description: "x".repeat(501), avatar: AVATAR }] },
   { coordinators: [COORDINATORS.coordinators[0], { ...COORDINATORS.coordinators[1], threadId: "thr_pr" }] },
 ];

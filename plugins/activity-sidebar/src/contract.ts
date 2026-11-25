@@ -1,7 +1,8 @@
 // The app <-> server contract and the records it carries: a thread's sleep, the Archived shelf's
-// count, and the regional managers' looks. Shared by server.ts and the app: pure zod plus defineRpcContract.
+// count, and the regional managers' looks and lines. Shared by server.ts and the app: pure zod plus defineRpcContract.
 import { defineRpcContract } from "@get-bb/plugin-sdk";
 import { z } from "zod";
+import { managerLineSchema } from "./model/manager-line.ts";
 import { managerLookSchema } from "./model/manager-look.ts";
 
 /**
@@ -36,6 +37,9 @@ export const ARCHIVED_COUNT_TAG = "archived-count";
 /** Every read of the managers' looks carries it; a regional manager's thread created, renamed or archived, and every minute, invalidate it. */
 export const MANAGER_LOOKS_TAG = "manager-looks";
 
+/** Every read of the managers' lines carries it; a manager's line changing invalidates it. */
+export const MANAGER_LINES_TAG = "manager-lines";
+
 export const activitySidebarContract = defineRpcContract({
   /** Every sleep record, for the whole list at once. */
   sleeps: {
@@ -49,11 +53,21 @@ export const activitySidebarContract = defineRpcContract({
     output: archivedCountSchema,
     tags: () => [ARCHIVED_COUNT_TAG],
   },
-  /** Each open regional manager's avatar and description; none when the Regional Manager plugin can't be read. */
+  /** Each open regional manager's avatar; none when the Regional Manager plugin can't be read. */
   managerLooks: {
     input: z.object({}),
     output: z.object({ looks: z.array(managerLookSchema) }),
     tags: () => [MANAGER_LOOKS_TAG],
+  },
+  /**
+   * The line of each open regional manager among `threadIds` (the managers a client shows, so one
+   * started or unarchived is read as it appears): the first sentence of its latest reply; a manager
+   * with none has no entry.
+   */
+  managerLines: {
+    input: z.object({ threadIds: z.array(z.string().min(1)).max(200) }),
+    output: z.object({ lines: z.array(managerLineSchema) }),
+    tags: () => [MANAGER_LINES_TAG],
   },
   /** Sleep until a future time, wake now (`until` = now), or forget the record (null: opened after waking). */
   setSleep: {

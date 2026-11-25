@@ -1,10 +1,10 @@
-// The regional managers' looks (avatar and description), read from the Regional Manager plugin's
+// The regional managers' looks (their avatars), read from the Regional Manager plugin's
 // published `coordinators` on every read, and when to read them again. That read is one-shot: the
 // plugin's own invalidations never reach this one, so a manager's thread created, renamed or archived
-// marks it stale, and so does every minute (an avatar or description edit renames nothing).
+// marks it stale, and so does every minute (an avatar edit renames nothing).
 import type { BbPluginApi, PluginBbSdk } from "@get-bb/plugin-sdk";
-import { MANAGER_LOOKS_TAG } from "../contract.ts";
-import { coordinatorsReadSchema, isManagerThread, REGIONAL_MANAGER, type ManagerLook } from "../model/manager-look.ts";
+import { MANAGER_LOOKS_TAG } from "../../contract.ts";
+import { coordinatorsReadSchema, isManagerThread, REGIONAL_MANAGER, type ManagerLook } from "../../model/manager-look.ts";
 
 /** The events besides creation that can add or remove a manager; server.ts hands each to `changed`. */
 export const MANAGER_EVENTS = ["thread.archived", "thread.unarchived", "thread.deleted"] as const;
@@ -70,7 +70,7 @@ export function openManagerLooks({ plugins, threads, rpc, log }: Deps) {
     changed,
 
     /**
-     * A thread retitled: a manager's (its profile edited, perhaps with its description) makes every
+     * A thread retitled: a manager's (its profile edited, perhaps with its avatar) makes every
      * client read again. Which thread it is comes from bb, so a manager the last read missed counts too.
      */
     async threadChanged({ id, changes }: ThreadChange): Promise<void> {
@@ -100,7 +100,7 @@ export function openManagerLooks({ plugins, threads, rpc, log }: Deps) {
       const open = await openThreadIds(coordinators.map((look) => look.threadId));
       return coordinators.filter((look) => open.has(look.threadId));
     } catch (error) {
-      if (!signal.aborted) log.warn(`Couldn't read the regional managers' avatars and descriptions; they show with their names only: ${messageOf(error)}`);
+      if (!signal.aborted) log.warn(`Couldn't read the regional managers' avatars; they show plain ones: ${messageOf(error)}`);
       return [];
     }
   }

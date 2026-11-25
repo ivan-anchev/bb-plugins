@@ -8,7 +8,7 @@ import { AVATAR, project, thread, WORKING } from "./fixtures.ts";
 const NOW = 10 * 3_600_000;
 
 function model(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
-  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: NOW, activeThreadId: null, filter: null, looks: [], ...extra });
+  return buildActivity({ threads, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: NOW, activeThreadId: null, filter: null, looks: [], lines: [], ...extra });
 }
 
 function build(threads: PluginSidebarThread[], extra: Partial<ActivityInput> = {}) {
@@ -337,12 +337,13 @@ test("the project filter narrows the threads, never the managers", () => {
   assert.deepEqual(managerIds(built), ["mgr"]);
 });
 
-test("a manager shows its look; without one (the read failed or doesn't know it), its name with a plain avatar and no description", () => {
+test("a manager shows its look and its line; without them (unread, failed, or none), its name alone with a plain avatar", () => {
   const threads = [thread("known", { ...MANAGER, createdAt: 1, displayTitle: "PR Reviews" }), thread("unknown", { ...MANAGER, createdAt: 2, displayTitle: "Sidebar" })];
-  const looks = [{ threadId: "known", description: "Reviews every open pull request.", avatar: AVATAR }];
-  const [known, unknown] = model(threads, { looks, activeThreadId: "unknown" }).managers;
-  assert.deepEqual({ ...known, thread: known.thread.displayTitle }, { thread: "PR Reviews", avatar: AVATAR, description: "Reviews every open pull request.", current: false });
-  assert.deepEqual({ ...unknown, thread: unknown.thread.displayTitle }, { thread: "Sidebar", avatar: null, description: null, current: true });
+  const looks = [{ threadId: "known", avatar: AVATAR }];
+  const lines = [{ threadId: "known", line: "Two pull requests wait on you." }];
+  const [known, unknown] = model(threads, { looks, lines, activeThreadId: "unknown" }).managers;
+  assert.deepEqual({ ...known, thread: known.thread.displayTitle }, { thread: "PR Reviews", avatar: AVATAR, line: "Two pull requests wait on you.", current: false });
+  assert.deepEqual({ ...unknown, thread: unknown.thread.displayTitle }, { thread: "Sidebar", avatar: null, line: null, current: true });
 });
 
 test("with no managers there are none, and the sections are exactly as without them", () => {

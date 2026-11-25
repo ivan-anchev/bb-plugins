@@ -1,8 +1,9 @@
 // What the Activity sidebar shows, as data: every parent thread's row and the section it stands in,
 // and the regional managers, who leave the sections for a view of their own while they're open.
-// Pure: the live threads, the sleeps, the managers' looks and the clock in; rows, sections and managers out.
+// Pure: the live threads, the sleeps, the managers' looks and lines and the clock in; rows, sections and managers out.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import type { SleepRecord } from "../contract.ts";
+import { namingThreads, type ManagerLine } from "./manager-line.ts";
 import { isManagerThread, type Avatar, type ManagerLook } from "./manager-look.ts";
 import { hueOf, type Hue } from "./project-hue.ts";
 import { wakesIn } from "./sleep.ts";
@@ -39,10 +40,11 @@ export type RowDetail = { machine: string | null; branch: string | null };
 export type Section = { key: SectionKey; rows: readonly RowModel[] };
 
 /**
- * A regional manager's row in the Managers view: its name is its thread's title. Its avatar and
- * description are its look's, or null while that is unknown: then it shows a plain avatar and no description.
+ * A regional manager's row in the Managers view: its name is its thread's title. Its avatar is its
+ * look's, null while that is unknown (a plain one shows); its line is the first sentence of its latest
+ * reply, null with none (its name stands alone).
  */
-export type ManagerModel = { thread: PluginSidebarThread; avatar: Avatar | null; description: string | null; current: boolean };
+export type ManagerModel = { thread: PluginSidebarThread; avatar: Avatar | null; line: string | null; current: boolean };
 
 /**
  * The sections; the open regional managers, oldest first; and the index of who hangs under whom they
@@ -60,8 +62,10 @@ export type ActivityInput = {
   activeThreadId: string | null;
   /** The project every section is narrowed to, or null for every project. Never the managers: the filter is the threads' own. */
   filter: string | null;
-  /** The regional managers' avatars and descriptions, as far as they are known. */
+  /** The regional managers' avatars, as far as they are known. */
   looks: readonly ManagerLook[];
+  /** The regional managers' lines, as far as they are known. */
+  lines: readonly ManagerLine[];
 };
 
 /**
@@ -108,13 +112,14 @@ export function buildActivity(input: ActivityInput): ActivityModel {
     return { key, rows: ordered.map(toRow) };
   });
 
-  const looks = new Map(input.looks.map((look) => [look.threadId, look]));
+  const looks = new Map(input.looks.map((look) => [look.threadId, look.avatar]));
+  const titles = new Map(input.threads.map((t) => [t.id, t.displayTitle]));
+  const lines = new Map(input.lines.map((line) => [line.threadId, namingThreads(line.line, (id) => titles.get(id))]));
   const managers = input.threads
     .filter(isOpenManager)
     .sort((a, b) => a.createdAt - b.createdAt || compare(a.id, b.id))
     .map((thread): ManagerModel => {
-      const look = looks.get(thread.id);
-      return { thread, avatar: look?.avatar ?? null, description: look?.description ?? null, current: thread.id === input.activeThreadId || thread.id === currentRoot };
+      return { thread, avatar: looks.get(thread.id) ?? null, line: lines.get(thread.id) ?? null, current: thread.id === input.activeThreadId || thread.id === currentRoot };
     });
   return { sections, managers, index };
 }

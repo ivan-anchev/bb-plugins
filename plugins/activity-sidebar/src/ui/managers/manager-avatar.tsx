@@ -1,29 +1,30 @@
-// A regional manager's avatar: its still blob in its hue, drawn as the Regional Manager plugin draws
-// it; or, while its look is unknown, a plain disc the same size.
+// A regional manager's avatar: a SIZE-square frame holding its still blob in its hue, drawn as the
+// Regional Manager plugin draws it, or, while its look is unknown, a plain disc filling the frame.
+// The row's text aligns to the frame, whatever the shape paints inside it.
 import { BlobAvatar } from "blob-avatar";
+import type { CSSProperties } from "react";
 import type { Avatar } from "../../model/manager-look.ts";
 import { HUE_COLORS } from "../../model/project-hue.ts";
 
-const SIZE = 28;
+// why: the size the name's line and the reply's line span exactly, with the gap between them (app.css .as-manager-words).
+const SIZE = 36;
 
-// why: blob-avatar draws in a 200-unit box whose body spans about 136 of it, so a box this much
-// larger, its overflow given back by negative margins, makes the body fill the size asked for.
-const BOX = Math.round(SIZE * (200 / 136));
+// why: blob-avatar 2.2.0 draws in a 200-unit box centred on 0, and none of its 21 shapes, in any of its
+// 6 expressions, paints farther than 66.1 units from that centre (the cat's ears; the capsule reaches
+// 64.4 across). Measured with getBBox, still; check again when blob-avatar changes. Scaling 2 × REACH
+// units to the frame keeps every shape inside it, centred.
+const REACH = 67;
+const BOX = (SIZE * 200) / (2 * REACH);
+
+const FRAME: CSSProperties = { width: SIZE, height: SIZE };
+const PLACE: CSSProperties = { position: "absolute", left: (SIZE - BOX) / 2, top: (SIZE - BOX) / 2 };
 
 // why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside it says who this is.
 export function ManagerAvatar({ avatar }: { avatar: Avatar | null }) {
-  if (avatar === null) return <span className="as-avatar-plain" aria-hidden />;
+  if (avatar === null) return <span className="as-avatar as-avatar-plain" style={FRAME} aria-hidden />;
   return (
-    <BlobAvatar
-      aria-hidden
-      shape={avatar.shape}
-      color={HUE_COLORS[avatar.hue].fill}
-      expression={avatar.expression}
-      animation="idle"
-      paused
-      size={BOX}
-      className="as-avatar"
-      style={{ margin: (SIZE - BOX) / 2 }}
-    />
+    <span className="as-avatar" style={FRAME} aria-hidden>
+      <BlobAvatar shape={avatar.shape} color={HUE_COLORS[avatar.hue].fill} expression={avatar.expression} animation="idle" paused size={BOX} style={PLACE} />
+    </span>
   );
 }

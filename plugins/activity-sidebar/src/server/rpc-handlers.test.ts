@@ -20,7 +20,8 @@ function harness() {
   };
   const archived = { read: async () => ({ total: 2, byProject: { prj_a: 2 } }) };
   const looks = { read: async () => ({ looks: [] }) };
-  const handlers = createRpcHandlers({ rpc: { experimental_invalidate: (tags) => void events.push(`invalidate ${tags.join(",")}`) }, store, archived, looks });
+  const lines = { read: async () => ({ lines: [] }) };
+  const handlers = createRpcHandlers({ rpc: { experimental_invalidate: (tags) => void events.push(`invalidate ${tags.join(",")}`) }, store, archived, looks, lines });
   return { handlers, events };
 }
 

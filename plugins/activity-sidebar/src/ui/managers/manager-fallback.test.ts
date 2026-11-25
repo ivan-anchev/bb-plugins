@@ -5,10 +5,10 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { cleanup } from "@testing-library/react";
 import { buildActivity } from "../../model/activity.ts";
 import { COORDINATORS, MALFORMED_COORDINATORS, project, thread } from "../../model/fixtures.ts";
-import { openManagerLooks } from "../../server/manager-looks.ts";
+import { openManagerLooks } from "../../server/managers/manager-looks.ts";
 
 // From the Regional Manager plugin's answer to the Managers view's rows: what each manager shows when
-// that answer is good, and that it falls back to its name and a plain avatar, with no description,
+// that answer is good, and that it falls back to its name and a plain avatar
 // whenever the answer fails or comes in a shape the sidebar doesn't know, even after a good one.
 
 const { SidebarViews } = await import("./sidebar-views.tsx");
@@ -33,11 +33,10 @@ function looksRead(answer: () => Promise<unknown>) {
 /** Each manager's row as the Managers view renders it from one read. */
 async function rowsAfter(read: ReturnType<typeof looksRead>) {
   const { looks } = await read.read();
-  const { managers } = buildActivity({ threads: THREADS, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null, looks });
+  const { managers } = buildActivity({ threads: THREADS, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null, looks, lines: [] });
   const slot = renderSlot({ component: SidebarViews }, { managers, view: "managers", onView: () => {}, onNavigate: () => {}, threads: null });
   const rows = Array.from(slot.container.querySelectorAll<HTMLElement>(".as-manager")).map((row) => ({
     name: row.querySelector(".as-title-text")?.textContent,
-    description: row.querySelector(".as-manager-description")?.textContent ?? null,
     avatar: row.querySelector(".as-avatar-plain") !== null ? "plain" : row.querySelector("svg") !== null ? "blob" : "none",
   }));
   cleanup();
@@ -45,14 +44,14 @@ async function rowsAfter(read: ReturnType<typeof looksRead>) {
 }
 
 const FALLBACK = [
-  { name: "PR Reviews", description: null, avatar: "plain" },
-  { name: "Sidebar", description: null, avatar: "plain" },
+  { name: "PR Reviews", avatar: "plain" },
+  { name: "Sidebar", avatar: "plain" },
 ];
 
-test("a good answer draws each manager's blob avatar, name and description", async () => {
+test("a good answer draws each manager's blob avatar and name", async () => {
   assert.deepEqual(await rowsAfter(looksRead(async () => COORDINATORS)), [
-    { name: "PR Reviews", description: "Reviews every open pull request.", avatar: "blob" },
-    { name: "Sidebar", description: null, avatar: "blob" },
+    { name: "PR Reviews", avatar: "blob" },
+    { name: "Sidebar", avatar: "blob" },
   ]);
 });
 
