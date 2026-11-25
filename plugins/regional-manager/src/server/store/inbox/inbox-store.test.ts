@@ -88,6 +88,22 @@ test("a reopen that fails before its events are unannounced keeps the doorbell, 
   assert.deepEqual(store.unannounced(MANAGER), [event]);
 });
 
+test("a catch-up whose marking fails on its last event leaves every event it returned unread, and retried marks them all read", () => {
+  const { db, store } = freshStore();
+  store.insertEvent(MANAGER, { kind: "coordinator-edited-files", fileCount: 2 }, 3_000);
+  store.insertEvent(MANAGER, { kind: "coordinator-tree-clean" }, 3_100);
+  const events = store.unread(MANAGER);
+  const last = events.at(-1) ?? assert.fail("no events");
+
+  const restore = failWrites(db, "UPDATE", "events", `OLD.id = ${last.id}`);
+  assert.throws(() => store.markRead(MANAGER, events.map(({ id }) => id), 3_200), /forced failure/);
+  assert.deepEqual(store.unread(MANAGER), events, "the first event's mark was undone with the failed one");
+
+  restore();
+  store.markRead(MANAGER, events.map(({ id }) => id), 3_300);
+  assert.deepEqual(store.unread(MANAGER), []);
+});
+
 test("a reminder fires once when due; a repeating one moves to its next time", () => {
   const { store } = freshStore();
   const once = store.insertReminder(MANAGER, { note: "Check CI", dueAt: 5_000, everyMs: null });

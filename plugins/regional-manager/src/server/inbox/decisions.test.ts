@@ -299,3 +299,77 @@ test("a catch-up whose call is aborted while it reads bb leaves its updates unre
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### The user commented on WEB-1[^\n]*\n\n[^\n]*In their own words:\n\nUse the staging key\./);
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Nothing new since your last catch-up/, "an answered catch-up marks it read");
 });
+
+/** A regional manager with an agent on WEB-1 that asked QUESTION, caught up, its thread busy so a doorbell waits in bb's queue. */
+async function askedWhileBusy() {
+  const started = await coordinating({ verify: false });
+  const { kit, threadId } = started;
+  await startedAgent(kit, threadId);
+  await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"] }, threadId);
+  await kit.call("crew_catch_up", {}, threadId);
+  await settled();
+  kit.thread(threadId).status = "active";
+  return started;
+}
+
+/** Runs `start` with every host read of bb's threads held, once `calls` reads are held: what it started, and the release of every read. */
+async function holdingThreadLists<T>(kit: Awaited<ReturnType<typeof coordinating>>["kit"], calls: number, start: () => T): Promise<{ started: T; release(): void }> {
+  kit.threadLists.holding = true;
+  const started = start();
+  while (kit.threadLists.held.length < calls) await new Promise((resolve) => setImmediate(resolve));
+  return {
+    started,
+    release() {
+      kit.threadLists.holding = false;
+      for (const release of kit.threadLists.held.splice(0)) release();
+    },
+  };
+}
+
+const ANSWERED = /The user answered your question d1/;
+
+test("an answer that lands while crew_catch_up reads bb keeps its queued doorbell, which wakes the manager to the next catch-up that returns it", async () => {
+  const { kit, threadId, coordinatorId } = await askedWhileBusy();
+  const { started: caughtUp, release } = await holdingThreadLists(kit, 1, () => kit.call("crew_catch_up", {}, threadId));
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "release/2" });
+  await settled();
+  assert.equal(kit.queued(threadId).length, 1, "the answer's doorbell waits behind the catch-up's turn");
+  release();
+
+  assert.doesNotMatch(textOf(await caughtUp), ANSWERED, "newer than the catch-up's read");
+  await settled();
+  const [doorbell = assert.fail("the doorbell was taken back")] = kit.queued(threadId);
+  await kit.dispatch(doorbell);
+  assert.match(kit.doorbellsDelivered(threadId).at(-1) ?? "", /The user answered your question d1/);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), ANSWERED);
+});
+
+test("two catch-ups that overlap while they read bb return an answer once between them", async () => {
+  const { kit, threadId, coordinatorId } = await askedWhileBusy();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "release/2" });
+  const { started: calls, release } = await holdingThreadLists(kit, 2, () => [kit.call("crew_catch_up", {}, threadId), kit.call("crew_catch_up", {}, threadId)]);
+  release();
+
+  const texts = (await Promise.all(calls)).map(textOf);
+  assert.equal(texts.filter((text) => ANSWERED.test(text)).length, 1);
+});
+
+test("an answer to the plugin's question at the cap, sent as its issue is canceled while bb is read, is refused and stores nothing", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  const holderThread = await toCap(kit, threadId, coordinatorId, issue, agentThreadId);
+  const holder = kit.store.agents(coordinatorId).find(({ threadId: agentThread }) => agentThread === holderThread) ?? assert.fail("no holder");
+  await kit.call("agent_stop", { agent: holder.id }, threadId);
+  await settled();
+  const before = kit.store.unread(coordinatorId).length;
+
+  const { started: answered, release } = await holdingThreadLists(kit, 1, async () => kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "One more round" }));
+  // The manager cancels WEB-1, as issue_update writes it, while the answer's host read is held.
+  const canceled = kit.store.updateIssue(coordinatorId, issueIdSchema.parse(issue), { closed: { as: "canceled", at: Date.now() } }, { requireUnheld: true, closes: new Map(), at: Date.now() });
+  assert.ok("issue" in canceled, "the cancel was written");
+  release();
+
+  await assert.rejects(answered, { code: "conflict", message: "d1 no longer takes an answer: WEB-1 is Canceled, so no round is left for it to allow." });
+  assert.equal(kit.store.decision(d1)?.answer, null);
+  assert.ok(!kit.store.unread(coordinatorId).slice(before).some(({ event }) => event.kind === "decision-answered"), "nobody is told of an answer");
+});

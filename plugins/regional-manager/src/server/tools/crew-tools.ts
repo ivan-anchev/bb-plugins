@@ -48,9 +48,11 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
     parameters: z.object({}),
     execute: forManager(store, CATCH_UP, async (id, _, { signal }) => {
       // why read before the board is: every event returned is then older than the read, so what is said of it (a failure's cap question, what locks its issue) is in the read. One recorded during the read waits for the next catch-up, whose doorbell it rings.
-      const unread = inbox.unread(id);
+      const before = new Set(inbox.unread(id).map((event) => event.id));
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
       const read = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+      // why read again: a catch-up overlapping this one may have returned some of them during the read, and each is returned once. Nothing is awaited from here to markRead.
+      const unread = inbox.unread(id).filter((event) => before.has(event.id));
       const issues = "error" in read ? read : read.reads;
       const readOf = (issueId: IssueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId) ?? null));
       // why the board's own read when there is one: its decisions and its issues are one snapshot. Without it, closed issues can't be told, so every unanswered decision is listed.

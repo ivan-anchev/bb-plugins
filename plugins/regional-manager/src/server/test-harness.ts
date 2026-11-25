@@ -827,7 +827,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox }), ...openIssuesHandler({ store, board }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox, views }), ...openIssuesHandler({ store, board }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   /** `turns`, whose every operation waits, once it holds its issue's turn, while turnsTaken says to hold it. */
   function heldWhileTaken(turns: IssueTurns): IssueTurns {

@@ -265,6 +265,19 @@ test("the plugin's question at the cap takes an answer while its issue is open; 
   assert.ok(lapsed.getByRole("list", { name: "Options" }), "its options stay, as what was asked");
 });
 
+test("focus on an option of the plugin's question at the cap moves to the question's card, never the page, when a merge closes the issue", async () => {
+  const { tab, reread } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
+  const card = () => tab().getByRole("article", { name: "Question d4" });
+  const option = within(card()).getByRole("button", { name: "Ship now" });
+  option.focus();
+  fireEvent.focus(option);
+
+  await reread([issue("WEB-1", { status: "done", headline: "Merged #41" })]);
+  await waitFor(() => assert.equal(within(card()).queryAllByRole("button").length, 0, "the issue's close took the options"));
+  // why by its name: a failed comparison of two elements prints the whole DOM.
+  assert.equal(document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.tagName, "Question d4");
+});
+
 test("a round whose findings may have reached its agent, and whose failure asked at the cap, says the user decides", async () => {
   const d4 = decisionIdSchema.parse("d4");
   const maybe: Entry[] = FEED.entries.map((entry) =>

@@ -131,7 +131,7 @@ export default function plugin(host: BbPluginApi): void {
   bb.rpc.register(privateContract, {
     primaryHost: async () => ({ hostId: (await bb.sdk.system.config()).primaryHostId }),
     ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }),
-    ...boardHandlers({ store, board, inbox }),
+    ...boardHandlers({ store, board, inbox, views }),
     ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }),
     ...memoryHandlers(store, memory, inbox),
   });
