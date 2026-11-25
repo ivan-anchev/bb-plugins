@@ -26,5 +26,5 @@ export function ManagerCard({ scroller, managers, underWaySince, listFocus, onNa
     return { label: manager.thread.displayTitle, focusKey: key, place: String(at), body: (close) => <ManagerCardBody manager={manager} underWaySince={underWaySince} onOpen={open(close)} /> };
   };
 
-  return <HoverCard scroller={scroller} listFocus={listFocus} cardOf={cardOf} />;
+  return <HoverCard scroller={scroller} listFocus={listFocus} cardOf={cardOf} focusShowsAtOnce />;
 }

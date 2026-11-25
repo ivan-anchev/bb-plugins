@@ -53,7 +53,24 @@ the sidebar, and each side owns the whole list under it.
   a new reply, and keeps its quiet colour when the row is selected. No
   agent, project, state, age, subthread count or pull request. Click a row to
   open the manager's thread; right-click it (or press the Menu key or
-  Shift+F10) for bb's own thread menu, without Sleep. There is no hover card.
+  Shift+F10) for bb's own thread menu, without Sleep.
+- **A manager's card.** Rest the pointer on a manager's row, or move to it
+  with ↑/↓ (the card opens at once from the keyboard), and its card opens
+  beside it: its avatar and name, its description when it has one, its state
+  and since when, and its project. Under a line come its issues in two groups,
+  **Needs you** (issues waiting on you, with why in each row's tooltip, and
+  open questions about no listed issue) and **In progress** (In progress,
+  Reviewing and Verifying; In review isn't listed), each headed by how many it
+  holds. Each issue row shows its status glyph, its id and its title. A
+  sub-issue sits under its parent on a hairline; a parent shown only for its
+  sub-issue is quieter. Up to nine issues all show; past that, eight rows and
+  then "+N more", which is only words. Click an issue to open its tab in the
+  manager's thread, beside its Board; click a question to open the manager's
+  thread. Tab goes into the card, through its issues, and on; Shift+Tab or
+  Escape comes back. The list is read when the card opens and again as the
+  manager's threads move, and at least every minute; until the installed
+  Regional Manager plugin publishes its open issues (`openIssues`), or when it
+  can't be read, the card shows no list. No card on a phone-width screen.
 - **Threads** is the list described below, with the open managers taken out
   of Activity, Pinned, Working and Asleep. An archived manager stays an
   ordinary row on Archived.

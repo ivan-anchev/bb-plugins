@@ -38,5 +38,5 @@ export function ThreadCard({ scroller, entries, data, listFocus, onNavigate }: P
     return { label: item.row.thread.displayTitle, focusKey: item.key, place: `${entry.y}/${entry.h}`, body: (close) => <CardBody item={item} data={data} onOpen={open(close)} /> };
   };
 
-  return <HoverCard scroller={scroller} listFocus={listFocus} cardOf={cardOf} />;
+  return <HoverCard scroller={scroller} listFocus={listFocus} cardOf={cardOf} focusShowsAtOnce={false} />;
 }

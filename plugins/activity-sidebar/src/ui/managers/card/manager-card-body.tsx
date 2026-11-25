@@ -42,13 +42,17 @@ export function ManagerCardBody({ manager, underWaySince, onOpen }: Props) {
         <StateLineView line={line} />
         <Line glyph={<CardGlyph name="folder" />}>{manager.project}</Line>
       </div>
-      {look !== null && list !== null && (
-        // why: the keyboard scrolls only what has focus, as on the threads' card.
-        <div {...kept} className="as-card-body" tabIndex={0}>
-          <div className="as-card-rule" />
-          <IssueSection list={list} coordinatorId={look.id} boardHref={t.href} onOpen={onOpen} />
-        </div>
-      )}
+      {/* why always there, hidden while empty (app.css): a refresh that takes the list away leaves focus
+          that was in it to the card, which needs the body to see it go (use-focus-kept.ts). The keyboard
+          scrolls only what has focus, as on the threads' card. */}
+      <div {...kept} className="as-card-body" tabIndex={0}>
+        {look !== null && list !== null && (
+          <>
+            <div className="as-card-rule" />
+            <IssueSection list={list} coordinatorId={look.id} boardHref={t.href} onOpen={onOpen} />
+          </>
+        )}
+      </div>
     </>
   );
 }

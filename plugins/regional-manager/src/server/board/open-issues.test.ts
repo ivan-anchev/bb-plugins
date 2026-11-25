@@ -3,27 +3,38 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coordinatorIdSchema } from "../../model/role.ts";
-import { coordinating, HEAD, ISSUE, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, HEAD, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const REPORT = { summary: "Done", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
 
-/** A manager with an issue in each place the open work reads, and one in a place it leaves out. */
+/**
+ * A manager with an issue in each place the open work reads, and in places it leaves out: working,
+ * reviewing, verifying, blocked, a parent in Todo with a sub-issue asked about, a decision on no
+ * issue; in review, and in Todo.
+ */
 async function busyBoard() {
   const started = await coordinating();
-  const { kit, threadId } = started;
+  const { kit, threadId, coordinatorId } = started;
   const file = async (input: object) => textOf(await kit.call("issue_create", { ...ISSUE, ...input }, threadId));
+  const handedOff = async (title: string, status: "done" | "blocked") => {
+    const { agentThreadId } = await startedAgent(kit, threadId, { title });
+    await kit.call("agent_handoff", { ...REPORT, status, ...(status === "done" ? { headSha: HEAD } : {}) }, agentThreadId);
+    await kit.idle(agentThreadId, "Handed off.");
+    await settled();
+  };
   await startedAgent(kit, threadId, { title: "Retry budget" }); // WEB-1: working
-  const reviewed = await startedAgent(kit, threadId, { title: "Retry queue" }); // WEB-2: handed off, reviewing
-  await kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD }, reviewed.agentThreadId);
-  kit.thread(reviewed.agentThreadId).status = "idle";
-  const blocked = await startedAgent(kit, threadId, { title: "Dead letters" }); // WEB-3: blocked
-  await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, blocked.agentThreadId);
-  kit.thread(blocked.agentThreadId).status = "idle";
-  await file({ title: "Webhook schema" }); // WEB-4: todo, its sub-issue asked about
-  await file({ title: "Schema version", parent: "WEB-4" }); // WEB-5
-  await kit.call("crew_ask_user", { question: "Keep v1 fields?", options: [], issue: "WEB-5" }, threadId);
+  kit.reviewers.reportAtOnce = false;
+  await handedOff("Retry queue", "done"); // WEB-2: its review running
+  kit.reviewers.reportAtOnce = true;
+  await handedOff("Retry jitter", "done"); // WEB-3: reviewed, its verifier running
+  await handedOff("Dead letters", "blocked"); // WEB-4
+  await file({ title: "Webhook schema" }); // WEB-5: todo, its sub-issue asked about
+  await file({ title: "Schema version", parent: "WEB-5" }); // WEB-6
+  await kit.call("crew_ask_user", { question: "Keep v1 fields?", options: [], issue: "WEB-6" }, threadId);
   await kit.call("crew_ask_user", { question: "Ship on Friday?", options: [] }, threadId);
-  await file({ title: "Backoff docs" }); // WEB-6: todo, left out
+  await kit.rpc.setVerify({ coordinatorId, verify: false });
+  await handedOff("Retry metrics", "done"); // WEB-7: in review, unverified
+  await file({ title: "Backoff docs" }); // WEB-8: todo
   return started;
 }
 
@@ -43,7 +54,7 @@ test("openIssues lists the board's Needs you and its work under way, with the bo
 
   assert.deepEqual(
     work.needsYou.map(({ id }) => id),
-    ["WEB-3", "WEB-5"],
+    ["WEB-4", "WEB-6"],
     "the blocked issue, and the sub-issue asked about, flagged itself",
   );
   assert.deepEqual(
@@ -54,13 +65,22 @@ test("openIssues lists the board's Needs you and its work under way, with the bo
   assert.deepEqual(
     work.underWay.map(({ id, status }) => [id, status]),
     [
+      ["WEB-3", "verifying"],
       ["WEB-2", "reviewing"],
       ["WEB-1", "in-progress"],
     ],
-    "under way: Reviewing before In progress, as the board orders them",
+    "under way: Verifying, Reviewing, then In progress, as the board orders them; In review and Todo left out",
   );
   for (const { id, status, title } of [...work.needsYou, ...work.underWay]) assert.deepEqual([status, title], [rows.get(id)?.status, rows.get(id)?.title], `${id} reads as on the board`);
-  assert.deepEqual(work.parents, [{ id: "WEB-4", title: "Webhook schema", status: "todo" }], "a listed sub-issue's parent, listed nowhere itself");
+  assert.deepEqual(
+    board.issues.filter(({ id }) => id === "WEB-7" || id === "WEB-8").map(({ id, status }) => [id, status]),
+    [
+      ["WEB-7", "in-review"],
+      ["WEB-8", "todo"],
+    ],
+    "the issues left out are on the board, In review and Todo",
+  );
+  assert.deepEqual(work.parents, [{ id: "WEB-5", title: "Webhook schema", status: "todo" }], "a listed sub-issue's parent, listed nowhere itself");
   assert.deepEqual(
     work.decisions.map(({ question }) => question),
     ["Ship on Friday?"],

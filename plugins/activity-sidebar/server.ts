@@ -26,8 +26,9 @@ export default function plugin(bb: BbPluginApi): void {
   bb.onDispose(bb.sdk.subscribe({ event: "thread:changed", callback: lines.changed }));
   bb.onDispose(lines.dispose);
 
-  const issues = openManagerIssues({ plugins: bb.sdk.plugins, rpc: bb.rpc, log: bb.log });
+  const issues = openManagerIssues({ plugins: bb.sdk.plugins, threads: bb.sdk.threads, rpc: bb.rpc, log: bb.log });
   for (const event of ISSUE_EVENTS) bb.events.on(event, ({ thread }) => issues.changed(thread));
+  bb.onDispose(bb.sdk.subscribe({ event: "thread:changed", callback: (change) => void issues.threadChanged(change) }));
   bb.onDispose(issues.dispose);
   bb.background.schedule("manager-issues", "* * * * *", issues.stale);
 

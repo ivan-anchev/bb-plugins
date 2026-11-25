@@ -14,13 +14,14 @@ type Harness = {
   at(x: number, y: number, row: string | null, onCard?: boolean): void;
 };
 
-function harness(): Harness {
+function harness(focusShowsAtOnce = false): Harness {
   const shown: (string | null)[] = [];
   const h: Harness = {
     shown,
     returned: 0,
     under: { point: { x: 0, y: 0 }, row: null, onCard: false },
     intent: new CardIntent({
+      focusShowsAtOnce,
       probe: () => h.under,
       cardEdge: () => (shown.at(-1) == null ? null : CARD),
       onChange: (id) => shown.push(id),
@@ -205,6 +206,17 @@ test("keyboard focus resting on a row opens its card after the dwell; focus leav
   k.intent.blur();
   mock.timers.tick(DWELL);
   assert.deepEqual(k.shown, []);
+});
+
+test("where keyboard focus shows a card at once, focus on a row shows it with no rest, and moving on hands it over at once", () => {
+  const h = harness(true);
+  h.intent.focusRow("a");
+  assert.deepEqual(h.shown, ["a"]);
+  h.intent.focusRow("b");
+  assert.deepEqual(h.shown, ["a", "b"]);
+  h.intent.blur();
+  mock.timers.tick(GRACE);
+  assert.deepEqual(h.shown, ["a", "b", null]);
 });
 
 test("the pointer leaving a row keyboard focus rests on neither cuts its rest short nor closes its card", () => {

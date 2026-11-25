@@ -27,13 +27,13 @@ export type ListFocus = {
  */
 export type CardOf = { label: string; focusKey: string; place: string; body(close: () => void): ReactNode };
 
-/** `cardOf`: the card of the row under a key, null once that row is gone. */
-type Props = { scroller: RefObject<HTMLElement | null>; listFocus: ListFocus; cardOf(key: string): CardOf | null };
+/** `cardOf`: the card of the row under a key, null once that row is gone. `focusShowsAtOnce`: as CardIntent's. */
+type Props = { scroller: RefObject<HTMLElement | null>; listFocus: ListFocus; cardOf(key: string): CardOf | null; focusShowsAtOnce: boolean };
 
 /** The card shown, and the one fading out behind it; null, none. */
 type Shown = { current: string | null; leaving: string | null };
 
-export function HoverCard({ scroller, listFocus, cardOf }: Props) {
+export function HoverCard({ scroller, listFocus, cardOf, focusShowsAtOnce }: Props) {
   const [shown, setShown] = useState<Shown>({ current: null, leaving: null });
   const card = useRef<HTMLDivElement>(null);
   const latestFocus = useRef(listFocus);
@@ -41,6 +41,7 @@ export function HoverCard({ scroller, listFocus, cardOf }: Props) {
     latestFocus.current = listFocus;
   });
   const intent = useCardIntent(scroller, card, shown.current !== null, {
+    focusShowsAtOnce,
     onChange: (key) => setShown((was) => ({ current: key, leaving: was.current ?? was.leaving })),
     returnFocus: () => latestFocus.current.refocus(),
   });
@@ -131,7 +132,7 @@ function useCardIntent(
   scroller: RefObject<HTMLElement | null>,
   card: RefObject<HTMLElement | null>,
   showing: boolean,
-  deps: Pick<CardIntentDeps, "onChange" | "returnFocus">,
+  deps: Pick<CardIntentDeps, "focusShowsAtOnce" | "onChange" | "returnFocus">,
 ): CardIntent {
   const pointer = useRef<Point>({ x: 0, y: 0 });
   const [intent] = useState(

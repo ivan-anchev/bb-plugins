@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { setTimeout as wait } from "node:timers/promises";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
-import { act, cleanup } from "@testing-library/react";
+import { act, cleanup, fireEvent } from "@testing-library/react";
 import { DWELL } from "../../../card/card-intent.ts";
 import { activitySidebarContract } from "../../../contract.ts";
 import { buildActivity } from "../../../model/activity.ts";
@@ -41,7 +41,7 @@ async function openCard(issues: () => Record<string, ManagerIssues | null>, look
   await act(() => wait(DWELL + 50));
   const card = document.querySelector<HTMLElement>(".as-card");
   assert.ok(card, "its card shows");
-  return { card, reads };
+  return { card, reads, slot };
 }
 
 const text = (el: Element | null) => el?.textContent?.replace(/\s+/g, " ").trim() ?? null;
@@ -97,9 +97,12 @@ test("past eight lines, a plain '+N more' that is neither a link, a button nor a
   assert.equal(more?.hasAttribute("tabindex"), false);
 });
 
+/** The card's body holds nothing, so app.css hides it (`.as-card-body:empty`). */
+const emptyBody = (card: HTMLElement) => card.querySelector(".as-card-body")?.childElementCount === 0;
+
 test("a manager with nothing waiting on the user and nothing under way: no rule, no list, no words in their place", async () => {
   const { card } = await openCard(() => ({ mgr_1: { needsYou: [], underWay: [], parents: [], decisions: [] } }));
-  assert.equal(card.querySelector(".as-card-body"), null);
+  assert.ok(emptyBody(card));
   assert.equal(card.querySelector(".as-card-rule"), null);
   assert.deepEqual(
     Array.from(card.querySelectorAll(".as-card-line"), (line) => text(line)),
@@ -112,7 +115,7 @@ test("a failed read of the manager's open work, or one the server couldn't read,
     const { card } = await openCard(issues);
     await act(() => wait(0));
     assert.equal(text(card.querySelector(".as-card-title")), "PR Reviews");
-    assert.equal(card.querySelector(".as-card-body"), null);
+    assert.ok(emptyBody(card));
     cleanup();
   }
 });
@@ -120,6 +123,54 @@ test("a failed read of the manager's open work, or one the server couldn't read,
 test("a manager whose look is unknown shows no description and no list, and reads nothing", async () => {
   const { card, reads } = await openCard(() => OPEN_ISSUES, null);
   assert.equal(card.querySelector(".as-card-desc"), null);
-  assert.equal(card.querySelector(".as-card-body"), null);
+  assert.ok(emptyBody(card));
   assert.deepEqual(reads, []);
 });
+
+/** Runs `body` with a stand-in for checkVisibility, which jsdom lacks and the card's focus keeping and Tab stops read. */
+async function withVisibility(body: () => Promise<void>) {
+  // why: jsdom has no layout; an element shows unless it, or what holds it, is an empty card body (app.css `.as-card-body:empty`).
+  const shows = Object.getOwnPropertyDescriptor(Element.prototype, "checkVisibility");
+  Element.prototype.checkVisibility = function (this: Element) {
+    return this.isConnected && this.closest(".as-card-body:empty") === null;
+  };
+  try {
+    await body();
+  } finally {
+    if (shows === undefined) delete (Element.prototype as Partial<Element>).checkVisibility;
+    else Object.defineProperty(Element.prototype, "checkVisibility", shows);
+  }
+}
+
+test("a refresh that takes the list away while an issue has focus leaves focus on the card, never the page", () =>
+  withVisibility(async () => {
+    let answer: Record<string, ManagerIssues | null> = OPEN_ISSUES;
+    const { card, slot } = await openCard(() => answer);
+    const issue = card.querySelector<HTMLElement>('a[href$="/WEB-2"]');
+    assert.ok(issue);
+    act(() => issue.focus());
+    answer = { mgr_1: null };
+    await act(() => slot.experimental_invalidateRpc(null));
+    await act(() => wait(0));
+    assert.ok(emptyBody(card), "the list is gone");
+    assert.equal(document.activeElement, card, "focus is on the card");
+  }));
+
+test("keyboard focus on a manager's row shows its card at once, so Tab right after goes into it", () =>
+  withVisibility(async () => {
+    const { managers } = buildActivity({ threads: THREADS, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null, looks: [LOOK], lines: [] });
+    const slot = renderSlot(
+      { component: SidebarViews },
+      { managers, underWaySince: new Map([["thr_pr", Date.now()]]), view: "managers", onView: () => {}, onNavigate: () => {}, threads: null },
+      { experimental_rpcContract: activitySidebarContract, rpc: { managerIssues: () => OPEN_ISSUES } },
+    );
+    const row = slot.getByRole("link", { name: /^PR Reviews/ });
+    act(() => row.focus());
+    await act(() => wait(0));
+    act(() => {
+      fireEvent.keyDown(row, { key: "Tab" });
+    });
+    const card = document.querySelector(".as-card");
+    assert.ok(card, "its card shows with no rest");
+    assert.ok(card.contains(document.activeElement), "Tab went into the card");
+  }));

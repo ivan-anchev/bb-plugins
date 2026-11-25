@@ -49,7 +49,7 @@ function IssueLineView({ line, href, onOpen }: { line: IssueLineOf; href: string
   const said = line.reason === null ? STATUS_LABELS[line.status] : `Needs you: ${line.reason}`;
   return (
     <>
-      {line.nested && (
+      {line.parentId !== null && (
         <>
           <Rails rail={{ at: TRUNK, indent: NESTED, last: line.last, through: [] }} />
           <span className="as-mini-pad" style={{ width: NESTED }} />
