@@ -2,15 +2,15 @@
 // and a count only; under each, its lines, the thread card's subthread lines in grammar: the issue's
 // glyph in the 20 slot, its id, its title fading out. A sub-issue hangs on a hairline under its parent;
 // a parent there only for its sub-issues is quiet. A press opens the issue's tab in the manager's
-// thread; a decision's opens the thread, whose Board asks it. "+N more" says what the cap left out,
+// thread; a decision's opens the thread, where the manager's Board asks it. "+N more" says what the cap left out,
 // and is no control.
-import type { IssueLine, IssueList } from "../../card/issue-list.ts";
-import { STATUS_LABELS } from "../../model/manager-issues.ts";
-import { Rails } from "../card/rails.tsx";
-import { FadingTitle } from "../row/row.tsx";
+import type { IssueLine, IssueList } from "./issue-list.ts";
+import { STATUS_LABELS } from "../../../model/manager-issues.ts";
+import { Rails } from "../../card/rails.tsx";
+import { FadingTitle } from "../../row/row.tsx";
 import { IssueGlyph } from "./issue-glyph.tsx";
 
-/** `coordinatorId` names the manager in its issues' links; `boardHref` is its thread, where its decisions are answered. */
+/** `coordinatorId` names the manager in its issues' links; `boardHref` is its thread, from whose Board its decisions are answered. */
 type Props = { list: IssueList; coordinatorId: string; boardHref: string; onOpen(): void };
 
 export function IssueSection({ list, coordinatorId, boardHref, onOpen }: Props) {
@@ -68,7 +68,7 @@ function IssueLineView({ line, href, onOpen }: { line: IssueLineOf; href: string
 
 function DecisionLine({ line, href, onOpen }: { line: DecisionLineOf; href: string; onOpen(): void }) {
   return (
-    <a className="as-mini-body" href={href} title="Needs you: your answer, on the Board" aria-label={`${line.question}, needs your answer on the Board`} onClick={onOpen}>
+    <a className="as-mini-body" href={href} title="Needs you: your answer" aria-label={`${line.question}, needs your answer`} onClick={onOpen}>
       <span className="as-mini-slot">
         <IssueGlyph mark="needs-you" />
       </span>

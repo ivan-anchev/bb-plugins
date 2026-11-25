@@ -2,18 +2,18 @@
 // and since when, its project; then, under a rule, its open work (issue-section.tsx), read only while
 // the card shows. No machine, branch or subthreads: a manager's work is its issues. A list that can't be
 // read, or a manager with nothing waiting on the user and nothing under way, leaves the card without it.
-import { issueList } from "../../card/issue-list.ts";
-import { stateLine } from "../../card/state-line.ts";
-import { useManagerIssues } from "../../data/managers/use-manager-issues.ts";
-import { useAsk } from "../../data/use-asks.ts";
-import { useMinute } from "../../data/use-minute.ts";
-import type { ManagerModel } from "../../model/activity.ts";
-import { withAsk } from "../../model/state.ts";
-import { CardGlyph } from "../card/card-glyphs.tsx";
-import { Line, StateLineView } from "../card/card-lines.tsx";
-import { useFocusKept } from "../card/use-focus-kept.ts";
+import { issueList } from "./issue-list.ts";
+import { stateLine } from "../../../card/state-line.ts";
+import { useManagerIssues } from "../../../data/managers/use-manager-issues.ts";
+import { useAsk } from "../../../data/use-asks.ts";
+import { useMinute } from "../../../data/use-minute.ts";
+import type { ManagerModel } from "../../../model/activity.ts";
+import { withAsk } from "../../../model/state.ts";
+import { CardGlyph } from "../../card/card-glyphs.tsx";
+import { Line, StateLineView } from "../../card/card-lines.tsx";
+import { useFocusKept } from "../../card/use-focus-kept.ts";
 import { IssueSection } from "./issue-section.tsx";
-import { ManagerAvatar } from "./manager-avatar.tsx";
+import { ManagerAvatar } from "../manager-avatar.tsx";
 
 /** The card's avatar, beside the title's first line. */
 const FACE = 20;

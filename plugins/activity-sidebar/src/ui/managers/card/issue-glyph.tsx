@@ -5,10 +5,10 @@
 // In review three quarters; Done closes on its check. Backlog's ring is dotted, Canceled's crossed.
 // Needs you's mark stands in for the status of an issue waiting on the user.
 import type { ReactNode } from "react";
-import type { IssueStatus } from "../../model/manager-issues.ts";
+import type { IssueStatus } from "../../../model/manager-issues.ts";
 
 /** What the glyph shows: an issue's status, or that it waits on the user. */
-export type IssueMark = IssueStatus | "needs-you";
+type IssueMark = IssueStatus | "needs-you";
 
 // why aria-hidden: the line's accessible name says the status in words.
 export function IssueGlyph({ mark }: { mark: IssueMark }) {

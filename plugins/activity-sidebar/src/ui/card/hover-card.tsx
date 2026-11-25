@@ -6,7 +6,7 @@
 // first to its body, which the arrow keys then scroll, and on through its buttons and links. Shift+Tab
 // off its first stop or Escape comes back, and Tab off its last goes on to what follows the list. Focus
 // in the card is its row's to the list. What a card says is its list's: the threads' (thread-card.tsx)
-// and the managers' (managers/manager-card.tsx). A row is found by its `data-card` key.
+// and the managers' (managers/card/manager-card.tsx). A row is found by its `data-card` key.
 import { Anchor, Content, Portal, Root } from "@radix-ui/react-popover";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { CardIntent, type CardIntentDeps, type Point, type Under } from "../../card/card-intent.ts";

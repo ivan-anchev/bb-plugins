@@ -2,7 +2,6 @@
 // beside: the same issues, with the same statuses and reasons, under Needs you and under way.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { publishedContract } from "../../contract.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { coordinating, HEAD, ISSUE, startedAgent, textOf } from "../test-harness.ts";
 
@@ -31,8 +30,16 @@ async function busyBoard() {
 test("openIssues lists the board's Needs you and its work under way, with the board's own statuses and reasons", async () => {
   const { kit, coordinatorId } = await busyBoard();
   const board = await kit.rpc.board({ coordinatorId });
-  const work = publishedContract.openIssues.output.parse(await kit.rpc.openIssues({ keys: [coordinatorId] }))[coordinatorId] ?? assert.fail("no open work read");
+  // why unparsed: the contract's schema would drop a field the handler sends and the card never reads.
+  const work = (await kit.rpc.openIssues({ keys: [coordinatorId] }))[coordinatorId] ?? assert.fail("no open work read");
   const rows = new Map(board.issues.map((row) => [row.id, row]));
+  const keysOf = (items: readonly object[]) => [...new Set(items.map((item) => Object.keys(item).sort().join(",")))];
+
+  assert.deepEqual(Object.keys(work).sort(), ["decisions", "needsYou", "parents", "underWay"], "it sends only what another plugin's card reads");
+  assert.deepEqual(keysOf(work.needsYou), ["id,parentId,reason,status,title"]);
+  assert.deepEqual(keysOf(work.underWay), ["id,parentId,status,title"]);
+  assert.deepEqual(keysOf(work.parents), ["id,status,title"]);
+  assert.deepEqual(keysOf(work.decisions), ["id,question"]);
 
   assert.deepEqual(
     work.needsYou.map(({ id }) => id),

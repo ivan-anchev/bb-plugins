@@ -1,12 +1,12 @@
 // The Managers view: one row a regional manager, oldest first, in a scroller that is one tab stop,
 // ↑/↓ moving between its rows as in the threads' list. Few rows, so all of them are mounted. Resting on
-// a row shows its card (manager-card.tsx), as a thread's row does.
+// a row shows its card (card/manager-card.tsx), as a thread's row does.
 import { useLayoutEffect, useMemo, useRef, type KeyboardEvent, type RefObject } from "react";
 import { heirOf } from "../../list/focus.ts";
 import type { ManagerModel } from "../../model/activity.ts";
 import type { ListFocus } from "../card/hover-card.tsx";
 import { usePanelShown } from "../portal-scope.ts";
-import { ManagerCard } from "./manager-card.tsx";
+import { ManagerCard } from "./card/manager-card.tsx";
 import { ManagerRow } from "./manager-row.tsx";
 
 /** `underWaySince`: since when each thread has worked, for a card's state line; null where no card shows (a compact viewport). */

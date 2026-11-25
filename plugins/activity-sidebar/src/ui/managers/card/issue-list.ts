@@ -2,10 +2,10 @@
 // their parent. A sub-issue whose parent isn't in its group brings the parent along as a quiet context
 // line, so a flagged sub-issue flags itself, never its parent (the Board's rule). Eight lines at most,
 // then how many more there are; never "+1 more", since that line would show as easily. Pure.
-import type { IssueStatus, ManagerIssues } from "../model/manager-issues.ts";
+import type { IssueStatus, ManagerIssues } from "../../../model/manager-issues.ts";
 
 /** The most lines the card shows before "+N more". */
-export const MAX_LINES = 8;
+const MAX_LINES = 8;
 
 /**
  * A line: an issue (`reason`, why it waits on the user, null when it doesn't; `nested` under its parent;
@@ -17,7 +17,7 @@ export type IssueLine =
   | { kind: "decision"; id: string; question: string };
 
 /** A group: its name, how many issues and decisions it holds, and the lines it shows. */
-export type IssueGroup = { name: "Needs you" | "In progress"; count: number; lines: readonly IssueLine[] };
+type IssueGroup = { name: "Needs you" | "In progress"; count: number; lines: readonly IssueLine[] };
 
 /** The groups that show a line, and how many lines are left out ("+N more"). */
 export type IssueList = { groups: readonly IssueGroup[]; hidden: number };

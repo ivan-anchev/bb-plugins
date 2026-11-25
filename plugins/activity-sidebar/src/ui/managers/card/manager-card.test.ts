@@ -1,19 +1,19 @@
-import "../../test-browser.ts";
+import "../../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { setTimeout as wait } from "node:timers/promises";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup } from "@testing-library/react";
-import { DWELL } from "../../card/card-intent.ts";
-import { activitySidebarContract } from "../../contract.ts";
-import { buildActivity } from "../../model/activity.ts";
-import { AVATAR, OPEN_ISSUES, project, thread, WORKING } from "../../model/fixtures.ts";
-import type { ManagerIssues } from "../../model/manager-issues.ts";
+import { DWELL } from "../../../card/card-intent.ts";
+import { activitySidebarContract } from "../../../contract.ts";
+import { buildActivity } from "../../../model/activity.ts";
+import { AVATAR, OPEN_ISSUES, project, thread, WORKING } from "../../../model/fixtures.ts";
+import type { ManagerIssues } from "../../../model/manager-issues.ts";
 
 // A manager's hover card as the Managers view shows it, with the list its server read answers: what it
 // says, and what it leaves out.
 
-const { SidebarViews } = await import("./sidebar-views.tsx");
+const { SidebarViews } = await import("../sidebar-views.tsx");
 
 afterEach(cleanup);
 
@@ -77,7 +77,7 @@ test("each issue opens its tab in the manager's thread; a sub-issue hangs under 
   assert.deepEqual(
     lines.map((line) => [line.querySelector("a")?.getAttribute("aria-label"), line.querySelector("a")?.getAttribute("href"), line.hasAttribute("data-context") ? "context" : null, line.querySelector(".as-mini-rails") === null ? null : "nested"]),
     [
-      ["Ship on Friday?, needs your answer on the Board", "/projects/prj_a/threads/thr_pr", null, null],
+      ["Ship on Friday?, needs your answer", "/projects/prj_a/threads/thr_pr", null, null],
       ["WEB-4 Webhook schema, Todo", "/plugins/regional-manager/regional-managers/issue/mgr_1/WEB-4", "context", null],
       ["WEB-5 Schema version, Needs you: Blocked: which schema version?", "/plugins/regional-manager/regional-managers/issue/mgr_1/WEB-5", null, "nested"],
       ["WEB-2 Retry queue, Reviewing", "/plugins/regional-manager/regional-managers/issue/mgr_1/WEB-2", null, null],

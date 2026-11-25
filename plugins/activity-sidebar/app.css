@@ -1260,7 +1260,7 @@ a.as-mini-body:focus-visible {
   font-size: 11px;
 }
 
-/* --- A manager's card (src/ui/managers/manager-card-body.tsx): the thread card's, its avatar leading
+/* --- A manager's card (src/ui/managers/card/manager-card-body.tsx): the thread card's, its avatar leading
    its name, its description under them; under the rule, its issues in groups. ------------------- */
 .as-card-head {
   flex: none;

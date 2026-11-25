@@ -1,8 +1,8 @@
 // The Managers view's hover card: a row's card is found by its manager's thread, says what
 // manager-card-body.tsx says, and a press on an issue in it opens that issue, routed in place by bb.
 import type { RefObject } from "react";
-import type { ManagerModel } from "../../model/activity.ts";
-import { HoverCard, type CardOf, type ListFocus } from "../card/hover-card.tsx";
+import type { ManagerModel } from "../../../model/activity.ts";
+import { HoverCard, type CardOf, type ListFocus } from "../../card/hover-card.tsx";
 import { ManagerCardBody } from "./manager-card-body.tsx";
 
 type Props = {

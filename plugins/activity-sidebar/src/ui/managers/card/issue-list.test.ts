@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { IssueStatus, ManagerIssues } from "../model/manager-issues.ts";
-import { issueList, MAX_LINES, type IssueList } from "./issue-list.ts";
+import type { IssueStatus, ManagerIssues } from "../../../model/manager-issues.ts";
+import { issueList, type IssueList } from "./issue-list.ts";
 
 const NONE: ManagerIssues = { needsYou: [], underWay: [], parents: [], decisions: [] };
 
@@ -65,7 +65,7 @@ test("a sub-issue whose parent the read doesn't name stands alone", () => {
   assert.deepEqual(shape(issueList({ ...NONE, underWay: [issue("WEB-5", "in-progress", "WEB-4")] })), ["In progress 1", "WEB-5"]);
 });
 
-test(`at most ${MAX_LINES} lines, Needs you first, sub-issues counted, then how many more`, () => {
+test(`at most 8 lines, Needs you first, sub-issues counted, then how many more`, () => {
   const list = issueList({
     ...NONE,
     needsYou: [flagged("WEB-1"), flagged("WEB-2"), flagged("WEB-3")],
@@ -74,8 +74,8 @@ test(`at most ${MAX_LINES} lines, Needs you first, sub-issues counted, then how 
   assert.deepEqual(shape(list), ["Needs you 3", "WEB-1", "WEB-2", "WEB-3", "In progress 9", "WEB-4", "  WEB-5", "WEB-6", "WEB-7", "WEB-8", "+4 more"]);
 });
 
-test(`exactly ${MAX_LINES + 1} lines all show, never "+1 more"`, () => {
-  const nine = Array.from({ length: MAX_LINES + 1 }, (_, i) => issue(`WEB-${i + 1}`));
+test(`exactly 9 lines all show, never "+1 more"`, () => {
+  const nine = Array.from({ length: 9 }, (_, i) => issue(`WEB-${i + 1}`));
   assert.deepEqual(shape(issueList({ ...NONE, underWay: nine })), ["In progress 9", ...nine.map(({ id }) => id)]);
   const ten = [...nine, issue("WEB-10")];
   assert.deepEqual(shape(issueList({ ...NONE, underWay: ten })).at(-1), "+2 more");
