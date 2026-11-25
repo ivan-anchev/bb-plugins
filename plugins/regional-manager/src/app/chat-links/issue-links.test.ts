@@ -34,7 +34,7 @@ afterEach(() => {
 const COORDINATOR_ID = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
 const MANAGER_THREAD = "thr_manager";
 const AGENT_THREAD = "thr_agent";
-const COORDINATOR: Coordinator = { id: COORDINATOR_ID, threadId: MANAGER_THREAD, projectId: "prj_1", description: null, avatar: { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" } };
+const COORDINATOR: Coordinator = { id: COORDINATOR_ID, threadId: MANAGER_THREAD, projectId: "prj_1", description: null, avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } };
 const HREF = (id: string) => `/plugins/regional-manager/regional-managers/issue/${COORDINATOR_ID}/${id}`;
 
 function issue(raw: string, fields: Partial<IssueRow>): IssueRow {

@@ -3,7 +3,6 @@
 // (its skills/crew-board/SKILL.md), parsed with this copy of its schema: a plugin imports nothing
 // from another.
 import { z } from "zod";
-import { HUES } from "./project-hue.ts";
 
 /** The plugin that starts regional managers, and owns their looks. */
 export const REGIONAL_MANAGER = "regional-manager";
@@ -19,8 +18,26 @@ const SHAPES = ["circle", "pebble", "squircle", "capsule", "triangle", "diamond"
 /** The friendly faces a manager can wear. */
 const EXPRESSIONS = ["neutral", "happy", "content", "curious", "attentive", "determined"] as const;
 
-/** A still blob in one of the 12 identity hues, the same hues as the project tiles. */
-const avatarSchema = z.object({ kind: z.literal("blob"), shape: z.enum(SHAPES), hue: z.enum(HUES), expression: z.enum(EXPRESSIONS) });
+/** The hues a manager's blob comes in, as the Regional Manager names and stores them. */
+const MANAGER_HUES = ["white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray"] as const;
+
+/** Each manager hue's colour, the user's own, as the Regional Manager paints it. */
+export const MANAGER_HUE_COLORS: Record<(typeof MANAGER_HUES)[number], `#${string}`> = {
+  white: "#ffffff",
+  brown: "#996e42",
+  red: "#e84447",
+  orange: "#e87031",
+  amber: "#e9993a",
+  green: "#5ac078",
+  teal: "#55b5a4",
+  blue: "#3e82f4",
+  purple: "#895df3",
+  pink: "#e74897",
+  gray: "#777777",
+};
+
+/** A still blob in one of the manager hues. */
+const avatarSchema = z.object({ kind: z.literal("blob"), shape: z.enum(SHAPES), hue: z.enum(MANAGER_HUES), expression: z.enum(EXPRESSIONS) });
 export type Avatar = z.infer<typeof avatarSchema>;
 
 /** What the Managers view reads of one started manager; the rest of the record is dropped. */

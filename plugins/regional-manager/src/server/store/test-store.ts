@@ -15,7 +15,7 @@ export const MANAGER = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c
 export const OTHER_MANAGER = coordinatorIdSchema.parse("9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d");
 
 /** The avatar every test manager has unless the test is about avatars. */
-export const AVATAR: Avatar = { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" };
+export const AVATAR: Avatar = { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" };
 
 export const EXECUTION = { providerId: "codex", model: "gpt-5.4", reasoningLevel: "medium" };
 

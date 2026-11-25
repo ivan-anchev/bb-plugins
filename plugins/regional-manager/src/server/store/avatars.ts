@@ -1,24 +1,29 @@
 // Each regional manager's avatar as stored: a look chosen once (avatar.ts), as JSON in the avatar
-// column. Managers pictured by one of bb's icons before blobs get theirs as the store opens.
+// column. Managers pictured by an older release's look, one of bb's icons or a blob in a retired hue,
+// get one of this release's as the store opens.
 import { z } from "zod";
-import { avatarSchema, freeLook, randomStart, seedOf, type Avatar, type AvatarChoice } from "../../model/profile/avatar.ts";
+import { avatarSchema, freeLook, randomStart, seedOf, startOf, type Avatar, type AvatarChoice } from "../../model/profile/avatar.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Db } from "./rows.ts";
 
 /**
- * Gives every regional manager still pictured by an icon the first free look from its id's seed, in
- * the order they were created, so none shares a look with another, in one transaction. Idempotent:
- * a manager with a blob is never rewritten, so a second run changes nothing. why from the id, never
+ * Gives every regional manager still pictured by an older release's look one of this release's, in the
+ * order they were created, so none shares a look with another, in one transaction: an icon manager the
+ * first free look from its id's seed, and a blob in a retired hue the same shape and face in the hue
+ * closest to it, or the next free look from there when another manager has that. Idempotent: a manager
+ * with this release's look is never rewritten, so a second run changes nothing. why from the id, never
  * the name: the name is bb's thread title, and a rename must not change the avatar.
  */
-export function pictureIconManagers(db: Db): void {
+export function upgradeOldLooks(db: Db): void {
   db().transaction(() => {
     const rows = db().prepare("SELECT id, avatar FROM coordinators ORDER BY created_at, rowid").all().map((row) => lookRowSchema.parse(row));
-    const isIcon = (json: string) => iconSchema.safeParse(decoded(json)).success;
-    const taken = rows.filter(({ avatar }) => !isIcon(avatar)).map(({ id, avatar }) => visibleLook(id, avatar));
+    const oldLookOf = (json: string) => oldLookSchema.safeParse(decoded(json)).data ?? null;
+    const taken = rows.filter(({ avatar }) => oldLookOf(avatar) === null).map(({ id, avatar }) => visibleLook(id, avatar));
     const update = db().prepare("UPDATE coordinators SET avatar = ? WHERE id = ?");
-    for (const { id } of rows.filter(({ avatar }) => isIcon(avatar))) {
-      const look = freeLook(seedOf(id), taken);
+    for (const { id, avatar } of rows) {
+      const old = oldLookOf(avatar);
+      if (old === null) continue;
+      const look = freeLook(old.kind === "icon" ? seedOf(id) : startOf({ ...old, hue: CLOSEST_HUE[old.hue] }), taken);
       update.run(JSON.stringify(look), id);
       taken.push(look);
     }
@@ -62,7 +67,16 @@ function decoded(json: string): unknown {
   }
 }
 
-/** An avatar of the releases before blobs: one of bb's icons. */
-const iconSchema = z.object({ kind: z.literal("icon") });
+/** The hues earlier releases offered and this one doesn't. The others (blue, amber, teal, orange, pink) kept their names, and now draw in the user's colour. */
+const RETIRED_HUES = ["violet", "emerald", "sky", "rose", "lime", "indigo", "cyan"] as const;
+
+/** Each retired hue's closest of this release's. */
+const CLOSEST_HUE: Record<(typeof RETIRED_HUES)[number], Avatar["hue"]> = { violet: "purple", emerald: "green", sky: "teal", rose: "red", lime: "green", indigo: "blue", cyan: "teal" };
+
+/** A look an older release stored: one of bb's icons, from before blobs, or a blob in a retired hue. */
+const oldLookSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("icon") }),
+  avatarSchema.extend({ hue: z.enum(RETIRED_HUES) }),
+]);
 
 const lookRowSchema = z.object({ id: z.string(), avatar: z.string() });

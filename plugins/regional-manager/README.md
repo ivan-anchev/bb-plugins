@@ -38,8 +38,8 @@ its role.
   times. `src/model/decision.ts`: a question put to the user, and an issue's
   decisions: those questions naming it and those recorded on it, oldest first.
   `src/model/profile/`: a regional manager's profile (name, description,
-  avatar), and its avatar: a still blob's look, a shape in one of Zeron's
-  identity hues, stored once and never taken from the name; the name is the
+  avatar), and its avatar: a still blob's look, a shape in one of the
+  user's 11 hues, stored once and never taken from the name; the name is the
   thread's title, which bb keeps, and the store keeps the rest.
 - `src/server/`: `store/` holds every SQL statement, one file per cluster
   (issues, agents, checks, inbox, pull requests) composed by `store.ts`, and

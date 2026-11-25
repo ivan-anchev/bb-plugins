@@ -6,7 +6,7 @@ import type { Avatar } from "../../model/profile/avatar.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
 import { listView } from "./coordinator-groups.ts";
 
-const AVATAR: Avatar = { kind: "blob", shape: "circle", hue: "violet", expression: "neutral" };
+const AVATAR: Avatar = { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" };
 
 const project = (id: string) => ({ id, name: `Project ${id}` });
 const thread = (n: number, projectId: string) => ({ id: `thr_${n}`, projectId });

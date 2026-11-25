@@ -5,8 +5,11 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { createElement, Fragment, useState } from "react";
 import { COORDINATORS_TAG, coordinatorContract as contract, type Coordinator } from "../../contract.ts";
+import type { Avatar } from "../../model/profile/avatar.ts";
 import type { Profile } from "../../model/profile/profile.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
+import { openStore } from "../../server/store/store.ts";
+import { freshStore, MANAGER } from "../../server/store/test-store.ts";
 import { PROJECT, sidebarThread } from "../test-sidebar.ts";
 
 // The context row of a regional manager's thread names it: its icon and its name, never its
@@ -31,8 +34,8 @@ function ContextRow({ threadId }: { threadId: string }) {
  * The row of a thread, over a plugin with one started regional manager, thr_1's, which keeps every
  * profile it is sent, as setProfile does but for the title, which bb keeps, once `saved` settles.
  */
-function mount(threadId: string, saved: Promise<void> = Promise.resolve()) {
-  let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar: { kind: "blob", shape: "bear", hue: "emerald", expression: "determined" } };
+function mount(threadId: string, saved: Promise<void> = Promise.resolve(), avatar: Avatar = { kind: "blob", shape: "bear", hue: "green", expression: "determined" }) {
+  let coordinator: Coordinator = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: "Moves webhooks off cron.", avatar };
   const saves: Profile[] = [];
   const rpc = {
     coordinators: () => ({ coordinators: [coordinator], notStarted: [] }),
@@ -52,8 +55,21 @@ test("a regional manager's thread shows its blob and its name, and not its descr
   const { view } = mount("thr_1");
 
   assert.ok(await view.findByText("Webhooks"));
-  assert.ok(view.container.querySelector('[fill="#27ac7a"]'), "its emerald blob");
+  assert.ok(view.container.querySelector('[fill="#5ac078"]'), "its green blob");
   assert.equal(view.queryByText("Moves webhooks off cron."), null);
+});
+
+test("a manager stored in a hue of the earlier palette still shows its blob, its shape and face kept, in the closest of the user's colours", async () => {
+  const { db, storage } = freshStore();
+  db.prepare("UPDATE coordinators SET avatar = ? WHERE id = ?").run(JSON.stringify({ kind: "blob", shape: "cat", hue: "violet", expression: "happy" }), MANAGER);
+  const stored = openStore(storage).coordinator(MANAGER);
+  assert.ok(stored);
+
+  const { view } = mount("thr_1", Promise.resolve(), stored.avatar);
+
+  assert.ok(await view.findByText("Webhooks"));
+  assert.ok(view.container.querySelector('[fill="#895df3"]'), "its purple blob");
+  assert.deepEqual(stored.avatar, { kind: "blob", shape: "cat", hue: "purple", expression: "happy" });
 });
 
 test("any other thread shows nothing", async () => {
@@ -84,7 +100,7 @@ test("pressing the blob and name opens the profile's editor on the name, and Sav
   assert.equal(view.queryByRole("form", { name: "Edit profile" }), null);
   assert.equal(toggle.getAttribute("aria-expanded"), "false");
   assert.ok(document.activeElement === toggle, "the focus goes back to the toggle");
-  await waitFor(() => assert.ok(view.container.querySelector('[fill="#18aa99"]'), "the new teal blob"));
+  await waitFor(() => assert.ok(view.container.querySelector('[fill="#55b5a4"]'), "the new teal blob"));
 });
 
 test("Esc closes an edit nothing changed in, with the focus back on the toggle; Cancel drops one that has changes", async () => {

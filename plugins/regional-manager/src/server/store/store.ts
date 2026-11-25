@@ -22,7 +22,7 @@ import { commentsStore } from "./feed/comments-store.ts";
 import { logStore } from "./feed/log-store.ts";
 import { prStore } from "./issue/pr-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
-import { lookFor, pictureIconManagers, withAvatar } from "./avatars.ts";
+import { lookFor, upgradeOldLooks, withAvatar } from "./avatars.ts";
 
 export type Store = ReturnType<typeof openStore>;
 
@@ -30,7 +30,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   // The host closes the handle on reload and reopens it on the next call, so never keep it.
   const db = () => storage.database();
   storage.migrate(db(), [...MIGRATIONS]);
-  pictureIconManagers(db);
+  upgradeOldLooks(db);
 
   function coordinators(id: CoordinatorId | null): Coordinator[] {
     return db()

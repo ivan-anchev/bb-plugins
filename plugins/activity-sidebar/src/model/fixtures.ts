@@ -49,13 +49,13 @@ export function project(id: string, name: string): PluginSidebarProject {
 /** Working, as bb resolves a running turn. */
 export const WORKING = { indicator: "runtime", status: "active", runtimeStatus: "active" } as const satisfies Partial<PluginSidebarThread>;
 
-export const AVATAR = { kind: "blob", shape: "bear", hue: "violet", expression: "attentive" } as const;
+export const AVATAR = { kind: "blob", shape: "bear", hue: "purple", expression: "attentive" } as const;
 
 /** The Regional Manager plugin's answer, as it publishes it: more than the sidebar reads. */
 export const COORDINATORS = {
   coordinators: [
     { id: "mgr_1", threadId: "thr_pr", projectId: "prj_a", description: "Reviews every open pull request.", avatar: AVATAR },
-    { id: "mgr_2", threadId: "thr_sb", projectId: "prj_a", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "rose" } },
+    { id: "mgr_2", threadId: "thr_sb", projectId: "prj_a", description: null, avatar: { ...AVATAR, shape: "bunny", hue: "red" } },
   ],
   notStarted: [{ id: "mgr_3", name: "Docs", description: null, avatar: AVATAR }],
 };

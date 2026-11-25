@@ -15,7 +15,7 @@ test("Shuffle picks a free look other than the current one while there is one", 
   assert.equal(lookKey(look), lookKey(other));
 });
 
-test("Shuffle never lands on a taken look while a free one is left: with 251 taken and the current one free, it keeps the current one, face and all", () => {
+test("Shuffle never lands on a taken look while a free one is left: with 230 taken and the current one free, it keeps the current one, face and all", () => {
   const [first, ...taken] = everyLook;
   assert.ok(first);
   const current = { ...first, expression: "determined" } as const;
