@@ -38,9 +38,10 @@ export function ActivityList({ activeThreadId, isCompactViewport, onNavigate }: 
   // why: a project removed since the choice was made narrows nothing.
   const chosen = live.projects.find((p) => p.id === filter) ?? null;
   const archivedCount = useArchivedCount(chosen?.id ?? null);
-  const hasManagers = live.threads.some(isOpenManager);
-  const looks = useManagerLooks(hasManagers);
-  const lines = useManagerLines(hasManagers);
+  // why sorted: the managers' lines are read by these ids, so the same managers ask the same read.
+  const managerIds = useMemo(() => live.threads.filter(isOpenManager).map((t) => t.id).sort(), [live.threads]);
+  const looks = useManagerLooks(managerIds.length > 0);
+  const lines = useManagerLines(managerIds);
   const model = useMemo(
     () => buildActivity({ threads: live.threads, projects: live.projects, sleeps: sleeps.sleeps, held, now, activeThreadId, filter: chosen?.id ?? null, looks, lines }),
     [live.threads, live.projects, sleeps.sleeps, held, now, activeThreadId, chosen, looks, lines],

@@ -1,30 +1,28 @@
 // Each open regional manager's line: the first sentence of its own latest reply with text, read from
-// its thread's completed items. A manager's first read looks back from its newest item; after that, each
-// time its thread moves, only the items since are read, and a changed line marks every client's read
-// stale. A user's message, a tool call or result, a reply without text, and a subagent's reply are never
-// the manager's line.
+// its thread's completed items. A manager's first read looks back from its newest item to that reply;
+// after that, each time its thread moves, only the items since are read, and a rewritten history is
+// read afresh. A changed line marks every client's read stale. A user's message, a tool call or result,
+// a reply without text, and a subagent's reply are never the manager's line.
 import type { BbPluginApi, PluginBbSdk } from "@get-bb/plugin-sdk";
 import { z } from "zod";
 import { MANAGER_LINES_TAG } from "../../contract.ts";
-import { isManagerThread, REGIONAL_MANAGER } from "../../model/manager-look.ts";
 import { firstSentence, type ManagerLine } from "../../model/manager-line.ts";
+import { REGIONAL_MANAGER } from "../../model/manager-look.ts";
 
 /** How many completed items one read of a thread's events asks for. */
 const PAGE = 50;
-/** How far a manager's first read looks back for a reply before it settles for none: this many pages. */
-const PAGES_BACK = 4;
 
 type Deps = {
   threads: {
-    list(args: OpenManagers): Promise<readonly { id: string }[]>;
+    list(args: OpenManagersOf): Promise<readonly { id: string }[]>;
     events: { list(args: CompletedItems): Promise<readonly EventRow[]> };
   };
   rpc: Pick<BbPluginApi["rpc"], "experimental_invalidate">;
   log: Pick<BbPluginApi["log"], "warn">;
 };
 
-/** bb's thread list narrowed to the open (existing, unarchived) regional managers. */
-type OpenManagers = { originPluginId: typeof REGIONAL_MANAGER; hasParent: false; archived: false; signal: AbortSignal };
+/** bb's thread list narrowed to the open (existing, unarchived) regional managers among `threadIds`. */
+type OpenManagersOf = { threadIds: readonly string[]; originPluginId: typeof REGIONAL_MANAGER; hasParent: false; archived: false; signal: AbortSignal };
 
 /** A thread's completed items, newest first back from `beforeSeq`, or oldest first on from `afterSeq`. */
 type CompletedItems = Pick<Parameters<PluginBbSdk["threads"]["events"]["list"]>[0], "afterSeq" | "beforeSeq" | "order"> & {
@@ -37,37 +35,44 @@ type CompletedItems = Pick<Parameters<PluginBbSdk["threads"]["events"]["list"]>[
 /** As much of an event row as a line needs. */
 type EventRow = { seq: number; type: string; data: unknown };
 
-/** What a manager's line was read from: its newest completed item read (0 for none), and its line, null for none. */
-type Latest = { seq: number; line: string | null };
+/**
+ * What a manager's line was read from: the newest completed item read (0 for none: the next read looks
+ * back from the newest), its line (null for none), and whether the last read failed, so the next
+ * client read tries again.
+ */
+type Latest = { seq: number; line: string | null; failed: boolean };
 
-/** What `experimental_thread.events` says: a thread whose events moved. */
-type ThreadMoved = { id: string; originPluginId: string | null; parentThreadId: string | null };
+/** A manager never read, or one whose history was rewritten: its next read looks back from the newest item. */
+const UNREAD: Latest = { seq: 0, line: null, failed: false };
+
+/** What `thread:changed` says of a thread: which, and what about it changed. */
+type ThreadChange = { id?: string; changes: readonly string[] };
 
 export type ManagerLines = ReturnType<typeof openManagerLines>;
 
 export function openManagerLines({ threads, rpc, log }: Deps) {
   const life = new AbortController();
-  /** Each manager read so far, by thread: its latest, one read at a time (each chained on the last). */
+  /** Each manager read so far, by thread: its latest, read one step at a time, each chained on the last (`step`). */
   const known = new Map<string, Promise<Latest>>();
 
   return {
-    /** Every open manager's line; one whose events can't be read shows none until the next read. */
-    async read(): Promise<{ lines: ManagerLine[] }> {
-      const open = await openManagerIds();
-      for (const id of known.keys()) if (!open.includes(id)) known.delete(id);
-      const latest = await Promise.all(open.map((threadId) => known.get(threadId) ?? firstRead(threadId)));
+    /** The line of each open manager among `threadIds`; one never read is read now, and one whose last read failed is read again. */
+    async read({ threadIds }: { threadIds: readonly string[] }): Promise<{ lines: ManagerLine[] }> {
+      const open = await openManagers(threadIds);
+      for (const id of threadIds) if (!open.includes(id)) known.delete(id);
+      const latest = await Promise.all(open.map(current));
       return { lines: open.flatMap((threadId, at) => lineOf(threadId, latest[at])) };
     },
 
-    /** A thread's events moved: a manager's already read reads its items since, and a changed line refreshes every client. */
-    moved(thread: ThreadMoved): void {
-      const was = known.get(thread.id);
-      if (was === undefined || !isManagerThread(thread)) return;
-      const next = was.then((latest) => readOn(thread.id, latest));
-      known.set(thread.id, next);
-      void Promise.all([was, next]).then(([before, after]) => {
-        if (after.line !== before.line && !life.signal.aborted) rpc.experimental_invalidate([MANAGER_LINES_TAG]);
-      });
+    /** A thread's events moved: a manager a client reads reads its items since. */
+    moved({ id }: { id: string }): void {
+      if (known.has(id)) step(id, readOn);
+    },
+
+    /** A thread's history rewritten or compacted: a manager a client reads is read afresh, its old line dropped. */
+    changed({ id, changes }: ThreadChange): void {
+      if (id === undefined || !known.has(id) || !changes.some((change) => change === "history-rewritten" || change === "history-compacted")) return;
+      step(id, (threadId) => readOn(threadId, UNREAD));
     },
 
     /** The plugin unloading: a read under way is abandoned. */
@@ -76,64 +81,73 @@ export function openManagerLines({ threads, rpc, log }: Deps) {
     },
   };
 
-  async function openManagerIds(): Promise<string[]> {
-    const open = await threads.list({ originPluginId: REGIONAL_MANAGER, hasParent: false, archived: false, signal: life.signal });
+  /**
+   * One read of a manager's line, chained after any read of it under way, so reads of one manager never
+   * overlap and each starts from where the last ended. A line changed since an earlier read refreshes
+   * every client; a first read is only the asking client's.
+   */
+  function step(threadId: string, read: (threadId: string, latest: Latest) => Promise<Latest>): Promise<Latest> {
+    const was = known.get(threadId);
+    const next = (was ?? Promise.resolve(UNREAD)).then((latest) => read(threadId, latest));
+    known.set(threadId, next);
+    if (was !== undefined) void announce(was, next);
+    return next;
+  }
+
+  async function announce(was: Promise<Latest>, next: Promise<Latest>): Promise<void> {
+    const [before, after] = await Promise.all([was, next]);
+    if (after.line !== before.line && !life.signal.aborted) rpc.experimental_invalidate([MANAGER_LINES_TAG]);
+  }
+
+  /** A manager's latest for a client: read now if never read, read again if its last read failed. */
+  function current(threadId: string): Promise<Latest> {
+    const pending = known.get(threadId);
+    if (pending === undefined) return step(threadId, readOn);
+    return pending.then((latest) => (latest.failed ? step(threadId, readOn) : latest));
+  }
+
+  async function openManagers(threadIds: readonly string[]): Promise<string[]> {
+    if (threadIds.length === 0) return [];
+    const open = await threads.list({ threadIds, originPluginId: REGIONAL_MANAGER, hasParent: false, archived: false, signal: life.signal });
     return open.map(({ id }) => id);
   }
 
-  /** A manager's first read; one that fails is forgotten, so the next read tries again. */
-  function firstRead(threadId: string): Promise<Latest> {
-    const read = readBack(threadId).catch((error: unknown): Latest => {
-      if (known.get(threadId) === read) known.delete(threadId);
-      warn(`Couldn't read regional manager ${threadId}'s latest reply; its row shows its name alone for now`, error);
-      return { seq: 0, line: null };
-    });
-    known.set(threadId, read);
-    return read;
-  }
-
-  /** Back from the newest completed item to the latest reply, a page at a time, at most PAGES_BACK of them. */
-  async function readBack(threadId: string): Promise<Latest> {
-    let newest = 0;
-    let beforeSeq: string | undefined;
-    for (let page = 0; page < PAGES_BACK; page++) {
-      const rows = await completed(threadId, { order: "desc", beforeSeq });
-      if (rows.length === 0) break;
-      newest ||= rows[0].seq;
-      const line = latestLine(rows);
-      if (line !== null) return { seq: newest, line };
-      beforeSeq = String(rows[rows.length - 1].seq);
-    }
-    return { seq: newest, line: null };
-  }
-
   /**
-   * The items since `latest` was read, a page at a time; the line stays as it was unless a newer reply
-   * came. With nothing read before (no items yet, or the first read failed), back from the newest. A
-   * failure keeps it as it was.
+   * The items since `latest` was read, a page at a time: the line changes only when a newer reply came.
+   * With nothing read before, back from the newest. A failure keeps what was read, marked for a retry.
    */
   async function readOn(threadId: string, latest: Latest): Promise<Latest> {
     try {
       if (latest.seq === 0) return await readBack(threadId);
-      let at = latest;
+      let at: Latest = { ...latest, failed: false };
       for (;;) {
         const rows = await completed(threadId, { order: "asc", afterSeq: String(at.seq) });
         if (rows.length === 0) return at;
-        at = { seq: rows[rows.length - 1].seq, line: latestLine([...rows].reverse()) ?? at.line };
+        at = { seq: rows[rows.length - 1].seq, line: latestLine([...rows].reverse()) ?? at.line, failed: false };
         if (rows.length < PAGE) return at;
       }
     } catch (error) {
-      warn(`Couldn't read regional manager ${threadId}'s new replies; its line is read again when its thread next moves`, error);
-      return latest;
+      if (!life.signal.aborted) log.warn(`Couldn't read regional manager ${threadId}'s replies; the next read tries again: ${error instanceof Error ? error.message : String(error)}`);
+      return { ...latest, failed: true };
+    }
+  }
+
+  /** Back from the newest completed item to the latest reply, a page at a time, as far as the thread goes. */
+  async function readBack(threadId: string): Promise<Latest> {
+    let newest = 0;
+    let beforeSeq: string | undefined;
+    for (;;) {
+      const rows = await completed(threadId, { order: "desc", beforeSeq });
+      if (rows.length === 0) return { seq: newest, line: null, failed: false };
+      newest ||= rows[0].seq;
+      const line = latestLine(rows);
+      if (line !== null) return { seq: newest, line, failed: false };
+      beforeSeq = String(rows[rows.length - 1].seq);
     }
   }
 
   function completed(threadId: string, from: Pick<CompletedItems, "order" | "afterSeq" | "beforeSeq">): Promise<readonly EventRow[]> {
     return threads.events.list({ threadId, types: ["item/completed"], limit: String(PAGE), signal: life.signal, ...from });
-  }
-
-  function warn(what: string, error: unknown): void {
-    if (!life.signal.aborted) log.warn(`${what}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 

@@ -20,6 +20,6 @@ export function createRpcHandlers({ rpc, store, archived, looks, lines }: Deps):
     },
     archivedCount: () => archived.read(),
     managerLooks: () => looks.read(),
-    managerLines: () => lines.read(),
+    managerLines: (input) => lines.read(input),
   };
 }

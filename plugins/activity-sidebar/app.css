@@ -206,13 +206,15 @@
   display: flex;
   padding-left: 8px;
 }
+/* The avatar's frame: the blob inside is placed against it (manager-avatar.tsx FittedBlob). */
 .as-avatar {
+  position: relative;
+  display: block;
   flex: 0 0 auto;
   pointer-events: none;
 }
-/* While its look is unknown: a plain disc on the segment's track. */
+/* While its look is unknown: a plain disc on the segment's track, filling the frame. */
 .as-avatar-plain {
-  display: block;
   border-radius: 999px;
   background: var(--muted);
 }

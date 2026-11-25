@@ -22,6 +22,7 @@ export default function plugin(bb: BbPluginApi): void {
 
   const lines = openManagerLines({ threads: bb.sdk.threads, rpc: bb.rpc, log: bb.log });
   bb.events.on("experimental_thread.events", ({ thread }) => lines.moved(thread));
+  bb.onDispose(bb.sdk.subscribe({ event: "thread:changed", callback: lines.changed }));
   bb.onDispose(lines.dispose);
 
   bb.rpc.register(activitySidebarContract, createRpcHandlers({ rpc: bb.rpc, store, archived, looks, lines }));

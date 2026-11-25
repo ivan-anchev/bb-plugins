@@ -37,10 +37,16 @@ function blockPlain(line: string): string {
     .replace(/\s+#+\s*$/, "");
 }
 
+/**
+ * An inline link or image: its text, then its destination, which may be <bracketed>, hold balanced
+ * parentheses (a wiki address), and carry a title.
+ */
+const LINK = /!?\[([^\]]*)\]\((?:\s*<[^>]*>|(?:[^()\s]|\((?:[^()\s]|\([^()\s]*\))*\))*)(?:\s+(?:"[^"]*"|'[^']*'|\([^)]*\)))?\s*\)/g;
+
 /** Inline marks: images and links keep their text, autolinks their address, code its words, emphasis loses its markers. */
 function inlinePlain(text: string): string {
   return text
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(LINK, "$1")
     .replace(/!?\[([^\]]*)\]\[[^\]]*\]/g, "$1")
     .replace(/<((?:https?|mailto):[^>\s]+)>/g, "$1")
     .replace(/`+([^`]+?)`+/g, "$1")

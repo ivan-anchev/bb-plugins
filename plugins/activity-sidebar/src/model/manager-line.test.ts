@@ -15,6 +15,8 @@ test("a line break ends the sentence; blank lines before it are skipped", () => 
 
 test("markdown is stripped: links keep their text, code blocks go, emphasis, code and heading marks go", () => {
   assert.equal(firstSentence("I've filed it as [BBP-6](/plugins/regional-manager/issue/BBP-6). It starts next."), "I've filed it as BBP-6.");
+  assert.equal(firstSentence("See [the PR](https://example.org/wiki/A_(B)). Next."), "See the PR.", "a destination with balanced parentheses");
+  assert.equal(firstSentence('Read [the notes](<docs/a b.md> "Notes") and ![a chart](c.png). Then go.'), "Read the notes and a chart.");
   assert.equal(firstSentence("```ts\nconst a = 1;\n```\nThe fix is in."), "The fix is in.");
   assert.equal(firstSentence("## Status\n\nAll green."), "Status");
   assert.equal(firstSentence("**Two** issues _need_ you, see `npm run check` and ~~none~~ else."), "Two issues need you, see npm run check and none else.");

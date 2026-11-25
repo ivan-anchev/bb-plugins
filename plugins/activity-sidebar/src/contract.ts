@@ -59,9 +59,13 @@ export const activitySidebarContract = defineRpcContract({
     output: z.object({ looks: z.array(managerLookSchema) }),
     tags: () => [MANAGER_LOOKS_TAG],
   },
-  /** Each open regional manager's line, the first sentence of its latest reply; a manager with none has no entry. */
+  /**
+   * The line of each open regional manager among `threadIds` (the managers a client shows, so one
+   * started or unarchived is read as it appears): the first sentence of its latest reply; a manager
+   * with none has no entry.
+   */
   managerLines: {
-    input: z.object({}),
+    input: z.object({ threadIds: z.array(z.string().min(1)).max(200) }),
     output: z.object({ lines: z.array(managerLineSchema) }),
     tags: () => [MANAGER_LINES_TAG],
   },
