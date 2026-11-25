@@ -65,16 +65,17 @@ const agent = (id: AgentId, startedAt: number, ended: Agent["ended"]): FeedFacts
 /** BBP-19 as it went: a1 failed twice, the manager handed it to a2, which failed once and then passed; #219 opened, passed CI and merged. */
 function bbp19(): FeedFacts {
   const one = handed(handoff(1, A1, 3_000), returned(["pass", "fail", "fail"], 3_500, { kind: "sent-back", round: 1, ci: { kind: "none" } }, [
-    { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", result: "anchored", anchor: "criterion", reason: "Seen." },
-    { file: "src/card.css", line: null, severity: "nit", claim: "Padding.", result: "rejected", reason: "Matches the row." },
+    { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", origin: "new", result: "anchored", anchor: "criterion", reason: "Seen." },
+    { file: "src/card.css", line: null, severity: "nit", claim: "Padding.", origin: "new", result: "rejected", reason: "Matches the row." },
   ]), {
     state: "reported",
     at: 3_200,
     reviewerThreadId: "thr_reviewer",
     findings: [
-      { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays." },
-      { file: "src/card.css", line: null, severity: "nit", claim: "Padding." },
+      { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", origin: "new" },
+      { file: "src/card.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
     ],
+    earlier: [],
     model: { providerId: "codex", model: "gpt-5.4" },
   });
   const two = handed(handoff(2, A1, 4_000), returned(["pass", "pass", "fail"], 4_500, { kind: "checked", refused: null, ci: { kind: "none" } }));

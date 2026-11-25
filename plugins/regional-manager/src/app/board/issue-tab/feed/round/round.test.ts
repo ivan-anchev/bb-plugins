@@ -74,20 +74,21 @@ test("an open round shows its steps: the handoff and its report, the reviewer's 
   assert.match(one.getByText(/^Sent back to/).closest("p")?.textContent ?? "", /^Sent back to a1 as fix round 1, with the 1 finding that held/);
 });
 
-test("a finding reads as its place, severity and claim, its path byte for byte as the reviewer wrote it, a leading space, a zero-width character and a bidi mark kept; a rejected claim is struck, and each triage gives its word and reason: what an anchored one breaks, a downgraded one's new severity", async () => {
+test("a finding reads as its place, severity, origin and claim, its path byte for byte as the reviewer wrote it, a leading space, a zero-width character and a bidi mark kept; a rejected claim is struck, and each triage gives its word and reason: what an anchored one breaks, a downgraded one's new severity", async () => {
   const path = " src/\u200bretry\u200f\u202e.ts";
   const findings = [
-    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", triage: { result: "anchored", anchor: "brief", reason: "Seen: it grows without bound." } },
-    { file: path, line: null, severity: "nit", claim: "The padding differs from the row's.", triage: { result: "rejected", reason: "It matches the row." } },
-    { file: path, line: 9, severity: "must-fix", claim: "The helper's name says nothing.", triage: { result: "downgraded", to: "nit", reason: "Breaks none of the five." } },
-    { file: path, line: 12, severity: "should-fix", claim: "The jitter is computed twice.", triage: { result: "confirmed", reason: "Both calls on line 12." } },
+    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "brief", reason: "Seen: it grows without bound." } },
+    { file: path, line: null, severity: "nit", claim: "The padding differs from the row's.", origin: "missed", triage: { result: "rejected", reason: "It matches the row." } },
+    { file: path, line: 9, severity: "must-fix", claim: "The helper's name says nothing.", origin: "unfixed", triage: { result: "downgraded", to: "nit", reason: "Breaks none of the five." } },
+    { file: path, line: 12, severity: "should-fix", claim: "The jitter is computed twice.", origin: "new", triage: { result: "confirmed", reason: "Both calls on line 12." } },
   ] satisfies ReturnType<typeof bodyOf>["findings"];
   const { tab } = await opened("WEB-1", WEB_1, { bodies: () => ({ ...bodyOf(3), findings }) });
   const three = rounds(tab()).card(3);
   const items = within(await three.findByRole("list", { name: "Findings" })).getAllByRole("listitem");
   assert.deepEqual(
     items.map((item) => item.querySelector(".rmi-finding-line")?.textContent),
-    [`${path}:4 (must-fix): The backoff has no cap.`, `${path} (nit): The padding differs from the row's.`, `${path}:9 (must-fix): The helper's name says nothing.`, `${path}:12 (should-fix): The jitter is computed twice.`],
+    [`${path}:4 (must-fix, new): The backoff has no cap.`, `${path} (nit, missed): The padding differs from the row's.`, `${path}:9 (must-fix, unfixed): The helper's name says nothing.`, `${path}:12 (should-fix, new): The jitter is computed twice.`],
+    "each finding's severity, then its origin",
   );
   assert.deepEqual(
     items.map((item) => item.querySelector(".rmi-finding-file")?.textContent),

@@ -421,24 +421,24 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
 }
 
 /**
- * Its review, as the regional manager reads it: that none was had and why, or what the reviewer
- * found, on what model, the verifier's totals of each triage, whether the findings that held went
+ * Its review, as the regional manager reads it: that none was had and why, with the earlier
+ * blocking findings the verifier triaged as unfixed then, or what the reviewer found, on what model, the verifier's totals of each triage, whether the findings that held went
  * to the agent, then each finding in the review's order with the verifier's word on it (review.ts
  * triageText) and its reason. Nothing for a check with no review stage.
  */
 function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
-  if (review.state === "missed") return [`Review: no review was had, as ${review.reason}.`];
+  const all = verdict.triage;
+  const held = all.filter(holds).length;
+  const each = all.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n");
+  const triaged = (lead: string): string[] => [[`${lead}; ${triageTotals(all)}.`, ...(held === 0 ? [] : [heldSent(verdict)])].join(" "), each];
+  if (review.state === "missed") {
+    const missed = `Review: no review was had, as ${review.reason}`;
+    return all.length === 0 ? [`${missed}.`] : triaged(`${missed}, so the verifier triaged the ${all.length} earlier blocking finding${all.length === 1 ? "" : "s"} as unfixed`);
+  }
   if (review.state !== "reported") return [];
   const by = `${review.model.providerId} ${review.model.model}`;
   if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.`];
-  const all = verdict.triage;
-  const totals = triageTotals(all);
-  const held = all.filter(holds).length;
-  const each = all.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  ${triageText(finding)}: ${finding.reason}`);
-  return [
-    [`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; ${totals}.`, ...(held === 0 ? [] : [heldSent(verdict)])].join(" "),
-    each.join("\n"),
-  ];
+  return triaged(`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}`);
 }
 
 /**

@@ -596,11 +596,13 @@
   min-width: 0;
   text-wrap: pretty;
 }
-/* why no chip behind it: on --muted, --destructive-text drops below 4.5:1 in the light theme. */
-.rmi-severity {
+/* A finding's severity and origin, in parentheses. why no chip behind it: on --muted, --destructive-text drops below 4.5:1 in the light theme. */
+.rmi-finding-tags {
   font-size: 11px;
-  font-weight: 500;
   color: var(--muted-foreground);
+}
+.rmi-severity {
+  font-weight: 500;
 }
 .rmi-severity[data-severity="must-fix"] { color: var(--destructive-text); }
 .rmi-severity[data-severity="should-fix"] { color: var(--warning-text); }

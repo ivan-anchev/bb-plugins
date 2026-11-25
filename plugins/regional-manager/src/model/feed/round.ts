@@ -83,7 +83,12 @@ export const roundBodySchema = z.object({
   /** The handoff's account (null: a final check's round, which has none). */
   handoff: handoffBodySchema.nullable(),
   verdict: shownVerdictSchema.nullable(),
-  /** The reviewer's findings, each with the verifier's triage once its verdict returned (null triage before): rejected, confirmed, anchored with what it breaks, or downgraded with its new severity. */
+  /**
+   * The findings its verifier triages, each with where it comes from (new, missed or unfixed) and
+   * the verifier's triage once its verdict returned (null triage before): rejected, confirmed,
+   * anchored with what it breaks, or downgraded with its new severity. why no earlier answers: the
+   * tab shows none.
+   */
   findings: z.array(reviewFindingSchema.extend({ triage: triageSchema.nullable() })),
   /** Why no review was had (null: one was, or none was asked for). */
   reviewMissed: z.string().nullable(),
@@ -257,9 +262,12 @@ const outcomeStep = (verdict: Verdict, at: number | null): Step | null => (verdi
 /** A step at `at`, before any status is attached to it (feed.ts). */
 const stepAt = (at: number): Step => ({ at, moved: null });
 
-/** Each finding with its triage once the verdict returned (joined as the store read it, verdict.ts withReview); before, none yet. */
+/**
+ * Each finding its verifier triaged, with its triage, once the verdict returned (joined as the
+ * store read it, rounds/delta.ts), an earlier blocking finding a missed review left unfixed
+ * included; before, the review's findings with no triage yet.
+ */
 function findingsOf({ review, verdict }: Check): RoundBody["findings"] {
-  if (review.state !== "reported") return [];
-  if (verdict.state !== "returned") return review.findings.map((finding) => ({ ...finding, triage: null }));
-  return verdict.triage.map(({ file, line, severity, claim, ...triage }) => ({ file, line, severity, claim, triage }));
+  if (verdict.state === "returned") return verdict.triage.map(({ file, line, severity, claim, origin, ...triage }) => ({ file, line, severity, claim, origin, triage }));
+  return review.state === "reported" ? review.findings.map((finding) => ({ ...finding, triage: null })) : [];
 }

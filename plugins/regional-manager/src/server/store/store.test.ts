@@ -508,3 +508,50 @@ test("a verdict and a review stored before they kept their time take their check
   assert.deepEqual([first?.verdict.state === "returned" && first.verdict.at, first?.review.state === "reported" && first.review.at], [7_000, 7_000], "the sent-back event's time, the earliest naming its check");
   assert.deepEqual([second?.verdict.state === "could-not-run" && second.verdict.at, second?.review.state === "missed" && second.review.at], [2_500, 2_500], "none announced it: the check's own time");
 });
+
+test("a reported review stored before findings had an origin and reviews had earlier answers reads with every finding new and no earlier answers, its verdict's triage joined to them", () => {
+  const { db, storage } = memoryStorage();
+  storage.migrate(db, [...MIGRATIONS]);
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
+  db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at, issue_key) VALUES (?, 'ticket-1', 'prj_1', 1, 1000, 'WEB')").run(MANAGER);
+  db.prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, done_criteria, rest, created_at) VALUES (?, 'WEB-1', 'build', 'Retries', 'Lost deliveries.', '[\"npm test passes\"]', 'todo', 1000)").run(MANAGER);
+  // As a release before origins stored them: no origin on a finding, no earlier on the review.
+  const findings = [
+    { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." },
+    { file: "src/retry.css", line: null, severity: "nit", claim: "Padding." },
+  ];
+  const review = { state: "reported", at: 3_000, reviewerThreadId: "thr_reviewer", findings, model: { providerId: "codex", model: "gpt-5.4" } };
+  const verdict = {
+    state: "returned",
+    at: 4_000,
+    verifierThreadId: "thr_verifier",
+    headSha: "a".repeat(40),
+    checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 },
+    criteria: [{ criterion: "npm test passes", result: "pass", evidence: "# pass 1" }],
+    findings: [],
+    triage: [
+      { result: "anchored", anchor: "brief", reason: "Seen." },
+      { result: "rejected", reason: "Matches." },
+    ],
+    mustFixFails: true,
+    model: { providerId: "claude-code", model: "sonnet" },
+    sameModel: false,
+    settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
+  };
+  const subject = { kind: "handoff", agentId: "a1", handoffId: randomUUID(), headSha: "a".repeat(40), prUrl: null };
+  const id = randomUUID();
+  db.prepare("INSERT INTO checks (id, coordinator_id, issue_id, subject, criteria, verdict, review, at) VALUES (?, ?, 'WEB-1', ?, '[\"npm test passes\"]', ?, ?, 2000)").run(
+    id,
+    MANAGER,
+    JSON.stringify(subject),
+    JSON.stringify(verdict),
+    JSON.stringify(review),
+  );
+
+  const check = openStore(storage).check(checkIdSchema.parse(id)) ?? assert.fail("no check");
+  assert.deepEqual(check.review.state === "reported" && [check.review.findings, check.review.earlier], [findings.map((finding) => ({ ...finding, origin: "new" })), []]);
+  assert.deepEqual(check.verdict.state === "returned" && check.verdict.triage.map(({ origin, result }) => [origin, result]), [
+    ["new", "anchored"],
+    ["new", "rejected"],
+  ]);
+});

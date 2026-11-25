@@ -1,5 +1,5 @@
-// The reviewer's findings in an open round: each its place in the diff, its severity and its claim,
-// then the verifier's triage with why: Rejected, Confirmed, Anchored with what it breaks, or
+// The findings in an open round: each its place in the diff, its severity, its origin (new, missed
+// or unfixed) and its claim, then the verifier's triage with why: Rejected, Confirmed, Anchored with what it breaks, or
 // Downgraded with its new severity; a rejected claim struck through. And how many there were, how
 // many held and how many of those were downgraded, as the round's rail and fold count them.
 import type { Round, RoundBody } from "../../../../../model/feed/round.ts";
@@ -15,7 +15,10 @@ export function Findings({ findings }: { findings: readonly Finding[] }) {
       {findings.map((finding, i) => (
         <li key={i} className="rmi-finding" data-triage={finding.triage?.result}>
           <p className="rmi-finding-line">
-            <Place {...finding} /> <span className="rmi-severity" data-severity={finding.severity}>({finding.severity}):</span>{" "}
+            <Place {...finding} />{" "}
+            <span className="rmi-finding-tags">
+              (<span className="rmi-severity" data-severity={finding.severity}>{finding.severity}</span>, <span className="rmi-origin">{finding.origin}</span>):
+            </span>{" "}
             <span className="rmi-finding-claim">{isRejected(finding) ? <s>{finding.claim}</s> : finding.claim}</span>
           </p>
           {finding.triage !== null && <Triage {...finding.triage} />}

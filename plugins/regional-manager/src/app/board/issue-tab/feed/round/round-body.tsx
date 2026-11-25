@@ -137,7 +137,10 @@ function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state
               <StepTime step={review.step} />
             </>
           }
-        />
+        >
+          {/* why findings under a missed review: its verifier triaged the earlier round's blocking findings, as unfixed. */}
+          {body !== null && body.findings.length > 0 && <Findings findings={body.findings} />}
+        </Step>
       );
     case "reported":
       return (

@@ -1,14 +1,16 @@
 // A verifier's own tool: issue_verdict, its judgement of each done-criterion with the evidence it
-// ran, and its triage of each of the review's findings. Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
+// ran, and its triage of each finding its first message lists. Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
 // commit and tree the check judges (verify.ts returned). The caller's role comes from the plugin's
 // database by its thread id.
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { placeText, TRIAGE_RULE, triageProblem, triageVariants, type Review } from "../../model/verdict/review.ts";
+import { placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
+import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
-import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
+import { scopeOf } from "../review/checker-brief.ts";
+import { failed, numbersRefusal, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Verify, VerifierReport } from "./verify.ts";
 
 export const VERDICT = "issue_verdict";
@@ -39,7 +41,7 @@ const verdictInputSchema = z.object({
 });
 type VerdictInput = z.infer<typeof verdictInputSchema>;
 
-type Deps = { store: Pick<Store, "roleOfThread" | "check">; verify: Pick<Verify, "returned"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "check" | "record" | "finalChecks">; verify: Pick<Verify, "returned"> };
 
 export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void {
   bb.agents.registerTool({
@@ -55,7 +57,7 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       // why throw: a verifier is started for a check, and checks are kept while their regional manager is.
       if (check === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
       if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
-      const report = reportOf(input, check);
+      const report = reportOf(input, check.criteria, triagedOf(store, check));
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
       const received = await verify.returned(check.id, threadId, report);
       if (received === "not-running") return failed(NOT_RUNNING);
@@ -69,9 +71,24 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
   });
 }
 
-/** The verdict, each criterion named by its text and the verifier's triage of each of the review's findings, in the check's order; or why it can't be taken. */
-function reportOf(input: VerdictInput, { criteria, review }: Pick<Check, "criteria" | "review">): VerifierReport | string {
-  const findings = reviewFindings(review);
+/**
+ * The findings the check's verifier triages (rounds/delta.ts triageList), on its scope; none for a
+ * final check, which has no review.
+ */
+function triagedOf(store: Pick<Store, "record" | "finalChecks">, check: Check): ReviewFinding[] {
+  const { subject } = check;
+  switch (subject.kind) {
+    case "handoff":
+      return triageList(check.review, scopeOf(store, { ...check, subject }));
+    case "final":
+      return [];
+    default:
+      return subject satisfies never;
+  }
+}
+
+/** The verdict, each criterion named by its text and the verifier's triage of each finding it triages (`findings`), in the check's order; or why it can't be taken. */
+function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: readonly ReviewFinding[]): VerifierReport | string {
   const refused =
     numbersRefusal(
       input.criteria.map(({ criterion }) => criterion),
@@ -104,28 +121,15 @@ function reportOf(input: VerdictInput, { criteria, review }: Pick<Check, "criter
   };
 }
 
-const reviewFindings = (review: Review) => (review.state === "reported" ? review.findings : []);
-
 /** Why the triage of a finding can't be taken (review.ts triageProblem), naming the first such finding by its number and place; null when every entry can. */
-function triageRefusal(triage: VerdictInput["triage"], findings: ReturnType<typeof reviewFindings>): string | null {
+function triageRefusal(triage: VerdictInput["triage"], findings: readonly ReviewFinding[]): string | null {
   for (const { finding: number, ...entry } of triage) {
     const finding = findings[number - 1];
     // why throw: numbersRefusal refused a number with no finding.
-    if (finding === undefined) throw new Error(`Finding ${number} is not one of the review's.`);
+    if (finding === undefined) throw new Error(`Finding ${number} is not one the verifier triages.`);
     const problem = triageProblem(finding, entry);
     if (problem !== null) return `finding ${number}, the ${finding.severity} at ${placeText(finding)}: ${problem}.`;
   }
-  return null;
-}
-
-/** Why the numbers given don't take each of `count` things once, in words (`words`); null when they do. */
-function numbersRefusal(numbers: readonly number[], count: number, words: { verb: string; each: string; all: string }): string | null {
-  const missing = Array.from({ length: count }, (_, i) => i + 1).filter((number) => !numbers.includes(number));
-  const unknown = numbers.filter((number) => number > count);
-  const repeated = numbers.filter((number, i) => numbers.indexOf(number) !== i);
-  if (missing.length > 0) return `${words.verb} every ${words.each}; missing ${missing.join(", ")} of 1 to ${count}.`;
-  if (unknown.length > 0) return count === 0 ? `there are no ${words.all} to ${words.verb}; pass [].` : `there are only ${count} ${words.all}; ${unknown.join(", ")} is not one.`;
-  if (repeated.length > 0) return `${words.verb} each ${words.each} once; ${repeated.join(", ")} appears more than once.`;
   return null;
 }
 

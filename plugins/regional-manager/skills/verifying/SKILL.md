@@ -29,6 +29,14 @@ For a done handoff:
   finding's file and line, its severity (must-fix, should-fix or nit) and its
   claim. Or that it found nothing, or that no review was had, and why. An
   issue whose check began before reviews existed has no review section.
+- On a later round, what the review covered: only the change since the last
+  reviewed round's commit, in the files this branch changes. Each finding
+  not marked is new, on code changed since; one marked **unfixed** is that
+  round's blocking finding the reviewer says is not fixed; one marked
+  **missed** sits on code that round reviewed unchanged. The blocking
+  findings the reviewer answered fixed follow, for context only. When no
+  review was had, that round's blocking findings are listed instead, each
+  unfixed, for you to triage.
 - The issue's decisions, under "Decisions on" its id, when it has any: what
   the user and the regional manager decided about it. They are part of the
   work, as its brief is. The plugin's own question at the issue's cap of
@@ -93,8 +101,14 @@ For a final check:
    brief or a done-criterion names it. Work that follows a recorded decision
    is never a finding.
 
+   **A missed finding never fails the verdict**, whatever it breaks, safety
+   included: never anchor it. Downgrade or reject it. An unfixed one is
+   triaged as any other: anchor it when it still holds and breaks what you
+   name.
+
    `issue_verdict` refuses a must-fix triaged confirmed, an anchored
-   should-fix or nit, and a downgrade that isn't lower, naming the finding.
+   should-fix or nit, an anchored missed finding, and a downgrade that isn't
+   lower, naming the finding.
 
 ## Never
 

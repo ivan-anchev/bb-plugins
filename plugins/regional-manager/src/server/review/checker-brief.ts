@@ -1,9 +1,32 @@
-// What a reviewer's and a verifier's first messages share: the issue they are written from, read
-// with its decisions in one read, and those decisions as the section each gives them.
+// What a reviewer's and a verifier's first messages share, and their tools: the issue they are
+// written from, read with its decisions in one read, those decisions as the section each gives
+// them, and the check's scope, the change its review covers.
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
+import { numberedRounds } from "../../model/feed/feed.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import type { HandoffCheck } from "../../model/verdict/check.ts";
+import { deltaOf, type Delta } from "../../model/verdict/rounds/delta.ts";
 import type { Store } from "../store/store.ts";
+
+/** What a check's review covers (rounds/delta.ts Delta), with, after a reviewed round, that round's number as the issue's tab shows it. */
+export type Scope = Extract<Delta, { kind: "first" }> | (Extract<Delta, { kind: "after" }> & { round: number });
+
+/**
+ * The scope of a check of a done handoff: the delta of the issue's checks before it, every agent's,
+ * and its base's round number by the feed's numbering. why throw: a check is inserted with its
+ * handoff, and a base is one of the issue's rounds.
+ */
+export function scopeOf(store: Pick<Store, "record" | "finalChecks">, check: HandoffCheck): Scope {
+  const record = store.record(check.coordinatorId, check.issueId);
+  const at = record.findIndex(({ handoff }) => handoff.id === check.subject.handoffId);
+  if (at === -1) throw new Error(`The handoff of check ${check.id} is not on ${check.issueId}'s record.`);
+  const delta = deltaOf(record.slice(0, at).flatMap(({ check: earlier }) => (earlier === null ? [] : [earlier])));
+  if (delta.kind === "first") return delta;
+  const base = numberedRounds(record, store.finalChecks(check.coordinatorId, check.issueId)).find((round) => round.kind === "handoff" && round.handed.check?.id === delta.base.id);
+  if (base === undefined) throw new Error(`The base of check ${check.id} is not one of ${check.issueId}'s rounds.`);
+  return { ...delta, round: base.number };
+}
 
 /** An issue as a reviewer's or a verifier's first message gives it: its brief, and its decisions. */
 type CheckedIssue = Issue & { brief: string; decisions: IssueDecision[] };

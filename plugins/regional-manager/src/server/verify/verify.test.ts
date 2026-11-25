@@ -1081,10 +1081,10 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
   await kit.idle(verifierThreadId, "Verdict returned.");
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.triage, [
-    { ...findings[0], result: "anchored", anchor: "brief", reason: anchored.reason },
-    { ...findings[1], result: "confirmed", reason: confirmed.reason },
-    { ...findings[2], result: "downgraded", to: "nit", reason: downgraded.reason },
-    { ...findings[3], result: "confirmed", reason: nit.reason },
+    { ...findings[0], origin: "new", result: "anchored", anchor: "brief", reason: anchored.reason },
+    { ...findings[1], origin: "new", result: "confirmed", reason: confirmed.reason },
+    { ...findings[2], origin: "new", result: "downgraded", to: "nit", reason: downgraded.reason },
+    { ...findings[3], origin: "new", result: "confirmed", reason: nit.reason },
   ]);
   const tool = kit.tools().find(({ name }) => name === "issue_verdict") ?? assert.fail("no issue_verdict");
   assert.match(JSON.stringify(z.toJSONSchema(tool.parameters)), /For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five\./, "a downgrade's reason asks why the lower severity fits, and the no-anchor reason only of a must-fix");
@@ -1140,4 +1140,86 @@ test("a final check's first message is unchanged by its parent's decisions: the 
   const decided = await finalCheckPrompt("Use the hosted vault: the user's call.");
   assert.equal(decided, await finalCheckPrompt(null), "the decision changes nothing in it");
   assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## Rules"]);
+});
+
+const CAP_FINDING = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
+
+/** WEB-1 after round 1, its review reporting CAP_FINDING, failed as the verifier anchored it and went back to the agent; then the agent's second done handoff, whose reviewer now runs. */
+async function afterBlockedRound() {
+  const agent = await withAgent();
+  const { kit, check, handOff } = agent;
+  kit.reviewers.reportAtOnce = false;
+  const reviewer = (): string => {
+    const review = check().review;
+    return review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
+  };
+  await handOff();
+  const first = reviewer();
+  await kit.call("issue_review", { findings: [CAP_FINDING] }, first);
+  await kit.idle(first, "Reviewed.");
+  await settled();
+  const verifierThreadId = agent.verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "brief", reason: "It doubles with no ceiling." }] }, verifierThreadId)), /^Verdict recorded/);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+  await handOff();
+  return { ...agent, reviewer };
+}
+
+test("issue_verdict refuses an anchored finding the reviewer marked missed, with a safety anchor too, naming the downgrade that works; downgraded, the verdict passes", async () => {
+  const { kit, row, verdict, verifier, reviewer } = await afterBlockedRound();
+  const missed = { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "A token is logged in plain text.", origin: "missed" } as const;
+  const threadId = reviewer();
+  await kit.call("issue_review", { findings: [missed], earlier: [{ finding: 1, fixed: true, note: "Capped at 5 minutes." }] }, threadId);
+  await kit.idle(threadId, "Reviewed.");
+  await settled();
+
+  const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.match(brief, new RegExp(`An independent reviewer read only the change since round 1, the last round reviewed, at \`${HEAD}\`, in the files this branch changes, and claims these\\.`));
+  assert.match(brief, /A finding marked unfixed is one of round 1's blocking findings[^\n]*; one marked missed sits on code round 1 reviewed unchanged; every other one is new/);
+  assert.match(brief, /\n\n1\. `src\/retry\.ts:3` \(must-fix, missed\): A token is logged in plain text\.\n\nRound 1's blocking findings the reviewer answered fixed, for context; they are not yours to triage:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The reviewer: Capped at 5 minutes\./);
+
+  for (const anchor of ["safety", "criterion"]) {
+    const refused = await kit.call("issue_verdict", { ...PASSES, triage: [{ finding: 1, result: "anchored", anchor, reason: "A secret leaks to the log." }] }, verifier());
+    assert.ok(isRefusal(refused));
+    assert.equal(
+      textOf(refused),
+      "issue_verdict is refused and nothing was saved: finding 1, the must-fix at `src/retry.ts:3`: a missed finding is never anchored, safety included, as it sits on code an earlier round reviewed unchanged: downgrade it to should-fix or nit.",
+      anchor,
+    );
+    assert.equal(verdict().state, "running", "nothing was saved");
+  }
+  const verifierThreadId = verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [{ finding: 1, result: "downgraded", to: "should-fix", reason: "Missed on round 1's code; logs a token." }] }, verifierThreadId)), /^Verdict recorded/);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+  const stored = verdict();
+  assert.deepEqual(stored.state === "returned" && stored.triage, [{ ...missed, result: "downgraded", to: "should-fix", reason: "Missed on round 1's code; logs a token." }]);
+  assert.equal((await row()).lane, "in-review", "a missed finding never fails the verdict, whatever it breaks");
+});
+
+test("after a failed round, a round whose review was missed gives its verifier that round's blocking findings as unfixed, to triage each; anchoring one fails the verdict", async () => {
+  const { kit, row, verdict, verifier, reviewer, opened } = await afterBlockedRound();
+  await kit.idle(reviewer(), "Done reviewing."); // it ends its turn without issue_review
+  await settled();
+
+  const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.match(
+    brief,
+    /## Round 1's blocking findings\n\nNo review was had: its reviewer ended its turn without reporting\. So each finding that failed round 1's verdict stands as unfixed until you check it here: triage every one in issue_verdict by its number\.[^\n]*\n\n1\. `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n/,
+  );
+  const skipped = await kit.call("issue_verdict", PASSES, verifier());
+  assert.equal(textOf(skipped), "issue_verdict is refused and nothing was saved: triage every finding of the reviewer's; missing 1 of 1 to 1.", "a stalled reviewer drops no blocker");
+
+  const verifierThreadId = verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "brief", reason: "retry.ts:42 still doubles with no ceiling." }] }, verifierThreadId)), /^Verdict recorded/);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+  const stored = verdict();
+  assert.deepEqual(stored.state === "returned" && stored.triage, [{ ...CAP_FINDING, origin: "unfixed", result: "anchored", anchor: "brief", reason: "retry.ts:42 still doubles with no ceiling." }]);
+  const issue = await row();
+  assert.deepEqual([issue.lane, issue.headline], ["needs-you", "✗ A must-fix review finding upheld after its fix round: Retries land with backoff"], "every criterion passed, and the unfixed blocker failed it");
+  const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");
+  assert.deepEqual(round.round.review.state, "missed");
+  assert.deepEqual(round.body.findings.map(({ origin, triage }) => [origin, triage?.result]), [["unfixed", "anchored"]], "its tab shows the unfixed finding under the missed review");
 });

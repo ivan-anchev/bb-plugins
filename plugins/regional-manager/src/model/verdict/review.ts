@@ -13,14 +13,36 @@ import type { Verdict } from "./verdict.ts";
 export const severitySchema = z.enum(["must-fix", "should-fix", "nit"]);
 type Severity = z.infer<typeof severitySchema>;
 
-/** One thing the reviewer found: where in the diff (its file, and its line, null when it names none), how much it matters, and what it claims is wrong. */
+/**
+ * Where a finding comes from, in a later round (rounds/delta.ts): `new`, on code changed since the
+ * last reviewed commit; `missed`, on code an earlier round reviewed unchanged, which never fails
+ * the verdict, whatever it breaks; `unfixed`, an earlier round's blocking finding not fixed. Every
+ * finding of a first round is new.
+ */
+export const originSchema = z.enum(["new", "missed", "unfixed"]);
+type Origin = z.infer<typeof originSchema>;
+
+/**
+ * One thing the reviewer found: where in the diff (its file, and its line, null when it names
+ * none), how much it matters, what it claims is wrong, and where it comes from. why the default:
+ * a finding stored before origins existed was the whole diff's, so new.
+ */
 export const reviewFindingSchema = z.object({
   file: z.string().min(1),
   line: z.number().int().min(1).nullable(),
   severity: severitySchema,
   claim: z.string().min(1),
+  origin: originSchema.default("new"),
 });
 export type ReviewFinding = z.infer<typeof reviewFindingSchema>;
+
+/**
+ * A later round's reviewer's answer on one of the earlier round's blocking findings, in their
+ * order: whether it is fixed, and what it saw. One answered not fixed is also stored as an
+ * `unfixed` finding of the review, for the verifier to triage.
+ */
+const earlierAnswerSchema = z.object({ fixed: z.boolean(), note: z.string() });
+export type EarlierAnswer = z.infer<typeof earlierAnswerSchema>;
 
 const reviewerThreadIdSchema = z.string().min(1);
 
@@ -29,7 +51,9 @@ const reviewerThreadIdSchema = z.string().min(1);
  * while verification was off or of a checkout bb's git plugin couldn't read, and one made before
  * reviews existed. `queued`: its reviewer starts once the agent's thread is idle. `running`: a
  * reviewer thread reviews.
- * `reported`: it returned its findings ([] for none), on the model bb ran it on. `missed`: no
+ * `reported`: it returned its findings ([] for none), on the model bb ran it on, and its answers on
+ * the earlier round's blocking findings (`earlier`, [] on a first round, and on one stored before
+ * answers existed). `missed`: no
  * review was had, and why; its thread, if it had one. Verification goes ahead either way. Each of
  * the two keeps `at`, when it came (the migration gave every one stored before a time).
  */
@@ -37,7 +61,7 @@ export const reviewSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("none") }),
   z.object({ state: z.literal("queued") }),
   z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema }),
-  z.object({ state: z.literal("reported"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), model: modelRefSchema }),
+  z.object({ state: z.literal("reported"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), earlier: z.array(earlierAnswerSchema).default([]), model: modelRefSchema }),
   z.object({ state: z.literal("missed"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
 ]);
 export type Review = z.infer<typeof reviewSchema>;
@@ -66,6 +90,10 @@ const ANCHOR_WORDS: Record<Anchor, string> = {
  */
 export const ANCHOR_RULE = `A must-fix blocks the work only when it breaks one of five things: ${anchorList()}. The brief is the issue's brief text: a CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion names it. Work that follows a recorded decision is never a finding.`;
 
+/** What a missed finding does, in the one wording each place a reviewer or a verifier reads gives it. */
+export const MISSED_RULE =
+  "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so the verifier never anchors it.";
+
 /**
  * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
  * review's order, each with why in a line: rejected, it doesn't hold or isn't worth fixing;
@@ -92,23 +120,25 @@ type Triage = z.infer<typeof triageSchema>;
 export type Triaged = ReviewFinding & Triage;
 
 /** How a verifier triages the reviewer's findings, and what its triage does, in the one wording each place a verifier reads gives it. */
-export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and breaks one of the five things below; name which as its anchor. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that breaks none of the five is downgraded, never confirmed. Give each its reason in a line. Every finding that holds goes back to the agent in its automatic fix round; a rejected one never does. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and breaks what you name. ${ANCHOR_RULE}`;
+export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and breaks one of the five things below; name which as its anchor. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that breaks none of the five is downgraded, never confirmed. Give each its reason in a line. Every finding that holds goes back to the agent in its automatic fix round; a rejected one never does. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and breaks what you name. ${ANCHOR_RULE} ${MISSED_RULE}`;
 
 /**
  * Why a verifier's triage of a finding can't be taken, in a phrase; null when it can: a must-fix
- * that holds is anchored or downgraded, never just confirmed; only a must-fix is anchored; and a
- * downgrade goes lower than the reviewer's severity. The one rule issue_verdict checks each entry with.
+ * that holds is anchored or downgraded, never just confirmed; only a must-fix is anchored, and
+ * never a missed one, safety included; and a downgrade goes lower than the reviewer's severity.
+ * The one rule issue_verdict checks each entry with.
  */
-export function triageProblem({ severity }: ReviewFinding, triage: Triage): string | null {
+export function triageProblem({ severity, origin }: ReviewFinding, triage: Triage): string | null {
   switch (triage.result) {
     case "rejected":
       return null;
     case "confirmed":
-      return severity === "must-fix" ? "a must-fix that holds is anchored, naming what it breaks, or downgraded, never just confirmed" : null;
+      return severity === "must-fix" ? `a must-fix that holds is ${origin === "missed" ? "downgraded" : "anchored, naming what it breaks, or downgraded"}, never just confirmed` : null;
     case "anchored":
-      return severity === "must-fix" ? null : `only a must-fix is anchored, and this one is a ${severity}: ${holdsAs(severity)}`;
+      if (severity !== "must-fix") return `only a must-fix is anchored, and this one is a ${severity}: ${holdsAs(severity, origin)}`;
+      return origin === "missed" ? `a missed finding is never anchored, safety included, as it sits on code an earlier round reviewed unchanged: ${holdsAs(severity, origin)}` : null;
     case "downgraded":
-      return lowerThan(severity).includes(triage.to) ? null : `a downgrade goes lower than the reviewer's ${severity}, and ${triage.to} isn't: ${holdsAs(severity)}`;
+      return lowerThan(severity).includes(triage.to) ? null : `a downgrade goes lower than the reviewer's ${severity}, and ${triage.to} isn't: ${holdsAs(severity, origin)}`;
     default:
       return triage satisfies never;
   }
@@ -147,11 +177,15 @@ export function triageText(triage: Triage): string {
 /** The severities lower than `severity`, the most a finding can matter first. */
 const lowerThan = (severity: Severity): Severity[] => severitySchema.options.slice(severitySchema.options.indexOf(severity) + 1);
 
-/** How a finding of `severity` that holds can be triaged, as a refusal's way forward: a must-fix anchored, any other confirmed, or either downgraded when a lower severity exists. */
-function holdsAs(severity: Severity): string {
-  const keep = severity === "must-fix" ? "anchor it, naming what it breaks" : "confirm it";
-  const lower = lowerThan(severity);
-  return lower.length === 0 ? keep : `${keep}, or downgrade it to ${lower.join(" or ")}`;
+/**
+ * How a finding of `severity` and `origin` that holds can be triaged, as a refusal's way forward:
+ * a must-fix anchored, or downgraded, the only way for a missed one; any other confirmed, or
+ * downgraded when a lower severity exists.
+ */
+function holdsAs(severity: Severity, origin: Origin): string {
+  const lower = `downgrade it to ${lowerThan(severity).join(" or ")}`;
+  if (severity === "must-fix") return origin === "missed" ? lower : `anchor it, naming what it breaks, or ${lower}`;
+  return lowerThan(severity).length === 0 ? "confirm it" : `confirm it, or ${lower}`;
 }
 
 /** The anchors as a list in a sentence: "a done-criterion, the issue's brief, …, or existing behaviour, as a regression". */
@@ -174,17 +208,16 @@ export const isReviewing = (review: Review): boolean => review.state === "queued
 export const reviewPending = ({ review, verdict }: { review: Review; verdict: Pick<Verdict, "state"> }): boolean => verdict.state === "queued" && isReviewing(review);
 
 /**
- * Each finding the reviewer reported, with the verifier's triage of it (`triage`, in the
- * findings' order); [] when it reported none or none was had. why throw on a count that differs,
+ * Each finding the verifier triaged (`findings`, the check's list, rounds/delta.ts triageList),
+ * with its triage of it (`triage`, in the findings' order). why throw on a count that differs,
  * or on a triage the rule refuses for its finding's severity (triageProblem), as an anchored nit:
  * issue_verdict refuses both, and the two are stored together, so a stored check that breaks
  * either is refused as the store reads it, never read as failing a verdict it couldn't fail. A
  * confirmed must-fix passes: verdicts from before the anchor rule stored it so (verdict.ts
  * failsVerdict).
  */
-export function triaged(review: Review, triage: readonly Triage[]): Triaged[] {
-  const findings = review.state === "reported" ? review.findings : [];
-  if (findings.length !== triage.length) throw new Error(`The verdict triages ${triage.length} of the review's ${findings.length} findings.`);
+export function triaged(findings: readonly ReviewFinding[], triage: readonly Triage[]): Triaged[] {
+  if (findings.length !== triage.length) throw new Error(`The verdict triages ${triage.length} of the check's ${findings.length} findings.`);
   return findings.map((finding, i) => {
     const one = at(triage, i);
     const problem = isLegacyConfirmed(finding, one) ? null : triageProblem(finding, one);
@@ -196,8 +229,8 @@ export function triaged(review: Review, triage: readonly Triage[]): Triaged[] {
 /** A must-fix the verifier confirmed, as verdicts from before the anchor rule stored one. */
 const isLegacyConfirmed = ({ severity }: ReviewFinding, { result }: Triage): boolean => severity === "must-fix" && result === "confirmed";
 
-/** A finding in a line: its place, its severity, then its claim. */
-export const findingText = (finding: ReviewFinding): string => `${placeText(finding)} (${finding.severity}): ${finding.claim}`;
+/** A finding in a line: its place, its severity and, when it isn't new, its origin, then its claim. */
+export const findingText = (finding: ReviewFinding): string => `${placeText(finding)} (${finding.severity}${finding.origin === "new" ? "" : `, ${finding.origin}`}): ${finding.claim}`;
 
 /** Where in the diff a finding is, as code: its file, and its line when it names one. */
 export const placeText = ({ file, line }: Pick<ReviewFinding, "file" | "line">): string => `\`${file}${line === null ? "" : `:${line}`}\``;

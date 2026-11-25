@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
 import type { Check, CheckSubject } from "./check.ts";
-import { holds, triaged, triageSchema, type Review, type Triaged } from "./review.ts";
+import { holds, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
 
@@ -109,17 +109,17 @@ const supersededSchema = z.object({ state: z.literal("superseded") });
 /** Verification was off when the agent handed off. */
 const waivedSchema = z.object({ state: z.literal("waived") });
 
-/** A verdict as the check stores it; the store reads it with its review (withReview). */
+/** A verdict as the check stores it; the store reads it with the findings its verifier triaged (withReview). */
 export const storedVerdictSchema = z.discriminatedUnion("state", [queuedSchema, runningSchema, returnedSchema, couldNotRunSchema, supersededSchema, waivedSchema]);
 export type StoredVerdict = z.infer<typeof storedVerdictSchema>;
 
 /** A verdict as its readers get it: a returned one's triage joined with the review's findings, each finding with the verifier's triage of it. */
 export type Verdict = Exclude<StoredVerdict, { state: "returned" }> | (Omit<Extract<StoredVerdict, { state: "returned" }>, "triage"> & { triage: Triaged[] });
 
-/** A stored verdict as its readers get it (Verdict), joined at the store's boundary. */
-export function withReview(verdict: StoredVerdict, review: Review): Verdict {
+/** A stored verdict as its readers get it (Verdict), joined at the store's boundary with `findings`, the check's list its verifier triaged (rounds/delta.ts). */
+export function withReview(verdict: StoredVerdict, findings: readonly ReviewFinding[]): Verdict {
   if (verdict.state !== "returned") return verdict;
-  return { ...verdict, triage: triaged(review, verdict.triage) };
+  return { ...verdict, triage: triaged(findings, verdict.triage) };
 }
 
 /**

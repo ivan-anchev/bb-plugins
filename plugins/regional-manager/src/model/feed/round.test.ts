@@ -38,13 +38,13 @@ const HANDOFF: Handoff = {
 };
 
 const TRIAGE: Triaged[] = [
-  { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", result: "anchored", anchor: "criterion", reason: "Seen: it grows without bound." },
-  { file: "src/retry.css", line: null, severity: "nit", claim: "The padding differs from the row's.", result: "rejected", reason: "It matches the row." },
-  { file: "src/retry.test.ts", line: 12, severity: "should-fix", claim: "No test retries after a failure.", result: "confirmed", reason: "Only the first attempt is tested." },
-  { file: "src/retry.ts", line: 30, severity: "must-fix", claim: "The helper's name says nothing.", result: "downgraded", to: "nit", reason: "It breaks none of the five." },
+  { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", result: "anchored", anchor: "criterion", reason: "Seen: it grows without bound." },
+  { file: "src/retry.css", line: null, severity: "nit", claim: "The padding differs from the row's.", origin: "new", result: "rejected", reason: "It matches the row." },
+  { file: "src/retry.test.ts", line: 12, severity: "should-fix", claim: "No test retries after a failure.", origin: "new", result: "confirmed", reason: "Only the first attempt is tested." },
+  { file: "src/retry.ts", line: 30, severity: "must-fix", claim: "The helper's name says nothing.", origin: "new", result: "downgraded", to: "nit", reason: "It breaks none of the five." },
 ];
-const FINDINGS: ReviewFinding[] = TRIAGE.map(({ file, line, severity, claim }) => ({ file, line, severity, claim }));
-const REPORTED: Review = { state: "reported", at: REVIEWED_AT, reviewerThreadId: "thr_reviewer", findings: FINDINGS, model: { providerId: "codex", model: "gpt-5.4" } };
+const FINDINGS: ReviewFinding[] = TRIAGE.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin }));
+const REPORTED: Review = { state: "reported", at: REVIEWED_AT, reviewerThreadId: "thr_reviewer", findings: FINDINGS, earlier: [], model: { providerId: "codex", model: "gpt-5.4" } };
 
 const RETURNED: Verdict = {
   state: "returned",
@@ -81,7 +81,7 @@ test("a reported review counts its findings and, once the verdict triaged them, 
     ],
     "each triage on its own finding, in the review's order",
   );
-  assert.deepEqual(findings.map(({ file, line, severity, claim }) => ({ file, line, severity, claim })), FINDINGS, "each finding as the reviewer wrote it");
+  assert.deepEqual(findings.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin })), FINDINGS, "each finding as the reviewer wrote it, with its origin");
 });
 
 test("before the verdict returns, the findings show with no triage yet and nothing is counted as held or downgraded", () => {

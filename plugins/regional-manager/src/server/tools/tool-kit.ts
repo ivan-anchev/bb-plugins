@@ -1,4 +1,5 @@
-// What every tool module shares: the part of bb that registers a tool, and the shape of a refusal.
+// What every tool module shares: the part of bb that registers a tool, the shape of a refusal, and
+// the refusal of numbered entries that don't take each numbered thing once.
 import type { PluginAgentToolContext, PluginAgentToolRegistrationBase, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import type { z } from "zod";
 import type { Agent } from "../../model/agent/agent.ts";
@@ -45,4 +46,18 @@ export function agentOf(store: Pick<Store, "agent">, role: Extract<Role, { kind:
   const agent = store.agent(role.coordinatorId, role.agentId);
   if (agent === null) throw new Error(`The agent ${role.agentId} of ${role.coordinatorId} is missing.`);
   return agent;
+}
+
+/** Why the numbers given don't take each of `count` things once, in words (`words`); null when they do. */
+export function numbersRefusal(numbers: readonly number[], count: number, words: { verb: string; each: string; all: string }): string | null {
+  const missing = Array.from({ length: count }, (_, i) => i + 1).filter((number) => !numbers.includes(number));
+  const unknown = numbers.filter((number) => number > count);
+  const repeated = numbers.filter((number, i) => numbers.indexOf(number) !== i);
+  if (missing.length > 0) return `${words.verb} every ${words.each}; missing ${missing.join(", ")} of 1 to ${count}.`;
+  if (unknown.length > 0) {
+    if (count === 0) return `there are no ${words.all} to ${words.verb}; pass [].`;
+    return `${count === 1 ? `there is only 1 ${words.each}` : `there are only ${count} ${words.all}`}; ${unknown.join(", ")} is not one.`;
+  }
+  if (repeated.length > 0) return `${words.verb} each ${words.each} once; ${repeated.join(", ")} appears more than once.`;
+  return null;
 }
