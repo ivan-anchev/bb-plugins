@@ -50,6 +50,9 @@
   display: flex;
   flex-direction: column;
 }
+.as-panel[hidden] {
+  display: none;
+}
 .as-panel > * {
   flex: 1 1 auto;
   min-height: 0;
@@ -105,8 +108,11 @@
     color: var(--foreground);
   }
 }
+/* why an outline in the full ink, not the rows' --ring shadow: the ring falls under 3:1 on the selected
+   thumb and wash in Zeron, and a shadow vanishes in forced colors; an outline is kept there. */
 .as-segment > button:focus-visible {
-  box-shadow: inset 0 0 0 1.5px var(--ring);
+  outline: 1.5px solid var(--foreground);
+  outline-offset: -1.5px;
 }
 @media (prefers-reduced-motion: reduce) {
   .as-segment-thumb,
@@ -155,8 +161,10 @@
 .as-manager[aria-current="page"] {
   background: var(--surface-selected);
 }
+/* why: as the segment's tabs: an outline in the full ink reads at 3:1 on every surface and in forced colors. */
 .as-manager:focus-visible {
-  box-shadow: inset 0 0 0 1.5px var(--ring);
+  outline: 1.5px solid var(--foreground);
+  outline-offset: -1.5px;
 }
 /* why: the avatar's left edge lines up with the section titles, bb's nav icons and the agent marks, 16 in. */
 .as-manager-face {

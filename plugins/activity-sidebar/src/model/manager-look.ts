@@ -30,5 +30,7 @@ const descriptionSchema = z.string().trim().min(1).max(500).nullable();
 export const managerLookSchema = z.object({ threadId: z.string().min(1), description: descriptionSchema, avatar: avatarSchema });
 export type ManagerLook = z.infer<typeof managerLookSchema>;
 
-/** The `coordinators` read's output, as far as the Managers view reads it. */
-export const coordinatorsReadSchema = z.object({ coordinators: z.array(managerLookSchema) });
+/** The `coordinators` read's output, as far as the Managers view reads it: one look a manager's thread. */
+export const coordinatorsReadSchema = z.object({
+  coordinators: z.array(managerLookSchema).refine((looks) => new Set(looks.map(({ threadId }) => threadId)).size === looks.length, "Each manager's thread appears once"),
+});

@@ -1,5 +1,5 @@
 // The Managers | Threads segment at the top of the sidebar: the ARIA tabs pattern, ←/→ (and Home/End)
-// moving between the two tabs and showing each as it goes. Its panel is the sidebar's (sidebar-views.tsx).
+// moving between the two tabs and showing each as it goes. Their panels are the sidebar's (sidebar-views.tsx).
 import { useRef, type KeyboardEvent } from "react";
 import type { View } from "../../data/local-choice/choices.ts";
 
@@ -8,9 +8,9 @@ const TABS: readonly { view: View; label: string }[] = [
   { view: "threads", label: "Threads" },
 ];
 
-/** The tab of `view` in the segment `id` names, and the panel they control. */
-export const tabId = (id: string, view: View): string => `${id}-${view}`;
-export const panelId = (id: string): string => `${id}-panel`;
+/** The tab of `view` in the segment `id` names, and the panel it controls. */
+export const tabId = (id: string, view: View): string => `${id}-${view}-tab`;
+export const panelId = (id: string, view: View): string => `${id}-${view}-panel`;
 
 export function ViewSegment({ id, view, onChange }: { id: string; view: View; onChange(view: View): void }) {
   const tabs = useRef(new Map<View, HTMLButtonElement>()).current;
@@ -37,7 +37,7 @@ export function ViewSegment({ id, view, onChange }: { id: string; view: View; on
           role="tab"
           id={tabId(id, tab.view)}
           aria-selected={tab.view === view}
-          aria-controls={panelId(id)}
+          aria-controls={panelId(id, tab.view)}
           tabIndex={tab.view === view ? 0 : -1}
           onClick={() => onChange(tab.view)}
           onKeyDown={onKeyDown}

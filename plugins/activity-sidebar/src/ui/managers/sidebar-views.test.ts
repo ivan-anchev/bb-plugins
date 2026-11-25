@@ -43,11 +43,23 @@ test("with no regional managers there is no segment and no tab panel: the thread
   assert.ok(threads(), "the threads' list shows, whatever view was chosen");
 });
 
-test("with managers, the Managers | Threads segment stands over the chosen view", () => {
-  const { slot, threads } = mount({ managers: [PR], view: "threads" });
-  assert.equal(slot.getByRole("tab", { name: "Threads" }).getAttribute("aria-selected"), "true");
-  assert.equal(slot.getByRole("tab", { name: "Managers" }).getAttribute("aria-selected"), "false");
-  assert.ok(slot.getByRole("tabpanel").contains(threads()));
+test("with managers, each tab controls its own panel, labelled by it; only the chosen one shows, with the one keyboard stop", () => {
+  for (const view of ["threads", "managers"] as const) {
+    const { slot } = mount({ managers: [PR], view });
+    for (const tab of slot.getAllByRole("tab")) {
+      const panel = document.getElementById(tab.getAttribute("aria-controls") ?? "");
+      assert.ok(panel, "its panel exists");
+      assert.equal(panel.getAttribute("role"), "tabpanel");
+      assert.equal(panel.getAttribute("aria-labelledby"), tab.id);
+      const chosen = tab.getAttribute("aria-selected") === "true";
+      assert.equal(panel.hidden, !chosen, `${tab.textContent} panel hidden unless chosen`);
+      assert.equal(panel.querySelectorAll(".as-scroller").length, chosen ? 1 : 0);
+    }
+    assert.equal(slot.getByRole("tab", { selected: true }).textContent, view === "threads" ? "Threads" : "Managers");
+    const stops = Array.from(slot.container.querySelectorAll<HTMLElement>("[tabindex='0']")).map((el) => el.getAttribute("role") ?? el.className);
+    assert.deepEqual(stops, ["tab", view === "threads" ? "as-scroller" : "as-scroller as-managers"], "the chosen tab, then the shown list");
+    cleanup();
+  }
 });
 
 test("a first manager started, or the last archived, never remounts the threads' list: its focus and scroll stay", async () => {
@@ -66,6 +78,16 @@ test("a first manager started, or the last archived, never remounts the threads'
   assert.equal(threads(), list);
   assert.equal(document.activeElement, list);
   assert.equal(list.scrollTop, 128);
+});
+
+test("the first manager started with Managers chosen, while the threads' list held focus: focus passes to the managers' list", async () => {
+  const { slot, show, threads } = mount({ managers: [], view: "managers" });
+  threads()?.focus();
+  assert.equal(document.activeElement, threads());
+
+  await show({ managers: [PR], view: "managers" });
+  assert.equal(threads(), null, "Managers is shown");
+  assert.equal(document.activeElement, slot.container.querySelector(".as-managers"));
 });
 
 test("the last manager archived while focus is on the segment or a manager's row: focus passes to the threads' list", async () => {
