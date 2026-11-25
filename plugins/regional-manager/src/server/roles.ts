@@ -2,6 +2,7 @@
 // session gets. Synchronous by contract; an indexed better-sqlite3 read is.
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgents } from "@get-bb/plugin-sdk";
 import { ticketMetadataSchema, type Role } from "../model/role.ts";
+import { ANCHOR_RULE } from "../model/verdict/review.ts";
 import { MAX_FAILED_VERDICTS, ordinal } from "../model/verdict/rounds/cap.ts";
 import { UNCHECKABLE_RULE } from "../model/verdict/verdict.ts";
 import { DISPLAY_NAME } from "../name.ts";
@@ -91,12 +92,14 @@ const AGENT_RULES = `You are an agent, started by a regional manager: a thread t
 const VERIFIER_RULES = `You are a verifier working for a regional manager: a thread that runs a body of work for the user. Your first message says what you check independently: an agent's done handoff, its commit and the issue's done-criteria, in the agent's own environment; or a parent issue's final check, its done-criteria on the default branch, in a fresh worktree made for you.
 - The plugin itself checks the commit and the tree through bb's git plugin: the agent's as it handed off, or your worktree as you return. Don't check them, and don't fail a criterion over them: your shell may see files that aren't in the tree.
 - For each criterion, run what proves or disproves it, and quote what it printed. Don't take an agent's word, its tests' names or its commit message as proof. ${UNCHECKABLE_RULE}
+- Triage each of the reviewer's findings your first message lists: anchor a must-fix only to what it breaks, and downgrade one that breaks nothing the rule lists. ${ANCHOR_RULE}
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree, or the plugin judges your worktree as you leave it.
-- End with issue_verdict, once, as your last action: your verdict reaches the regional manager only through it.
+- End with issue_verdict, as your last action: your verdict reaches the regional manager only through it. When it refuses what you passed, correct that and call it again; stop once it records your verdict.
 - The verifying skill is your playbook.`;
 
 const REVIEWER_RULES = `You are a reviewer working for a regional manager: a thread that runs a body of work for the user. Your first message names a diff an agent handed off as done, in the agent's own environment, with the issue's brief, its done-criteria and the rules every agent follows (CREW.md).
 - Review the diff as CREW.md instructs reviewers. What you report is checked by an independent verifier next, so report what you found, each claim at its file and line.
+- CREW.md says what to look for, and at what severity: report each finding at the severity it gives, a must-fix that breaks none of the five below included. The anchor rule alone says what blocks, and the verifier applies it, anchoring or downgrading each must-fix. ${ANCHOR_RULE}
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree.
 - ${ALONE_RULE}
 - End with ${REVIEW}, once, as your last action: your findings reach the verifier only through it. Never end a turn before you call it, not even to wait for a command in the background: a turn that ends without it ends your review unheard.`;

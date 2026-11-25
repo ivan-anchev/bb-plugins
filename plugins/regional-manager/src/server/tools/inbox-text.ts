@@ -18,8 +18,8 @@ import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
 import { askedQuestion, askedText, capMovesText, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
-import { findingText, type Review } from "../../model/verdict/review.ts";
-import { checkInFlight, ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
+import { checkInFlight, ciVerdictOf, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
 /** What the texts look up, all within one regional manager. */
@@ -421,10 +421,10 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
 }
 
 /**
- * What came of a returned verdict's review: no review was had, and why; or what its reviewer found,
- * on what model, each finding as the verifier triaged it, confirmed must-fix ones first, as each
- * failed the verdict, then the other confirmed ones, then the rejected ones, each with the
- * verifier's reason, and whether the confirmed ones went to the agent. Nothing for a check with no review stage.
+ * Its review, as the regional manager reads it: that none was had and why, or what the reviewer
+ * found, on what model, the verifier's totals of each triage, whether the findings that held went
+ * to the agent, then each finding in the review's order with the verifier's word on it (review.ts
+ * triageText) and its reason. Nothing for a check with no review stage.
  */
 function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
   if (review.state === "missed") return [`Review: no review was had, as ${review.reason}.`];
@@ -432,29 +432,35 @@ function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned
   const by = `${review.model.providerId} ${review.model.model}`;
   if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.`];
   const all = verdict.triage;
-  const lines = (findings: typeof all) => findings.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  Why: ${finding.reason}`);
-  const { failing, others } = confirmedFindings(verdict);
-  const mustFix = lines(failing);
-  const confirmed = lines(others);
-  const rejected = lines(all.filter((finding) => finding.result === "rejected"));
-  const confirmedCount = mustFix.length + confirmed.length;
+  const totals = triageTotals(all);
+  const held = all.filter(holds).length;
+  const each = all.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  ${triageText(finding)}: ${finding.reason}`);
   return [
-    [`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; the verifier confirmed ${confirmedCount} and rejected ${rejected.length}.`, ...(confirmedCount === 0 ? [] : [confirmedSent(verdict)])].join(" "),
-    ...(mustFix.length === 0 ? [] : [`Confirmed must-fix, each of which fails the verdict:\n${mustFix.join("\n")}`]),
-    ...(confirmed.length === 0 ? [] : [`${mustFix.length === 0 ? "Confirmed" : "Confirmed, the others"}:\n${confirmed.join("\n")}`]),
-    ...(rejected.length === 0 ? [] : [`Rejected:\n${rejected.join("\n")}`]),
+    [`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}; ${totals}.`, ...(held === 0 ? [] : [heldSent(verdict)])].join(" "),
+    each.join("\n"),
   ];
 }
 
-/** Whether a verdict's confirmed review findings reached the agent, as far as the plugin knows: only a failed verdict sent back as its fix round carries them. */
-function confirmedSent({ settlement }: Extract<Verdict, { state: "returned" }>): string {
+/**
+ * The verifier's totals, each triage with how many findings it got, in catch-up's order: "the
+ * verifier anchored 1, downgraded 0, confirmed 2 and rejected 1". why a Record of every result: a
+ * triage added later fails to compile here until catch-up words it.
+ */
+function triageTotals(findings: readonly Triaged[]): string {
+  const words: Record<Triaged["result"], string> = { anchored: "anchored", downgraded: "downgraded", confirmed: "confirmed", rejected: "rejected" };
+  const each = Object.entries(words).map(([result, word]) => `${word} ${findings.filter((finding) => finding.result === result).length}`);
+  return `the verifier ${each.slice(0, -1).join(", ")} and ${each.at(-1)}`;
+}
+
+/** Whether the review findings that held reached the agent, as far as the plugin knows: only a failed verdict sent back as its fix round carries them. */
+function heldSent({ settlement }: Extract<Verdict, { state: "returned" }>): string {
   switch (settlement.kind) {
     case "sent-back":
-      return "The confirmed ones went back to the agent with the failed verdict.";
+      return "The ones that held went back to the agent with the failed verdict.";
     case "sending-back":
-      return "The confirmed ones are on their way back to the agent with the failed verdict.";
+      return "The ones that held are on their way back to the agent with the failed verdict.";
     case "maybe-sent-back":
-      return "The confirmed ones went with the failed verdict's findings, which may or may not have reached the agent.";
+      return "The ones that held went with the failed verdict's findings, which may or may not have reached the agent.";
     case "pending":
     case "waiting-for-ci":
       return "None has gone to the agent yet.";

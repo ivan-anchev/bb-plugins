@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
-import type { Review } from "./review.ts";
-import { failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type Verdict } from "./verdict.ts";
+import type { Review, ReviewFinding } from "./review.ts";
+import { failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type StoredVerdict, type Verdict } from "./verdict.ts";
 
 /** The claimed commit, on a clean tree, as bb's git plugin read it. */
 const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
@@ -45,22 +45,49 @@ test("a criterion the verifier couldn't check is not a pass", () => {
   assert.equal(outcome(returned(["unverifiable"])), "fail");
 });
 
-test("a must-fix finding the verifier confirmed fails a verdict that passes every criterion; a rejected one, and confirmed should-fix and nit ones, never do", () => {
-  type Triaged = [severity: "must-fix" | "should-fix" | "nit", result: "confirmed" | "rejected"];
-  /** A verdict that passed both its criteria, as the store reads it with its review (each finding triaged as given). */
-  const read = (triaged: Triaged[], mustFixFails = true) => {
-    const { triage, ...stored } = returned(["pass", "pass"]);
-    const findings = triaged.map(([severity]) => ({ file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps." }));
-    const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings, model: { providerId: "codex", model: "gpt-default" } };
-    const verdict = withReview({ ...stored, mustFixFails, triage: triaged.map(([, result]) => ({ result, reason: "ran it" })) }, review);
-    return verdict.state === "returned" ? verdict : assert.fail("not returned");
-  };
-  assert.equal(outcome(read([["must-fix", "confirmed"]])), "fail");
-  assert.equal(outcome(read([["nit", "rejected"], ["must-fix", "confirmed"]])), "fail");
-  assert.equal(outcome(read([["must-fix", "rejected"], ["should-fix", "confirmed"], ["nit", "confirmed"]])), "pass");
-  assert.equal(outcome(read([["must-fix", "confirmed"]], false)), "pass", "a verdict settled before the rule keeps its outcome");
-  assert.deepEqual(failureReasons(read([["must-fix", "confirmed"], ["nit", "confirmed"], ["must-fix", "rejected"]])), [{ kind: "must-fix", count: 1 }], "only the confirmed must-fix finding counts");
-  assert.equal(judge(read([["must-fix", "confirmed"]]), { kind: "waiting", number: 41 }), "fail", "it fails before CI is judged, as a failed criterion does");
+/** A finding of the given severity, as the reviewer reported it. */
+const finding = (severity: Severity) => ({ file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps." });
+type Severity = ReviewFinding["severity"];
+
+/** A verdict that passed both its criteria, as the store reads it with its review: each finding of `severity` triaged as `triage`. */
+function readWith(triaged: [Severity, Triage][], mustFixFails = true): Extract<Verdict, { state: "returned" }> {
+  const { triage: _none, ...stored } = returned(["pass", "pass"]);
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: triaged.map(([severity]) => finding(severity)), model: { providerId: "codex", model: "gpt-default" } };
+  const verdict = withReview({ ...stored, mustFixFails, triage: triaged.map(([, triage]) => triage) }, review);
+  return verdict.state === "returned" ? verdict : assert.fail("not returned");
+}
+type Triage = Extract<StoredVerdict, { state: "returned" }>["triage"][number];
+
+const ANCHORED: Triage = { result: "anchored", anchor: "brief", reason: "The brief says retries back off." };
+const DOWNGRADED: Triage = { result: "downgraded", to: "should-fix", reason: "It breaks none of the five." };
+const CONFIRMED: Triage = { result: "confirmed", reason: "Seen." };
+const REJECTED: Triage = { result: "rejected", reason: "It caps at 5 minutes." };
+
+test("a verdict whose criteria all pass fails only when the verifier anchored a finding; a downgraded must-fix, a rejected one, and confirmed should-fix and nit ones pass", () => {
+  assert.equal(outcome(readWith([["must-fix", ANCHORED]])), "fail");
+  assert.equal(outcome(readWith([["nit", REJECTED], ["must-fix", ANCHORED]])), "fail");
+  assert.equal(outcome(readWith([["must-fix", DOWNGRADED]])), "pass", "a downgraded must-fix passes");
+  assert.equal(outcome(readWith([["must-fix", REJECTED], ["should-fix", CONFIRMED], ["nit", CONFIRMED], ["must-fix", { ...DOWNGRADED, to: "nit" }]])), "pass");
+  assert.deepEqual(failureReasons(readWith([["must-fix", ANCHORED], ["must-fix", DOWNGRADED], ["nit", CONFIRMED], ["must-fix", REJECTED]])), [{ kind: "must-fix", count: 1 }], "only the anchored finding counts");
+  assert.equal(judge(readWith([["must-fix", ANCHORED]]), { kind: "waiting", number: 41 }), "fail", "it fails before CI is judged, as a failed criterion does");
+});
+
+test("a stored verdict from before the anchor rule, with a confirmed must-fix, keeps the outcome mustFixFails gave it", () => {
+  // As the store holds it: the verifier's word on each finding was confirmed or rejected, with no anchor.
+  const { triage: _none, ...rest } = returned(["pass", "pass"]);
+  const stored = storedVerdictSchema.parse({ ...rest, triage: [{ result: "confirmed", reason: "Seen." }] });
+  assert.deepEqual(stored.state === "returned" && stored.triage, [{ result: "confirmed", reason: "Seen." }], "it parses as it is");
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [finding("must-fix")], model: { providerId: "codex", model: "gpt-default" } };
+  assert.equal(outcome(withReview(stored, review)), "fail", "returned under the must-fix rule: it failed, and still does");
+  assert.deepEqual(failureReasons(readWith([["must-fix", CONFIRMED]])), [{ kind: "must-fix", count: 1 }]);
+  assert.equal(outcome(readWith([["must-fix", CONFIRMED]], false)), "pass", "settled before the must-fix rule: it passed, and still does");
+});
+
+test("a stored triage the rule refuses for its finding's severity is refused as the store reads it, never read as failing a verdict", () => {
+  assert.throws(() => readWith([["nit", ANCHORED]]), /^Error: The verdict's triage of finding 1 breaks the triage rule: only a must-fix is anchored, and this one is a nit: confirm it\.$/);
+  assert.throws(() => readWith([["must-fix", REJECTED], ["should-fix", ANCHORED]]), /triage of finding 2 breaks the triage rule: only a must-fix is anchored, and this one is a should-fix/);
+  assert.throws(() => readWith([["should-fix", DOWNGRADED]]), /triage of finding 1 breaks the triage rule: a downgrade goes lower than the reviewer's should-fix, and should-fix isn't/);
+  assert.equal(outcome(readWith([["must-fix", CONFIRMED], ["should-fix", { ...DOWNGRADED, to: "nit" }]])), "fail", "a confirmed must-fix from before the anchor rule still reads, and a valid downgrade beside it");
 });
 
 test("a returned verdict is pending until it is settled: its findings reached the agent, or it is checked", () => {

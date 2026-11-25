@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { TRIAGE_RULE, triageSchema } from "../../model/verdict/review.ts";
+import { placeText, TRIAGE_RULE, triageProblem, triageVariants, type Review } from "../../model/verdict/review.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
@@ -28,9 +28,9 @@ const verdictInputSchema = z.object({
   findings: z.array(z.string().trim().min(1).max(2_000)).max(20).describe("Problems you saw that no criterion covers. [] for none."),
   triage: z
     .array(
-      triageSchema.extend({
+      triageVariants({
         finding: z.number().int().min(1).describe("The reviewer's finding's number in your first message."),
-        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't."),
+        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five."),
       }),
     )
     .max(50)
@@ -71,20 +71,22 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
 
 /** The verdict, each criterion named by its text and the verifier's triage of each of the review's findings, in the check's order; or why it can't be taken. */
 function reportOf(input: VerdictInput, { criteria, review }: Pick<Check, "criteria" | "review">): VerifierReport | string {
-  const findings = review.state === "reported" ? review.findings.length : 0;
+  const findings = reviewFindings(review);
   const refused =
     numbersRefusal(
       input.criteria.map(({ criterion }) => criterion),
       criteria.length,
       { verb: "judge", each: "done-criterion", all: "done-criteria" },
-    ) ?? numbersRefusal(
+    ) ??
+    numbersRefusal(
       input.triage.map(({ finding }) => finding),
-      findings,
+      findings.length,
       { verb: "triage", each: "finding of the reviewer's", all: "findings of the reviewer's" },
-    );
+    ) ??
+    triageRefusal(input.triage, findings);
   if (refused !== null) return refused;
   const byNumber = new Map(input.criteria.map((check) => [check.criterion, check]));
-  const byFinding = new Map(input.triage.map((one) => [one.finding, one]));
+  const byFinding = new Map(input.triage.map(({ finding, ...triage }) => [finding, triage]));
   return {
     findings: input.findings,
     criteria: criteria.map((criterion, i) => {
@@ -93,13 +95,27 @@ function reportOf(input: VerdictInput, { criteria, review }: Pick<Check, "criter
       if (check === undefined) throw new Error(`Criterion ${i + 1} has no result.`);
       return { criterion, result: check.result, evidence: check.evidence };
     }),
-    triage: Array.from({ length: findings }, (_, i) => {
-      const one = byFinding.get(i + 1);
+    triage: findings.map((_, i) => {
+      const triage = byFinding.get(i + 1);
       // why throw: missing numbers were refused above.
-      if (one === undefined) throw new Error(`Finding ${i + 1} has no triage.`);
-      return { result: one.result, reason: one.reason };
+      if (triage === undefined) throw new Error(`Finding ${i + 1} has no triage.`);
+      return triage;
     }),
   };
+}
+
+const reviewFindings = (review: Review) => (review.state === "reported" ? review.findings : []);
+
+/** Why the triage of a finding can't be taken (review.ts triageProblem), naming the first such finding by its number and place; null when every entry can. */
+function triageRefusal(triage: VerdictInput["triage"], findings: ReturnType<typeof reviewFindings>): string | null {
+  for (const { finding: number, ...entry } of triage) {
+    const finding = findings[number - 1];
+    // why throw: numbersRefusal refused a number with no finding.
+    if (finding === undefined) throw new Error(`Finding ${number} is not one of the review's.`);
+    const problem = triageProblem(finding, entry);
+    if (problem !== null) return `finding ${number}, the ${finding.severity} at ${placeText(finding)}: ${problem}.`;
+  }
+  return null;
 }
 
 /** Why the numbers given don't take each of `count` things once, in words (`words`); null when they do. */
@@ -115,7 +131,7 @@ function numbersRefusal(numbers: readonly number[], count: number, words: { verb
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict once, as your last action, then stop. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge the criteria, and triage the reviewer's findings.
+const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or once it refuses because the check no longer waits for your verdict or your worktree couldn't be read. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge the criteria, and triage the reviewer's findings.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
 - findings: problems no criterion covers, up to 20. [] for none.
-- triage: when your first message lists the reviewer's findings, one entry for each by its number. ${TRIAGE_RULE} [] when it lists none.`;
+- triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor, or downgraded with to, the lower severity. ${TRIAGE_RULE} [] when it lists none.`;

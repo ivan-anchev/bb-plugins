@@ -8,7 +8,7 @@ import { decisionIdSchema, type DecisionId } from "../decision.ts";
 import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
 import { issueStatusSchema, type Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
-import { reviewFindingSchema, reviewPending, triageSchema, type Review } from "../verdict/review.ts";
+import { holds, reviewFindingSchema, reviewPending, triageSchema, type Review } from "../verdict/review.ts";
 import { checkInFlight, criterionResultSchema, firstFailure, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
 
 /**
@@ -41,17 +41,22 @@ export const roundSchema = z.object({
     z.object({ kind: z.literal("agent"), agentId: agentIdSchema, status: handoffStatusSchema, summary: z.string() }),
     z.object({ kind: z.literal("final"), defaultBranch: z.string() }),
   ]),
-  /** Its review: none (no review stage), still to come, missed (why is the body's), or reported with how many findings and, once the verdict triaged them, how many it confirmed; each that came, its step. */
+  /**
+   * Its review: none (no review stage), still to come, missed (why is the body's), or reported with
+   * how many findings and, once the verdict triaged them, how many held (every one not rejected:
+   * anchored, downgraded or confirmed) and how many of those it downgraded, both null until then;
+   * each that came, its step.
+   */
   review: z.discriminatedUnion("state", [
     z.object({ state: z.literal("none") }),
     z.object({ state: z.literal("pending") }),
     z.object({ state: z.literal("missed"), step: stepSchema }),
-    z.object({ state: z.literal("reported"), step: stepSchema, findings: z.number().int(), confirmed: z.number().int().nullable() }),
+    z.object({ state: z.literal("reported"), step: stepSchema, findings: z.number().int(), held: z.number().int().nullable(), downgraded: z.number().int().nullable() }),
   ]),
   /**
    * Its verdict (null: nothing checks this round, as a blocked or research handoff): what it says,
    * and, when it failed, what failed it first (verdict.ts firstFailure): its checkout (not the
-   * claimed commit on a clean tree), a criterion, a must-fix finding the verifier confirmed, or CI; each criterion's result in the check's order ([] until it returned), and the
+   * claimed commit on a clean tree), a criterion, a must-fix finding the verifier anchored, or CI; each criterion's result in the check's order ([] until it returned), and the
    * fix round its findings went back to its agent as once settled (null: none):
    * reached it, or may have (the plugin can't tell, so the verdict is its manager's); when it
    * returned or could not run (null: neither yet, or it never will); and, on the one round whose
@@ -78,7 +83,7 @@ export const roundBodySchema = z.object({
   /** The handoff's account (null: a final check's round, which has none). */
   handoff: handoffBodySchema.nullable(),
   verdict: shownVerdictSchema.nullable(),
-  /** The reviewer's findings, each with the verifier's triage once its verdict returned (null triage before). */
+  /** The reviewer's findings, each with the verifier's triage once its verdict returned (null triage before): rejected, confirmed, anchored with what it breaks, or downgraded with its new severity. */
   findings: z.array(reviewFindingSchema.extend({ triage: triageSchema.nullable() })),
   /** Why no review was had (null: one was, or none was asked for). */
   reviewMissed: z.string().nullable(),
@@ -190,16 +195,16 @@ function reviewOf({ review, verdict }: Check): Round["review"] {
     case "missed":
       return { state: "missed", step: stepAt(review.at) };
     case "reported":
-      return { state: "reported", step: stepAt(review.at), findings: review.findings.length, confirmed: confirmedOf(verdict) };
+      return { state: "reported", step: stepAt(review.at), findings: review.findings.length, ...heldOf(verdict) };
     default:
       return review satisfies never;
   }
 }
 
-/** How many of the review's findings the verifier confirmed; null until its verdict triaged them. */
-function confirmedOf(verdict: Verdict): number | null {
-  if (verdict.state !== "returned") return null;
-  return verdict.triage.filter(({ result }) => result === "confirmed").length;
+/** How many of the review's findings held, and how many of those the verifier downgraded; both null until its verdict triaged them. */
+function heldOf(verdict: Verdict): Pick<Extract<Round["review"], { state: "reported" }>, "held" | "downgraded"> {
+  if (verdict.state !== "returned") return { held: null, downgraded: null };
+  return { held: verdict.triage.filter(holds).length, downgraded: verdict.triage.filter(({ result }) => result === "downgraded").length };
 }
 
 function verdictOf(verdict: Verdict, asked: DecisionId | null): Round["verdict"] {
@@ -256,5 +261,5 @@ const stepAt = (at: number): Step => ({ at, moved: null });
 function findingsOf({ review, verdict }: Check): RoundBody["findings"] {
   if (review.state !== "reported") return [];
   if (verdict.state !== "returned") return review.findings.map((finding) => ({ ...finding, triage: null }));
-  return verdict.triage.map(({ result, reason, ...finding }) => ({ ...finding, triage: { result, reason } }));
+  return verdict.triage.map(({ file, line, severity, claim, ...triage }) => ({ file, line, severity, claim, triage }));
 }

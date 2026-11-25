@@ -1,11 +1,11 @@
 // A done handoff's verdict: whether the commit the agent claimed was what it left checked out, as the
 // plugin read it, whether an independent verifier thread checked the work against each
-// done-criterion, what it found, and which of the reviewer's findings it confirmed. Pass or fail
+// done-criterion, what it found, and how it triaged each of the reviewer's findings. Pass or fail
 // is never stored: `judge` derives it, so the board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
 import type { Check, CheckSubject } from "./check.ts";
-import { triaged, triageSchema, type Review, type Triaged } from "./review.ts";
+import { holds, triaged, triageSchema, type Review, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
 
@@ -61,9 +61,10 @@ const settlementSchema = z.discriminatedUnion("kind", [
  * own worktree held as it returned) and `checkout`, bb's read of the tree it was judged in: each
  * criterion in the issue's order, and the model bb ran it on. `sameModel`: no other model was
  * available, so it ran on the model of an agent whose work it checks. `mustFixFails`: whether a
- * must-fix finding the verifier confirmed fails it (failingFindings), true for every verdict
+ * must-fix finding the verifier confirmed fails it (failsVerdict), true for every verdict
  * returned since that rule; false for one settled before it, which keeps the outcome it settled
- * with (migrations.ts).
+ * with (migrations.ts). Since the anchor rule a must-fix is never confirmed, so it reads only on
+ * verdicts from before.
  * why the defaults: a verdict stored before settlements existed was settled as it was stored, and
  * one stored before reviews existed triaged none.
  */
@@ -226,7 +227,7 @@ type EitherReturned = Extract<ShownVerdict, { state: "returned" }>;
 
 /**
  * The one rule for pass or fail: the claimed commit was checked out on a clean tree, every
- * criterion passed, the verifier confirmed no must-fix finding of the reviewer's, and CI on the
+ * criterion passed, no finding of the reviewer's fails it (failsVerdict), and CI on the
  * commit didn't fail. It waits while CI is still to come; CI that couldn't be checked, or that
  * reported no checks, is not a failure.
  */
@@ -237,8 +238,8 @@ export function judge(verdict: Returned, ci: Ci): "pass" | "fail" | "waiting-for
 
 /**
  * Why a returned verdict failed: its checkout wasn't the claimed commit on a clean tree; `failed`
- * of its `of` criteria didn't pass; the verifier confirmed `count` must-fix findings
- * (failingFindings); CI failed on pull request `number`.
+ * of its `of` criteria didn't pass; `count` of the reviewer's findings fail it on their own
+ * (failsVerdict); CI failed on pull request `number`.
  */
 export type FailureReason = { kind: "checkout" } | { kind: "criteria"; failed: number; of: number } | { kind: "must-fix"; count: number } | { kind: "ci"; number: number };
 
@@ -261,17 +262,20 @@ export function failureReasons(verdict: Returned, ci: CiVerdict | null = ciVerdi
 export const firstFailure = (verdict: Verdict): FailureReason | null => (verdict.state === "returned" ? (failureReasons(verdict)[0] ?? null) : null);
 
 /**
- * The findings that fail the verdict on their own: the must-fix ones the verifier confirmed, unless
- * it settled before that rule (`mustFixFails`). Should-fix and nit findings never do.
+ * Whether a finding fails its verdict on its own: the verifier anchored it to what it breaks, or,
+ * on a verdict from before the anchor rule, confirmed it as a must-fix while that rule
+ * (`mustFixFails`) held. Should-fix and nit findings never do. The one failing rule.
  */
-function failingFindings(verdict: Returned): Returned["triage"] {
-  return verdict.mustFixFails ? verdict.triage.filter(({ severity, result }) => severity === "must-fix" && result === "confirmed") : [];
-}
+const failsVerdict = (finding: Triaged, mustFixFails: boolean): boolean =>
+  finding.result === "anchored" || (mustFixFails && finding.result === "confirmed" && finding.severity === "must-fix");
 
-/** The findings the verifier confirmed, in their order: `failing`, those that fail the verdict on their own (failingFindings), and the `others`. */
-export function confirmedFindings(verdict: Returned): { failing: Returned["triage"]; others: Returned["triage"] } {
+/** The findings that fail the verdict on their own (failsVerdict). */
+const failingFindings = (verdict: Returned): Returned["triage"] => verdict.triage.filter((finding) => failsVerdict(finding, verdict.mustFixFails));
+
+/** The findings that held, every one the verifier didn't reject, in their order: `failing`, those that fail the verdict on their own (failsVerdict), and the `others`, downgraded ones included. */
+export function heldFindings(verdict: Returned): { failing: Returned["triage"]; others: Returned["triage"] } {
   const failing = failingFindings(verdict);
-  return { failing, others: verdict.triage.filter((finding) => finding.result === "confirmed" && !failing.includes(finding)) };
+  return { failing, others: verdict.triage.filter((finding) => holds(finding) && !failing.includes(finding)) };
 }
 
 /** A reason besides the criteria, which each place words in its own count. */
@@ -292,7 +296,7 @@ export function failureText(reason: ReasonBesidesCriteria, judged: Judged): stri
     case "checkout":
       return judged === "handoff" ? NOT_CLEAN.toLowerCase() : "the verifier's worktree wasn't clean";
     case "must-fix":
-      return reason.count === 1 ? "a must-fix review finding confirmed" : `${reason.count} must-fix review findings confirmed`;
+      return reason.count === 1 ? "a must-fix review finding upheld" : `${reason.count} must-fix review findings upheld`;
     case "ci":
       return `CI failed on #${reason.number}`;
     default:

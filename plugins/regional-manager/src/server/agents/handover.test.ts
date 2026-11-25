@@ -530,6 +530,39 @@ test("an earlier verdict that passed, with a finding, reaches the new agent whol
   assert.match(read, /2 of 2 criteria passed[\s\S]*# pass 13[\s\S]*- The retry log line repeats the payload\./);
 });
 
+test("the first message of an agent taking the issue over words an earlier anchored finding with what it breaks and a downgraded one with its new severity, neither as Confirmed or Rejected", async () => {
+  const { kit, coordinatorId, agentThreadId, handover, firstMessage, handOff } = await handedTo();
+  kit.reviewers.reportAtOnce = false;
+  await handOff(agentThreadId);
+  const review = kit.store.latestHandoff(coordinatorId, a1)?.check?.review;
+  const reviewer = review?.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review?.state}`);
+  const findings = [
+    { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
+    { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports are out of order." },
+  ];
+  await kit.call("issue_review", { findings }, reviewer);
+  await kit.idle(reviewer, "Reviewed.");
+  await settled();
+  const triage = [
+    { finding: 1, result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." },
+    { finding: 2, result: "downgraded", to: "nit", reason: "No criterion, brief line or decision covers import order." },
+  ];
+  const verifierThreadId = verifierOf(kit, coordinatorId);
+  await kit.call("issue_verdict", { ...PASSES, triage }, verifierThreadId);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+
+  const message = firstMessage(threadIn(textOf(await handover())));
+  assert.ok(
+    message.includes(
+      "Its reviewer's findings, as the verifier triaged them, in their words:\n\n```\n- `src/retry.ts:42` (must-fix): The backoff never caps.\n  Anchored, as it breaks the issue's brief: The brief says retries back off; this never stops doubling.\n- `src/retry.ts:3` (must-fix): The imports are out of order.\n  Downgraded to nit: No criterion, brief line or decision covers import order.\n```",
+    ),
+    message,
+  );
+  assert.match(message, /Failed at `0123456`: a must-fix review finding upheld, though every done-criterion passed\./);
+  assert.doesNotMatch(message, /\n {2}(Confirmed|Rejected):/);
+});
+
 test("a verdict waiting for CI when its agent is replaced is kept whole, settled as superseded, in issue_read and the new agent's first message", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, handover, firstMessage, handOff } = await handedTo();
   const branch = kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch");

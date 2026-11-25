@@ -50,15 +50,27 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
     store.bindTicket(`${kind}-${ticket}`, `thr_${kind}_${ticket}`);
   };
   checker("reviewer");
-  store.receiveReview(check.id, `thr_reviewer_${ticket}`, [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], MODEL, 3_200);
+  store.receiveReview(check.id, `thr_reviewer_${ticket}`, FINDINGS, MODEL, 3_200);
   checker("verifier");
-  const triage = [{ result: "confirmed", reason: "No cap in retry.ts." }] as const;
+  const triage = TRIAGE;
   const criteria = [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }] as const;
   store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
   store.claimFixRound(check.id, { kind: "none" });
   store.settleReturned(check.id, { kind: "sent-back" }, 3_600);
   return handoff;
 }
+
+/** What a round's reviewer reported: a must-fix the verifier anchors, one it downgrades, and a nit it rejects. */
+const FINDINGS = [
+  { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." },
+  { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing." },
+  { file: "src/retry.css", line: null, severity: "nit", claim: "Padding." },
+] as const;
+const TRIAGE = [
+  { result: "anchored", anchor: "brief", reason: "No cap in retry.ts; the brief says capped." },
+  { result: "downgraded", to: "should-fix", reason: "Breaks none of the five." },
+  { result: "rejected", reason: "Matches the row." },
+] as const;
 
 /** WEB-2 with an entry of every kind, the status its round's outcome moved it to, the one it was seen in after its edit and one no moment explains; WEB-1 it depends on, WEB-3 depending on it; and another manager's handoff, the manager then removed. */
 function seeded() {
@@ -125,12 +137,13 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   const round = entries.get("round");
   assert.ok(round?.kind === "round");
   assert.deepStrictEqual(keysOf(round.round), ["by", "handed", "inFlight", "key", "number", "outcome", "review", "verdict"]);
+  assert.deepStrictEqual(keysOf(round.round.review), ["downgraded", "findings", "held", "state", "step"], "its review counts the findings that held, the anchored and the downgraded one, and the downgraded");
   assert.deepStrictEqual(
     { by: round.round.by, handed: round.round.handed, review: round.round.review, verdict: round.round.verdict, outcome: round.round.outcome, inFlight: round.round.inFlight },
     {
       by: { kind: "agent", agentId: "a1", status: "done", summary: "Retries land" },
       handed: { at: 3_000, moved: null },
-      review: { state: "reported", step: { at: 3_200, moved: null }, findings: 1, confirmed: 1 },
+      review: { state: "reported", step: { at: 3_200, moved: null }, findings: 3, held: 2, downgraded: 1 },
       verdict: { outcome: { kind: "fail", by: "criteria" }, results: ["fail"], fixRound: { round: 1, delivery: "sent" }, step: { at: 3_500, moved: null }, asked: null },
       outcome: { at: 3_600, moved: "in-progress" },
       inFlight: false,
@@ -169,7 +182,16 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   assert.equal(body.reviewMissed, null, "a review was had");
   assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
   assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
-  assert.deepStrictEqual(body.findings, [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", triage: { result: "confirmed", reason: "No cap in retry.ts." } }]);
+  assert.deepStrictEqual(body.findings.map(keysOf), [
+    ["claim", "file", "line", "severity", "triage"],
+    ["claim", "file", "line", "severity", "triage"],
+    ["claim", "file", "line", "severity", "triage"],
+  ]);
+  assert.deepStrictEqual(body.findings.map(({ triage }) => keysOf(triage ?? assert.fail("no triage"))), [["anchor", "reason", "result"], ["reason", "result", "to"], ["reason", "result"]], "an anchored finding names what it breaks, a downgraded one its new severity");
+  assert.deepStrictEqual(
+    body.findings,
+    FINDINGS.map((finding, i) => ({ ...finding, triage: TRIAGE[i] })),
+  );
 });
 
 test("the feed of an issue the manager doesn't have, or of a manager not started, is refused", async () => {

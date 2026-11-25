@@ -170,7 +170,7 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   return (
     <p className="rmi-outcome" data-result={verdict.outcome.kind}>
       {/* why one span: a sentence long enough to wrap wraps within itself, not as whole flex items. */}
-      <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} confirmed={confirmedOf(round.review)} asked={verdict.asked} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
+      <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} held={heldOf(round.review)} asked={verdict.asked} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
       {round.outcome !== null && <StepTime step={round.outcome} />}
     </p>
   );
@@ -178,17 +178,17 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
 
 /**
  * Where a failed verdict's findings went: to its agent as a fix round, with the review's findings
- * the verifier confirmed (only those reach the agent: src/server/verify/findings.ts), or maybe, when the plugin can't
+ * that held (only those reach the agent: src/server/verify/findings.ts), or maybe, when the plugin can't
  * tell whether they reached it; then who decides: the user, when its failure asked at the issue's cap (`asked`).
  */
-function SentBack({ agent, round, delivery, confirmed, asked }: { agent: ReactNode; confirmed: number; asked: DecisionId | null } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
-  const withConfirmed = confirmed === 0 ? "" : `, with the ${confirmed === 1 ? "1 confirmed finding" : `${confirmed} confirmed findings`}`;
+function SentBack({ agent, round, delivery, held, asked }: { agent: ReactNode; held: number; asked: DecisionId | null } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
+  const withHeld = held === 0 ? "" : `, with the ${held === 1 ? "1 finding that held" : `${held} findings that held`}`;
   switch (delivery) {
     case "sent":
       return (
         <>
           Sent back to {agent} as fix round {round}
-          {withConfirmed}
+          {withHeld}
         </>
       );
     // why the manager's: the plugin stopped mid-send, or bb's answer didn't say, so nothing shows whether the agent has them.
@@ -196,7 +196,7 @@ function SentBack({ agent, round, delivery, confirmed, asked }: { agent: ReactNo
       return (
         <>
           Maybe sent back to {agent} as fix round {round}
-          {withConfirmed}: {asked === null ? "the regional manager decides" : `at its cap, the plugin asked you (${asked})`}
+          {withHeld}: {asked === null ? "the regional manager decides" : `at its cap, the plugin asked you (${asked})`}
         </>
       );
     default:
@@ -206,8 +206,8 @@ function SentBack({ agent, round, delivery, confirmed, asked }: { agent: ReactNo
   }
 }
 
-/** How many of the review's findings the verifier confirmed; 0 when it had no review, or none was confirmed. */
-const confirmedOf = (review: Round["review"]): number => (review.state === "reported" ? (review.confirmed ?? 0) : 0);
+/** How many of the review's findings held; 0 when it had no review, or none held. */
+const heldOf = (review: Round["review"]): number => (review.state === "reported" ? (review.held ?? 0) : 0);
 
 /**
  * What became of a verdict nothing went back to an agent from. why the results: one superseded after

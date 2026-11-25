@@ -102,21 +102,52 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
   assert.equal(by(checkedWith(returned(["pass"])), CODEX), "codex gpt-default");
 });
 
-test("a verdict's review says whether its confirmed findings reached the agent only as far as its settlement shows", () => {
+test("a verdict's review says whether the findings that held reached the agent only as far as its settlement shows", () => {
   const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], model: { providerId: "claude-code", model: "sonnet" } };
-  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", result: "confirmed", reason: "It never caps." }] };
+  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", result: "anchored", anchor: "criterion", reason: "It never caps." }] };
   const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
     [{ kind: "pending" }, "None has gone to the agent yet."],
     [{ kind: "waiting-for-ci" }, "None has gone to the agent yet."],
-    [{ kind: "sending-back", round: 1, ci: { kind: "none" } }, "The confirmed ones are on their way back to the agent with the failed verdict."],
-    [{ kind: "sent-back", round: 1, ci: { kind: "none" } }, "The confirmed ones went back to the agent with the failed verdict."],
-    [{ kind: "maybe-sent-back", round: 1, ci: { kind: "none" } }, "The confirmed ones went with the failed verdict's findings, which may or may not have reached the agent."],
+    [{ kind: "sending-back", round: 1, ci: { kind: "none" } }, "The ones that held are on their way back to the agent with the failed verdict."],
+    [{ kind: "sent-back", round: 1, ci: { kind: "none" } }, "The ones that held went back to the agent with the failed verdict."],
+    [{ kind: "maybe-sent-back", round: 1, ci: { kind: "none" } }, "The ones that held went with the failed verdict's findings, which may or may not have reached the agent."],
     [{ kind: "checked", refused: null, ci: { kind: "none" } }, "None of them went to the agent."],
     [{ kind: "superseded" }, "None of them went to the agent."],
   ];
   for (const [settlement, line] of cases) {
     const text = handoffText(checkedWith({ ...failed, settlement }, null, review), agentOn(CODEX));
-    assert.ok(text.includes(`Review: a reviewer on claude-code sonnet reported 1 finding; the verifier confirmed 1 and rejected 0. ${line}`), settlement.kind);
-    assert.match(text, /Confirmed must-fix, each of which fails the verdict:\n- `src\/retry\.ts:4` \(must-fix\): No cap\.\n {2}Why: It never caps\./);
+    assert.ok(text.includes(`Review: a reviewer on claude-code sonnet reported 1 finding; the verifier anchored 1, downgraded 0, confirmed 0 and rejected 0. ${line}`), settlement.kind);
   }
+});
+
+test("catch-up words a round's review as the verifier's totals, anchored, downgraded, confirmed and rejected, then each finding in the review's order with its triage: what an anchored one breaks, a downgraded one's new severity", () => {
+  const findings = [
+    { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." },
+    { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing." },
+    { file: "src/retry.ts", line: 12, severity: "should-fix", claim: "Jitter computed twice." },
+    { file: "src/retry.css", line: null, severity: "nit", claim: "Padding." },
+  ] as const;
+  const triage = [
+    { result: "anchored", anchor: "brief", reason: "The brief says capped." },
+    { result: "downgraded", to: "nit", reason: "Breaks none of the five." },
+    { result: "confirmed", reason: "Both calls on line 12." },
+    { result: "rejected", reason: "Matches the row." },
+  ] as const;
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [...findings], model: { providerId: "claude-code", model: "sonnet" } };
+  const verdict: Extract<Verdict, { state: "returned" }> = {
+    ...returned(["pass"]),
+    settlement: { kind: "sent-back", round: 1, ci: { kind: "none" } },
+    triage: findings.map((finding, i) => ({ ...finding, ...(triage[i] ?? assert.fail("no triage")) })),
+  };
+  const text = handoffText(checkedWith(verdict, null, review), agentOn(CODEX));
+  assert.ok(
+    text.includes(
+      [
+        "Review: a reviewer on claude-code sonnet reported 4 findings; the verifier anchored 1, downgraded 1, confirmed 1 and rejected 1. The ones that held went back to the agent with the failed verdict.",
+        "- `src/retry.ts:4` (must-fix): No cap.\n  Anchored, as it breaks the issue's brief: The brief says capped.\n- `src/retry.ts:9` (must-fix): The name says nothing.\n  Downgraded to nit: Breaks none of the five.\n- `src/retry.ts:12` (should-fix): Jitter computed twice.\n  Confirmed: Both calls on line 12.\n- `src/retry.css` (nit): Padding.\n  Rejected: Matches the row.",
+      ].join("\n\n"),
+    ),
+    text,
+  );
+  assert.match(text, /Failed verification: a must-fix review finding upheld\. 1 of 1 criteria passed/, "the anchored finding alone fails it");
 });

@@ -65,7 +65,7 @@ const agent = (id: AgentId, startedAt: number, ended: Agent["ended"]): FeedFacts
 /** BBP-19 as it went: a1 failed twice, the manager handed it to a2, which failed once and then passed; #219 opened, passed CI and merged. */
 function bbp19(): FeedFacts {
   const one = handed(handoff(1, A1, 3_000), returned(["pass", "fail", "fail"], 3_500, { kind: "sent-back", round: 1, ci: { kind: "none" } }, [
-    { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", result: "confirmed", reason: "Seen." },
+    { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", result: "anchored", anchor: "criterion", reason: "Seen." },
     { file: "src/card.css", line: null, severity: "nit", claim: "Padding.", result: "rejected", reason: "Matches the row." },
   ]), {
     state: "reported",
@@ -141,7 +141,7 @@ test("BBP-19's feed: every moment in the order it happened, each round numbered,
     "the first event naming a check times its outcome; a later one doesn't move it",
   );
   const [first] = roundsIn(entries);
-  assert.deepEqual(first?.review, { state: "reported", step: { at: 3_200, moved: null }, findings: 2, confirmed: 1 });
+  assert.deepEqual(first?.review, { state: "reported", step: { at: 3_200, moved: null }, findings: 2, held: 1, downgraded: 0 });
   assert.deepEqual(
     entries.flatMap((entry) => (entry.kind === "pr" ? [entry.changes] : [])),
     [["opened"], ["ci-passed"], ["merged"]],
