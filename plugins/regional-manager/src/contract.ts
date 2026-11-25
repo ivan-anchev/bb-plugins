@@ -5,6 +5,7 @@ import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import { agentIdSchema } from "./model/agent/agent.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
+import { openIssuesSchema } from "./model/board/open-issues.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
 import { executionSchema } from "./model/agent/execution.ts";
 import { commentIdSchema, commentTextSchema, submissionIdSchema } from "./model/feed/comment.ts";
@@ -154,8 +155,9 @@ export type MemoryEntry = z.infer<typeof memoryEntrySchema>;
 
 /**
  * What other plugins may read, published to them as discoverable (server.ts). A cross-plugin contract:
- * the Activity Sidebar reads each started manager's `threadId`, `description` and `avatar` to draw
- * its Managers view, so those three keep their names and shapes (skills/crew-board/SKILL.md).
+ * the Activity Sidebar reads each started manager's `id`, `threadId`, `description` and `avatar` to
+ * draw its Managers view, and each one's `openIssues` for its hover card, so those keep their names
+ * and shapes (skills/crew-board/SKILL.md).
  */
 export const publishedContract = defineRpcContract({
   /** Every regional manager whose thread exists, and every one not started yet, each newest first. */
@@ -163,6 +165,18 @@ export const publishedContract = defineRpcContract({
     input: z.object({}),
     output: z.object({ coordinators: z.array(coordinatorSchema), notStarted: z.array(notStartedSchema) }),
     tags: () => [COORDINATORS_TAG],
+    experimental_description: "Every regional manager: a started one's thread, project, description and avatar; one not started yet with its name.",
+  },
+  /**
+   * Each of these regional managers' open work (model/board/open-issues.ts), read from its board's
+   * own rows; none for an unknown id, or one not started. Each one reads again when its board does.
+   */
+  openIssues: {
+    input: z.object({ keys: z.array(coordinatorIdSchema) }),
+    output: z.record(z.string(), openIssuesSchema),
+    keyTags: (key) => [boardTag(coordinatorIdSchema.parse(key))],
+    experimental_description:
+      "Each regional manager's open work, keyed by its id: the issues waiting on the user, with why; the issues under way (Verifying, Reviewing, In progress); the parents of listed sub-issues not listed themselves; and the open decisions naming no listed issue.",
   },
 });
 
