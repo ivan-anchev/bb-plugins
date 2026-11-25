@@ -1321,7 +1321,8 @@ a.as-mini-body .as-title[data-over] {
 }
 /* How many issues the card leaves out: words, not a control, in line with the titles' glyphs. */
 .as-card-more {
-  padding: 4px 0 0 4px;
+  margin-top: -4px;
+  padding-left: 4px;
   color: var(--subtle-foreground);
   font-size: 11px;
   line-height: 14px;
