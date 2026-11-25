@@ -14,17 +14,19 @@ const SIZE = 36;
 // 64.4 across). Measured with getBBox, still; check again when blob-avatar changes. Scaling 2 × REACH
 // units to the frame keeps every shape inside it, centred.
 const REACH = 67;
-const BOX = (SIZE * 200) / (2 * REACH);
 
-const FRAME: CSSProperties = { width: SIZE, height: SIZE };
-const PLACE: CSSProperties = { position: "absolute", left: (SIZE - BOX) / 2, top: (SIZE - BOX) / 2 };
-
-// why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside it says who this is.
-export function ManagerAvatar({ avatar }: { avatar: Avatar | null }) {
-  if (avatar === null) return <span className="as-avatar as-avatar-plain" style={FRAME} aria-hidden />;
+/**
+ * why paused: a still picture, as the Regional Manager plugin shows it. why aria-hidden: the name beside
+ * it says who this is. `size`: the frame's side; a row's unless given (a card's is smaller).
+ */
+export function ManagerAvatar({ avatar, size = SIZE }: { avatar: Avatar | null; size?: number }) {
+  const frame: CSSProperties = { width: size, height: size };
+  if (avatar === null) return <span className="as-avatar as-avatar-plain" style={frame} aria-hidden />;
+  const box = (size * 200) / (2 * REACH);
+  const place: CSSProperties = { position: "absolute", left: (size - box) / 2, top: (size - box) / 2 };
   return (
-    <span className="as-avatar" style={FRAME} aria-hidden>
-      <BlobAvatar shape={avatar.shape} color={HUE_COLORS[avatar.hue].fill} expression={avatar.expression} animation="idle" paused size={BOX} style={PLACE} />
+    <span className="as-avatar" style={frame} aria-hidden>
+      <BlobAvatar shape={avatar.shape} color={HUE_COLORS[avatar.hue].fill} expression={avatar.expression} animation="idle" paused size={box} style={place} />
     </span>
   );
 }

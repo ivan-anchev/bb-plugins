@@ -13,7 +13,7 @@ import { buildActivity } from "../../model/activity.ts";
 import { project, thread } from "../../model/fixtures.ts";
 
 // A panel hidden takes every overlay it opened with it: the threads' hover card, view menu and a row's
-// thread menu; a manager row's thread menu. Mounted as bb mounts the sidebar, with the real list.
+// thread menu; a manager's hover card and its row's thread menu. Mounted as bb mounts the sidebar, with the real list.
 
 const { SidebarViews } = await import("./sidebar-views.tsx");
 const { ListViewport } = await import("../list-viewport.tsx");
@@ -42,7 +42,7 @@ function mount(view: View) {
     onRetry: () => {},
     viewMenu: createElement(ViewMenu, { projects: PROJECTS, chosen: null, onChoose: () => {}, compact: true, onCompact: () => {} }),
   });
-  const props = (shown: View) => ({ managers: model.managers, view: shown, onView: () => {}, onNavigate: () => {}, threads });
+  const props = (shown: View) => ({ managers: model.managers, underWaySince: new Map<string, number>(), view: shown, onView: () => {}, onNavigate: () => {}, threads });
   const slot = renderSlot({ component: SidebarViews }, props(view));
   const choose = async (shown: View) => {
     await act(async () => {
@@ -87,6 +87,18 @@ test("a thread row's menu, or the threads' view menu, open as Managers is chosen
     assert.equal(document.activeElement?.closest(".as-panel[hidden]") ?? null, null, "no focus in the hidden panel");
     cleanup();
   }
+});
+
+test("a manager's hover card, open on its row, goes as Threads is chosen, and focus lands on the chosen tab", async () => {
+  const { choose, link, tab } = mount("managers");
+  act(() => link("PR Reviews").focus());
+  await act(() => wait(DWELL + 50));
+  assert.ok(document.querySelector(".as-card"), "its card shows");
+
+  await choose("threads");
+  assert.equal(document.querySelector(".as-card"), null, "no card over Threads");
+  assert.equal(overlays(), 0);
+  assert.equal(document.activeElement, tab("threads"));
 });
 
 test("a manager row's menu, open as Threads is chosen, closes", async () => {

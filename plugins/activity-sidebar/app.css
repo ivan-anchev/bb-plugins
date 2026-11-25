@@ -1193,16 +1193,20 @@
   font-size: 12px;
   line-height: 16px;
 }
-button.as-mini-body {
+button.as-mini-body,
+a.as-mini-body {
   cursor: pointer;
 }
-button.as-mini-body:hover {
+button.as-mini-body:hover,
+a.as-mini-body:hover {
   background: var(--state-hover);
 }
-button.as-mini-body:active {
+button.as-mini-body:active,
+a.as-mini-body:active {
   background: var(--state-active);
 }
-button.as-mini-body:focus-visible {
+button.as-mini-body:focus-visible,
+a.as-mini-body:focus-visible {
   box-shadow: inset 0 0 0 1.5px var(--ring);
 }
 .as-mini-slot {
@@ -1255,3 +1259,89 @@ button.as-mini-body:focus-visible {
 .as-mini[data-place] .as-title {
   font-size: 11px;
 }
+
+/* --- A manager's card (src/ui/managers/manager-card-body.tsx): the thread card's, its avatar leading
+   its name, its description under them; under the rule, its issues in groups. ------------------- */
+.as-card-head {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+/* why -1 above and below: the 20 avatar centred on the title's first 18 line. */
+.as-card-head > .as-avatar {
+  margin: -1px 0;
+}
+.as-card-head > .as-card-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* What the manager is for, in the description's ink, whole up to four lines. */
+.as-card-desc {
+  flex: none;
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+/* An issue's id, in mono, whole before its title. */
+.as-issue-id {
+  flex: none;
+  color: var(--subtle-foreground);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+/* A parent there only for its sub-issues: quieter, its glyph too. */
+.as-mini[data-context] .as-title,
+.as-mini[data-context] .as-issue-state {
+  color: var(--subtle-foreground);
+}
+/* An issue's title too long for it runs through under the pointer, as a row's does; its start fades as it goes. */
+a.as-mini-body .as-title[data-over] {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--as-fade-in), #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 var(--as-fade-in), #000 calc(100% - 20px), transparent);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  a.as-mini-body:hover .as-title[data-over] {
+    --as-fade-in: 12px;
+    transition-delay: 500ms;
+  }
+  a.as-mini-body:hover .as-title[data-over] > .as-title-text {
+    transform: translateX(calc(-1 * var(--as-travel)));
+    transition: transform var(--as-run) cubic-bezier(0.45, 0, 0.55, 1) 500ms;
+  }
+}
+/* How many issues the card leaves out: words, not a control, in line with the titles' glyphs. */
+.as-card-more {
+  padding: 4px 0 0 4px;
+  color: var(--subtle-foreground);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+/* An issue's status glyph in its status's token, as the Regional Manager's Board draws it
+   (its issue-board.css `.rmi-state`), 12 in the line's 20 slot. */
+.as-issue-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+}
+.as-issue-state[data-state="backlog"],
+.as-issue-state[data-state="canceled"] { color: var(--subtle-foreground); }
+.as-issue-state[data-state="todo"] { color: var(--muted-foreground); }
+.as-issue-state[data-state="in-progress"] { color: light-dark(var(--color-blue-600), var(--color-blue-400)); }
+.as-issue-state[data-state="reviewing"] { color: light-dark(var(--color-cyan-600), var(--color-cyan-400)); }
+.as-issue-state[data-state="verifying"] { color: var(--warning-text); }
+.as-issue-state[data-state="in-review"] { color: var(--success); }
+.as-issue-state[data-state="done"] { color: var(--pr-merged); }
+.as-issue-state[data-state="needs-you"] { color: var(--destructive-text); }

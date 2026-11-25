@@ -1,6 +1,7 @@
 // Test rows: a valid PluginSidebarThread with the fields a test cares about overridden; and the
 // Regional Manager plugin's `coordinators` and `openIssues` answers, well formed and not.
 import type { PluginSidebarProject, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { ManagerIssues } from "./manager-issues.ts";
 
 export function thread(id: string, overrides: Partial<PluginSidebarThread> = {}): PluginSidebarThread {
   return {
@@ -71,7 +72,7 @@ export const MALFORMED_COORDINATORS: readonly unknown[] = [
 ];
 
 /** The Regional Manager plugin's `openIssues` answer for mgr_1, as it publishes it. */
-export const OPEN_ISSUES = {
+export const OPEN_ISSUES: Record<string, ManagerIssues> = {
   mgr_1: {
     needsYou: [{ id: "WEB-5", title: "Schema version", status: "in-progress", reason: "Blocked: which schema version?", parentId: "WEB-4" }],
     underWay: [{ id: "WEB-2", title: "Retry queue", status: "reviewing", parentId: null }],

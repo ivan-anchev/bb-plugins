@@ -30,7 +30,7 @@ const PR = manager("PR Reviews", 1);
 const SIDEBAR = manager("Sidebar", 2);
 
 type Shown = { managers: readonly ManagerModel[]; view: View };
-const props = ({ managers, view }: Shown) => ({ managers, view, onView: () => {}, onNavigate: () => {}, threads: THREADS });
+const props = ({ managers, view }: Shown) => ({ managers, underWaySince: null, view, onView: () => {}, onNavigate: () => {}, threads: THREADS });
 
 function mount(shown: Shown) {
   const slot = renderSlot({ component: SidebarViews }, props(shown));

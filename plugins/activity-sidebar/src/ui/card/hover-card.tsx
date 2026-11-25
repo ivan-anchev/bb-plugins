@@ -1,33 +1,16 @@
-// The list's hover card. CardIntent (src/card/card-intent.ts) decides which row's card shows, fed by
+// A list's hover card. CardIntent (src/card/card-intent.ts) decides which row's card shows, fed by
 // pointer and focus events delegated on the scroller, and by the pointer's moves anywhere while a card
 // shows. Radix Popover (shimmed by the host, so it shares bb's overlay layer) places it beside that row,
 // kept inside the window, and closes it on Escape wherever focus is. A card leaving fades out while the
 // next fades in. The keyboard reaches it from its row: Tab goes in,
-// first to its body, which the arrow keys then scroll, and on through its buttons. Shift+Tab off its
-// first stop or Escape comes back, and Tab off its last goes on to what follows the list. Focus in the
-// card is its row's to the list.
-import { useBbNavigate } from "@get-bb/plugin-sdk/app";
+// first to its body, which the arrow keys then scroll, and on through its buttons and links. Shift+Tab
+// off its first stop or Escape comes back, and Tab off its last goes on to what follows the list. Focus
+// in the card is its row's to the list. What a card says is its list's: the threads' (thread-card.tsx)
+// and the managers' (managers/manager-card.tsx). A row is found by its `data-card` key.
 import { Anchor, Content, Portal, Root } from "@radix-ui/react-popover";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from "react";
 import { CardIntent, type CardIntentDeps, type Point, type Under } from "../../card/card-intent.ts";
-import type { ListItem } from "../../list/items.ts";
-import type { LayoutEntry } from "../../list/layout.ts";
-import type { ThreadIndex } from "../../model/thread-index.ts";
 import { PORTAL_SCOPE } from "../portal-scope.ts";
-import { CardBody } from "./card-body.tsx";
-
-/** What a card reads beyond its row: who hangs under whom, and since when each thread has worked. */
-export type CardData = { index: ThreadIndex; underWaySince: ReadonlyMap<string, number> };
-
-export type RowItem = Extract<ListItem, { kind: "row" }>;
-
-/**
- * A row in its place: its section and thread. A row that moves to another section (archived, put to
- * sleep, done working) is another row, so its card goes with the old one.
- */
-export function cardKeyOf(item: RowItem): string {
-  return `${item.section}/${item.row.thread.id}`;
-}
 
 /** The list's keyboard focus, which counts focus in a card as its row's. */
 export type ListFocus = {
@@ -37,15 +20,20 @@ export type ListFocus = {
   refocus(): void;
 };
 
-/** A row where the list lays it out: `y` from the list's top, `h` its height. */
-type PlacedRow = { item: RowItem; y: number; h: number };
+/**
+ * A row's card: its accessible name; the list item focus in it counts as; where the row stands (a new
+ * place re-anchors the card); and what it says, given the way to put it away (before opening what a
+ * press in it names).
+ */
+export type CardOf = { label: string; focusKey: string; place: string; body(close: () => void): ReactNode };
 
-type Props = { scroller: RefObject<HTMLElement | null>; entries: readonly LayoutEntry[]; data: CardData; listFocus: ListFocus; onNavigate(): void };
+/** `cardOf`: the card of the row under a key, null once that row is gone. */
+type Props = { scroller: RefObject<HTMLElement | null>; listFocus: ListFocus; cardOf(key: string): CardOf | null };
 
 /** The card shown, and the one fading out behind it; null, none. */
 type Shown = { current: string | null; leaving: string | null };
 
-export function HoverCard({ scroller, entries, data, listFocus, onNavigate }: Props) {
+export function HoverCard({ scroller, listFocus, cardOf }: Props) {
   const [shown, setShown] = useState<Shown>({ current: null, leaving: null });
   const card = useRef<HTMLDivElement>(null);
   const latestFocus = useRef(listFocus);
@@ -56,38 +44,30 @@ export function HoverCard({ scroller, entries, data, listFocus, onNavigate }: Pr
     onChange: (key) => setShown((was) => ({ current: key, leaving: was.current ?? was.leaving })),
     returnFocus: () => latestFocus.current.refocus(),
   });
-  const navigate = useBbNavigate();
-  const current = placedRow(entries, shown.current);
+  const gone = shown.current !== null && cardOf(shown.current) === null;
 
-  // It goes with its row: filtered out, folded away, moved to another section, deleted. Focus that was in
-  // it still counts as there: React turns events off while it commits, so the card's removal reports no
-  // blur, and CardIntent hands focus back to the row (or the list's heir for it) as it puts the card away.
+  // It goes with its row: filtered out, folded away, moved to another section, archived, deleted. Focus
+  // that was in it still counts as there: React turns events off while it commits, so the card's removal
+  // reports no blur, and CardIntent hands focus back to the row (or the list's heir for it) as it puts the card away.
   useEffect(() => {
-    if (shown.current !== null && current === null) intent.cold();
-  }, [shown.current, current, intent]);
-
-  const open = (threadId: string) => {
-    intent.cold();
-    navigate.toThread(threadId);
-    onNavigate();
-  };
+    if (gone) intent.cold();
+  }, [gone, intent]);
 
   // why: one array, so a card keeps its instance (and plays its exit) as it turns from shown to leaving.
   const cards = [shown.leaving, shown.current].filter((key, i, all): key is string => key !== null && all.indexOf(key) === i);
   return cards.map((key) => {
-    const placed = placedRow(entries, key);
-    if (placed === null) return null;
-    const { item } = placed;
+    const what = cardOf(key);
+    if (what === null) return null;
     const isCurrent = key === shown.current;
     return (
       <Root key={key} open={isCurrent}>
-        <RowAnchor scroller={scroller} cardKey={key} y={placed.y} h={placed.h} />
+        <RowAnchor scroller={scroller} cardKey={key} place={what.place} />
         <Portal>
           <Content
             {...PORTAL_SCOPE}
             ref={isCurrent ? card : undefined}
             className="as-card"
-            aria-label={item.row.thread.displayTitle}
+            aria-label={what.label}
             side="right"
             align="start"
             sideOffset={10}
@@ -102,7 +82,7 @@ export function HoverCard({ scroller, entries, data, listFocus, onNavigate }: Pr
             onMouseLeave={(e) => intent.leaveCard(cardKeyAt(e.relatedTarget))}
             onFocus={() => {
               intent.focusCard();
-              listFocus.hold(item.key);
+              listFocus.hold(what.focusKey);
             }}
             // why: focus going to a row is reported by the row.
             onBlur={(e) => {
@@ -110,7 +90,7 @@ export function HoverCard({ scroller, entries, data, listFocus, onNavigate }: Pr
             }}
             onKeyDown={(e) => tabOut(e, listFocus)}
           >
-            <CardBody item={item} data={data} onOpen={open} />
+            {what.body(() => intent.cold())}
           </Content>
         </Portal>
       </Root>
@@ -125,7 +105,7 @@ export function HoverCard({ scroller, entries, data, listFocus, onNavigate }: Pr
  * Radix places the card again; it reads the row where its glide starts, not where it lands. The last
  * box read stands in once the row unmounts.
  */
-function RowAnchor({ scroller, cardKey, y, h }: { scroller: RefObject<HTMLElement | null>; cardKey: string; y: number; h: number }) {
+function RowAnchor({ scroller, cardKey, place }: { scroller: RefObject<HTMLElement | null>; cardKey: string; place: string }) {
   const anchor = useMemo(() => {
     let last = new DOMRect();
     const getBoundingClientRect = () => {
@@ -137,7 +117,7 @@ function RowAnchor({ scroller, cardKey, y, h }: { scroller: RefObject<HTMLElemen
     // why: keyed on the row's place, not its model. A new anchor restarts Floating UI's autoUpdate, which
     // forces style and layout, and the click that opens a row changes its model in the very commit bb
     // lays the opened thread out in.
-  }, [scroller, cardKey, y, h]);
+  }, [scroller, cardKey, place]);
   return <Anchor virtualRef={anchor} />;
 }
 
@@ -256,11 +236,12 @@ function tabOut(e: ReactKeyboardEvent<HTMLElement>, listFocus: ListFocus) {
 }
 
 /**
- * Where Tab stops in the card, in order: its body, which scrolls, then the body's buttons (mini rows,
- * "Show all", the plan's folds and Retry). A card with neither plan nor subthreads hides its body.
+ * Where Tab stops in the card, in order: its body, which scrolls, then the body's buttons and links
+ * (mini rows, "Show all", the plan's folds and Retry; a manager's issues). A card with nothing under
+ * its lines hides its body, or has none.
  */
 function tabStops(card: HTMLElement): HTMLElement[] {
-  return Array.from(card.querySelectorAll<HTMLElement>('[tabindex="0"], button')).filter((stop) => stop.checkVisibility());
+  return Array.from(card.querySelectorAll<HTMLElement>('[tabindex="0"], button, a[href]')).filter((stop) => stop.checkVisibility());
 }
 
 function underPointer(point: Point): Under {
@@ -277,10 +258,4 @@ function cardKeyAt(target: EventTarget | null): string | null {
 /** On the card shown; the 10 between it and its row count as the card (app.css `.as-card::before`). */
 function isOnCard(target: EventTarget | null): boolean {
   return target instanceof Element && target.closest('.as-card[data-state="open"]') !== null;
-}
-
-function placedRow(entries: readonly LayoutEntry[], key: string | null): PlacedRow | null {
-  if (key === null) return null;
-  for (const { item, y, h } of entries) if (item.kind === "row" && cardKeyOf(item) === key) return { item, y, h };
-  return null;
 }
