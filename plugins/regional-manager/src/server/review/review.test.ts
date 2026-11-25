@@ -153,8 +153,10 @@ test("the reviewer's first message, its role's rules and issue_review's instruct
     "role's rules": kit.configurationFor(reviewer(), {}).instructions ?? assert.fail("no rules"),
     "issue_review's instructions": tool.instructions ?? assert.fail("no instructions"),
   };
+  assert.match(places["first message"], /Report each finding at the severity CREW\.md gives it, a must-fix that breaks none of the five included: the verifier anchors or downgrades it, never you\./);
+  assert.match(places["role's rules"], /report each finding at the severity it gives, a must-fix that breaks none of the five below included/);
   for (const [place, text] of Object.entries(places)) {
-    assert.match(text, /CREW\.md says what to look for; (this|the anchor) rule alone says what blocks\./, place);
+    assert.match(text, /CREW\.md says what to look for[^\n]*(this|the anchor|The anchor) rule alone says what blocks/, place);
     assert.ok(
       text.includes(
         "A must-fix blocks the work only when it breaks one of five things: a done-criterion, the issue's brief, a recorded decision, safety (data loss, a crash or a security hole), or existing behaviour, as a regression. The brief is the issue's brief text: a CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion names it. Work that follows a recorded decision is never a finding.",

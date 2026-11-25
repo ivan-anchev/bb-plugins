@@ -649,7 +649,9 @@ before its verifier starts. The plugin starts a **reviewer**:
   loss, a crash or a security hole), or existing behaviour, as a regression.
   A CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion
   names it. The reviewer's first message, its rules and `issue_review`'s
-  instructions say so.
+  instructions say so. A reviewer reports each finding at the severity
+  CREW.md gives it, a must-fix that breaks none of the five included: the
+  verifier, not the reviewer, anchors or downgrades it.
 - **Triage**: the verifier's first message lists the findings, numbered, as
   claims to check; its verdict triages each, with a reason in a line:
   rejected; confirmed, a should-fix or nit that holds; anchored, a must-fix
