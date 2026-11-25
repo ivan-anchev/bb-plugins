@@ -1,9 +1,8 @@
 // The row a parent's Done sub-issues fold behind while the parent isn't Done (sub-issue-tree.tsx):
-// a sub-issue's row in its look, Done's glyph in its slot and "+N completed" for its words, quiet as
-// a Done row is. Pressing it unfolds them in place under it, and again folds them, the button the
-// parent's count is (pills.tsx), with no chevron drawn.
+// a sub-issue's row in its look, its glyph's slot left empty so "+N completed" lines up with the
+// sub-issues' ids, quiet as a Done row is. Pressing it unfolds them in place under it, and again
+// folds them, the button the parent's count is (pills.tsx), with no chevron drawn.
 import { handFocusTo } from "../../../ui/focus-hand-off.ts";
-import { StatusGlyph } from "../status-glyph.tsx";
 
 type CompletedRowProps = {
   count: number;
@@ -26,9 +25,7 @@ export function CompletedRow({ count, open, controls, onToggle }: CompletedRowPr
         aria-controls={open ? controls : undefined}
         onClick={onToggle}
       >
-        <span className="rmi-slot">
-          <StatusGlyph status="done" />
-        </span>
+        <span className="rmi-slot" />
         <span className="rmi-row-more">+{count} completed</span>
       </button>
     </div>
