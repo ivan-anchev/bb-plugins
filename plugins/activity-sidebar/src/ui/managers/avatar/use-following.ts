@@ -3,7 +3,7 @@
 // home on the library's spring, and it holds still again once they are home. A touch has no hover; with
 // Reduce motion nothing follows.
 import { useEffect, useRef, useState, type PointerEvent } from "react";
-import { useReducedMotion } from "../motion/reduced-motion.ts";
+import { useReducedMotion } from "../../motion/reduced-motion.ts";
 
 /** Still; following the cursor; or easing home, moving but no longer following. */
 export type Following = "off" | "on" | "easing-home";

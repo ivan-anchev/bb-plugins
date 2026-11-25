@@ -7,7 +7,7 @@ import type { ManagerModel } from "../../model/activity.ts";
 import { openMenuFromKeyboard } from "../row/row.tsx";
 import { toActionTarget } from "../row/row-menu.tsx";
 import { usePanelShown } from "../portal-scope.ts";
-import { useFollowing, type Following } from "./use-following.ts";
+import { useFollowing, type Following } from "./avatar/use-following.ts";
 
 type Props = { manager: ManagerModel; className: string; label: string; onNavigate(): void; children(following: Following): ReactNode };
 

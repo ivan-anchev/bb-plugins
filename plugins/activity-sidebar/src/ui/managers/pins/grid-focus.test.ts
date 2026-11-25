@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nextItem, type ArrowKey } from "./manager-focus.ts";
+import { nextItem, type ArrowKey } from "./grid-focus.ts";
 
 // Seven pinned in three columns (rows of 3, 3 and 1), then three in the list: items 0–6 tiles, 7–9 rows.
 const GRID = { tiles: 7, columns: 3, total: 10 };

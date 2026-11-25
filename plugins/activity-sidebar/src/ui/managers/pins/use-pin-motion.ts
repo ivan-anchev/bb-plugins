@@ -4,8 +4,8 @@
 // slide adds onto one still under way (`composite: "add"`), so an item cut short carries on from where
 // it was seen. With Reduce motion everything takes its place at once.
 import { useLayoutEffect, useRef, type RefObject } from "react";
-import { glideMs, OUT3 } from "../../list/motion-plan.ts";
-import { useReducedMotion } from "../motion/reduced-motion.ts";
+import { glideMs, OUT3 } from "../../../list/motion-plan.ts";
+import { useReducedMotion } from "../../motion/reduced-motion.ts";
 import { planPinMotion, type Box, type PinMove, type Placed } from "./pin-motion.ts";
 
 /** `scroller`: the view, holding each item in a `[data-key]` wrapper, the grid's in `.as-pins`. */
@@ -76,7 +76,7 @@ function play(move: PinMove, scroller: HTMLElement) {
       face?.animate([from, { transform: "none", transformOrigin: "0 0" }], { duration, easing: OUT3 });
       // why: its words come in after the avatar has left, so they don't read as sliding with it.
       for (const words of item.querySelectorAll<HTMLElement>(".as-pin-name, .as-manager-words")) {
-        words.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }], { duration, easing: "ease-out" });
+        words.animate([{ opacity: 0 }, { opacity: 0, offset: 0.35 }, { opacity: 1 }], { duration, easing: OUT3 });
       }
       return;
     }

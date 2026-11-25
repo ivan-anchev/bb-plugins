@@ -5,7 +5,7 @@
 export type ArrowKey = "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight";
 
 /** The view's items: `tiles` tiles in `columns` columns, then rows, `total` in all. */
-export type ManagerGrid = { tiles: number; columns: number; total: number };
+type ManagerGrid = { tiles: number; columns: number; total: number };
 
 /** The item focus moves to from `at` (null: from the list itself, onto the first item); null where the key doesn't move it. */
 export function nextItem(at: number | null, key: ArrowKey, { tiles, columns, total }: ManagerGrid): number | null {

@@ -1,18 +1,18 @@
 // The Managers view: the pinned managers' tiles in a grid at its top, in bb's pin order, then one row a
 // regional manager, oldest first, in a scroller that is one tab stop: the arrow keys move between its
-// tiles and rows (manager-focus.ts). Few items, so all of them are mounted. Resting on a tile or a row
+// tiles and rows (pins/grid-focus.ts). Few items, so all of them are mounted. Resting on a tile or a row
 // shows its card (card/manager-card.tsx), as a thread's row does. Pinning or unpinning one moves it
-// between the grid and the list (use-pin-motion.ts).
+// between the grid and the list (pins/use-pin-motion.ts).
 import { useLayoutEffect, useMemo, useRef, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import { heirOf } from "../../list/focus.ts";
 import type { ManagerModel, Managers } from "../../model/activity.ts";
 import type { ListFocus } from "../card/hover-card.tsx";
 import { usePanelShown } from "../portal-scope.ts";
 import { ManagerCard } from "./card/manager-card.tsx";
-import { isArrowKey, nextItem } from "./manager-focus.ts";
+import { isArrowKey, nextItem } from "./pins/grid-focus.ts";
 import { ManagerRow } from "./manager-row.tsx";
-import { ManagerTile } from "./manager-tile.tsx";
-import { usePinMotion } from "./use-pin-motion.ts";
+import { ManagerTile } from "./pins/manager-tile.tsx";
+import { usePinMotion } from "./pins/use-pin-motion.ts";
 
 /** `underWaySince`: since when each thread has worked, for a card's state line; null where no card shows (a compact viewport). */
 type Props = { managers: Managers; underWaySince: ReadonlyMap<string, number> | null; onNavigate(): void };
@@ -21,7 +21,9 @@ export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
   const shown = usePanelShown();
   const scroller = useRef<HTMLDivElement>(null);
   const keys = useMemo(() => [...managers.pinned, ...managers.unpinned].map((m) => m.thread.id), [managers]);
-  const held = useHeldItem(keys, scroller);
+  // why: whether the keyboard's focus ring showed on the item, so focus following it to its new place shows it only then.
+  const ringed = useRef(false);
+  const held = useHeldItem(keys, scroller, ringed);
   const listFocus = useListFocus(held, scroller);
   usePinMotion(scroller);
 
@@ -30,8 +32,9 @@ export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
       key={manager.thread.id}
       data-key={manager.thread.id}
       data-card={manager.thread.id}
-      onFocus={() => {
+      onFocus={(e) => {
         held.current = manager.thread.id;
+        ringed.current = e.target.matches(":focus-visible");
       }}
     >
       {children}
@@ -74,7 +77,7 @@ export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
  * its own menu or elsewhere), focus passes to its heir (list/focus.ts), or to the list once none is left.
  * When it moves between the grid and the list (pinned or unpinned from its menu), focus follows it there.
  */
-function useHeldItem(keys: readonly string[], scroller: RefObject<HTMLDivElement | null>): RefObject<string | null> {
+function useHeldItem(keys: readonly string[], scroller: RefObject<HTMLDivElement | null>, ringed: RefObject<boolean>): RefObject<string | null> {
   const held = useRef<string | null>(null);
   const before = useRef(keys);
 
@@ -85,14 +88,15 @@ function useHeldItem(keys: readonly string[], scroller: RefObject<HTMLDivElement
     if (key === null) return;
     if (keys.includes(key)) {
       // why: its old link went with focus on it (bb's menu hands focus back to it as it closes).
-      if (!document.activeElement?.isConnected || document.activeElement === document.body) linkOf(scroller.current, key)?.focus({ preventScroll: true });
+      const dropped = !document.activeElement?.isConnected || document.activeElement === document.body;
+      if (dropped) linkOf(scroller.current, key)?.focus({ preventScroll: true, focusVisible: ringed.current });
       return;
     }
     const heir = heirOf(was, key, new Set(keys));
     held.current = heir;
     const target = heir === null ? scroller.current : linkOf(scroller.current, heir);
     target?.focus({ preventScroll: true });
-  }, [keys, scroller]);
+  }, [keys, scroller, ringed]);
 
   return held;
 }
@@ -119,7 +123,7 @@ function linkOf(scroller: HTMLElement | null, key: string): HTMLElement | null {
 }
 
 /**
- * The arrow keys move between tiles and rows (manager-focus.ts), from the scroller itself to the first.
+ * The arrow keys move between tiles and rows (pins/grid-focus.ts), from the scroller itself to the first.
  * A key another control already handled, or one pressed in a portaled menu (React bubbles it here),
  * belongs to that control.
  */
@@ -139,4 +143,11 @@ function moveFocus(e: KeyboardEvent<HTMLDivElement>) {
 /** How many columns the grid lays out at its present width (app.css `.as-pins`). */
 function columnsOf(grid: HTMLElement): number {
   return getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+}
+
+// why: the HTML standard's option, in every engine bb runs on; TypeScript's DOM types don't carry it yet.
+declare global {
+  interface FocusOptions {
+    focusVisible?: boolean;
+  }
 }

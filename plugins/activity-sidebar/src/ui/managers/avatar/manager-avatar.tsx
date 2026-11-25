@@ -4,7 +4,7 @@
 // tile has the pointer (use-following.ts).
 import { BlobAvatar } from "blob-avatar";
 import type { CSSProperties } from "react";
-import { MANAGER_HUE_COLORS, type Avatar } from "../../model/manager-look.ts";
+import { MANAGER_HUE_COLORS, type Avatar } from "../../../model/manager-look.ts";
 import type { Following } from "./use-following.ts";
 
 // why: the size the name's line and the reply's line span exactly, with the gap between them (app.css .as-manager-words).

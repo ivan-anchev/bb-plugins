@@ -3,7 +3,7 @@
 // from bb's menu, it leaves the list for the grid above.
 import type { ManagerModel } from "../../model/activity.ts";
 import { FadingTitle } from "../row/row.tsx";
-import { ManagerAvatar } from "./manager-avatar.tsx";
+import { ManagerAvatar } from "./avatar/manager-avatar.tsx";
 import { ManagerLink } from "./manager-link.tsx";
 
 export function ManagerRow({ manager, onNavigate }: { manager: ManagerModel; onNavigate(): void }) {

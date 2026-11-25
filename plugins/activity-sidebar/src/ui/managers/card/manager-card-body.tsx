@@ -13,7 +13,7 @@ import { CardGlyph } from "../../card/card-glyphs.tsx";
 import { Line, StateLineView } from "../../card/card-lines.tsx";
 import { useFocusKept } from "../../card/use-focus-kept.ts";
 import { IssueSection } from "./issue-section.tsx";
-import { ManagerAvatar } from "../manager-avatar.tsx";
+import { ManagerAvatar } from "../avatar/manager-avatar.tsx";
 
 /** The card's avatar, beside the title's first line. */
 const FACE = 20;

@@ -242,7 +242,7 @@
   line-height: 16px;
 }
 
-/* --- The pinned managers' grid, above the rows (src/ui/managers/manager-tile.tsx): at most 3 a row,
+/* --- The pinned managers' grid, above the rows (src/ui/managers/pins/manager-tile.tsx): at most 3 a row,
    2 when the sidebar is too narrow for 3 of 84. auto-fill keeps the empty columns, so 1 or 2 tiles keep a
    column's width and sit at the start. No chrome and no title: a gap alone parts it from the list. */
 .as-pins {
