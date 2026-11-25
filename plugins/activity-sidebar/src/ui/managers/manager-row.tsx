@@ -4,14 +4,15 @@
 import type { ManagerModel } from "../../model/activity.ts";
 import { FadingTitle } from "../row/row.tsx";
 import { ManagerAvatar } from "./avatar/manager-avatar.tsx";
+import type { Follow } from "./avatar/use-following.ts";
 import { ManagerLink } from "./manager-link.tsx";
 
-export function ManagerRow({ manager, onNavigate }: { manager: ManagerModel; onNavigate(): void }) {
+export function ManagerRow({ manager, follow, onNavigate }: { manager: ManagerModel; follow: Follow; onNavigate(): void }) {
   const t = manager.thread;
   const spoken = manager.line === null ? t.displayTitle : `${t.displayTitle}, ${manager.line}`;
 
   return (
-    <ManagerLink manager={manager} className="as-manager" label={spoken} onNavigate={onNavigate}>
+    <ManagerLink manager={manager} className="as-manager" label={spoken} follow={follow} onNavigate={onNavigate}>
       {(following) => (
         <>
           <span className="as-manager-face">

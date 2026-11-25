@@ -8,6 +8,7 @@ import { heirOf } from "../../list/focus.ts";
 import type { ManagerModel, Managers } from "../../model/activity.ts";
 import type { ListFocus } from "../card/hover-card.tsx";
 import { usePanelShown } from "../portal-scope.ts";
+import { useFollowing } from "./avatar/use-following.ts";
 import { ManagerCard } from "./card/manager-card.tsx";
 import { isArrowKey, nextItem } from "./pins/grid-focus.ts";
 import { ManagerRow } from "./manager-row.tsx";
@@ -26,6 +27,7 @@ export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
   const held = useHeldItem(keys, scroller, ringed);
   const listFocus = useListFocus(held, scroller);
   usePinMotion(scroller);
+  const followOf = useFollowing();
 
   const item = (manager: ManagerModel, children: ReactNode) => (
     <div
@@ -59,10 +61,10 @@ export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
       {/* why data-card-lane: a tile's card stands where a row's would, past the grid's right edge, not over the tiles beside it (hover-card.tsx). */}
       {managers.pinned.length > 0 && (
         <div className="as-pins" role="group" aria-label="Pinned" data-card-lane="">
-          {managers.pinned.map((manager) => item(manager, <ManagerTile manager={manager} onNavigate={onNavigate} />))}
+          {managers.pinned.map((manager) => item(manager, <ManagerTile manager={manager} follow={followOf(manager.thread.id)} onNavigate={onNavigate} />))}
         </div>
       )}
-      {managers.unpinned.map((manager) => item(manager, <ManagerRow manager={manager} onNavigate={onNavigate} />))}
+      {managers.unpinned.map((manager) => item(manager, <ManagerRow manager={manager} follow={followOf(manager.thread.id)} onNavigate={onNavigate} />))}
       {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does.
           Put away while the Managers panel is hidden, as every overlay is (portal-scope.ts). */}
       {underWaySince !== null && shown && <ManagerCard scroller={scroller} managers={managers} underWaySince={underWaySince} listFocus={listFocus} onNavigate={onNavigate} />}
@@ -89,7 +91,10 @@ function useHeldItem(keys: readonly string[], scroller: RefObject<HTMLDivElement
     if (keys.includes(key)) {
       // why: its old link went with focus on it (bb's menu hands focus back to it as it closes).
       const dropped = !document.activeElement?.isConnected || document.activeElement === document.body;
-      if (dropped) linkOf(scroller.current, key)?.focus({ preventScroll: true, focusVisible: ringed.current });
+      const link = dropped ? linkOf(scroller.current, key) : null;
+      link?.focus({ preventScroll: true, focusVisible: ringed.current });
+      // why: its new place can be out of view (pinned from far down the list, or unpinned to below the fold); its own box isn't moved by the pin motion.
+      link?.scrollIntoView({ block: "nearest" });
       return;
     }
     const heir = heirOf(was, key, new Set(keys));

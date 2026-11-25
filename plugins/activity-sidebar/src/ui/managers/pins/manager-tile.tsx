@@ -5,15 +5,16 @@
 import type { ManagerModel } from "../../../model/activity.ts";
 import { FadingTitle } from "../../row/row.tsx";
 import { ManagerAvatar } from "../avatar/manager-avatar.tsx";
+import type { Follow } from "../avatar/use-following.ts";
 import { ManagerLink } from "../manager-link.tsx";
 
 // why: the row's 36 and about a fifth more reads as "slightly larger" beside the rows, not as another control; and it is a touch target's size.
 const AVATAR = 44;
 
 // why no title attribute: its tooltip would fight the hover card, whose title is the full name.
-export function ManagerTile({ manager, onNavigate }: { manager: ManagerModel; onNavigate(): void }) {
+export function ManagerTile({ manager, follow, onNavigate }: { manager: ManagerModel; follow: Follow; onNavigate(): void }) {
   return (
-    <ManagerLink manager={manager} className="as-pin" label={manager.thread.displayTitle} onNavigate={onNavigate}>
+    <ManagerLink manager={manager} className="as-pin" label={manager.thread.displayTitle} follow={follow} onNavigate={onNavigate}>
       {(following) => (
         <>
           <ManagerAvatar avatar={manager.look?.avatar ?? null} following={following} size={AVATAR} />

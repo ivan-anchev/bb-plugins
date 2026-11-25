@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nextItem, type ArrowKey } from "./grid-focus.ts";
+import { nextItem } from "./grid-focus.ts";
 
 // Seven pinned in three columns (rows of 3, 3 and 1), then three in the list: items 0–6 tiles, 7–9 rows.
 const GRID = { tiles: 7, columns: 3, total: 10 };
-const from = (at: number | null, key: ArrowKey) => nextItem(at, key, GRID);
+const from = (at: number | null, key: Parameters<typeof nextItem>[1]) => nextItem(at, key, GRID);
 
 test("from the list itself, any arrow goes to the first item", () => {
   assert.equal(from(null, "ArrowDown"), 0);
@@ -39,4 +39,5 @@ test("with no pins, ↑/↓ walk the list as before; with nothing at all, nothin
 
 test("pins alone: ↓ from the last grid row stays on its tile", () => {
   assert.equal(nextItem(4, "ArrowDown", { tiles: 5, columns: 3, total: 5 }), 4);
+  assert.equal(nextItem(0, "ArrowDown", { tiles: 2, columns: 3, total: 2 }), 0, "one short row: no sideways step");
 });
