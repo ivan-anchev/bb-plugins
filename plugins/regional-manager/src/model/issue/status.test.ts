@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentIdSchema, type Agent } from "../agent/agent.ts";
 import { handoffIdSchema, type Handoff } from "../agent/handoff.ts";
+import { decisionIdSchema, type Decision } from "../decision.ts";
 import { coordinatorIdSchema } from "../role.ts";
 import { checkIdSchema, type Check, type FinalCheck } from "../verdict/check.ts";
 import type { PrSnapshot } from "../verdict/pr.ts";
@@ -73,7 +74,10 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
 
 const thread = (status: HolderThread["status"], hasPendingInteraction = false): HolderThread => ({ status, hasPendingInteraction });
-const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecision: false, finalCheck: null, verifierAsks: false, ...over });
+const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecisions: [], finalCheck: null, verifierAsks: false, ...over });
+/** WEB-1 named by one unanswered question: the plugin's at its cap when `cap` is a count, else the regional manager's. */
+const asking = (cap: number | null): Partial<IssueFacts> => ({ openDecisions: [question(cap)] });
+const question = (cap: number | null): Decision => ({ id: decisionIdSchema.parse("d1"), issueId: issue.id, question: "Another round?", options: [], askedAt: 1_000, answer: null, cap });
 const held = (thread: HolderThread | null, current: Handed | null = null, fixRounds = 0): Partial<IssueFacts> => ({ holder: { agent: { ...agent, fixRounds }, thread, current } });
 const view = (over: Partial<IssueFacts>) => {
   const [placed] = issueViews([facts(over)]);
@@ -168,9 +172,16 @@ test("an issue resting in Todo after its agent ended says how it ended; only one
 
 test("an issue named by an unanswered decision Needs you, unless something more pressing does", () => {
   const asked = "Waiting on your answer to its decision";
-  assert.deepEqual(view({ openDecision: true }), at("todo", "Not started", asked));
-  assert.deepEqual(view({ openDecision: true, ...held(thread("active")) }), at("in-progress", "Working", asked));
-  assert.deepEqual(view({ openDecision: true, ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
+  assert.deepEqual(view(asking(null)), at("todo", "Not started", asked));
+  assert.deepEqual(view({ ...asking(null), ...held(thread("active")) }), at("in-progress", "Working", asked));
+  assert.deepEqual(view({ ...asking(null), ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
+});
+
+test("an issue whose cap question is open Needs you with a reason that leads with its cap, and its headline carries no count", () => {
+  assert.deepEqual(view(asking(3)), at("todo", "Not started", "At its cap of 3 failed verifications: Waiting on your answer to its decision"));
+  const blocking = { ...held(thread("idle"), { handoff: blocked, check: null }) };
+  assert.deepEqual(view({ ...asking(3), ...blocking }), at("in-progress", "Blocked: Needs a staging key", "At its cap of 3 failed verifications: Blocked: Needs a staging key"));
+  assert.deepEqual(view(asking(4)).needsYou, "At 4 failed verifications, past its cap of 3: Waiting on your answer to its decision");
 });
 
 /** A parent WEB-1 of `kind` and its sub-issues WEB-2, WEB-3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */
@@ -191,7 +202,7 @@ const reported = (at: number): Partial<IssueFacts> => ({ issue: { ...issue, kind
 test("a parent's headline says only what its count of Done sub-issues doesn't: nothing, or why it Needs you", () => {
   const asked = "Waiting on your answer to its decision";
   assert.deepEqual(rolled("build", [resting("todo")]), at("todo", null));
-  const [parent = assert.fail("no view")] = issueViews([facts({ openDecision: true }), facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-2"), parentId: issue.id } })]);
+  const [parent = assert.fail("no view")] = issueViews([facts(asking(null)), facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-2"), parentId: issue.id } })]);
   assert.deepEqual({ status: parent.status, headline: parent.headline, needsYou: parent.needsYou }, at("todo", asked, asked));
 });
 
@@ -202,7 +213,7 @@ test("a parent rolls up from its sub-issues: any started is In progress, any in 
   assert.deepEqual(rolled("build", [resting("backlog")]), at("todo", null), "the parent rests in Todo");
   assert.deepEqual(rolled("build", [closedAs("canceled"), closedAs("canceled")], { rest: "backlog" }), at("backlog", null), "every sub-issue canceled");
   assert.deepEqual(rolled("build", [closedAs("canceled")]), at("todo", null));
-  assert.deepEqual(rolled("build", [{ openDecision: false }], { closed: { as: "canceled", at: 9_000 } }), at("canceled", "Canceled"));
+  assert.deepEqual(rolled("build", [{}], { closed: { as: "canceled", at: 9_000 } }), at("canceled", "Canceled"));
   const { parent, subs } = family("build", [held(thread("idle"), { handoff: blocked, check: null }), resting("todo")]);
   assert.deepEqual([parent.status, parent.needsYou, parent.subIssues, parent.holder], ["in-progress", null, { done: 0, total: 2 }, null], "a flagged sub-issue flags itself, not its parent");
   assert.equal(subs[0]?.needsYou, "Blocked: Needs a staging key");
@@ -268,6 +279,20 @@ test("a build parent whose work is all merged is placed by its latest final chec
   const none = "WEB-1 has no done-criteria for its final check";
   assert.deepEqual(placed(null, merged(2), { doneCriteria: [] }), { ...at2("in-progress", none, none), due: null, closedBy: null });
   assert.deepEqual(placed(null, [{ pr: pr("merged") }], { kind: "research" }).status, "done", "a research parent never has one");
+});
+
+test("the plugin's question at its cap locks an open issue, and leaves Needs you once a passing final check closes its parent; another question still waits", () => {
+  const [open = assert.fail("no view")] = issueViews([facts(asking(3))]);
+  assert.deepEqual([open.capLock?.id, open.capLock?.cap], ["d1", 3]);
+  assert.equal(issueViews([facts({ ...asking(3), pr: pr("merged") })])[0]?.capLock, null, "merged: Done");
+  const merged = Array.from({ length: 2 }, () => ({ pr: pr("merged") }));
+  const passed = finalCheck(["WEB-2", "WEB-3"], returned(["pass"]));
+  const capped = family("build", merged, {}, { ...asking(3), finalCheck: passed }).parent;
+  assert.deepEqual([capped.status, capped.needsYou, capped.capLock], ["done", null, null]);
+  const failed = family("build", merged, {}, { ...asking(3), finalCheck: finalCheck(["WEB-2", "WEB-3"], returned(["fail"])) }).parent;
+  assert.deepEqual([failed.status, failed.needsYou, failed.capLock?.id], ["in-progress", "At its cap of 3 failed verifications: ✗ Final check failed", "d1"]);
+  const asked = family("build", merged, {}, { ...asking(null), finalCheck: passed }).parent;
+  assert.deepEqual([asked.status, asked.needsYou, asked.capLock], ["done", "Waiting on your answer to its decision", null]);
 });
 
 test("a sub-issue is blocked by its parent's dependencies, and its own", () => {

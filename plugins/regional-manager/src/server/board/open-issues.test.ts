@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coordinatorIdSchema } from "../../model/role.ts";
-import { coordinating, HEAD, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, HEAD, ISSUE, settled, startedAgent, textOf, toCap } from "../test-harness.ts";
 
 const REPORT = { summary: "Done", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
 
@@ -93,4 +93,20 @@ test("a manager's open work is empty when it has none, or is unknown, rather tha
   const unknown = coordinatorIdSchema.parse("00000000-0000-4000-8000-000000000000");
   const empty = { needsYou: [], underWay: [], parents: [], decisions: [] };
   assert.deepEqual(await kit.rpc.openIssues({ keys: [coordinatorId, unknown] }), { [coordinatorId]: empty, [unknown]: empty });
+});
+
+test("openIssues lists an issue at its cap under Needs you, its reason led by the cap, and drops its question once the issue is canceled, as the board does", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  await toCap(kit, threadId, coordinatorId, "WEB-1", agentThreadId);
+  const work = async () => (await kit.rpc.openIssues({ keys: [coordinatorId] }))[coordinatorId] ?? assert.fail("no open work read");
+
+  const capped = await work();
+  assert.deepEqual(capped.needsYou.map(({ id, reason }) => [id, reason]), [["WEB-1", "At its cap of 3 failed verifications: ✗ Failed verification: Retries land with backoff"]]);
+  assert.deepEqual(capped.decisions, [], "its question names a listed issue");
+
+  await kit.call("agent_stop", { agent: "a2" }, threadId);
+  assert.ok(!textOf(await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId)).includes("refused"));
+  assert.deepEqual(await work(), { needsYou: [], underWay: [], parents: [], decisions: [] }, "the canceled issue's question no longer waits, here or on the board");
+  assert.deepEqual((await kit.rpc.board({ coordinatorId })).decisions.map(({ id, answer }) => [id, answer]), [["d1", null]], "nothing was written: it is still unanswered");
 });

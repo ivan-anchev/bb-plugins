@@ -9,7 +9,8 @@ import { agentIdSchema } from "../../model/agent/agent.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
-import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, levels, settled, startedAgent, textOf, withoutLinks, type SendFailure } from "../test-harness.ts";
+import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, failsVerification, levels, settled, startedAgent, textOf, threadIn, toCap, withoutLinks, type SendFailure } from "../test-harness.ts";
+import { takeUnread } from "../store/test-store.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("WEB-1");
@@ -195,7 +196,7 @@ test("a verdict on a superseded or stale handoff, or of a stopped agent, sends n
     assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
   }
   for (const { kit, coordinatorId, check } of [stale, closed]) {
-    assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id }], "the regional manager decides");
+    assert.deepEqual(takeUnread(kit.store, coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }], "the regional manager decides");
   }
 });
 
@@ -326,7 +327,7 @@ test("a crash before the findings leave, then an unrelated turn in the agent's t
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 1, "the claim is kept");
   assert.deepEqual(doorbells(), [doorbellOf(MAYBE_SENT)], "the regional manager is woken");
   assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /nothing bb keeps shows whether they arrived: they may or may not have\. Read the issue with issue_read before you message the agent/);
-  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()), [], "told once");
+  assert.deepEqual(takeUnread(kit.store, coordinatorId, Date.now()), [], "told once");
   await kit.tick();
   await settled();
   assert.deepEqual([kit.sent().filter((args) => args.threadId === agentThreadId).length, kit.store.unannounced(coordinatorId)], [0, []], "settled once");
@@ -402,7 +403,7 @@ test("an agent turn that starts after the verifier's model is looked up, before 
   assert.equal(answers, 1);
   assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), []);
   assert.equal(kit.store.agent(coordinatorId, a1)?.fixRounds, 0);
-  assert.deepEqual(kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id }]);
+  assert.deepEqual(takeUnread(kit.store, coordinatorId, Date.now()).map(({ event }) => event), [{ kind: "checked", issueId: i1, checkId: check().id, asked: null }]);
 });
 
 test("a verdict that passes every criterion is In review with ✓ and the models bb ran the verifier on", async () => {
@@ -889,7 +890,7 @@ test("a second done handoff supersedes the first verdict and stops its verifier,
   await settled();
   assert.equal(doorbells().length, 1, "only the newer handoff is announced");
   assert.deepEqual(
-    kit.store.takeUnread(coordinatorId, Date.now()).map(({ event }) => event.kind === "checked" && event.checkId),
+    takeUnread(kit.store, coordinatorId, Date.now()).map(({ event }) => event.kind === "checked" && event.checkId),
     [check().id],
   );
 });
@@ -949,7 +950,7 @@ test("no registered tool can change whether a regional manager verifies, whoever
     for (const caller of callers) for (const input of inputs) await kit.call(name, input, caller).catch(() => undefined);
   }
   assert.equal(kit.store.verifies(coordinatorId), true);
-  assert.ok(!kit.store.takeUnread(coordinatorId, Date.now()).some(({ event }) => event.kind === "verification-toggled"));
+  assert.ok(!takeUnread(kit.store, coordinatorId, Date.now()).some(({ event }) => event.kind === "verification-toggled"));
 });
 
 test("a done handoff's verifier runs on the verifier named on its issue, and the verdict says so", async () => {
@@ -993,4 +994,45 @@ test("a verifier named while a check runs leaves that check as it is, and applie
   assert.equal(check().verifier, null);
   assert.equal(verifier(), running);
   assert.deepEqual(kit.store.issue(coordinatorId, i1)?.verifier, { providerId: "claude-code", model: "sonnet", reasoningLevel: "high" });
+});
+
+test("an issue's third failed verdict, by a fresh agent with its fix round unspent, is checked and sent to nobody, and the plugin asks the user at the cap", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, doorbells, row } = await withAgent();
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  assert.deepEqual(kit.store.decisions(coordinatorId), [], "two failures ask nothing");
+
+  const fresh = threadIn(textOf(await kit.call("agent_start", { issue: "WEB-1" }, threadId)));
+  const a2 = agentIdSchema.parse("a2");
+  assert.equal(kit.store.agent(coordinatorId, a2)?.fixRounds, 0, "a fresh agent, its fix round unspent");
+  const sentBefore = kit.sent().length;
+  await failsVerification(kit, coordinatorId, fresh);
+
+  const third = kit.store.latestHandoff(coordinatorId, a2)?.check?.verdict;
+  assert.deepEqual(third?.state === "returned" && third.settlement, { kind: "checked", refused: null, ci: { kind: "none" } });
+  assert.deepEqual(kit.sent().slice(sentBefore).filter((args) => args.threadId === fresh || args.threadId === agentThreadId), [], "nothing went to either agent");
+  assert.equal(kit.store.agent(coordinatorId, a2)?.fixRounds, 0, "no round was spent");
+  assert.deepEqual(kit.store.decisions(coordinatorId).map(({ id, issueId, cap, answer }) => ({ id, issueId, cap, answer })), [{ id: "d1", issueId: i1, cap: 3, answer: null }]);
+  assert.equal((await row()).needsYou, "At its cap of 3 failed verifications: ✗ Failed verification: Retries land with backoff");
+  assert.match(doorbells().at(-1) ?? "", /- WEB-1 "Add retries" \(a2\) handed off: done, failed verification; WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)$/);
+  assert.match(
+    textOf(await kit.call("crew_catch_up", {}, threadId)),
+    /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start and agent_message on WEB-1 are refused\./,
+  );
+});
+
+test("a failure settled while a cap question is open, as when a person wakes the agent, goes back to nobody and asks nothing more", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId } = await withAgent();
+  const fresh = await toCap(kit, threadId, coordinatorId, "WEB-1", agentThreadId);
+  const a2 = agentIdSchema.parse("a2");
+  assert.equal(kit.store.decisions(coordinatorId).length, 1, "the third asked");
+
+  await kit.startTurn(fresh); // a person types to a2, which works and hands off again
+  const sentBefore = kit.sent().length;
+  await failsVerification(kit, coordinatorId, fresh);
+  const fourth = kit.store.latestHandoff(coordinatorId, a2)?.check?.verdict;
+  assert.deepEqual(fourth?.state === "returned" && fourth.settlement, { kind: "checked", refused: null, ci: { kind: "none" } });
+  assert.deepEqual(kit.sent().slice(sentBefore).filter((args) => args.threadId === fresh), [], "sent to nobody, though a2's round is unspent");
+  assert.equal(kit.store.agent(coordinatorId, a2)?.fixRounds, 0);
+  assert.deepEqual(kit.store.decisions(coordinatorId).map(({ cap, answer }) => ({ cap, answer })), [{ cap: 3, answer: null }], "and asked nothing more");
 });

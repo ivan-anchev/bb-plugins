@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { commentIdSchema, submissionIdSchema } from "../../../model/feed/comment.ts";
-import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
+import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent, takeUnread } from "../test-store.ts";
 
 const m1 = commentIdSchema.parse("m1");
 
@@ -46,7 +46,7 @@ test("the regional manager's reply records no event; an agent's records a commen
   const other = filedIssue(store, MANAGER, newIssue(), 1_000).id;
   const agentId = startAgent(store, issueId, "agent-1");
   const asked = store.commentIssue(MANAGER, { issueId, author: { kind: "user" }, text: "Why SQS?", replyTo: null, submission: null }, 2_000) ?? assert.fail("not stored");
-  store.takeUnread(MANAGER, 2_100);
+  takeUnread(store, MANAGER, 2_100);
 
   const managers = store.commentIssue(MANAGER, { issueId, author: { kind: "manager" }, text: "It is already deployed.", replyTo: asked, submission: null }, 2_200);
   const agents = store.commentIssue(MANAGER, { issueId, author: { kind: "agent", agentId }, text: "SQS is wired.", replyTo: asked, submission: null }, 2_300);

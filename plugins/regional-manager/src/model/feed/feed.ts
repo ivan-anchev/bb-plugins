@@ -3,7 +3,7 @@
 // store (feed-reader.ts), this merges them. A status is only ever as logged (log-store.ts
 // observeStatuses), never derived here from what happened.
 import type { Agent } from "../agent/agent.ts";
-import type { IssueDecision } from "../decision.ts";
+import type { DecisionId, IssueDecision } from "../decision.ts";
 import type { InboxEvent, StoredEvent } from "../inbox/inbox-event.ts";
 import type { Issue } from "../issue/issue.ts";
 import type { Handed, IssueStatus } from "../issue/status.ts";
@@ -165,11 +165,17 @@ function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus 
 /** Rounds numbered in the order they began: every handoff, and a build parent's final checks. */
 function roundsOf({ handed, finalChecks, events }: FeedFacts): Round[] {
   const outcomeAt = outcomeTimes(events);
+  const asked = askedByCheck(events);
   const begun = sortByTime([
-    ...handed.map((one) => ({ at: one.handoff.at, make: (n: number) => roundOf(one, n, one.check === null ? null : (outcomeAt.get(one.check.id) ?? null)) })),
+    ...handed.map((one) => ({ at: one.handoff.at, make: (n: number) => roundOf(one, n, one.check === null ? null : (outcomeAt.get(one.check.id) ?? null), one.check === null ? null : (asked.get(one.check.id) ?? null)) })),
     ...finalChecks.map((check) => ({ at: check.at, make: (n: number) => finalRoundOf(check, n, outcomeAt.get(check.id) ?? null) })),
   ]);
   return begun.map(({ make }, i) => make(i + 1));
+}
+
+/** The question each check's settling put to the user at the issue's cap, as its `checked` event recorded it; a check that asked none is absent. */
+function askedByCheck(events: readonly StoredEvent[]): Map<string, DecisionId> {
+  return new Map(events.flatMap(({ event }) => (event.kind === "checked" && event.asked !== null ? [[event.checkId, event.asked] as const] : [])));
 }
 
 /** When each check's outcome was announced: the first `checked` or `sent-back` event naming it. */

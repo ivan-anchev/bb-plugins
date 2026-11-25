@@ -11,12 +11,14 @@ import { isVerified } from "../../../../model/issue/kind.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import type { FeedAgents } from "./byline.tsx";
 import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
+import type { DecisionId } from "../../../../model/decision.ts";
 import { CommentCard } from "./comment-card.tsx";
 import { CommentComposer } from "./comment-composer.tsx";
 import { DecisionCard } from "./decision-card.tsx";
 import { EntryLine, MovedLine } from "./entry-line.tsx";
 import { CriteriaGrid } from "./round/criteria-grid.tsx";
 import { RoundCard } from "./round/round-card.tsx";
+import { CapCounts } from "./round/score.tsx";
 
 const FILTERS: readonly { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
@@ -41,7 +43,7 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
   const shown = feed.entries.filter((entry) => shownIn(filter, entry));
   const comments = commentsIn(feed.entries);
   return (
-    <>
+    <CapCounts.Provider value={capCountsIn(feed.entries)}>
       {feed.doneCriteria.length > 0 && <CriteriaGrid coordinatorId={coordinatorId} issueId={issue.id} verified={isVerified(issue.kind)} criteria={feed.doneCriteria} rounds={rounds} />}
       <section className="rmi-part" aria-labelledby={titleId}>
         <div className="rmi-section-head">
@@ -69,7 +71,7 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
         )}
         <CommentComposer coordinatorId={coordinatorId} issueId={issue.id} posted={comments} />
       </section>
-    </>
+    </CapCounts.Provider>
   );
 }
 
@@ -81,7 +83,7 @@ function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onTo
     case "round":
       return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} onEngage={() => onEngage(entry.round)} />;
     case "decision":
-      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} />;
+      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} status={issue.status} />;
     case "comment": {
       const { replyTo } = entry.comment;
       return <CommentCard coordinatorId={coordinatorId} entry={entry} answered={replyTo === null ? null : (comments.get(replyTo) ?? null)} agents={agents} />;
@@ -105,6 +107,10 @@ function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onTo
 
 /** The feed's comments, by id. */
 const commentsIn = (entries: readonly Entry[]): Map<CommentId, Comment> => new Map(entries.flatMap((entry) => (entry.kind === "comment" ? [[entry.comment.id, entry.comment] as const] : [])));
+
+/** Each cap question among the entries, by its id, with the count it was asked at (score.tsx CapCounts). */
+const capCountsIn = (entries: readonly Entry[]): ReadonlyMap<DecisionId, number> =>
+  new Map(entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.cap !== null ? [[entry.decision.id, entry.decision.cap] as const] : [])));
 
 const roundsIn = (entries: readonly Entry[]): Round[] => entries.flatMap((entry) => (entry.kind === "round" ? [entry.round] : []));
 

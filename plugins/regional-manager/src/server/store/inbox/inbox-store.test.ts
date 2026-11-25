@@ -4,7 +4,7 @@ import { decisionIdSchema } from "../../../model/decision.ts";
 import { closesOf } from "../../../model/issue/relations.ts";
 import { issueViews, type IssueView } from "../../../model/issue/status.ts";
 import type { PrSnapshot } from "../../../model/verdict/pr.ts";
-import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER } from "../test-store.ts";
+import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, takeUnread } from "../test-store.ts";
 
 test("a decision may name the issue it flags, and is answered once", () => {
   const { store } = freshStore();
@@ -12,7 +12,7 @@ test("a decision may name the issue it flags, and is answered once", () => {
   const named = store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId }, 3_000);
   const general = store.insertDecision(MANAGER, { question: "Ship on Friday?", options: [], issueId: null }, 3_100);
 
-  assert.deepEqual(named, { id: "d1", issueId, question: "Which queue?", options: ["SQS", "Redis"], askedAt: 3_000, answer: null });
+  assert.deepEqual(named, { id: "d1", issueId, question: "Which queue?", options: ["SQS", "Redis"], askedAt: 3_000, answer: null, cap: null });
   assert.equal(general.issueId, null);
   assert.equal(store.answerDecision(MANAGER, named.id, "SQS", 4_000), "answered");
   assert.equal(store.answerDecision(MANAGER, named.id, "Redis", 4_100), "already-answered");
@@ -51,8 +51,8 @@ test("a doorbell announces its events once; one that never reached its thread ma
   assert.equal(store.doorbell(MANAGER), null);
   assert.deepEqual(store.unannounced(MANAGER), [event]);
 
-  assert.deepEqual(store.takeUnread(MANAGER, 3_200), [event]);
-  assert.deepEqual(store.takeUnread(MANAGER, 3_300), []);
+  assert.deepEqual(takeUnread(store, MANAGER, 3_200), [event]);
+  assert.deepEqual(takeUnread(store, MANAGER, 3_300), []);
 });
 
 test("a doorbell whose queued message fails to be kept leaves its events unannounced, and retried announces them", () => {
@@ -115,13 +115,13 @@ test("the manager's own working tree is recorded once per state", () => {
 /** WEB-1 merged as #41 when `merged`, WEB-2 canceled by the manager, WEB-3 depending on them as stored: every issue of the manager as viewed with no agent. */
 function mergedOrNot(store: ReturnType<typeof freshStore>["store"]) {
   const pr: PrSnapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: "0123456789abcdef0123456789abcdef01234567", failedChecks: [] };
-  return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, openDecision: false, finalCheck: null, verifierAsks: false, pr: merged && issue.id === "WEB-1" ? pr : null })));
+  return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, openDecisions: [], finalCheck: null, verifierAsks: false, pr: merged && issue.id === "WEB-1" ? pr : null })));
 }
 
 /** The issues `views` says are unblocked since what is known, recorded, as "WEB-3 by WEB-1 done". */
 function recorded(store: ReturnType<typeof freshStore>["store"], views: readonly IssueView[], at: number): string[] {
   store.recordUnblocked(MANAGER, views, at);
-  return store.takeUnread(MANAGER, at).flatMap(({ event }) => (event.kind === "unblocked" ? [`${event.issueId} by ${event.by} ${event.closedAs}`] : []));
+  return takeUnread(store, MANAGER, at).flatMap(({ event }) => (event.kind === "unblocked" ? [`${event.issueId} by ${event.by} ${event.closedAs}`] : []));
 }
 
 test("a relation knows its dependency's close from when it is written: kept through edits of the others, gone with it, and written afresh when added again", () => {

@@ -6,6 +6,7 @@ import { experimental_useRpcKeyedQuery, Markdown } from "@get-bb/plugin-sdk/app"
 import { useId, type ReactNode } from "react";
 import { coordinatorContract as contract, roundBodyKey } from "../../../../../contract.ts";
 import type { HandoffBody } from "../../../../../model/agent/handoff.ts";
+import type { DecisionId } from "../../../../../model/decision.ts";
 import type { Round, RoundBody as Body, RoundKey, Step as StepAt } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
@@ -169,7 +170,7 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   return (
     <p className="rmi-outcome" data-result={verdict.outcome.kind}>
       {/* why one span: a sentence long enough to wrap wraps within itself, not as whole flex items. */}
-      <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} confirmed={confirmedOf(round.review)} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
+      <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} confirmed={confirmedOf(round.review)} asked={verdict.asked} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
       {round.outcome !== null && <StepTime step={round.outcome} />}
     </p>
   );
@@ -178,9 +179,9 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
 /**
  * Where a failed verdict's findings went: to its agent as a fix round, with the review's findings
  * the verifier confirmed (only those reach the agent: src/server/verify/findings.ts), or maybe, when the plugin can't
- * tell whether they reached it.
+ * tell whether they reached it; then who decides: the user, when its failure asked at the issue's cap (`asked`).
  */
-function SentBack({ agent, round, delivery, confirmed }: { agent: ReactNode; confirmed: number } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
+function SentBack({ agent, round, delivery, confirmed, asked }: { agent: ReactNode; confirmed: number; asked: DecisionId | null } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
   const withConfirmed = confirmed === 0 ? "" : `, with the ${confirmed === 1 ? "1 confirmed finding" : `${confirmed} confirmed findings`}`;
   switch (delivery) {
     case "sent":
@@ -195,7 +196,7 @@ function SentBack({ agent, round, delivery, confirmed }: { agent: ReactNode; con
       return (
         <>
           Maybe sent back to {agent} as fix round {round}
-          {withConfirmed}: the regional manager decides
+          {withConfirmed}: {asked === null ? "the regional manager decides" : `at its cap, the plugin asked you (${asked})`}
         </>
       );
     default:
@@ -208,8 +209,13 @@ function SentBack({ agent, round, delivery, confirmed }: { agent: ReactNode; con
 /** How many of the review's findings the verifier confirmed; 0 when it had no review, or none was confirmed. */
 const confirmedOf = (review: Round["review"]): number => (review.state === "reported" ? (review.confirmed ?? 0) : 0);
 
-/** What became of a verdict nothing went back to an agent from. why the results: one superseded after it returned waited for CI, so it was replaced before CI, not before its verdict. */
-function outcomeText({ outcome, results }: NonNullable<Round["verdict"]>): string {
+/**
+ * What became of a verdict nothing went back to an agent from. why the results: one superseded after
+ * it returned waited for CI, so it was replaced before CI, not before its verdict. why `asked` first:
+ * a failure that asked the user at the issue's cap is theirs to decide, not the regional manager's.
+ */
+function outcomeText({ outcome, results, asked }: NonNullable<Round["verdict"]>): string {
+  if (asked !== null) return `Not sent back: at its cap, the plugin asked you (${asked})`;
   return outcome.kind === "superseded" && results.length > 0 ? "Replaced before CI was judged" : OUTCOME[outcome.kind];
 }
 

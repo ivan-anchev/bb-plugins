@@ -8,6 +8,7 @@ import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import type { Avatar } from "../../model/profile/avatar.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
+import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { openStore, type Store } from "./store.ts";
 import type { NewIssue } from "./issue/issues-store.ts";
 
@@ -77,4 +78,11 @@ export function verifyOff(storage: Pick<PluginStorage, "database">, id: Coordina
 /** Makes the regional manager one 0.3.0 created: no name stored, and flagged as waiting for its goal unless `flagged` is false. */
 export function heldAs030(storage: Pick<PluginStorage, "database">, id: CoordinatorId, flagged = true): void {
   storage.database().prepare("UPDATE coordinators SET awaiting_goal = ?, name = NULL WHERE id = ?").run(Number(flagged), id);
+}
+
+/** Every unread event of the regional manager, marked read at `at` once returned, as an answered catch-up marks them. */
+export function takeUnread(store: Pick<Store, "unread" | "markRead">, coordinatorId: CoordinatorId, at: number = Date.now()): StoredEvent[] {
+  const events = store.unread(coordinatorId);
+  store.markRead(coordinatorId, events.map(({ id }) => id), at);
+  return events;
 }

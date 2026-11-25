@@ -10,11 +10,13 @@ import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, failedVerification, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
-import { STATUS_LABELS, type Handed, type IssueView } from "../../model/issue/status.ts";
+import { isClosed } from "../../model/issue/relations.ts";
+import { STATUS_LABELS, type Handed, type IssueStatus, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
+import { askedQuestion, askedText, capMovesText, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { findingText, type Review } from "../../model/verdict/review.ts";
 import { checkInFlight, ciVerdictOf, confirmedFindings, failurePhrases, failureReasons, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
@@ -34,6 +36,8 @@ export type Lookups = {
   record(id: IssueId): readonly Handed[];
   /** The issue's view, as the board in the same catch-up places it; null when bb's thread list couldn't be read. */
   view(id: IssueId): IssueView | null;
+  /** The questions the plugin put to the user at the issue's cap, in the order asked, as they stand now. */
+  capQuestions(id: IssueId): readonly CapQuestion[];
 };
 
 /** The updates section of a catch-up: every event it returned, oldest first. */
@@ -65,7 +69,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     switch (subject.kind) {
       case "handoff": {
         const handed = handedOf(subject.handoffId, lookups);
-        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${FAILED_IS_YOURS}` : "";
+        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${failedNextStep(check, event.asked, lookups)}` : "";
         return `### ${issueName(event.issueId, titles, subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
       }
       case "final":
@@ -79,7 +83,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
   }
   if (event.kind === "comment-to-you") {
     const comment = commentOf(event.commentId, lookups);
-    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId), checkOnRecordInFlight(lookups.record(event.issueId)))}`;
+    return `### The user commented on ${titled(event.issueId, titles)}: ${comment.id}\n\n${when}${answers(comment, lookups)} In their own words:\n\n${comment.text}\n\n${commentNextStep(comment, lookups.view(event.issueId), checkOnRecordInFlight(lookups.record(event.issueId)), lockOf(event.issueId, lookups))}`;
   }
   const on = issueName(event.issueId, titles, event.agentId);
   switch (event.kind) {
@@ -107,7 +111,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     case "pr":
       return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
     case "returned-to-todo":
-      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. Start one with agent_start, or plan it again with issue_update.`;
+      return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. ${restingNextStep(event.issueId, lookups)}`;
     default:
       return event satisfies never;
   }
@@ -153,8 +157,10 @@ export const checkOnRecordInFlight = (record: readonly Handed[]): boolean => rec
  * check on its record is in flight (`inFlight`). why the check, not only the status: a done handoff
  * queues its check while the agent's turn still runs, which the board shows as In progress.
  */
-function commentNextStep({ id, issueId }: Comment, view: IssueView | null, inFlight: boolean): string {
+function commentNextStep({ id, issueId }: Comment, view: IssueView | null, inFlight: boolean, lock: CapQuestion | null): string {
   const answer = `Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision)`;
+  // why first: while the cap question locks the issue, relaying to an agent or starting one is refused.
+  if (lock !== null) return `${answer}. Don't relay it to an agent or start one: ${issueId} failed verification ${lock.cap} times and the plugin asked the user (${lock.id}), so until they answer, agent_start and agent_message on ${issueId} are refused. If their comment bears on that question, point them at ${lock.id} on the board in your reply.`;
   // why issue_read, not another catch-up: this update comes only once, and the plugin's own record of the issue doesn't need bb's thread list.
   if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board${inFlight ? `, but a check on its record is in flight, so don't relay it to an agent now` : ""}. ${RELAY_WAIT}`;
   const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
@@ -178,6 +184,27 @@ export function commentsText(comments: readonly Comment[]): string {
   return comments.map(({ id, at, author, replyTo, text }) => `#### ${id}, ${whose(author)}, at ${new Date(at).toISOString()}${replyTo === null ? "" : `, answering ${replyTo}`}\n\n${text}`).join("\n\n");
 }
 
+/** What the regional manager can do about an issue left with no agent: start one, unless it closed since or its cap question locks it (lockOf). */
+function restingNextStep(issueId: IssueId, lookups: Pick<Lookups, "capQuestions" | "view">): string {
+  const closed = closedNow(issueId, lookups);
+  if (closed !== null) return `${issueId} is ${STATUS_LABELS[closed]} now, so no agent can start on it.`;
+  const lock = lockOf(issueId, lookups);
+  if (lock === null) return "Start one with agent_start, or plan it again with issue_update.";
+  return `Until the user answers ${lock.id}, the plugin's question at its cap, agent_start on ${issueId} is refused. ${capMovesText(issueId, lock.id, lookups.view(issueId))}`;
+}
+
+/** The issue's status when its view places it closed now, Done or Canceled; null when it is open, or bb's thread list couldn't give a view. */
+function closedNow(issueId: IssueId, { view }: Pick<Lookups, "view">): IssueStatus | null {
+  const status = view(issueId)?.status ?? null;
+  return status !== null && isClosed(status) ? status : null;
+}
+
+/** What locks the issue now: its view's cap lock (IssueView capLock); when bb's thread list couldn't give a view, its unanswered cap question, as though it were open. */
+function lockOf(issueId: IssueId, { capQuestions, view }: Pick<Lookups, "capQuestions" | "view">): CapQuestion | null {
+  const read = view(issueId);
+  return read === null ? unansweredCapQuestion(capQuestions(issueId)) : read.capLock;
+}
+
 /** A decision the user answered: what was asked and offered, then the answer, marked as theirs. */
 function answeredText({ id, question, options, answer }: Decision, when: string): string {
   if (answer === null) throw new Error(`The decision ${id} is announced as answered, but has no answer.`);
@@ -187,8 +214,8 @@ function answeredText({ id, question, options, answer }: Decision, when: string)
 }
 
 /** The decisions section of a catch-up: every decision still waiting for the user, oldest first. */
-export function openDecisionsText(decisions: readonly Decision[]): string {
-  const open = decisions.filter((decision) => decision.answer === null);
+/** The decisions still waiting for the user (`open`, board-groups.ts waitingDecisions), as catch-up lists them. */
+export function openDecisionsText(open: readonly Decision[]): string {
   if (open.length === 0) return "## Decisions\n\nNone waiting for the user. Ask one with crew_ask_user when only the user can decide.";
   const lines = open.map(({ id, question, options, askedAt }) => `- ${id}, asked ${new Date(askedAt).toISOString()}: ${question}${options.length === 0 ? "" : ` Options: ${options.map((option) => `"${option}"`).join(", ")}.`}`);
   return ["## Decisions\n\nWaiting for the user on the board, under Needs you. Their answer wakes you; don't ask again meanwhile.", ...lines].join("\n\n");
@@ -224,6 +251,27 @@ const MAY_HAVE_REACHED_AGENT =
 
 const MOVE_TO_AN_AGENT =
   "bb's git plugin read changed files in your working tree when your turn ended, and the board warns the user of it. You never edit project files yourself, and you never touch your working tree: no stash, revert, checkout or deletion, not even of files you changed, since the user may have edited the same files. First propose, in a crew_ask_user decision, an issue whose agent redoes the change properly on its own branch, always, whatever the user's rules say: describe its title, brief and done-criteria, file it with issue_create, and start its agent only once they agree. In the same decision, ask the user whether to discard the changes in your environment: discarding them is theirs to do, never yours. If you made none of these changes, they are the user's: leave them and say so in your reply. The warning stays until a turn of yours ends with a clean tree.";
+
+/**
+ * What a failed done handoff leaves the regional manager to do, led by what its failure asked the
+ * user at the issue's cap, if it did: nothing once the issue closed, as by a merge or a cancel;
+ * else decide, or, while the issue's cap question is open, only what works then (rounds/cap.ts).
+ */
+function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view">): string {
+  const asked = askedId === null ? null : askedQuestion(lookups.decision(askedId));
+  const led = asked === null ? "" : `This was ${askedText(check.issueId, asked, mayHaveReachedAgent(check.verdict))}. `;
+  const closed = closedNow(check.issueId, lookups);
+  // why first: a closed issue takes no agent, and its question no longer waits for the user.
+  if (closed !== null) return `${led}${closedText(check.issueId, closed, asked)}`;
+  const open = lockOf(check.issueId, lookups);
+  if (open === null) return `${led}${FAILED_IS_YOURS}`;
+  const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;
+  return `${led}${held}Until the user answers ${open.id}, agent_start and agent_message on ${check.issueId} are refused. ${capMovesText(check.issueId, open.id, lookups.view(check.issueId))}`;
+}
+
+/** What a failure on an issue closed since (`status`, Done or Canceled) leaves to do: nothing; its question, if it asked one (`asked`), left the board. */
+const closedText = (issueId: IssueId, status: IssueStatus, asked: CapQuestion | null): string =>
+  `${issueId} is ${STATUS_LABELS[status]} now, so no agent can start on it and this failure needs nothing from you${asked === null ? "" : `; ${asked.id} left the board, as no round is left for an answer to allow`}.`;
 
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";

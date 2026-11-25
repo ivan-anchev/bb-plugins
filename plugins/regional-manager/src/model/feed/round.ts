@@ -4,6 +4,7 @@
 // share no field: the split is where the wire divides what folds from what opens.
 import { z } from "zod";
 import { agentIdSchema } from "../agent/agent.ts";
+import { decisionIdSchema, type DecisionId } from "../decision.ts";
 import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
 import { issueStatusSchema, type Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
@@ -52,8 +53,10 @@ export const roundSchema = z.object({
    * and, when it failed, what failed it first (verdict.ts firstFailure): its checkout (not the
    * claimed commit on a clean tree), a criterion, a must-fix finding the verifier confirmed, or CI; each criterion's result in the check's order ([] until it returned), and the
    * fix round its findings went back to its agent as once settled (null: none):
-   * reached it, or may have (the plugin can't tell, so the verdict is its manager's); and when it
-   * returned or could not run (null: neither yet, or it never will).
+   * reached it, or may have (the plugin can't tell, so the verdict is its manager's); when it
+   * returned or could not run (null: neither yet, or it never will); and, on the one round whose
+   * failure put the cap question to the user (rounds/cap.ts), that question's id (null on every
+   * other round). why no count: the question, among the issue's decisions, carries its cap.
    */
   verdict: z
     .object({
@@ -61,6 +64,7 @@ export const roundSchema = z.object({
       results: z.array(criterionResultSchema),
       fixRound: z.object({ round: z.number().int(), delivery: z.enum(["sent", "maybe"]) }).nullable(),
       step: stepSchema.nullable(),
+      asked: decisionIdSchema.nullable(),
     })
     .nullable(),
   /** When its returned verdict was sent back or made final, from the inbox event that said so (null: not yet, or no verdict returned, which its verifier's step tells). */
@@ -81,15 +85,15 @@ export const roundBodySchema = z.object({
 });
 export type RoundBody = z.infer<typeof roundBodySchema>;
 
-/** The round a handoff and its check make, numbered `number`, its outcome announced at `outcomeAt` (null: not yet). */
-export function roundOf({ handoff, check }: Handed, number: number, outcomeAt: number | null): Round {
+/** The round a handoff and its check make, numbered `number`, its outcome announced at `outcomeAt` (null: not yet), and what its failure asked at the cap (null: nothing). */
+export function roundOf({ handoff, check }: Handed, number: number, outcomeAt: number | null, asked: DecisionId | null): Round {
   return {
     key: roundKeySchema.parse(`h-${handoff.id}`),
     number,
     handed: stepAt(handoff.at),
     by: { kind: "agent", agentId: handoff.agentId, status: handoff.status, summary: handoff.summary },
     review: check === null ? { state: "none" } : reviewOf(check),
-    verdict: check === null ? null : verdictOf(check.verdict),
+    verdict: check === null ? null : verdictOf(check.verdict, asked),
     outcome: check === null ? null : outcomeStep(check.verdict, outcomeAt),
     inFlight: check !== null && checkInFlight(check),
   };
@@ -103,7 +107,7 @@ export function finalRoundOf(check: FinalCheck, number: number, outcomeAt: numbe
     handed: stepAt(check.at),
     by: { kind: "final", defaultBranch: check.subject.defaultBranch },
     review: { state: "none" },
-    verdict: verdictOf(check.verdict),
+    verdict: verdictOf(check.verdict, null),
     outcome: outcomeStep(check.verdict, outcomeAt),
     inFlight: checkInFlight(check),
   };
@@ -198,17 +202,17 @@ function confirmedOf(verdict: Verdict): number | null {
   return verdict.triage.filter(({ result }) => result === "confirmed").length;
 }
 
-function verdictOf(verdict: Verdict): Round["verdict"] {
+function verdictOf(verdict: Verdict, asked: DecisionId | null): Round["verdict"] {
   switch (verdict.state) {
     case "returned":
-      return { outcome: outcomeOf(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict), step: stepAt(verdict.at) };
+      return { outcome: outcomeOf(verdict), results: verdict.criteria.map(({ result }) => result), fixRound: fixRoundOf(verdict), step: stepAt(verdict.at), asked };
     case "could-not-run":
-      return { outcome: outcomeOf(verdict), results: [], fixRound: null, step: stepAt(verdict.at) };
+      return { outcome: outcomeOf(verdict), results: [], fixRound: null, step: stepAt(verdict.at), asked: null };
     case "queued":
     case "running":
     case "superseded":
     case "waived":
-      return { outcome: outcomeOf(verdict), results: [], fixRound: null, step: null };
+      return { outcome: outcomeOf(verdict), results: [], fixRound: null, step: null, asked: null };
     default:
       return verdict satisfies never;
   }

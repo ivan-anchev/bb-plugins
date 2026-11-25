@@ -81,7 +81,7 @@ function bbp19(): FeedFacts {
   const three = handed(handoff(3, A2, 5_000), returned(["pass", "pass", "fail"], 5_500, { kind: "sent-back", round: 1, ci: { kind: "none" } }));
   const four = handed(handoff(4, A2, 5_800), returned(["pass", "pass", "pass"], 6_400, { kind: "checked", refused: null, ci: { kind: "pass", number: 219 } }));
   const decisions: IssueDecision[] = [
-    { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 } },
+    { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 }, cap: null },
     { kind: "recorded", text: "a1 loops: hand BBP-19 to a fresh agent.", at: 4_700 },
     { kind: "recorded", text: "Verified and merged.", at: 6_700 },
   ];
@@ -94,13 +94,13 @@ function bbp19(): FeedFacts {
     events: stored([
       [3_600, { kind: "sent-back", issueId: BBP_19, agentId: A1, checkId: checkIdOf(one), round: 1 }],
       [3_900, { kind: "decision-answered", decisionId: decisionIdSchema.parse("d1") }],
-      [4_600, { kind: "checked", issueId: BBP_19, checkId: checkIdOf(two) }],
+      [4_600, { kind: "checked", issueId: BBP_19, checkId: checkIdOf(two), asked: null }],
       [5_200, { kind: "pr", issueId: BBP_19, agentId: A2, pr: pr("open", "pending"), changes: ["opened"] }],
       [5_600, { kind: "sent-back", issueId: BBP_19, agentId: A2, checkId: checkIdOf(three), round: 1 }],
       [6_000, { kind: "pr", issueId: BBP_19, agentId: A2, pr: pr("open", "pass"), changes: ["ci-passed"] }],
-      [6_500, { kind: "checked", issueId: BBP_19, checkId: checkIdOf(four) }],
+      [6_500, { kind: "checked", issueId: BBP_19, checkId: checkIdOf(four), asked: null }],
       [6_600, { kind: "pr", issueId: BBP_19, agentId: A2, pr: pr("merged", "pass"), changes: ["merged"] }],
-      [6_650, { kind: "checked", issueId: BBP_19, checkId: checkIdOf(four) }],
+      [6_650, { kind: "checked", issueId: BBP_19, checkId: checkIdOf(four), asked: null }],
     ]),
     log: [],
     comments: [],
@@ -204,7 +204,7 @@ test("the filters: All shows everything, Rounds only rounds, Discussion only dec
 });
 
 test("a round whose criteria all passed scores a pass only once it is settled: before, it is verifying or waiting for CI, and one replaced says so; a failed criterion fails it whatever comes", () => {
-  const scored = (verdict: Verdict) => scoreOf(roundOf(handed(handoff(1, A1, 3_000), verdict), 1, null));
+  const scored = (verdict: Verdict) => scoreOf(roundOf(handed(handoff(1, A1, 3_000), verdict), 1, null, null));
   const passed = (settlement: Extract<Verdict, { state: "returned" }>["settlement"]) => scored(returned(["pass", "pass", "pass"], 3_500, settlement));
   assert.deepEqual(passed({ kind: "pending" }), { kind: "pending", stage: "verifying" });
   assert.deepEqual(passed({ kind: "waiting-for-ci" }), { kind: "pending", stage: "ci" });
@@ -218,7 +218,7 @@ test("a round whose criteria all passed scores a pass only once it is settled: b
 });
 
 test("a fix round says whether its findings reached the agent: sent, or maybe, when the plugin can't tell; none while they are on their way, as the round is in flight", () => {
-  const fixRound = (settlement: Extract<Verdict, { state: "returned" }>["settlement"]) => roundOf(handed(handoff(1, A1, 3_000), returned(["fail", "pass", "pass"], 3_500, settlement)), 1, null).verdict?.fixRound;
+  const fixRound = (settlement: Extract<Verdict, { state: "returned" }>["settlement"]) => roundOf(handed(handoff(1, A1, 3_000), returned(["fail", "pass", "pass"], 3_500, settlement)), 1, null, null).verdict?.fixRound;
   assert.deepEqual(
     [fixRound({ kind: "sending-back", round: 1, ci: { kind: "none" } }), fixRound({ kind: "sent-back", round: 1, ci: { kind: "none" } }), fixRound({ kind: "maybe-sent-back", round: 2, ci: { kind: "none" } }), fixRound({ kind: "checked", refused: null, ci: { kind: "none" } })],
     [null, { round: 1, delivery: "sent" }, { round: 2, delivery: "maybe" }, null],
@@ -226,16 +226,16 @@ test("a fix round says whether its findings reached the agent: sent, or maybe, w
 });
 
 test("a check superseded while its review was to come is no longer in flight: its review reads as none and its score as replaced", () => {
-  const superseded = roundOf(handed(handoff(1, A1, 3_000), { state: "superseded" }, { state: "running", reviewerThreadId: "thr_reviewer" }), 1, null);
+  const superseded = roundOf(handed(handoff(1, A1, 3_000), { state: "superseded" }, { state: "running", reviewerThreadId: "thr_reviewer" }), 1, null, null);
   assert.deepEqual([superseded.inFlight, superseded.review, scoreOf(superseded)], [false, { state: "none" }, { kind: "unjudged", outcome: "superseded" }]);
-  const reviewing = roundOf(handed(handoff(2, A1, 4_000), { state: "queued", checkout: null }, { state: "running", reviewerThreadId: "thr_reviewer" }), 2, null);
+  const reviewing = roundOf(handed(handoff(2, A1, 4_000), { state: "queued", checkout: null }, { state: "running", reviewerThreadId: "thr_reviewer" }), 2, null, null);
   assert.deepEqual([reviewing.inFlight, reviewing.review, scoreOf(reviewing)], [true, { state: "pending" }, { kind: "pending", stage: "reviewing" }]);
 });
 
 test("a verdict failed by its checkout and a criterion names its checkout first, in its round as in the issue's headline (verdict.ts failureReasons)", () => {
   const both = returned(["fail", "pass", "pass"], 3_500, { kind: "checked", refused: null, ci: { kind: "none" } });
   const dirty: Verdict = both.state === "returned" ? { ...both, checkout: { headSha: SHA, changedFiles: ["?? notes.md"], changedFileCount: 1 } } : assert.fail("not returned");
-  const round = roundOf(handed(handoff(1, A1, 3_000), dirty), 1, null);
+  const round = roundOf(handed(handoff(1, A1, 3_000), dirty), 1, null, null);
   assert.deepEqual([round.verdict?.outcome, scoreOf(round)], [{ kind: "fail", by: "checkout" }, { kind: "failed", by: "checkout" }]);
 });
 

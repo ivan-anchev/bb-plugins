@@ -9,7 +9,7 @@ import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import type { FeedAgents } from "../byline.tsx";
 import { findingsText } from "./findings.tsx";
 import { RoundBody } from "./round-body.tsx";
-import { Score } from "./score.tsx";
+import { AskedNote, Score } from "./score.tsx";
 
 /** `onEngage`: the reader pressed or focused something inside the open round, which keeps it open as theirs. */
 type RoundCardProps = { coordinatorId: CoordinatorId; issueId: IssueId; round: Round; agents: FeedAgents; open: boolean; onToggle(): void; onEngage(): void };
@@ -26,6 +26,7 @@ export function RoundCard({ coordinatorId, issueId, round, agents, open, onToggl
         </span>
         <FoundCount review={round.review} />
         <Score round={round} />
+        <AskedNote asked={round.verdict?.asked ?? null} />
       </button>
       <div id={bodyId} hidden={!open} onFocusCapture={onEngage} onPointerDownCapture={onEngage}>
         {open && <RoundBody coordinatorId={coordinatorId} issueId={issueId} round={round} agents={agents} />}

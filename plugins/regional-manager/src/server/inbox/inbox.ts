@@ -64,7 +64,8 @@ type InboxStore = Pick<
   | "unannounced"
   | "coordinatorsToRing"
   | "announce"
-  | "takeUnread"
+  | "unread"
+  | "markRead"
   | "doorbell"
   | "doorbells"
   | "clearDoorbell"
@@ -113,7 +114,11 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     ringing.add(id);
     let delivery: "sent" | "queued";
     try {
-      const text = doorbellText(events, { titles: new Map(store.issues(id).map(({ id, title }) => [id, title])), check: store.check, decision: store.decision });
+      const text = doorbellText(events, {
+        titles: new Map(store.issues(id).map(({ id, title }) => [id, title])),
+        check: store.check,
+        decision: store.decision,
+      });
       // why agent-only: the model reads the doorbell, but bb draws no message for it, so the user sees only the turn it starts.
       const sent = await bb.sdk.threads.send({ threadId: coordinator.threadId, input: [{ type: "text", text, visibility: "agent-only", mentions: [] }], mode: "queue-if-active" });
       // why record a send that lands after a dispose: it happened, and announcing it again would ring twice.
@@ -321,11 +326,16 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
       recorded(id);
     },
 
-    /** Every unread event, whole, marked read as it is returned. A doorbell still queued then announces nothing unread, so it is taken back. */
-    takeUnread(id: CoordinatorId): StoredEvent[] {
-      const events = store.takeUnread(id, Date.now());
+    /** Every unread event, whole, oldest first, left unread until a catch-up that returned them marks them read (markRead). */
+    unread: (id: CoordinatorId): StoredEvent[] => store.unread(id),
+
+    /**
+     * Marks the events read, as a catch-up returned them whole. A doorbell still queued then announces
+     * nothing unread, so it is taken back; withdraw rings again for any event recorded since.
+     */
+    markRead(id: CoordinatorId, events: readonly StoredEvent[]): void {
+      store.markRead(id, events.map((event) => event.id), Date.now());
       withdraw(id).catch((error: unknown) => bb.log.warn(`Could not take back the doorbell of ${id}: ${messageOf(error)}`));
-      return events;
     },
 
     /**

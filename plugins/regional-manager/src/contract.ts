@@ -254,7 +254,7 @@ export const privateContract = defineRpcContract({
     input: z.object({ coordinatorId: coordinatorIdSchema, verify: z.boolean() }),
     output: z.object({}),
   },
-  /** Stores the user's answer to a decision and wakes its regional manager. A decision is answered once: a second answer is refused. */
+  /** Stores the user's answer to a decision and wakes its regional manager. A decision is answered once: a second answer is refused, as is one to the plugin's question at an issue's cap once the issue closed. */
   answerDecision: {
     input: z.object({ coordinatorId: coordinatorIdSchema, decisionId: decisionIdSchema, answer: answerSchema }),
     output: z.object({}),

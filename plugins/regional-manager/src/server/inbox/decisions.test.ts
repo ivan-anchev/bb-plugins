@@ -6,7 +6,7 @@ import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, doorbellOf, isRefusal, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
+import { coordinating, doorbellOf, newSubmission, failsVerification, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
 const d1 = decisionIdSchema.parse("d1");
@@ -189,4 +189,113 @@ test("a question about an issue reads that issue's open tab again at once, and n
   await kit.call("crew_ask_user", { question: "Start WEB-1 now?", options: ["Yes", "Not yet"], issue: "WEB-1" }, threadId);
   const tags = kit.invalidated().slice(before).filter((tag) => tag.startsWith("issue:"));
   assert.deepEqual(tags, [issueTag(coordinatorId, issueIdSchema.parse("WEB-1"))]);
+});
+
+test("a cap question whose issue's pull request merged leaves Needs you, on the board and in the needsYou count, while one on an open issue stays; the board sends each question's cap", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  for (const title of ["Add retries", "Dead letters"]) {
+    const { issue, agentThreadId } = await startedAgent(kit, threadId, { title });
+    await toCap(kit, threadId, coordinatorId, issue, agentThreadId);
+  }
+  const needsYouLane = async () => {
+    const board = await boardOf(kit, coordinatorId);
+    const lane = boardGroups(board.decisions, board.issues).find(({ lane: name }) => name === "needs-you")?.rows ?? [];
+    return lane.map((row) => (row.kind === "decision" ? `${row.decision.id} ${row.decision.issueId}` : row.issue.id));
+  };
+  const counted = async () => (await kit.rpc.needsYou({ keys: [coordinatorId] }))[coordinatorId];
+  assert.deepEqual(await needsYouLane(), ["d1 WEB-1", "d2 WEB-2", "WEB-1", "WEB-2"]);
+  assert.deepEqual(await counted(), { decisions: 2, issues: 2 });
+  // why the RPC's own answer, unparsed: a parse would drop a key the payload must not carry.
+  const raw = await kit.rpc.board({ coordinatorId });
+  assert.deepStrictEqual(raw.decisions.map((decision) => Object.keys(decision).sort()), [0, 1].map(() => ["answer", "askedAt", "cap", "id", "issueId", "options", "question"]));
+  assert.deepStrictEqual(raw.decisions.map(({ cap }) => cap), [3, 3]);
+
+  const web1 = kit.store.agents(coordinatorId).find(({ issueId, ended }) => issueId === "WEB-1" && ended === null) ?? assert.fail("no holder");
+  const branch = kit.thread(web1.threadId ?? assert.fail("no thread")).environmentBranchName ?? assert.fail("no branch");
+  kit.github.prs.set(branch, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 60_000;
+  await kit.tick();
+  await settled();
+
+  assert.equal((await boardOf(kit, coordinatorId)).issues.find(({ id }) => id === "WEB-1")?.status, "done");
+  assert.deepEqual(await needsYouLane(), ["d2 WEB-2", "WEB-2"], "WEB-1's question is on no lane; WEB-2's stays");
+  assert.deepEqual(await counted(), { decisions: 1, issues: 1 });
+  assert.equal(kit.store.decision(d1)?.answer, null, "nothing was written: the question is still unanswered");
+});
+
+test("a cap question asked while the board's host read is held arrives with its issue's reason: the badge counts the question and the issue from one read, as the board shows them", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, fresh);
+  await kit.idle(fresh, "Handed off.");
+  await settled();
+  const a2 = kit.store.agents(coordinatorId).find(({ threadId: agentThread }) => agentThread === fresh) ?? assert.fail("no a2");
+  const third = kit.store.latestHandoff(coordinatorId, a2.id)?.check ?? assert.fail("no check");
+  const running = third.verdict.state === "running" ? third.verdict : assert.fail(`the verdict is ${third.verdict.state}`);
+  const checkout = running.checkout ?? assert.fail("no checkout");
+
+  kit.threadLists.holding = true;
+  const badge = kit.rpc.needsYou({ keys: [coordinatorId] });
+  await settled();
+  // The third verdict returns and settles while the badge's host read is held, asking the user.
+  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
+  kit.store.settleReturned(third.id, { kind: "checked", refused: null, ci: { kind: "none" } }, Date.now());
+  kit.threadLists.holding = false;
+  for (const release of kit.threadLists.held.splice(0)) release();
+
+  assert.deepStrictEqual((await badge)[coordinatorId], { decisions: 1, issues: 1 }, "the question and its issue, never one without the other");
+  const board = await kit.rpc.board({ coordinatorId });
+  assert.deepStrictEqual([board.decisions.length, board.issues.map(({ needsYou }) => needsYou)], [1, ["At its cap of 3 failed verifications: ✗ Failed verification: Retries land with backoff"]]);
+});
+
+test("a failure that asks at the cap while crew_catch_up's host read is held waits for the next catch-up, which tells it with its question and the lock", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, fresh);
+  await kit.idle(fresh, "Handed off.");
+  await settled();
+  const a2 = kit.store.agents(coordinatorId).find(({ threadId: agentThread }) => agentThread === fresh) ?? assert.fail("no a2");
+  const third = kit.store.latestHandoff(coordinatorId, a2.id)?.check ?? assert.fail("no check");
+  const running = third.verdict.state === "running" ? third.verdict : assert.fail(`the verdict is ${third.verdict.state}`);
+  const checkout = running.checkout ?? assert.fail("no checkout");
+
+  kit.turnEvents.holding = true;
+  const caughtUp = kit.call("crew_catch_up", {}, threadId);
+  while (kit.turnEvents.held.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  // The third verdict returns and settles while catch-up reads a2's turns, asking the user.
+  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
+  kit.store.settleReturned(third.id, { kind: "checked", refused: null, ci: { kind: "none" } }, Date.now());
+  kit.turnEvents.holding = false;
+  for (const release of kit.turnEvents.held.splice(0)) release();
+
+  const first = textOf(await caughtUp);
+  assert.doesNotMatch(first, /\bd1\b/, "neither the failure that asked nor its question: both are newer than this catch-up's read");
+  const next = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(next, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start and agent_message on WEB-1 are refused\./);
+  assert.match(/## Decisions\n\n[^#]*/.exec(next)?.[0] ?? assert.fail("no decisions section"), /- d1, asked /);
+});
+
+test("a catch-up whose call is aborted while it reads bb leaves its updates unread: the next catch-up returns them", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating();
+  await startedAgent(kit, threadId);
+  textOf(await kit.call("crew_catch_up", {}, threadId));
+  await kit.rpc.commentIssue({ coordinatorId, issueId: issueIdSchema.parse("WEB-1"), text: "Use the staging key.", replyTo: null, submission: newSubmission() });
+
+  const aborted = new AbortController();
+  kit.threadLists.holding = true;
+  const caughtUp = kit.call("crew_catch_up", {}, threadId, aborted.signal);
+  while (kit.threadLists.held.length === 0) await new Promise((resolve) => setImmediate(resolve));
+  aborted.abort();
+  kit.threadLists.holding = false;
+  for (const release of kit.threadLists.held.splice(0)) release();
+  assert.match(textOf(await caughtUp), /Use the staging key\./, "the answer nobody receives still holds it");
+
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /### The user commented on WEB-1[^\n]*\n\n[^\n]*In their own words:\n\nUse the staging key\./);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Nothing new since your last catch-up/, "an answered catch-up marks it read");
 });

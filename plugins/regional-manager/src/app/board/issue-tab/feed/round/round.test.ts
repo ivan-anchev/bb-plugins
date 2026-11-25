@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { roundBodyKey } from "../../../../../contract.ts";
+import { decisionIdSchema } from "../../../../../model/decision.ts";
 import type { Entry } from "../../../../../model/feed/entry.ts";
 import { bodyOf, COORDINATOR, FEED, id, issue, opened, roundKey } from "../../test-tab.ts";
 
@@ -114,7 +115,7 @@ test("a finding reads as its place, severity and claim, its path byte for byte a
 test("before its verdict returns, a round's findings show with no triage; its rail and, folded, its line count the findings and none confirmed", async () => {
   const verifying: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.review.state === "reported"
-      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, confirmed: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null, step: null }, outcome: null, inFlight: true } }
+      ? { ...entry, round: { ...entry.round, review: { ...entry.round.review, confirmed: null }, verdict: { outcome: { kind: "pending" }, results: [], fixRound: null, step: null, asked: null }, outcome: null, inFlight: true } }
       : entry,
   );
   const running = { ...bodyOf(3), verdict: { state: "running", verifierThreadId: "thr_verifier_3" }, findings: bodyOf(3).findings.map((finding) => ({ ...finding, triage: null })) } satisfies ReturnType<typeof bodyOf>;
@@ -206,6 +207,76 @@ test("a round whose body fails to read says so beside its steps, and Retry reads
   assert.deepEqual(new Set(bodyReads.flat()), new Set([keyOf(3)]));
 });
 
+test("only the round whose failure asked the user at the cap says so by its score: \"3rd failed verification: asked you\"", async () => {
+  const d4 = decisionIdSchema.parse("d4");
+  const capped: Entry[] = FEED.entries.map((entry) => {
+    if (entry.kind === "round" && entry.round.number === 2 && entry.round.verdict !== null) {
+      return { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: null, asked: d4 } } };
+    }
+    return entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.answer === null ? { ...entry, decision: { ...entry.decision, id: d4, cap: 3 } } : entry;
+  });
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: capped }) });
+  const { card, head } = rounds(tab());
+  assert.deepEqual(
+    [1, 2, 3].map((n) => head(n).querySelector(".rmi-score-asked")?.textContent ?? null),
+    [null, "· 3rd failed verification: asked you", null],
+  );
+  assert.equal(head(2).querySelector(".rmi-score-asked")?.getAttribute("title"), "3rd failed verification: asked you on the board (d4)");
+  fireEvent.click(head(2));
+  assert.equal((await card(2).findByText(/^Not sent back/)).textContent, "Not sent back: at its cap, the plugin asked you (d4)", "the user decides, not the regional manager");
+  const question = tab().getByRole("article", { name: "Question d4" });
+  assert.match(question.querySelector(".rmi-decision-head")?.textContent ?? "", /^The plugin asked you/);
+  assert.match(tab().getByRole("article", { name: "Question d1" }).querySelector(".rmi-decision-head")?.textContent ?? "", /^Regional manager asked you/);
+});
+
+/** The feed with round 2's failure asking question d4 at the cap, the latest round; round 3 not yet handed off. */
+function cappedAtRound2(): Entry[] {
+  const d4 = decisionIdSchema.parse("d4");
+  return FEED.entries.flatMap((entry): Entry[] => {
+    if (entry.kind === "round" && entry.round.number === 3) return [];
+    if (entry.kind === "round" && entry.round.number === 2 && entry.round.verdict !== null) {
+      return [{ ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: null, asked: d4 } } }];
+    }
+    return [entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.answer === null ? { ...entry, decision: { ...entry.decision, id: d4, cap: 3 } } : entry];
+  });
+}
+
+test("the count of failed verifications is the asking round's head alone: the grid's latest score and the round's verifier step carry none", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
+  const { card, head } = rounds(tab());
+  assert.equal(head(2).querySelector(".rmi-score-asked")?.textContent, "· 3rd failed verification: asked you");
+  const grid = tab().getByText(/^2 rounds · latest/);
+  assert.match(grid.textContent ?? "", /Failed: 2 of 3$/, "the grid's latest score, and nothing after it");
+  await card(2).findByText(/^Not sent back/);
+  const verifier = card(2).getByText((_, element) => element?.classList.contains("rmi-step-title") === true && /^Verifier/.test(element.textContent ?? ""));
+  assert.doesNotMatch(verifier.textContent ?? "", /asked you/);
+});
+
+test("the plugin's question at the cap takes an answer while its issue is open; once the issue is Done its options are no buttons, and it says why", async () => {
+  const open = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
+  const asking = within(open.tab().getByRole("article", { name: "Question d4" }));
+  assert.ok(asking.getAllByRole("button").length > 0, "open: each option answers it");
+  cleanup();
+
+  const done = await opened("WEB-1", [issue("WEB-1", { status: "done", headline: "Merged #41" })], { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
+  const lapsed = within(done.tab().getByRole("article", { name: "Question d4" }));
+  assert.deepEqual(lapsed.queryAllByRole("button"), [], "nothing to press");
+  assert.ok(lapsed.getByText("Not answered: the issue is Done, so no round is left for an answer to allow."));
+  assert.ok(lapsed.getByRole("list", { name: "Options" }), "its options stay, as what was asked");
+});
+
+test("a round whose findings may have reached its agent, and whose failure asked at the cap, says the user decides", async () => {
+  const d4 = decisionIdSchema.parse("d4");
+  const maybe: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 1 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: { round: 1, delivery: "maybe" }, asked: d4 } } } : entry,
+  );
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: maybe }) });
+  const { card, head } = rounds(tab());
+  fireEvent.click(head(1));
+  const outcome = (await card(1).findByText(/sent back to/)).closest("p");
+  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 confirmed finding: at its cap, the plugin asked you \(d4\)/);
+});
+
 test("a round whose findings may or may not have reached its agent says so, and that the manager decides", async () => {
   const maybe: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 1 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, fixRound: { round: 1, delivery: "maybe" } } } } : entry,
@@ -287,7 +358,7 @@ test("the grid's head says the latest round's own score, so one all of whose cri
 test("a round nothing verified, as with verification off, shows no reviewer step, no verifier step and no outcome line; its score says it", async () => {
   // why this shape: with verification off a handoff gets no review and a waived verdict (server/review/review.test.ts).
   const waived: Entry[] = FEED.entries.map((entry) =>
-    entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "none" }, verdict: { outcome: { kind: "unverified" }, results: [], fixRound: null, step: null }, inFlight: false } } : entry,
+    entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "none" }, verdict: { outcome: { kind: "unverified" }, results: [], fixRound: null, step: null, asked: null }, inFlight: false } } : entry,
   );
   const unverified = { ...bodyOf(3), verdict: { state: "waived" }, findings: [] } satisfies ReturnType<typeof bodyOf>;
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: waived }), bodies: () => unverified });

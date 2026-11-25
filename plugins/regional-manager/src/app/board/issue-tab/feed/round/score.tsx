@@ -1,6 +1,10 @@
 // What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix confirmed,
-// Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so.
+// Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so. Beside
+// it in the round's head only, the failure that put the cap question to the user says "3rd failed verification: asked you".
+import { createContext, useContext } from "react";
+import type { DecisionId } from "../../../../../model/decision.ts";
 import { scoreOf, type Round } from "../../../../../model/feed/round.ts";
+import { ordinal } from "../../../../../model/verdict/rounds/cap.ts";
 import { NOT_CLEAN, NOT_CLEAN_TREE } from "../../../../../model/verdict/checkout.ts";
 import { ResultGlyph } from "./result-glyph.tsx";
 
@@ -45,6 +49,31 @@ export function Score({ round }: { round: Round }) {
       score satisfies never;
       return null;
   }
+}
+
+/**
+ * The count of failed verifications each cap question of the feed was asked at, by its id, from
+ * the question itself among the feed's decisions (feed.tsx): what a round's note reads its count from.
+ */
+export const CapCounts = createContext<ReadonlyMap<DecisionId, number>>(new Map());
+
+/**
+ * On the one round whose failure put the cap question to the user (round.ts), what it did, in its
+ * head beside its score (round-card.tsx): "3rd failed verification: asked you". why not in Score:
+ * the grid's latest and the verifier's step show the score too, and the count is the round's alone.
+ */
+export function AskedNote({ asked }: { asked: DecisionId | null }) {
+  const counts = useContext(CapCounts);
+  if (asked === null) return null;
+  // why a neutral fallback: the question comes in the same feed read as its round, but a map can't promise the type checker its key.
+  const failed = counts.get(asked);
+  const text = failed === undefined ? "Failed verification: asked you" : `${ordinal(failed)} failed verification: asked you`;
+  return (
+    <span className="rmi-score-asked" title={`${text} on the board (${asked})`}>
+      <span aria-hidden="true">· </span>
+      {text}
+    </span>
+  );
 }
 
 /** A round nothing checks: how its handoff ended, when not done; nothing for a final check, or a kind or status this bundle doesn't know. */

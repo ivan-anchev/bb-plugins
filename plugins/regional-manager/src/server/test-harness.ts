@@ -391,7 +391,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const memoryWrites: CoordinatorId[] = [];
   const memory = openMemoryRoot(join(mkdtempSync(join(tmpdir(), "coordinator-test-")), "data.db"), openedStore, (id) => memoryWrites.push(id));
   const metadata = new Map<string, Metadata>();
-  const tools = new Map<string, { parameters: z.ZodType; instructions: string | null; run(input: unknown, threadId: string): Promise<PluginAgentToolResult> }>();
+  const tools = new Map<string, { parameters: z.ZodType; instructions: string | null; run(input: unknown, threadId: string, signal: AbortSignal): Promise<PluginAgentToolResult> }>();
   let configure: ((context: PluginAgentConfigurationContext) => PluginAgentConfiguration) | null = null;
   const handlers: Partial<Handlers> = {};
   // why a generic function: it keeps each event's handlers typed by that event.
@@ -694,7 +694,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   } satisfies SpawnBb["sdk"]["threads"] & ManagerBb["sdk"]["threads"] & HeldBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
-      tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal: new AbortController().signal }) });
+      tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId, signal) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal }) });
     },
     configure(provider) {
       configure = provider;
@@ -851,7 +851,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     if (review?.state !== "running") throw new Error(`The review of ${checkId} isn't running as its reviewer binds.`);
     const tool = tools.get("issue_review");
     if (tool === undefined) throw new Error("No tool issue_review");
-    await tool.run({ findings: [] }, review.reviewerThreadId);
+    await tool.run({ findings: [] }, review.reviewerThreadId, new AbortController().signal);
     await idle(review.reviewerThreadId, "Reviewed.");
   }
 
@@ -1124,11 +1124,11 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     /** Every tool the plugin registered, by name, with its parameters and the instructions bb injects with it (null: none). */
     tools: () => [...tools].map(([name, { parameters, instructions }]) => ({ name, parameters, instructions })),
-    /** Calls the tool as the thread's agent would. */
-    async call(tool: string, input: unknown, threadId: string): Promise<PluginAgentToolResult> {
+    /** Calls the tool as the thread's agent would; `signal` aborts as bb's does when the call is cancelled or the thread stopped. */
+    async call(tool: string, input: unknown, threadId: string, signal: AbortSignal = new AbortController().signal): Promise<PluginAgentToolResult> {
       const registered = tools.get(tool);
       if (registered === undefined) throw new Error(`No tool ${tool}`);
-      return registered.run(input, threadId);
+      return registered.run(input, threadId, signal);
     },
   };
 }
@@ -1231,3 +1231,36 @@ export async function startedAgent(kit: ReturnType<typeof harness>, threadId: st
   const issue = issueIn(textOf(await kit.call("issue_create", { ...ISSUE, ...fields }, threadId)));
   return { issue, agentThreadId: threadIn(textOf(await kit.call("agent_start", { issue, ...start }, threadId))) };
 }
+
+/**
+ * The agent in `agentThreadId` hands off done (its summary "Retries land with backoff") and ends
+ * its turn, and the verifier the plugin starts on it fails its first criterion and passes the rest.
+ */
+export async function failsVerification(kit: ReturnType<typeof harness>, coordinatorId: CoordinatorId, agentThreadId: string): Promise<void> {
+  const done = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD };
+  await kit.call("agent_handoff", done, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  await settled();
+  const agent = kit.store.agents(coordinatorId).find(({ threadId }) => threadId === agentThreadId) ?? assert.fail(`no agent in ${agentThreadId}`);
+  const check = kit.store.latestHandoff(coordinatorId, agent.id)?.check ?? assert.fail("no check");
+  const { verdict } = check;
+  const verifierThreadId = verdict.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict.state}`);
+  const criteria = check.criteria.map((_, i) => ({ criterion: i + 1, result: i === 0 ? "fail" : "pass", evidence: i === 0 ? "# fail 1" : "# pass" }));
+  await kit.call("issue_verdict", { criteria, findings: [] }, verifierThreadId);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+}
+
+/**
+ * Drives `issue` to its cap of failed verdicts: its agent `agentThreadId` fails verification twice,
+ * the first going back to it as its fix round, then the regional manager `threadId` hands the issue
+ * to a fresh agent, which fails once more, and the plugin asks the user. Returns the fresh agent's thread.
+ */
+export async function toCap(kit: ReturnType<typeof harness>, threadId: string, coordinatorId: CoordinatorId, issue: string, agentThreadId: string): Promise<string> {
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  await failsVerification(kit, coordinatorId, agentThreadId);
+  const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
+  await failsVerification(kit, coordinatorId, fresh);
+  return fresh;
+}
+

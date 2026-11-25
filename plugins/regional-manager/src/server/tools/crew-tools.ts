@@ -3,11 +3,13 @@
 // caller's role from the plugin's database by its thread id, never from the thread's metadata, which
 // any client, plugin or the thread's own agent can write.
 import { z } from "zod";
-import { optionsSchema, questionSchema } from "../../model/decision.ts";
+import { waitingDecisions } from "../../model/board/board-groups.ts";
+import { isOpen, optionsSchema, questionSchema } from "../../model/decision.ts";
 import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
 import type { CoordinatorId, Role } from "../../model/role.ts";
+import { capQuestionsOf } from "../../model/verdict/rounds/cap.ts";
 import type { BoardReader } from "../board/board.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import { boardText } from "../issues/issue-text.ts";
@@ -30,7 +32,7 @@ export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER
 
 type Deps = {
   store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment" | "record">;
-  inbox: Pick<Inbox, "takeUnread">;
+  inbox: Pick<Inbox, "unread" | "markRead">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
   /** Runs after a decision is asked, to show it on the regional manager's board. */
@@ -44,11 +46,17 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
       "Catch up: returns every update since your last catch-up in full (agents' handoffs, a done one with its verifier's verdict, agents that failed, wait on the user, stopped without a handoff or ended before their work was done, issues unblocked, pull requests, your reminders that came due, the user's answers to your questions, the user's comments on issues and your agents' replies there, and the user's memory edits and verification switch), then the board (every issue you filed, under Needs you, In review, Verifying, Reviewing, In progress, Todo, Backlog, Done or Canceled, with its agent, thread and branch, what blocks it and what it blocks) and the issues ready to start (in Todo, not blocked), the questions still waiting for the user, your reminders with their ids, and your memory files (MEMORY.md, GOAL.md, NOTES.md, RULES.md, CREW.md) in full, each with its version, and names any other memory file. Each update is returned once. Call it first on every wake.",
     presentation: { label: { pending: "Catching up", completed: "Caught up" }, icon: { glyph: "Workflow" } },
     parameters: z.object({}),
-    execute: forManager(store, CATCH_UP, async (id) => {
+    execute: forManager(store, CATCH_UP, async (id, _, { signal }) => {
+      // why read before the board is: every event returned is then older than the read, so what is said of it (a failure's cap question, what locks its issue) is in the read. One recorded during the read waits for the next catch-up, whose doorbell it rings.
+      const unread = inbox.unread(id);
       // why caught: the updates and the memory are still worth reading when bb's thread list can't be.
-      const issues = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+      const read = await board.issues(id).catch((error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }));
+      const issues = "error" in read ? read : read.reads;
       const readOf = (issueId: IssueId) => ("error" in issues ? null : (issues.find(({ view }) => view.issue.id === issueId) ?? null));
-      const updates = updatesText(inbox.takeUnread(id), {
+      // why the board's own read when there is one: its decisions and its issues are one snapshot. Without it, closed issues can't be told, so every unanswered decision is listed.
+      const decisions = "error" in read ? store.decisions(id) : read.decisions;
+      const waiting = "error" in read ? decisions.filter(isOpen) : waitingDecisions(decisions, read.reads.map(({ view }) => ({ id: view.issue.id, status: view.status })));
+      const updates = updatesText(unread, {
         titles: new Map(store.issues(id).map((issue) => [issue.id, issue.title])),
         handoff: store.handoff,
         check: store.check,
@@ -58,8 +66,12 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
         // why the store when bb's thread list couldn't be read: there is no view for the record to agree with.
         record: (issueId) => readOf(issueId)?.record ?? store.record(id, issueId),
         view: (issueId) => readOf(issueId)?.view ?? null,
+        capQuestions: (issueId) => capQuestionsOf(decisions, issueId),
       });
-      return `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(store.decisions(id))}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
+      const text = `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(waiting)}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
+      // why marked read only now, and not once the call was aborted: an answer nobody receives must leave its updates for the next catch-up.
+      if (!signal.aborted) inbox.markRead(id, unread);
+      return text;
     }),
   });
 

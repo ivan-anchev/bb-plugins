@@ -75,6 +75,8 @@ export function registerAgentTools(bb: ToolsBb, { store, agents }: Deps): void {
           return `Queued for ${agent.id}: it is waiting on the user or busy, and gets your message once it is free.${droppedText(agent, outcome.dropped)}`;
         case "already-ended":
           return failed(`${agent.id} was ${outcome.how}, so it takes no more messages. Start a new agent on ${agent.issueId} with agent_start.`);
+        case "capped":
+          return failed(`${MESSAGE} is refused and nothing was sent: ${outcome.reason}`);
         case "unbound":
           return failed(`${agent.id} has no thread to message yet: bb hasn't confirmed one.`);
         case "unquiet": {

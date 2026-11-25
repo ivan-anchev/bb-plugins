@@ -5,7 +5,9 @@
 import { z } from "zod";
 import { isOpen, type Decision, type OpenDecision } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
+import { isClosed } from "../issue/relations.ts";
 import { STATUS_LABELS, type IssueStatus } from "../issue/status.ts";
+import { stillWaits } from "../verdict/rounds/cap.ts";
 
 /** The board's lanes, in the order it shows them. */
 const laneSchema = z.enum(["needs-you", "in-review", "verifying", "reviewing", "in-progress", "todo", "backlog", "done", "canceled"]);
@@ -22,6 +24,17 @@ type Nested = Placed & { id: IssueId; parentId: IssueId | null };
 
 /** An issue's lane: Needs you while it waits on the user, else its status. */
 export const laneOf = ({ status, needsYou }: Placed): Lane => (needsYou === null ? status : "needs-you");
+
+/**
+ * The decisions that wait for the user: each open one, but a cap question whose issue closed
+ * meanwhile, as by a merge or a cancel (rounds/cap.ts stillWaits): nothing is left for its answer
+ * to allow. why derived here and stored nowhere: the board, the rail badge and crew_catch_up read
+ * it alike, each from the issues of the same read as its decisions.
+ */
+export function waitingDecisions(decisions: readonly Decision[], issues: readonly Pick<Nested, "id" | "status">[]): OpenDecision[] {
+  const closed = new Set(issues.flatMap(({ id, status }) => (isClosed(status) ? [id] : [])));
+  return decisions.filter(isOpen).filter((decision) => stillWaits(decision, decision.issueId !== null && closed.has(decision.issueId)));
+}
 
 /** The rows in each lane that has any, in the board's order; rows keep their order. */
 function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane; rows: Row[] }[] {
@@ -45,7 +58,8 @@ export type BoardItem<Issue> =
 
 /**
  * The board's rows in each lane that has any, in the board's order. A decision sits under Needs you
- * until the user answers it, first there, and then leaves the board: it stays among its issue's
+ * until the user answers it (or, for a cap question, its issue closes; see waitingDecisions), first there,
+ * and then leaves the board: it stays among its issue's
  * decisions (issue-detail.tsx, issue_read). A top-level issue sits in its own lane, its sub-issues
  * under it; a flagged issue sits under Needs you only, never also in its status's lane, and a
  * flagged sub-issue under its parent too. A canceled sub-issue sits under Canceled, never under its
@@ -56,7 +70,7 @@ export type BoardItem<Issue> =
 export function boardGroups<Issue extends Nested>(decisions: readonly Decision[], issues: readonly Issue[]): { lane: Lane; rows: BoardItem<Issue>[] }[] {
   const subIssuesOf = (id: IssueId): Issue[] => issues.filter(({ parentId, status }) => parentId === id && status !== "canceled");
   return byLane<BoardItem<Issue>>([
-    ...decisions.filter(isOpen).map((decision) => ({ kind: "decision", lane: "needs-you", decision }) as const),
+    ...waitingDecisions(decisions, issues).map((decision) => ({ kind: "decision", lane: "needs-you", decision }) as const),
     ...issues.flatMap((issue): BoardItem<Issue>[] => {
       if (issue.parentId === null) return [{ kind: "issue", lane: laneOf(issue), issue, subIssues: subIssuesOf(issue.id) }];
       return [
@@ -71,7 +85,7 @@ export function boardGroups<Issue extends Nested>(decisions: readonly Decision[]
 export const needsYouSchema = z.object({ decisions: z.number().int().nonnegative(), issues: z.number().int().nonnegative() });
 export type NeedsYou = z.infer<typeof needsYouSchema>;
 
-/** What sits under Needs you: each decision and each issue there once, a flagged sub-issue as its own row. */
-export function needsYou(decisions: readonly Decision[], issues: readonly Placed[]): NeedsYou {
-  return { decisions: decisions.filter(isOpen).length, issues: issues.filter((issue) => laneOf(issue) === "needs-you").length };
+/** What sits under Needs you: each decision waiting there (waitingDecisions) and each issue there once, a flagged sub-issue as its own row. */
+export function needsYou(decisions: readonly Decision[], issues: readonly (Placed & Pick<Nested, "id">)[]): NeedsYou {
+  return { decisions: waitingDecisions(decisions, issues).length, issues: issues.filter((issue) => laneOf(issue) === "needs-you").length };
 }

@@ -1,7 +1,7 @@
 // A decision the coordinating thread put to the user with crew_ask_user: its question, the options
 // it offered (none: the user answers in their own words), when it asked, and the user's answer once
-// given. The question and options are the thread's own words, so its doorbell may quote the
-// question; the answer is the user's, and reaches the thread only through crew_catch_up. A question
+// given. The question and options are the thread's own words, or at an issue's cap the plugin's
+// (rounds/cap.ts), so its doorbell may quote the question; the answer is the user's, and reaches the thread only through crew_catch_up. A question
 // naming an issue stays among that issue's decisions, with those the thread recorded on it.
 import { z } from "zod";
 import { issueIdSchema, type IssueId } from "./issue/issue.ts";
@@ -25,7 +25,9 @@ export const answerSchema = z.string().trim().min(1).max(MAX_ANSWER_CHARS);
 
 /**
  * A decision as the board and crew_catch_up read it: the issue it flags Needs you until the user
- * answers (null: none), and the user's answer and when they gave it, null until they do.
+ * answers (null: none), and the user's answer and when they gave it, null until they do. `cap`: for
+ * a question the plugin itself asked at the issue's cap of failed verdicts (rounds/cap.ts), the
+ * count it asked at; null for one the regional manager asked with crew_ask_user.
  */
 export const decisionSchema = z.object({
   id: decisionIdSchema,
@@ -34,6 +36,7 @@ export const decisionSchema = z.object({
   options: z.array(z.string()),
   askedAt: z.number(),
   answer: z.object({ text: z.string(), at: z.number() }).nullable(),
+  cap: z.number().int().min(1).nullable(),
 });
 export type Decision = z.infer<typeof decisionSchema>;
 
@@ -45,12 +48,12 @@ export const isOpen = (decision: Decision): decision is OpenDecision => decision
 export const decisionTextSchema = z.string().trim().min(1).max(2_000);
 
 /**
- * One of an issue's decisions: a question put to the user about it with crew_ask_user, the options
- * it offered, and their answer once given (null: not yet), or a decision the regional manager recorded on it. `at`: when
- * it was asked, or recorded.
+ * One of an issue's decisions: a question put to the user about it, with crew_ask_user or by the
+ * plugin at its cap (`cap`, as Decision has it), the options it offered, and their answer once given
+ * (null: not yet), or a decision the regional manager recorded on it. `at`: when it was asked, or recorded.
  */
 export const issueDecisionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("asked"), id: decisionIdSchema, question: z.string(), options: z.array(z.string()), at: z.number(), answer: decisionSchema.shape.answer }),
+  z.object({ kind: z.literal("asked"), id: decisionIdSchema, question: z.string(), options: z.array(z.string()), at: z.number(), answer: decisionSchema.shape.answer, cap: decisionSchema.shape.cap }),
   z.object({ kind: z.literal("recorded"), text: z.string(), at: z.number() }),
 ]);
 export type IssueDecision = z.infer<typeof issueDecisionSchema>;
@@ -58,7 +61,7 @@ export type RecordedDecision = Extract<IssueDecision, { kind: "recorded" }>;
 
 /** The issue's decisions, its one list, oldest first: every question put to the user naming it, answered or not, and every decision recorded on it. */
 export function issueDecisions(issueId: IssueId, asked: readonly Decision[], recorded: readonly RecordedDecision[]): IssueDecision[] {
-  const questions = asked.filter((decision) => decision.issueId === issueId).map(({ id, question, options, askedAt, answer }) => ({ kind: "asked", id, question, options, at: askedAt, answer }) as const);
+  const questions = asked.filter((decision) => decision.issueId === issueId).map(({ id, question, options, askedAt, answer, cap }) => ({ kind: "asked", id, question, options, at: askedAt, answer, cap }) as const);
   return [...questions, ...recorded].sort((a, b) => a.at - b.at);
 }
 

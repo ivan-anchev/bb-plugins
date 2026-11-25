@@ -45,6 +45,7 @@ const decision = (id: string, answered: boolean): Decision => ({
   question: `Question ${id}?`,
   options: [],
   askedAt: 1_000,
+  cap: null,
   answer: answered ? { text: "Yes", at: 2_000 } : null,
 });
 

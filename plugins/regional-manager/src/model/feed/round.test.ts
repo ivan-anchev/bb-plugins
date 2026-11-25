@@ -67,7 +67,7 @@ function handed(review: Review, verdict: Verdict): Handed & { check: Check } {
 
 test("a reported review counts its findings and, once the verdict triaged them, the ones it confirmed; opened, each finding carries its triage", () => {
   const made = handed(REPORTED, RETURNED);
-  assert.deepEqual(roundOf(made, 1, null).review, { state: "reported", findings: 3, confirmed: 2, step: { at: REVIEWED_AT, moved: null } });
+  assert.deepEqual(roundOf(made, 1, null, null).review, { state: "reported", findings: 3, confirmed: 2, step: { at: REVIEWED_AT, moved: null } });
   const { findings } = bodyOf(made.handoff, made.check);
   assert.deepEqual(findings[1]?.triage, { result: "rejected", reason: "It matches the row." });
   assert.deepEqual(
@@ -80,7 +80,7 @@ test("a reported review counts its findings and, once the verdict triaged them, 
 
 test("before the verdict returns, the findings show with no triage yet and nothing is counted as confirmed", () => {
   const made = handed(REPORTED, RUNNING);
-  assert.deepEqual(roundOf(made, 1, null).review, { state: "reported", findings: 3, confirmed: null, step: { at: REVIEWED_AT, moved: null } });
+  assert.deepEqual(roundOf(made, 1, null, null).review, { state: "reported", findings: 3, confirmed: null, step: { at: REVIEWED_AT, moved: null } });
   assert.deepEqual(
     bodyOf(made.handoff, made.check).findings.map(({ triage }) => triage),
     [null, null, null],
@@ -89,7 +89,7 @@ test("before the verdict returns, the findings show with no triage yet and nothi
 
 test("a missed review's spine says only that it was missed, and when; why is the body's, read when the round opens", () => {
   const made = handed({ state: "missed", at: 3_100, reviewerThreadId: null, reason: "no reviewer model" }, RUNNING);
-  assert.deepEqual(roundOf(made, 1, null).review, { state: "missed", step: { at: 3_100, moved: null } });
+  assert.deepEqual(roundOf(made, 1, null, null).review, { state: "missed", step: { at: 3_100, moved: null } });
   assert.equal(bodyOf(made.handoff, made.check).reviewMissed, "no reviewer model");
   assert.equal(bodyOf(HANDOFF, null).reviewMissed, null);
 });

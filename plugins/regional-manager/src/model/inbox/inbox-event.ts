@@ -39,8 +39,13 @@ const onAgent = { issueId: issueIdSchema, agentId: agentIdSchema };
 export const inboxEventSchema = z.discriminatedUnion("kind", [
   /** An agent's handoff no verifier checks, announced at once: blocked, gave up, or done on an issue nothing verifies. A done one a verifier checks is announced as `checked`, with its verdict. */
   z.object({ kind: z.literal("handoff"), ...onAgent, handoffId: handoffIdSchema, status: handoffStatusSchema }),
-  /** A check is final and nothing goes back to its agent, or verification was off. */
-  z.object({ kind: z.literal("checked"), issueId: issueIdSchema, checkId: checkIdSchema }),
+  /**
+   * A check is final and nothing goes back to its agent, or verification was off. `asked`: the
+   * question its settling put to the user at the issue's cap (rounds/cap.ts), recorded in the same
+   * transaction, so the failure that asked is known whatever order the checks settled in; null when
+   * it asked none. why a default: an event recorded before the cap asked nothing.
+   */
+  z.object({ kind: z.literal("checked"), issueId: issueIdSchema, checkId: checkIdSchema, asked: decisionIdSchema.nullable().default(null) }),
   /** A check failed, and the plugin sent its findings back to the agent as its fix round `round`. */
   z.object({ kind: z.literal("sent-back"), ...onAgent, checkId: checkIdSchema, round: z.number().int().min(1) }),
   /** An agent's turn ended with no current handoff; `lastAnswer` is its last answer, whole (null: none). */
