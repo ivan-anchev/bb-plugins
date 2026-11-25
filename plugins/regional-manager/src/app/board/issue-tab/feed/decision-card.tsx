@@ -49,7 +49,7 @@ function Question({ coordinatorId, decision, moved, status }: { coordinatorId: C
   // Whether focus is on one of the options. why a ref: whatever unmounts them fires no blur.
   const onOption = useRef(false);
   const answered = decision.answer !== null;
-  const takesAnswer = !answered && stillWaits(decision, isClosed(status));
+  const takesAnswer = stillWaits(decision, isClosed(status));
   // why an effect: focus is the browser's, and the option it was on is gone only once this commit lands.
   useLayoutEffect(() => {
     if (takesAnswer || !onOption.current) return;

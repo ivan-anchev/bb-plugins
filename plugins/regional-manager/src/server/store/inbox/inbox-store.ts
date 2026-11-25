@@ -123,9 +123,9 @@ export function inboxStore(db: Db) {
       })();
     },
 
-    /** Whether the queued doorbell with this message id announced an event that is still unread. */
-    announcesUnread(queuedMessageId: string): boolean {
-      return db().prepare("SELECT 1 FROM events WHERE doorbell = ? AND read_at IS NULL LIMIT 1").get(queuedMessageId) !== undefined;
+    /** Whether the regional manager's queued doorbell with this message id announced an event that is still unread. */
+    announcesUnread(coordinatorId: CoordinatorId, queuedMessageId: string): boolean {
+      return db().prepare("SELECT 1 FROM events WHERE coordinator_id = ? AND read_at IS NULL AND doorbell = ? LIMIT 1").get(coordinatorId, queuedMessageId) !== undefined;
     },
 
     /** The queued doorbell of a regional manager, or null when none is waiting. */

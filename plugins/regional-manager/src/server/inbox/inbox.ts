@@ -150,7 +150,7 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
   async function withdraw(id: CoordinatorId): Promise<void> {
     const queuedMessageId = store.doorbell(id);
     const coordinator = store.coordinator(id);
-    if (disposed || queuedMessageId === null || coordinator === null || store.announcesUnread(queuedMessageId)) return;
+    if (disposed || queuedMessageId === null || coordinator === null || store.announcesUnread(id, queuedMessageId)) return;
     try {
       await bb.sdk.threads.queuedMessages.delete({ threadId: coordinator.threadId, queuedMessageId });
     } catch (error) {
