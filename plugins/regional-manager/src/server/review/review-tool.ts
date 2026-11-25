@@ -16,7 +16,7 @@ const reviewInputSchema = z.object({
         file: z.string().min(1).max(500).describe("The file the finding is in, as the diff names it."),
         line: z.number().int().min(1).nullable().describe("The line in that file at the reviewed commit; null when the finding names no one line."),
         severity: severitySchema.describe(
-          `must-fix: wrong, and must not merge as it is, as CREW.md says. Report it as must-fix even when it breaks none of the five things below, and say in the claim which it breaks, or that it breaks none: the verifier anchors or downgrades it, never you. should-fix: worth fixing before it merges. nit: a small improvement. ${ANCHOR_RULE}`,
+          `must-fix: the severity CREW.md gives a finding. Report it as must-fix even when it breaks none of the five things below, and say in the claim which it breaks, or that it breaks none: the verifier anchors or downgrades it, never you. should-fix: worth fixing before it merges. nit: a small improvement. ${ANCHOR_RULE}`,
         ),
         claim: z.string().trim().min(1).max(2_000).describe("What is wrong there, and why, in a few lines."),
       }),

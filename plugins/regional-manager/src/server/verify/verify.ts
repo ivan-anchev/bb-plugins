@@ -49,7 +49,8 @@ import { refusalOf } from "./send-refusal.ts";
 import type { AsksBb } from "../hidden/asks.ts";
 import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { verifierExecution } from "./verifier-model.ts";
-import { checkedIssue, verifierBrief } from "./verifier-brief.ts";
+import { checkedIssue } from "../review/checker-brief.ts";
+import { verifierBrief } from "./verifier-brief.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type ThreadRow = Awaited<ReturnType<Threads["list"]>>[number];

@@ -432,8 +432,7 @@ function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned
   const by = `${review.model.providerId} ${review.model.model}`;
   if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.`];
   const all = verdict.triage;
-  const counts = triageCounts(all);
-  const totals = `the verifier anchored ${counts.anchored}, downgraded ${counts.downgraded}, confirmed ${counts.confirmed} and rejected ${counts.rejected}`;
+  const totals = triageTotals(all);
   const held = all.filter(holds).length;
   const each = all.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  ${triageText(finding)}: ${finding.reason}`);
   return [
@@ -442,11 +441,15 @@ function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned
   ];
 }
 
-/** How many findings the verifier gave each triage. why a Record: a triage added later fails to compile here until catch-up words it. */
-function triageCounts(findings: readonly Triaged[]): Record<Triaged["result"], number> {
-  const counts: Record<Triaged["result"], number> = { anchored: 0, downgraded: 0, confirmed: 0, rejected: 0 };
-  for (const { result } of findings) counts[result] += 1;
-  return counts;
+/**
+ * The verifier's totals, each triage with how many findings it got, in catch-up's order: "the
+ * verifier anchored 1, downgraded 0, confirmed 2 and rejected 1". why a Record of every result: a
+ * triage added later fails to compile here until catch-up words it.
+ */
+function triageTotals(findings: readonly Triaged[]): string {
+  const words: Record<Triaged["result"], string> = { anchored: "anchored", downgraded: "downgraded", confirmed: "confirmed", rejected: "rejected" };
+  const each = Object.entries(words).map(([result, word]) => `${word} ${findings.filter((finding) => finding.result === result).length}`);
+  return `the verifier ${each.slice(0, -1).join(", ")} and ${each.at(-1)}`;
 }
 
 /** Whether the review findings that held reached the agent, as far as the plugin knows: only a failed verdict sent back as its fix round carries them. */

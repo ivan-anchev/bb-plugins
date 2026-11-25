@@ -157,7 +157,7 @@ test("the reviewer's first message, its role's rules and issue_review's instruct
   assert.match(places["role's rules"], /report each finding at the severity it gives, a must-fix that breaks none of the five below included/);
   assert.match(
     JSON.stringify(z.toJSONSchema(tool.parameters)),
-    /must-fix: wrong, and must not merge as it is, as CREW\.md says\. Report it as must-fix even when it breaks none of the five things below, and say in the claim which it breaks, or that it breaks none: the verifier anchors or downgrades it, never you\./,
+    /must-fix: the severity CREW\.md gives a finding\. Report it as must-fix even when it breaks none of the five things below, and say in the claim which it breaks, or that it breaks none: the verifier anchors or downgrades it, never you\./,
     "issue_review's severity field keeps a CREW.md must-fix a must-fix",
   );
   for (const [place, text] of Object.entries(places)) {

@@ -10,7 +10,7 @@ import type { MemoryText } from "../../model/memory-file.ts";
 import type { HandoffCheck } from "../../model/verdict/check.ts";
 import { ANCHOR_RULE } from "../../model/verdict/review.ts";
 import { crewSection } from "../agents/brief.ts";
-import { decisionsPart } from "../verify/verifier-brief.ts";
+import { decisionsPart } from "./checker-brief.ts";
 import { REVIEW } from "./review-tool.ts";
 
 /** The diff to review: the claimed commit, the pull request the agent named (null: none), and the branch it is reviewed against (null: bb records no default branch). */
