@@ -36,13 +36,18 @@ type Shown = { current: string | null; leaving: string | null };
 export function HoverCard({ scroller, listFocus, cardOf, focusShowsAtOnce }: Props) {
   const [shown, setShown] = useState<Shown>({ current: null, leaving: null });
   const card = useRef<HTMLDivElement>(null);
+  /** The row whose card a Tab asked to go into before the card was laid out; it goes in as the card is. */
+  const entering = useRef<string | null>(null);
   const latestFocus = useRef(listFocus);
   useLayoutEffect(() => {
     latestFocus.current = listFocus;
   });
-  const intent = useCardIntent(scroller, card, shown.current !== null, {
+  const intent = useCardIntent(scroller, card, entering, shown.current !== null, {
     focusShowsAtOnce,
-    onChange: (key) => setShown((was) => ({ current: key, leaving: was.current ?? was.leaving })),
+    onChange: (key) => {
+      if (entering.current !== key) entering.current = null;
+      setShown((was) => ({ current: key, leaving: was.current ?? was.leaving }));
+    },
     returnFocus: () => latestFocus.current.refocus(),
   });
   const gone = shown.current !== null && cardOf(shown.current) === null;
@@ -53,6 +58,14 @@ export function HoverCard({ scroller, listFocus, cardOf, focusShowsAtOnce }: Pro
   useEffect(() => {
     if (gone) intent.cold();
   }, [gone, intent]);
+
+  // why: a Tab that came while the card was shown but not yet laid out (keyboard focus shows it at once) goes in now.
+  const laidOut = (node: HTMLDivElement | null, key: string) => {
+    card.current = node;
+    if (node === null || entering.current !== key) return;
+    entering.current = null;
+    (tabStops(node)[0] ?? node).focus();
+  };
 
   // why: one array, so a card keeps its instance (and plays its exit) as it turns from shown to leaving.
   const cards = [shown.leaving, shown.current].filter((key, i, all): key is string => key !== null && all.indexOf(key) === i);
@@ -66,7 +79,8 @@ export function HoverCard({ scroller, listFocus, cardOf, focusShowsAtOnce }: Pro
         <Portal>
           <Content
             {...PORTAL_SCOPE}
-            ref={isCurrent ? card : undefined}
+            ref={isCurrent ? (node) => laidOut(node, key) : undefined}
+            data-card-of={key}
             className="as-card"
             aria-label={what.label}
             side="right"
@@ -131,6 +145,7 @@ function RowAnchor({ scroller, cardKey, place }: { scroller: RefObject<HTMLEleme
 function useCardIntent(
   scroller: RefObject<HTMLElement | null>,
   card: RefObject<HTMLElement | null>,
+  entering: RefObject<string | null>,
   showing: boolean,
   deps: Pick<CardIntentDeps, "focusShowsAtOnce" | "onChange" | "returnFocus">,
 ): CardIntent {
@@ -173,11 +188,17 @@ function useCardIntent(
     const focusOut = (e: FocusEvent) => {
       if (cardKeyAt(e.target) !== null && cardKeyAt(e.relatedTarget) === null && !isOnCard(e.relatedTarget)) intent.blur();
     };
-    // why: the card is portaled to the end of the page, so the browser's Tab would skip it.
+    // why: the card is portaled to the end of the page, so the browser's Tab would skip it. A card shown
+    // but not laid out yet (React renders it after this event) holds the Tab, and takes focus as it is.
     const tabIn = (e: KeyboardEvent) => {
       const key = cardKeyAt(e.target);
       if (e.key !== "Tab" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || key === null || !intent.shows(key)) return;
-      const first = card.current === null ? undefined : tabStops(card.current)[0];
+      if (card.current?.dataset.cardOf !== key) {
+        e.preventDefault();
+        entering.current = key;
+        return;
+      }
+      const first = tabStops(card.current)[0];
       if (first === undefined) return;
       e.preventDefault();
       first.focus();
@@ -203,7 +224,7 @@ function useCardIntent(
       el.removeEventListener("contextmenu", cold, true);
       intent.cold();
     };
-  }, [scroller, intent]);
+  }, [scroller, intent, card, entering]);
 
   // why: a crossing on its way to the card can end anywhere, the main pane included. Followed over the
   // whole page, as the prototype does, the pointer leaving both the row and the card always lets

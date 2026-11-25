@@ -165,11 +165,13 @@ test("keyboard focus on a manager's row shows its card at once, so Tab right aft
       { experimental_rpcContract: activitySidebarContract, rpc: { managerIssues: () => OPEN_ISSUES } },
     );
     const row = slot.getByRole("link", { name: /^PR Reviews/ });
-    act(() => row.focus());
-    await act(() => wait(0));
+    // why one act: React lays the card out only after it, so the Tab comes before the card is on the page, as a quick ↓ Tab does.
     act(() => {
+      row.focus();
+      assert.equal(document.querySelector(".as-card"), null, "not laid out yet");
       fireEvent.keyDown(row, { key: "Tab" });
     });
+    await act(() => wait(0));
     const card = document.querySelector(".as-card");
     assert.ok(card, "its card shows with no rest");
     assert.ok(card.contains(document.activeElement), "Tab went into the card");
