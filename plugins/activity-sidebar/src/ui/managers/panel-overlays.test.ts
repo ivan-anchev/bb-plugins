@@ -2,25 +2,37 @@ import "../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, before, test } from "node:test";
 import { setTimeout as wait } from "node:timers/promises";
+import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent } from "@testing-library/react";
 import { createElement } from "react";
 import { DWELL } from "../../card/card-intent.ts";
 import type { View } from "../../data/local-choice/choices.ts";
-import { view as listView } from "../../list/fixtures.ts";
+import { view as listView, quiet } from "../../list/fixtures.ts";
 import { listItems } from "../../list/items.ts";
 import { buildActivity } from "../../model/activity.ts";
 import { project, thread } from "../../model/fixtures.ts";
+import { installHostThreadMenu, PageResizeObserver } from "../../test-host.ts";
 
 // A panel hidden takes every overlay it opened with it: the threads' hover card, view menu and a row's
-// thread menu; a manager's hover card and its row's thread menu. Mounted as bb mounts the sidebar, with the real list.
+// thread menu; a manager's hover card and its row's thread menu. Shown again, the threads' list comes
+// back whole. Mounted as bb mounts the sidebar, with the real list.
 
 const { SidebarViews } = await import("./sidebar-views.tsx");
 const { ListViewport } = await import("../list-viewport.tsx");
 const { ViewMenu } = await import("../view-menu.tsx");
 
-// why: jsdom lays nothing out, so the list would see no height and mount no row.
-before(() => Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 600 }));
+before(() => {
+  // why: jsdom lays nothing out, so the list would see no height and mount no row. A hidden panel measures 0, as in a browser.
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.closest("[hidden]") === null ? 600 : 0;
+    },
+  });
+  globalThis.ResizeObserver = PageResizeObserver;
+  installHostThreadMenu();
+});
 afterEach(cleanup);
 
 const PROJECTS = [project("prj_a", "bb-plugins")];
@@ -30,9 +42,9 @@ const THREADS = [
   thread("thr_b", { displayTitle: "Write the docs", latestAttentionAt: 10, projectId: "prj_a" }),
 ];
 
-function mount(view: View) {
-  const model = buildActivity({ threads: THREADS, projects: PROJECTS, sleeps: new Map(), held: new Set(), now: 100, activeThreadId: null, filter: null, looks: [], lines: [] });
-  const threads = createElement(ListViewport, {
+function mount(view: View, threads: readonly PluginSidebarThread[] = THREADS) {
+  const model = buildActivity({ threads, projects: PROJECTS, sleeps: new Map(), held: new Set(), now: 100, activeThreadId: null, filter: null, looks: [], lines: [] });
+  const list = createElement(ListViewport, {
     items: listItems(model.sections, listView()),
     card: { index: model.index, underWaySince: new Map() },
     onNavigate: () => {},
@@ -42,7 +54,7 @@ function mount(view: View) {
     onRetry: () => {},
     viewMenu: createElement(ViewMenu, { projects: PROJECTS, chosen: null, onChoose: () => {}, compact: true, onCompact: () => {} }),
   });
-  const props = (shown: View) => ({ managers: model.managers, underWaySince: new Map<string, number>(), view: shown, onView: () => {}, onNavigate: () => {}, threads });
+  const props = (shown: View) => ({ managers: model.managers, underWaySince: new Map<string, number>(), view: shown, onView: () => {}, onNavigate: () => {}, threads: list });
   const slot = renderSlot({ component: SidebarViews }, props(view));
   const choose = async (shown: View) => {
     await act(async () => {
@@ -61,6 +73,7 @@ function mount(view: View) {
   return { slot, choose, link, tab };
 }
 
+const menus = () => document.querySelectorAll("[role=menu]").length;
 const overlays = () => document.querySelectorAll("[data-bb-portaled-overlay], [role=menu], [role=dialog]").length;
 
 test("the threads' hover card, open on its row, goes as Managers is chosen, and focus lands on the chosen tab", async () => {
@@ -80,11 +93,14 @@ test("a thread row's menu, or the threads' view menu, open as Managers is chosen
     const { slot, choose, link } = mount("threads");
     if (open === "row menu") await act(async () => fireEvent.contextMenu(link("Fix the build")));
     else await act(async () => fireEvent.keyDown(slot.getByRole("button", { name: "View options" }), { key: "Enter" }));
-    assert.ok(await slot.findByRole("menu"), `${open} open`);
+    assert.equal(menus(), 1, `${open} open`);
 
     await choose("managers");
-    assert.equal(slot.queryByRole("menu"), null, `${open} closed`);
+    assert.equal(menus(), 0, `${open} gone from the page`);
     assert.equal(document.activeElement?.closest(".as-panel[hidden]") ?? null, null, "no focus in the hidden panel");
+
+    await choose("threads");
+    assert.equal(menus(), 0, `${open} still closed back on Threads`);
     cleanup();
   }
 });
@@ -101,12 +117,26 @@ test("a manager's hover card, open on its row, goes as Threads is chosen, and fo
   assert.equal(document.activeElement, tab("threads"));
 });
 
-test("a manager row's menu, open as Threads is chosen, closes", async () => {
-  const { slot, choose, link } = mount("managers");
+test("a manager row's menu, open as Threads is chosen, closes, and stays closed back on Managers", async () => {
+  const { choose, link } = mount("managers");
   await act(async () => fireEvent.contextMenu(link("PR Reviews")));
-  assert.ok(await slot.findByRole("menu"));
+  assert.equal(menus(), 1, "its menu open");
 
   await choose("threads");
-  assert.equal(slot.queryByRole("menu"), null);
-  assert.equal(document.activeElement?.closest(".as-panel[hidden]") ?? null, null);
+  assert.equal(menus(), 0, "gone from the page");
+  assert.equal(document.activeElement?.closest(".as-panel[hidden]") ?? null, null, "no focus in the hidden panel");
+
+  await choose("managers");
+  assert.equal(menus(), 0, "still closed");
+});
+
+test("the threads' list, shown again after Managers, lays out whole on its first frame: Archived stands at its foot", async () => {
+  const { choose } = mount("threads", [THREADS[0], ...quiet(8)]);
+  const archived = () => document.querySelector('[data-key="t:archived"]');
+  assert.ok(archived(), "Archived at the foot");
+
+  await choose("managers");
+  await act(() => PageResizeObserver.deliver());
+  await choose("threads");
+  assert.ok(archived(), "Archived there before the page tells the list its size again");
 });

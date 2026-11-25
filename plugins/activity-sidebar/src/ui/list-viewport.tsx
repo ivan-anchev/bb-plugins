@@ -32,7 +32,7 @@ export function ListViewport({ items, card, ...actions }: Props) {
   const shown = usePanelShown();
   const scroller = useRef<HTMLDivElement>(null);
   const nodes = useRef(new Map<string, HTMLElement>()).current;
-  const height = useHeight(scroller);
+  const height = useHeight(scroller, shown);
   const [top, setTop] = useState(0);
   const layout = useMemo(() => layoutItems(items, height), [items, height]);
   const stopKeys = useMemo(() => stopsOf(layout).map((entry) => entry.key), [layout]);
@@ -223,16 +223,20 @@ function firstBelow(stops: readonly LayoutEntry[], scrollTop: number): LayoutEnt
   return stops.find((entry) => entry.y >= scrollTop) ?? stops[stops.length - 1];
 }
 
-/** The scroller's height, kept current by a ResizeObserver. */
-function useHeight(ref: RefObject<HTMLElement | null>): number {
+/**
+ * The scroller's height, kept current by a ResizeObserver while its panel shows. Hidden, it keeps the
+ * last height it showed at, and measures again as it shows, before it paints.
+ */
+function useHeight(ref: RefObject<HTMLElement | null>, shown: boolean): number {
   const [height, setHeight] = useState(0);
+  // why: a hidden panel measures 0, which would lay the list out for no room and drop its bottom shelves.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (el === null) return;
+    if (el === null || !shown) return;
     setHeight(el.clientHeight);
     const observer = new ResizeObserver(() => setHeight(el.clientHeight));
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ref]);
+  }, [ref, shown]);
   return height;
 }
