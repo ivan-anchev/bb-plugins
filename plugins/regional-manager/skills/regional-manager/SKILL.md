@@ -452,11 +452,12 @@ verdict) stays one.
   it before changing anything, and hands off blocked if it is missing.
   Worktree to worktree cuts from the local branch, even after the old thread
   is archived or its worktree removed. With a sandbox on either side, the
-  branch travels only through origin: ask the agent to push and open a pull
-  request (a merge request, `MR`, on GitLab) first, as the plugin never pushes
-  or commits for it; it is allowed once that request's head is the commit the
-  agent left (read fresh from the project's forge at the move, so call right
-  after the push; a move refused because the forge can't be read says why).
+  branch travels only through origin, and the plugin never pushes or commits
+  for an agent: the move is allowed once a pull request (a merge request,
+  `MR`, on GitLab) on that branch has the commit the agent left as its head,
+  read fresh from the project's forge at the move; a move refused because the
+  forge can't be read says why. Whether the agent pushes or opens one is your
+  brief's call; otherwise continue in its environment.
   A move reads the previous environment first and is refused, with nothing
   stopped, when it holds uncommitted files (named), has no branch checked
   out (a detached HEAD), or can't be read, as a suspended sandbox can't:
@@ -467,7 +468,8 @@ verdict) stays one.
   origin is lost, and the refusal offers `from: "default"`. A removed
   worktree's unpushed commits stay on its local branch: a move of them to a
   sandbox is refused, and a start with no `placement` (or a worktree) reaches
-  them, whose agent can push and open its pull request.
+  them; a move to a sandbox works once a pull request or merge request on
+  that branch has its head.
 - **A clean start**: `from: "default"` gives the new agent a new environment
   from the default branch (a `placement` may name where), with the earlier
   handoffs and verdicts still in its first message. Use it when the earlier

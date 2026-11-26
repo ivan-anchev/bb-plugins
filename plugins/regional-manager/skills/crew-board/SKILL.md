@@ -482,7 +482,8 @@ verdict.
 - **Refused, with nothing stopped**: a move out of an environment with
   uncommitted files (named), no branch checked out, or that can't be read,
   offering the continue; a move with a sandbox on either side whose head no
-  pull request shows, offering the continue or a push; a removed sandbox
+  pull request or merge request shows, offering the continue or a retry once
+  one on that branch has that head; a removed sandbox
   whose head never reached origin, offering `from: "default"`: its unpushed
   commits went with it; a removed worktree's unpushed commits to a sandbox,
   offering a worktree start, which reaches its local branch. A
@@ -951,9 +952,11 @@ reads them itself on the same once-a-minute tick, from the project's forge:
   for a verdict that waits on a pull request in a project on no forge the
   plugin reads, or one a read begun after the handoff found merged or closed
   before CI finished on the claimed commit. What lasts, and what fixes it:
-  - gh missing, signed out, or holding credentials GitHub rejects: sign gh
-    in with `gh auth login` on the machine running bb; for rejected
-    credentials, check `gh auth status` there.
+  - gh missing: install gh on the machine running bb, then sign it in there
+    with `gh auth login`.
+  - gh signed out, or holding credentials GitHub rejects: sign gh in with
+    `gh auth login` on the machine running bb; for rejected credentials,
+    check `gh auth status` there.
   - A host that isn't github.com and that glab isn't signed in to, or glab
     not installed: if it is a GitLab, install glab and run `glab auth login
     --hostname H` on the machine running bb.
@@ -962,8 +965,11 @@ reads them itself on the same once-a-minute tick, from the project's forge:
     run `glab auth login --hostname H` there again.
   - glab is signed in but can't see the project: check the project's git
     remote, and that the account glab is signed in as can read it.
-  - The GitLab lacks a field the plugin's query reads: it is older than the
-    plugin reads.
+  - The GitLab lacks a field the plugin's query reads (it is older than the
+    plugin reads): merge requests there can't be read until that GitLab
+    serves the fields the plugin reads, which takes upgrading it; ask whoever
+    runs it. This is not the review-feedback gap above, where a GitLab
+    lacking only a feedback field is still read, without review feedback.
   - A remote the plugin can't read, an https remote naming a port, or a
     github.com remote naming no owner/name repository: the remote itself.
 

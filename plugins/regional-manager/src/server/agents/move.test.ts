@@ -18,7 +18,7 @@ const BLOCKED = { status: "blocked", summary: "Needs the staging key", did: ["Wr
 const WORKTREE = { kind: "worktree" };
 const SANDBOX = { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } };
 // why: whether an agent opens a pull request is its brief's call, so a handover's own words never tell it to.
-const OPEN_A_PULL_REQUEST = /open (a|its|your)( own)? (pull request|PR)|pull request of your own/i;
+const OPEN_A_PULL_REQUEST = /open (a|its|your)( own)? (pull request|merge request|PR|MR)|open one\b|pull request of your own/i;
 
 /** A regional manager whose agent a1 holds build issue WEB-1, started with `start` (a worktree by default), working. */
 async function holding(start: object = {}) {
@@ -223,8 +223,9 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   assert.ok(isRefusal(unpushed));
   assert.equal(
     textOf(unpushed),
-    `agent_start is refused: Nothing changed. a1's branch \`${branch}\` isn't shown on origin at its head 1111111: a move with a sandbox on either side reaches the branch only through origin, and only a pull request or merge request whose head is that commit shows it was pushed. Continue in its environment (leave out placement), or ask a1 to push and open a pull request or merge request, then call again.`,
+    `agent_start is refused: Nothing changed. a1's branch \`${branch}\` isn't shown on origin at its head 1111111: a move with a sandbox on either side reaches the branch only through origin, and only a pull request or merge request whose head is that commit shows it was pushed. Continue in its environment (leave out placement), or call again once a pull request or merge request on \`${branch}\` has that commit as its head.`,
   );
+  assert.doesNotMatch(textOf(unpushed), OPEN_A_PULL_REQUEST, "whether to open a pull request is the brief's call");
   assert.deepEqual([kit.thread(agentThreadId).status, agent(a1).ended], ["active", null], "nothing stopped");
 
   pushAndOpen();
@@ -364,7 +365,7 @@ test("criterion 8 (harness): once bb removes a1's worktree, a move to a sandbox 
   assert.ok(isRefusal(refused));
   assert.equal(
     textOf(refused),
-    `agent_start is refused: Nothing changed. bb removed a1's worktree, and nothing shows its branch \`${branch}\` reached origin at its head 1111111 (no pull request or merge request has that head): its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request or merge request, and a move to a sandbox works after that. Or start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`,
+    `agent_start is refused: Nothing changed. bb removed a1's worktree, and nothing shows its branch \`${branch}\` reached origin at its head 1111111 (no pull request or merge request has that head): its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; a move to a sandbox works once a pull request or merge request on its branch has its head. Or start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent's first message.`,
   );
   assert.equal(kit.repo.local.get(branch), COMMITTED);
 
