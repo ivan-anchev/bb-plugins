@@ -150,6 +150,14 @@ const anchorText = ({ anchor, steps }: { anchor: Anchor; steps: string | null })
 export const defectText = (defect: BlockingDefect, indent = ""): string => `Blocks, ${anchorText(defect)}: ${defect.claim.replaceAll("\n", `\n${indent}`)}`;
 
 /**
+ * Where the findings that hold go, in the one wording every place a reviewer, a verifier, an agent
+ * or the regional manager reads gives it: what fails the verdict goes back; the rest waits for the
+ * pass, which files it (rounds/follow-up.ts).
+ */
+export const FOLLOW_UP_RULE =
+  "Only an anchored must-fix goes back to the agent, in its automatic fix round. The other findings that hold don't: when the issue passes, the plugin files them all as one follow-up issue in Backlog, blocked until the issue is Done, unless every one is a nit, which stays in the issue's feed.";
+
+/**
  * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
  * review's order, each with why in a line: rejected, it doesn't hold or isn't worth fixing;
  * confirmed, a should-fix or nit that holds; anchored, a must-fix that holds and meets `anchor`,
@@ -177,7 +185,7 @@ type Triage = z.infer<typeof triageSchema>;
 export type Triaged = ReviewFinding & Triage;
 
 /** How a verifier triages the reviewer's findings, and what its triage does, in the one wording each place a verifier reads gives it. */
-export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and meets one of the four anchors the anchor rule names; name it as its anchor: bug, safety or regression for a bug hit in normal use, with steps, the normal-use steps that reach it; criterion, brief or decision for a broken done-criterion, explicit brief requirement or recorded decision. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that meets no anchor is downgraded, never confirmed, to should-fix when it is a principle or REVIEW.md violation, a missing test, unclear text or a bug that needs a contrived setup, and to nit only when it is a matter of taste. Give each its reason in a line. Every finding that holds goes back to the agent in its automatic fix round; a rejected one never does. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and meets the anchor you name. ${MISSED_RULE}`;
+export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and meets one of the four anchors the anchor rule names; name it as its anchor: bug, safety or regression for a bug hit in normal use, with steps, the normal-use steps that reach it; criterion, brief or decision for a broken done-criterion, explicit brief requirement or recorded decision. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that meets no anchor is downgraded, never confirmed, to should-fix when it is a principle or REVIEW.md violation, a missing test, unclear text or a bug that needs a contrived setup, and to nit only when it is a matter of taste. Give each its reason in a line. Only an anchored must-fix goes back to the agent; the others that hold are filed as a follow-up when the issue passes, unless all are nits. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and meets the anchor you name. ${MISSED_RULE}`;
 
 /**
  * Why a verifier's triage of a finding can't be taken, in a phrase; null when it can: a must-fix
@@ -209,7 +217,7 @@ function severityProblem({ severity, origin }: ReviewFinding, triage: Triage): s
   }
 }
 
-/** Whether a finding held, as the verifier triaged it: every one it didn't reject. The one rule for what goes back to the agent and what a round counts as held. */
+/** Whether a finding held, as the verifier triaged it: every one it didn't reject. The one rule for what a round counts as held. */
 export function holds(triage: Triage): boolean {
   switch (triage.result) {
     case "rejected":

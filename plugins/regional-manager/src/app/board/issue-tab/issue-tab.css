@@ -68,6 +68,10 @@
   white-space: pre-wrap;
   text-wrap: pretty;
 }
+/* The brief, folded under the description: its fold the report's (feed/feed.css), its text the description's. */
+.rmi-brief > .rmi-description {
+  margin-top: 6px;
+}
 .rmi-part {
   display: flex;
   flex-direction: column;

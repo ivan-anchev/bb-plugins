@@ -9,7 +9,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import type { PrSnapshot } from "../../model/verdict/pr.ts";
 import type { Store } from "../store/store.ts";
-import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../store/test-store.ts";
+import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, passWithShouldFix, startAgent } from "../store/test-store.ts";
 import type { ListBb } from "../agents/threads.ts";
 import { createFeedReader } from "./feed-reader.ts";
 import { coordinating, doorbellOf, ISSUE, issueIn, settled, startedAgent, textOf, newSubmission, toCap } from "../test-harness.ts";
@@ -56,7 +56,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
   const criteria = [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }] as const;
   store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], blocking: [], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
   store.claimFixRound(check.id, { kind: "none" });
-  store.settleReturned(check.id, { kind: "sent-back" }, 3_600);
+  store.settleReturned(check.id, { kind: "sent-back" }, 3_600, null);
   return handoff;
 }
 
@@ -109,31 +109,34 @@ type Fed = Awaited<ReturnType<ReturnType<typeof feedHandlers>["issueFeed"]>>;
 type FedEntry = Fed["entries"][number];
 const byKind = (feed: Fed) => new Map(feed.entries.map((entry): [FedEntry["kind"], FedEntry] => [entry.kind, entry]));
 
+/** The keys each entry kind sends: what its tab reads of it. */
+const EXPECTED_KEYS: Record<FedEntry["kind"], string[]> = {
+  created: ["at", "followUpOf", "kind", "moved"],
+  logged: ["at", "event", "kind", "moved"],
+  "agent-started": ["agentId", "at", "kind", "moved"],
+  "agent-ended": ["agentId", "at", "how", "kind", "moved"],
+  round: ["kind", "round"],
+  decision: ["decision", "kind", "moved"],
+  comment: ["comment", "kind"],
+  pr: ["at", "changes", "kind", "moved", "number"],
+  thread: ["agentId", "at", "event", "kind", "moved"],
+  "follow-up": ["at", "issueId", "kind", "moved"],
+  unblocked: ["at", "by", "kind", "moved"],
+  moved: ["at", "kind", "status"],
+};
+
 test("an issue's feed sends exactly what its tab reads: its plan's text and relations, its agents' threads, and each entry kind's own fields", async () => {
   const { handlers, issueId } = seeded();
   const feed = await handlers.issueFeed({ coordinatorId: MANAGER, issueId });
-  assert.deepStrictEqual(keysOf(feed), ["agents", "blocks", "dependsOn", "description", "doneCriteria", "entries"]);
+  assert.deepStrictEqual(keysOf(feed), ["agents", "blocks", "brief", "dependsOn", "description", "doneCriteria", "entries"]);
   assert.deepStrictEqual([feed.dependsOn, feed.blocks, feed.agents], [["WEB-1"], ["WEB-3"], [{ id: "a1", threadId: "thr_agent-1" }]]);
   assert.deepStrictEqual(
     feed.entries.map(({ kind }) => kind),
     ["created", "agent-started", "round", "decision", "decision", "pr", "thread", "unblocked", "agent-ended", "logged", "comment", "comment", "moved"],
   );
   const entries = byKind(feed);
-  const expected: Record<FedEntry["kind"], string[]> = {
-    created: ["at", "kind", "moved"],
-    logged: ["at", "event", "kind", "moved"],
-    "agent-started": ["agentId", "at", "kind", "moved"],
-    "agent-ended": ["agentId", "at", "how", "kind", "moved"],
-    round: ["kind", "round"],
-    decision: ["decision", "kind", "moved"],
-    comment: ["comment", "kind"],
-    pr: ["at", "changes", "kind", "moved", "number"],
-    thread: ["agentId", "at", "event", "kind", "moved"],
-    unblocked: ["at", "by", "kind", "moved"],
-    moved: ["at", "kind", "status"],
-  };
-  assert.deepStrictEqual([...entries.keys()].sort(), keysOf(expected), "an entry of every kind");
-  for (const [kind, entry] of entries) assert.deepStrictEqual(keysOf(entry), expected[kind], kind);
+  assert.deepStrictEqual([...entries.keys()].sort(), keysOf(EXPECTED_KEYS).filter((kind) => kind !== "follow-up"), "an entry of every kind but a follow-up, which a pass files (the test below)");
+  for (const [kind, entry] of entries) assert.deepStrictEqual(keysOf(entry), EXPECTED_KEYS[kind], kind);
   const round = entries.get("round");
   assert.ok(round?.kind === "round");
   assert.deepStrictEqual(keysOf(round.round), ["by", "handed", "inFlight", "key", "number", "outcome", "review", "verdict"]);
@@ -282,4 +285,21 @@ test("through the feed RPC, only the round whose failure asked at the cap names 
   assert.deepStrictEqual(keysOf(decision), ["decision", "kind", "moved"]);
   assert.deepStrictEqual(keysOf(decision.decision), ["answer", "at", "cap", "id", "kind", "options", "question"]);
   assert.equal(decision.decision.cap, 3, "the count it was asked at, which tells it from a question the regional manager asked");
+});
+
+test("the feed of an issue whose pass filed a follow-up sends one follow-up entry naming it, at when it was filed, with exactly its keys; the follow-up's own feed begins filed as its follow-up", async () => {
+  const { store } = freshStore();
+  const origin = filedIssue(store, MANAGER, newIssue(), 1_000).id;
+  passWithShouldFix(store, origin, startAgent(store, origin, "agent-1"), 1, 3_000);
+  const handlers = feedHandlers({ store, reader: createFeedReader(bb, store), inbox: { commentIssue: () => assert.fail("posted") } });
+
+  const feed = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: origin });
+  const followUps = feed.entries.filter(({ kind }) => kind === "follow-up");
+  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", moved: null }]);
+  assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
+  const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
+  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: "WEB-1", moved: null }], "the follow-up's own feed names its origin as it begins");
+  assert.match(followUp.brief ?? "", /- Round 1: `src\/retry\.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./, "its tab gets the brief that lists the finding, its round and the verifier's reason");
+  const own = feed.entries.find(({ kind }) => kind === "created");
+  assert.deepStrictEqual(own, { kind: "created", at: 1_000, followUpOf: null, moved: null });
 });

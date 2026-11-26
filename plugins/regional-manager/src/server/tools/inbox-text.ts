@@ -21,6 +21,7 @@ import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion,
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { defectText, findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
 import { checkInFlight, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { onlyNits, unfiledAtMerge } from "../../model/verdict/rounds/follow-up.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
 /** What the texts look up, all within one regional manager. */
@@ -70,11 +71,11 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
     switch (subject.kind) {
       case "handoff": {
         const handed = handedOf(subject.handoffId, lookups);
-        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${failedNextStep(check, event.asked, lookups)}` : "";
+        const yours = outcome(check.verdict) === "fail" ? `\n\n${fixRoundNote(check.verdict)}${failedNextStep(check, event.asked, lookups)}` : passedLine(check, titles);
         return `### ${issueName(event.issueId, titles, subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
       }
       case "final":
-        return `### ${titled(event.issueId, titles)} final check\n\n${when} ${finalCheckText({ ...check, subject }, lookups)}\n\n${finalNextStep({ ...check, subject }, lookups.view(event.issueId))}`;
+        return `### ${titled(event.issueId, titles)} final check\n\n${when} ${finalCheckText({ ...check, subject }, lookups)}\n\n${finalNextStep({ ...check, subject }, lookups.view(event.issueId))}${passedLine(check, titles)}`;
       default:
         return subject satisfies never;
     }
@@ -109,8 +110,10 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
       return `### ${on} failed\n\n${when} ${event.error === null ? "bb gave no error message." : `bb's error:\n\n${event.error.trim()}`} Read the issue with issue_read before deciding what to do.`;
     case "needs-input":
       return `### ${on} is waiting on the user in its thread\n\n${when} Only the user can answer it there; tell them in your reply. It asks, in its own words:\n\n${event.question.trim()}`;
-    case "pr":
-      return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.`;
+    case "pr": {
+      const unfiled = event.changes.includes("merged") ? unfiledLine(lookups.record(event.issueId)) : "";
+      return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.${unfiled}`;
+    }
     case "returned-to-todo":
       return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. ${restingNextStep(event.issueId, lookups)}`;
     default:
@@ -250,6 +253,26 @@ export function remindersText(reminders: readonly Reminder[]): string {
 /** One reminder in a line: its id, when it is next due, how often it repeats, and its note. */
 export function reminderText({ id, note, dueAt, everyMs }: Reminder): string {
   return `${id}, due ${new Date(dueAt).toISOString()}${everyMs === null ? "" : `, then every ${intervalText(everyMs)}`}: ${note}`;
+}
+
+/**
+ * What a pass filed, after its report: the follow-up its settling filed of the findings its
+ * issue's rounds held without blocking it (rounds/follow-up.ts), named; nothing when it filed none.
+ */
+function passedLine({ issueId, followUpId }: Check, titles: Lookups["titles"]): string {
+  if (followUpId === null) return "";
+  return `\n\nIt passed, so the plugin filed every review finding its rounds held without blocking it as ${titled(followUpId, titles)}, top-level in Backlog and depending on ${issueId}: agent_start on it is refused while ${issueId} is open. It has no done-criteria yet: plan it with issue_update before an agent starts on it, or cancel it if the user doesn't want it.`;
+}
+
+/**
+ * What a merge leaves of the issue's review: how many findings its rounds held that no follow-up
+ * collected (rounds/follow-up.ts unfiledAtMerge), as when it passed with only nits left, or merged
+ * with a failed verdict. Nothing is filed now; nothing when there are none.
+ */
+function unfiledLine(record: readonly Handed[]): string {
+  const unfiled = unfiledAtMerge(record.flatMap(({ check }) => (check === null ? [] : [check]))).length;
+  if (unfiled === 0) return "";
+  return ` It merged with ${unfiled === 1 ? "1 review finding" : `${unfiled} review findings`} its rounds held that no follow-up collected. Nothing is filed for ${unfiled === 1 ? "it" : "them"} now; ${unfiled === 1 ? "it stays" : "they stay"} in the issue's feed.`;
 }
 
 /** The handoff an event or a check names. why throw: each is inserted with its handoff, in one transaction. */
@@ -431,7 +454,7 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const blocking = verdict.blocking.length === 0 ? [] : [`Blocking defects it found, each failing the verdict:\n${verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n")}`];
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
-      return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict)].join("\n\n");
+      return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict, check.followUpId)].join("\n\n");
     }
     case "could-not-run":
       return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;
@@ -450,11 +473,11 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
  * to the agent, then each finding in the review's order with the verifier's word on it (review.ts
  * triageText) and its reason. Nothing for a check with no review stage.
  */
-function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>): string[] {
+function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string[] {
   const all = verdict.triage;
   const held = all.filter(holds).length;
   const each = all.map((finding) => `- ${findingText(finding, "  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n");
-  const triaged = (lead: string): string[] => [[`${lead}; ${triageTotals(all)}.`, ...(held === 0 ? [] : [heldSent(verdict)])].join(" "), each];
+  const triaged = (lead: string): string[] => [[`${lead}; ${triageTotals(all)}.`, ...(held === 0 ? [] : [heldSent(verdict, followUpId)])].join(" "), each];
   if (review.state === "missed") {
     const missed = `Review: no review was had, as ${review.reason}`;
     return all.length === 0 ? [`${missed}.`] : triaged(`${missed}, so the verifier triaged the ${all.length} earlier blocking finding${all.length === 1 ? "" : "s"} as unfixed`);
@@ -476,15 +499,42 @@ function triageTotals(findings: readonly Triaged[]): string {
   return `the verifier ${each.slice(0, -1).join(", ")} and ${each.at(-1)}`;
 }
 
-/** Whether the review findings that held reached the agent, as far as the plugin knows: only a failed verdict sent back as its fix round carries them. */
-function heldSent({ settlement }: Extract<Verdict, { state: "returned" }>): string {
+/**
+ * Where the review findings that held went, as far as the plugin knows: those that fail the verdict
+ * go back to the agent only with a failed verdict sent back as its fix round; the others never do
+ * (review.ts FOLLOW_UP_RULE, othersWent).
+ */
+function heldSent(verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string {
+  const { failing, others } = heldFindings(verdict);
+  const they = failing.length === 0 ? "They" : "The others";
+  const failed = failing.length === 0 ? [] : [failingSent(verdict.settlement)];
+  const rest = others.length === 0 ? [] : [othersWent(they, verdict, followUpId)];
+  return [...failed, ...rest].join(" ");
+}
+
+/**
+ * Where the findings that held without failing a verdict went: into the follow-up that collected
+ * them; to the issue's pass, still to come; or nowhere, when its pass filed none, because every one
+ * was a nit (rounds/follow-up.ts onlyNits), or, for a pass settled before follow-ups, with no reason
+ * the plugin can give.
+ */
+function othersWent(they: string, verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string {
+  if (followUpId !== null) return `${they} are filed in ${followUpId}, its follow-up.`;
+  if (outcome(verdict) !== "pass") return `${they} don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit.`;
+  // why only when they are: a pass settled before follow-ups existed filed none whatever was left.
+  if (onlyNits(heldFindings(verdict).others)) return `${they} don't go back to the agent, and its pass filed no follow-up, as every finding left was a nit: they stay in the issue's feed.`;
+  return `${they} didn't go back to the agent, and its pass filed no follow-up.`;
+}
+
+/** Whether the findings that fail a verdict reached the agent, as far as its settlement shows. */
+function failingSent(settlement: Extract<Verdict, { state: "returned" }>["settlement"]): string {
   switch (settlement.kind) {
     case "sent-back":
-      return "The ones that held went back to the agent with the failed verdict.";
+      return "The ones that fail it went back to the agent with the failed verdict.";
     case "sending-back":
-      return "The ones that held are on their way back to the agent with the failed verdict.";
+      return "The ones that fail it are on their way back to the agent with the failed verdict.";
     case "maybe-sent-back":
-      return "The ones that held went with the failed verdict's findings, which may or may not have reached the agent.";
+      return "The ones that fail it went with the failed verdict's findings, which may or may not have reached the agent.";
     case "pending":
     case "waiting-for-ci":
       return "None has gone to the agent yet.";

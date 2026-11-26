@@ -1,10 +1,11 @@
-// An issue's detail, read when its tab opens, under its head: its description, its relations, and its
+// An issue's detail, read when its tab opens, under its head: its description, its brief folded, its relations, and its
 // feed (feed/feed.tsx), the grid of its criteria by round and its Activity. It reads its own issue
 // alone, again only when that issue changes.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueRow } from "../../../../contract.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { ReadFailure } from "../../../ui/read-failure.tsx";
+import { DiscloseGlyph } from "./disclose-glyph.tsx";
 import { Feed } from "../feed/feed.tsx";
 import { IssueRelations } from "./issue-relations.tsx";
 
@@ -25,10 +26,24 @@ export function IssueDetail({ coordinatorId, issue, issues }: IssueDetailProps) 
       {feed !== undefined && (
         <>
           <p className="rmi-description">{feed.description}</p>
+          {feed.brief !== null && <Brief brief={feed.brief} />}
           <IssueRelations issue={issue} dependsOn={feed.dependsOn} blocks={feed.blocks} issues={issues} />
           <Feed coordinatorId={coordinatorId} issue={issue} feed={feed} />
         </>
       )}
     </>
+  );
+}
+
+/** The agent's brief, folded, as it is written. why folded: it runs to 20,000 characters, and the description says what the issue is about. */
+function Brief({ brief }: { brief: string }) {
+  return (
+    <details className="rmi-report-fold rmi-brief">
+      <summary>
+        <DiscloseGlyph />
+        Brief
+      </summary>
+      <p className="rmi-description">{brief}</p>
+    </details>
   );
 }

@@ -99,5 +99,5 @@ function knownOf(reviewed: readonly ReviewedCheck[], blocking: readonly Triaged[
   );
 }
 
-/** What makes two findings one: the same place and claim, byte for byte. why JSON: it keeps every part apart, whatever bytes a path or claim holds. */
-const findingKey = ({ file, line, claim }: ReviewFinding): string => JSON.stringify([file, line, claim]);
+/** What makes two findings one, for the known findings and a follow-up's list alike: the same place and claim, byte for byte. why JSON: it keeps every part apart, whatever bytes a path or claim holds. */
+export const findingKey = ({ file, line, claim }: ReviewFinding): string => JSON.stringify([file, line, claim]);

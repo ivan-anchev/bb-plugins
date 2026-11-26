@@ -15,7 +15,10 @@ export type IssueId = z.infer<typeof issueIdSchema>;
 /** The id of the regional manager's issue numbered `number`, whose key is `key`. */
 export const issueIdOf = (key: IssueKey, number: number): IssueId => issueIdSchema.parse(`${key}-${number}`);
 
-export const titleSchema = z.string().trim().min(1).max(80).regex(ONE_LINE, "A title is one line");
+/** The most characters a title holds. */
+export const MAX_TITLE_CHARS = 80;
+
+export const titleSchema = z.string().trim().min(1).max(MAX_TITLE_CHARS).regex(ONE_LINE, "A title is one line");
 
 /** What the issue is about, in plain words, for the user. why short: the board shows it whole. */
 export const descriptionSchema = z.string().trim().min(1).max(2_000);
@@ -64,6 +67,9 @@ export type Issue = {
   closed: null | { as: z.infer<typeof closedAsSchema>; at: number };
   createdAt: number;
 };
+
+/** An issue as it is filed: what the manager gives it, or a follow-up the plugin files (rounds/follow-up.ts). */
+export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "parentId" | "dependsOn">;
 
 /** The brief an agent starts from, or why none can start on the issue as it is planned. */
 export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneCriteria">): { brief: string } | { refused: string } {

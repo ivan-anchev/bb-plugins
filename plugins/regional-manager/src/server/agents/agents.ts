@@ -32,7 +32,7 @@ import { catalogRouting, sameModel, type Execution, type RequestedExecution } fr
 import { handoffIsCurrent, type HandoffId } from "../../model/agent/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import type { Related } from "../../model/issue/relations.ts";
-import { headlineText, keepsPlaceAfterEnd, type IssueView } from "../../model/issue/status.ts";
+import { headlineText, keepsPlaceAfterEnd, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { PrRead } from "../../model/verdict/pr.ts";
@@ -159,7 +159,7 @@ type Deps = {
   store: FactsStore &
     Pick<
       Store,
-      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "latestHandoff" | "handoff" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks" | "issueDecisions" | "decisions"
+      "coordinator" | "coordinators" | "issue" | "agent" | "issueThreads" | "roleOfThread" | "markNudged" | "insertAgent" | "replaceAgent" | "record" | "latestHandoff" | "handoff" | "agentTicket" | "removeCoordinator" | "supersedeOpenChecks" | "issueDecisions" | "decisions" | "originOf"
     >;
   spawner: Pick<Spawner, "agent">;
   inbox: Pick<Inbox, "endAgent">;
@@ -269,7 +269,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    */
   function startable(coordinatorId: CoordinatorId, issueId: IssueId, view: IssueView, { execution, inherited }: RunsOn): { issue: Issue; brief: string } | { refused: string } {
     const issue = issueOf(coordinatorId, issueId);
-    const final = finalText(issue, view) ?? capRefusal(view) ?? parentText(issue, store.issues(coordinatorId));
+    const final = finalText(issue, view) ?? capRefusal(view) ?? parentText(issue, store.issues(coordinatorId)) ?? followUpRefusal(view, store.originOf(coordinatorId, issueId));
     if (final !== null) return { refused: final };
     const planned = briefToStart(issue);
     if ("refused" in planned) return planned;
@@ -332,7 +332,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     if (filed === null) return { refused: `You have no issue ${issueId}. crew_catch_up lists your issues.` };
     // why first, before where it would run is read: a closed issue takes no agent, one locked at its cap none until the user answers, which leads a parent's refusal too, and a parent never has one, so nothing its earlier agents left, their environments or pull requests, bears on it.
     const { view } = await readIssue(bb, store, filed);
-    const refused = finalText(filed, view) ?? capRefusal(view) ?? parentText(filed, store.issues(coordinatorId));
+    const refused = finalText(filed, view) ?? capRefusal(view) ?? parentText(filed, store.issues(coordinatorId)) ?? followUpRefusal(view, store.originOf(coordinatorId, issueId));
     if (refused !== null) return { refused };
     const named = placement === undefined ? null : placementOf(placement, await placementFacts(coordinatorId));
     if (named !== null && "refused" in named) return named;
@@ -633,6 +633,19 @@ function mergeRefusal(id: IssueId, merge: { id: string } | null, { from, placeme
   const why = `The user chose to merge ${id} as it is (${merge.id}), so an agent starts on it only in its last agent's environment, on its pull request's branch: on a new branch, that pull request would be left behind and its merge wouldn't make ${id} Done.`;
   if (from === "default" || placement !== null) return `${why} Start one with no from or placement.`;
   return `${why} bb has removed that environment, so no agent can continue there: ask the user to merge the pull request themselves, which makes ${id} Done.`;
+}
+
+/**
+ * Why no agent may start on a follow-up yet: the issue whose pass filed it (`origin`, checks-store.ts
+ * originOf; null: it is no follow-up) is still open among what blocks it (`view`, read just now), so
+ * its default branch lacks the work the follow-up's findings are about. why only a follow-up's
+ * origin: every other dependency informs and never refuses (relations.ts). null when one may start.
+ */
+function followUpRefusal(view: IssueView, origin: IssueId | null): string | null {
+  const open = view.blockedBy.find(({ id }) => id === origin);
+  if (open === undefined) return null;
+  const { id } = view.issue;
+  return `${id} is the follow-up of ${open.id}, which is ${STATUS_LABELS[open.status]}: its agent starts only once ${open.id} is Done, from a default branch that has ${open.id}'s work. Wait for ${open.id} to close, which crew_catch_up announces as unblocking ${id}; or cancel ${id} with issue_update if it isn't wanted.`;
 }
 
 function finalText(issue: Issue, view: IssueView): string | null {

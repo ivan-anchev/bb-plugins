@@ -5,13 +5,13 @@
 import type { z } from "zod";
 import type { Agent } from "../../model/agent/agent.ts";
 import { sameModel, type Execution, type RequestedExecution } from "../../model/agent/execution.ts";
-import { verifierProblem, type Issue, type IssueId, type managerStatusSchema } from "../../model/issue/issue.ts";
+import { verifierProblem, type Issue, type IssueId, type managerStatusSchema, type NewIssue } from "../../model/issue/issue.ts";
 import { blockedBy, closesOf, newlyReady, relationsOf, type Related } from "../../model/issue/relations.ts";
 import { headlineText, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
-import type { DependencyChange, IssueEdit, NewIssue } from "../store/issue/issues-store.ts";
+import type { DependencyChange, IssueEdit } from "../store/issue/issues-store.ts";
 import type { Store } from "../store/store.ts";
 import type { CurrentViews } from "./views/current-views.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./views/issue-facts.ts";

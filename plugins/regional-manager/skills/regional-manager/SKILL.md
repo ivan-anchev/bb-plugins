@@ -577,8 +577,22 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   answer each fixed or still blocking, so one stays until a verifier sees it
   fixed. The rest reach you as its findings, which never fail it. Confirmed and downgraded
   findings never fail it. When a failed verdict
-  goes back to the agent as its automatic fix round, every finding that held
-  goes with it. When the issue has a pull
+  goes back to the agent as its automatic fix round, only the anchored
+  must-fixes go with it, and the others that held only as a count.
+  **Follow-ups**: when the issue passes with a confirmed should-fix or a
+  downgraded must-fix left from any of its rounds, the plugin files every
+  finding its rounds held without blocking it, nits included, as one
+  follow-up: a top-level build issue in Backlog, titled "Follow-ups from
+  BBP-2: …" (after the first issue of a chain of follow-ups), that depends
+  on the issue, so it stays blocked until the issue is Done: `agent_start`
+  on it is refused while the issue is open and among what blocks it. Its brief lists
+  each finding once with its round and the verifier's reason; it has no
+  done-criteria, so plan it with `issue_update` before an agent starts on it,
+  or cancel it if the user doesn't want it. A pass whose leftovers are all
+  nits files nothing: they stay in the issue's feed. Your update for the pass
+  names the follow-up, and the issue's feed shows it. When the issue's pull
+  request merges with held findings no follow-up collected, its update says
+  how many; nothing is filed then. When the issue has a pull
   request, a verdict that passed every other check (every criterion, no
   anchored must-fix finding, no blocking defect, the claimed commit on a
   clean tree) also waits for CI on the claimed commit; CI failing fails it.
