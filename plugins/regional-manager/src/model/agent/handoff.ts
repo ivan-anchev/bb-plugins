@@ -62,7 +62,7 @@ export const handoffFieldsSchema = z.object({
   deviations: givenItems.describe("Where you departed from the brief, and why, up to 300 characters each and 10 items. [] for none."),
   findings: givenItems.describe("Things you noticed outside your brief, up to 300 characters each and 10 items. [] for none."),
   headSha: commitSchema.optional().describe("done on a build issue only, and required then: the 40-character output of `git rev-parse HEAD` after your last commit."),
-  prUrl: prUrlSchema.optional().describe("done on a build issue only: the pull request you opened, if any."),
+  prUrl: prUrlSchema.optional().describe("done on a build issue only: the pull request (merge request on GitLab) you opened, if any."),
   report: reportSchema.optional().describe("done on a research issue only, and required then: your report, in markdown, up to 20,000 characters. It is your result: your regional manager reads it whole."),
 });
 

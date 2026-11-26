@@ -397,8 +397,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
    * send and never answer, as when the plugin crashes during the call.
    */
   const sends: { failure: SendFailure | null; pending: Promise<void> | null; unanswered: boolean } = { failure: null, pending: null, unanswered: false };
-  /** The project as bb gives it: its git remote (null: none). A test may change it between ticks. */
-  const project: { remote: string | null } = { remote: "https://github.com/acme/webhooks.git" };
+  /** The project as bb gives it: its git remote (null: none), or the error bb refuses to say it with instead (null: says it). A test may change it between ticks. */
+  const project: { remote: string | null; failure: Error | null } = { remote: "https://github.com/acme/webhooks.git", failure: null };
   /**
    * GitHub and gh as the PR watch reaches them: each branch's pull request, a failure every gh run
    * rejects with instead (null: none), and every run's arguments. A test sets them between ticks.
@@ -842,7 +842,12 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
     },
   } satisfies CatalogBb["sdk"]["providers"];
-  const projects = { get: async (_: { projectId: string }) => ({ name: PROJECT_NAME, gitRemoteUrl: project.remote }) };
+  const projects = {
+    async get(_: { projectId: string }) {
+      if (project.failure !== null) throw project.failure;
+      return { name: PROJECT_NAME, gitRemoteUrl: project.remote };
+    },
+  };
   /**
    * bb's environments: the ones it has destroyed, as when their sandbox was removed (every other one
    * is ready), and the project's default branch bb records on each. Set `holding` to keep each answer, as read when called, until the test calls its release in `held`.

@@ -247,6 +247,8 @@ it records that the work couldn't be verified.
 Nobody answers you. Anything you ask a person, or ask them to approve, is
 declined at once: go on without it, and leave the criterion it would have
 checked unverifiable, saying why. Your verdict's findings name each ask
-declined. For GitHub use the `gh` CLI in the shell, never a connector or app:
-its sign-in is an ask nobody answers. Showing no activity for 30 minutes ends
+declined. For GitHub or GitLab use its CLI, `gh` or `glab`, in the shell,
+never a connector or app: its sign-in is an ask nobody answers. Take the one the
+project's git remote is on (`gh` for github.com, `glab` for a GitLab host); a
+handoff's `prUrl` may be a GitLab merge request's. Showing no activity for 30 minutes ends
 the check without a verdict.

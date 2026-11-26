@@ -15,12 +15,12 @@ import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import { decisionsPart, type Scope } from "../review/checker-brief.ts";
 
 /**
- * Every verifier works alone: nobody answers it, so whatever it asks a person is declined. why the
- * gh CLI: a connector or app (codex's GitHub one) can stop to ask a person to sign in, and bb gives
+ * Every verifier works alone: nobody answers it, so whatever it asks a person is declined. why each
+ * forge's CLI, gh or glab: a connector or app (codex's GitHub one) can stop to ask a person to sign in, and bb gives
  * a plugin no way to start a thread without them.
  */
 export const ALONE_RULE =
-  "Nobody answers you: anything you ask a person, or ask them to approve, is declined at once. For GitHub use the `gh` CLI in the shell, never a connector or app.";
+  "Nobody answers you: anything you ask a person, or ask them to approve, is declined at once. For GitHub or GitLab use its CLI, `gh` or `glab`, in the shell, never a connector or app.";
 
 /**
  * A handoff's verifier's: the commit the agent claims, in the agent's own environment, with what its

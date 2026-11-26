@@ -49,6 +49,7 @@ import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
 import type { Spawner } from "../spawn.ts";
 import type { NewAgent } from "../store/issue/agents-store.ts";
 import type { Store } from "../store/store.ts";
+import type { ForgeRepo } from "../watch/locate.ts";
 import type { PrWatch } from "../watch/pr-watch.ts";
 import { agentBrief } from "./brief.ts";
 import { environmentGone, type EnvironmentsBb } from "./environments.ts";
@@ -98,7 +99,7 @@ type Spot = { placement: Placement; environment: EnvironmentArgs; base: Base; ch
 /** What a start asks of its issue's agents: its kind, `from`, and the placement named, resolved (null: none named). */
 type Asked = { kind: Kind; from: StartFrom; placement: Placement | null };
 
-/** A start's proof that the branch is on origin at the head: its pull request, as GitHub has it (`agent`: the one last on the branch). */
+/** A start's proof that the branch is on origin at the head: its pull request or merge request, as its forge has it (`agent`: the one last on the branch). */
 type Prove = (agent: Agent, branch: string, head: string) => Promise<PrRead>;
 
 /** A start decided: its issue, what it asked, where it spawns, what it runs on, and the issue's previous agent (null: none). */
@@ -166,7 +167,7 @@ type Deps = {
   inbox: Pick<Inbox, "endAgent">;
   memory: MemoryRoot;
   turns: IssueTurns;
-  prs: Pick<PrWatch, "readNow">;
+  prs: Pick<PrWatch, "readNow" | "forgeOf">;
   /** What bb says about where the regional manager's agents can run, read when agent_start names a placement. */
   placementFacts(id: CoordinatorId): Promise<PlacementFacts>;
   /** Runs after anything that changes a regional manager's board. */
@@ -304,21 +305,36 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    */
   function start(coordinatorId: CoordinatorId, request: StartRequest): Promise<StartOutcome | Busy> {
     return turns.run(coordinatorId, request.issueId, async () => {
+      // why first: its await must not sit between the start's last checks and its writes (takeOver).
+      const forge = await forgeOf(coordinatorId);
       const prove = provenOnce(coordinatorId);
       const decided = await decide(coordinatorId, request, prove);
       if ("refused" in decided) return { kind: "refused", reason: decided.refused };
       const taken = await takeOver(coordinatorId, decided, prove);
       if ("refused" in taken) return { kind: "refused", reason: taken.refused };
-      return spawn(coordinatorId, decided, taken);
+      return spawn(coordinatorId, decided, taken, forge);
     });
   }
 
   /**
-   * A start's push proofs: the pull request read fresh from GitHub (readNow), and read again only
-   * when asked at another branch or head. why fresh: a saved read is what GitHub showed at an
-   * earlier minute, and the branch may have moved since, back included. why once per head: a move
-   * is judged twice, before and after the holder stops, and the second needs no new read while the
-   * head it compares is the same.
+   * The forge the regional manager's project is on, for the agent's first message (null: on none the
+   * plugin reads). why caught: bb failing to say the project's remote must not fail a start; the
+   * message then says nothing of a forge, as on a remote the plugin can't read.
+   */
+  async function forgeOf(coordinatorId: CoordinatorId): Promise<ForgeRepo | null> {
+    try {
+      return await prs.forgeOf(coordinatorId);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * A start's push proofs: the pull request or merge request read fresh from its forge (readNow),
+   * and read again only when asked at another branch or head. why fresh: a saved read is what the
+   * forge showed at an earlier minute, and the branch may have moved since, back included. why
+   * once per head: a move is judged twice, before and after the holder stops, and the second needs
+   * no new read while the head it compares is the same.
    */
   function provenOnce(coordinatorId: CoordinatorId): Prove {
     let last: { branch: string; head: string; read: Promise<PrRead> } | null = null;
@@ -403,7 +419,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
   }
 
   /** Step 4: spawns the inserted agent's thread with its first message; one bb refuses ends as spawn-failed. */
-  async function spawn(coordinatorId: CoordinatorId, { runsOn, after }: Decided, { issue, brief, blockedBy, spot, agentId, ticket, replaced, withdrawn }: Taken): Promise<StartOutcome> {
+  async function spawn(coordinatorId: CoordinatorId, { runsOn, after }: Decided, { issue, brief, blockedBy, spot, agentId, ticket, replaced, withdrawn }: Taken, forge: ForgeRepo | null): Promise<StartOutcome> {
     const { execution, inherited } = runsOn;
     const carried = carriedOf(coordinatorId, spot);
     const succession: Succession = { after, replaced, withdrawn, carried };
@@ -417,6 +433,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
         { ...issue, brief, decisions: store.issueDecisions(coordinatorId, issue.id) },
         { base: spot.base, branch: carried?.branch ?? null, pr: carried?.pr ?? null, earlier: store.record(coordinatorId, issue.id) },
         { crewRules: files.read(CREW_FILE).text, index: files.read(MEMORY_INDEX).text },
+        forge,
       );
       return started(await spawner.agent(ticket, { coordinator: coordinatorOf(coordinatorId), title: issue.title, environment: spot.environment, execution, serviceTier: inherited?.serviceTier ?? null, prompt }));
     } catch (error) {

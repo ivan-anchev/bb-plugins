@@ -15,6 +15,12 @@ hold the issue until you are stopped: no other agent works on it meanwhile.
 
 It holds everything you start from:
 
+- **Its opening lines**: who you are, your regional manager's thread, and, on
+  a build issue whose project is on a forge the plugin reads, that forge, its
+  host and its CLI, as in "Its project is on GitLab at gitlab.example.com: use
+  the `glab` CLI for its merge requests." (or `gh` for GitHub's, beside `glab`
+  for GitLab's). Use that CLI for the project's pull or merge requests. When
+  it names no forge, the plugin couldn't place the project on one.
 - **What it is about**: the issue's description, as the user sees it.
 - **Brief**: the work, its context and its constraints.
 - **Done when**, on a build issue: the done-criteria, numbered. Each one is
@@ -135,8 +141,8 @@ then stop:
   criteria, group neighbouring ones in an item. Use `[]` for an empty
   list. A handoff past these caps is refused, and nothing is saved.
 - **headSha** (a build issue's done only, required): `git rev-parse HEAD`
-  after your last commit. **prUrl**: the pull request, if you opened one. Name
-  it: a verdict that passes your criteria then waits for CI on your commit,
+  after your last commit. **prUrl**: the pull request (a merge request's URL
+  on GitLab), if you opened one. Name it: a verdict that passes your criteria then waits for CI on your commit,
   and fails if CI does.
 - **report** (a research issue's done only, required): your whole report, in
   markdown, up to 20,000 characters, answering each question you were given.

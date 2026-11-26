@@ -363,8 +363,10 @@ in its own environment, on its own branch.
   environment provider, such as `boat-sandbox`, with `machineInputs` for the
   machine it makes (such as `{"preset": "small"}`); a sandbox agent gets its
   own new branch from the default one. `execution` names what it runs on (see
-  [Who runs what](#who-runs-what)). Its first message is the issue's
-  description, brief and criteria (a research agent's as its questions, with
+  [Who runs what](#who-runs-what)). Its first message names, on a build issue,
+  the forge its project is on, its host and CLI (`gh` or `glab`), never
+  whether to open a pull request or merge request: say that in the brief.
+  Then the issue's description, brief and criteria (a research agent's as its questions, with
   how to hand off its report), and `CREW.md` and `MEMORY.md` as they are now,
   so put rules every agent follows in `CREW.md` before you start agents. It
   holds no other file of your memory, a report included, unless the brief
@@ -450,11 +452,12 @@ verdict) stays one.
   it before changing anything, and hands off blocked if it is missing.
   Worktree to worktree cuts from the local branch, even after the old thread
   is archived or its worktree removed. With a sandbox on either side, the
-  branch travels only through origin: ask the agent to push and open a pull
-  request first, as the plugin never pushes or commits for it; it is allowed
-  once that pull request's head is the commit the agent left (read fresh
-  from GitHub at the move, so call right after the push; a move refused
-  because GitHub can't be read says why).
+  branch travels only through origin, and the plugin never pushes or commits
+  for an agent: the move is allowed once a pull request (a merge request,
+  `MR`, on GitLab) on that branch has the commit the agent left as its head,
+  read fresh from the project's forge at the move; a move refused because the
+  forge can't be read says why. Whether the agent pushes or opens one is your
+  brief's call; otherwise continue in its environment.
   A move reads the previous environment first and is refused, with nothing
   stopped, when it holds uncommitted files (named), has no branch checked
   out (a detached HEAD), or can't be read, as a suspended sandbox can't:
@@ -465,7 +468,8 @@ verdict) stays one.
   origin is lost, and the refusal offers `from: "default"`. A removed
   worktree's unpushed commits stay on its local branch: a move of them to a
   sandbox is refused, and a start with no `placement` (or a worktree) reaches
-  them, whose agent can push and open its pull request.
+  them; a move to a sandbox works once a pull request or merge request on
+  that branch has its head.
 - **A clean start**: `from: "default"` gives the new agent a new environment
   from the default branch (a `placement` may name where), with the earlier
   handoffs and verdicts still in its first message. Use it when the earlier
@@ -620,9 +624,10 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     the verifier ran. Its pull request merging makes it Done; to accept it
     without a merge, `issue_update` with `status: "done"`. "verified, CI not
     checked" means the plugin can't read CI until someone acts, such as
-    signing gh in (the reason is in the verdict): say so. "verified, no CI
-    checks" means GitHub reported no checks on the commit even after the wait
-    for them: say so.
+    signing gh or glab in (the reason is in the verdict), or that a GitLab
+    pipeline is blocked on a manual job nobody has played, which the merge
+    still needs: say so. "verified, no CI checks" means the forge reported no
+    checks on the commit even after the wait for them: say so.
   - **failed verification, findings sent back to it (fix round 1)**: the
     agent's first failed verdict went back to it by itself, as a message from
     its verifier. Nothing to do: the issue is In progress, and the agent's
@@ -678,8 +683,9 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     - **One more round**: tell the agent what to fix, or hand the issue to a
       fresh agent. If that round fails too, the plugin asks again.
     - **Cancel the issue**: stop its agent with `agent_stop`, close its pull
-      request with `gh pr close` and the number or branch the update names,
-      and cancel it with `issue_update`.
+      request with `gh pr close` (a merge request with `glab mr close`) and
+      the number or branch the update names, and cancel it with
+      `issue_update`.
     - An answer in their own words allows one more round: read it for what
       they want.
 
@@ -716,11 +722,13 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   depends on closed. If BBP-3 is in Todo, it is ready: start its agent, naming in its brief
   what it needs of BBP-2. If an agent already holds it, tell that agent with
   `agent_message`.
-- **PR #n: opened, reopened, merged, closed, CI passed, CI failed, approved,
-  changes requested**: the issue's pull request, as the plugin read it from
-  GitHub. A merge makes the issue Done. Changes requested or failing CI after
-  a verified handoff are yours: message the agent. Never merge or approve a
-  pull request yourself.
+- **PR #n or MR !n: opened, reopened, merged, closed, CI passed, CI failed,
+  approved, changes requested, unresolved discussions**: the issue's pull
+  request (`PR #n`, GitHub) or merge request (`MR !n`, GitLab), as the plugin
+  read it from the project's forge; unresolved discussions are GitLab's
+  alone. A merge makes the issue Done. Changes requested, unresolved
+  discussions or failing CI after a verified handoff are yours: message the
+  agent. Never merge or approve one yourself.
 - **the user edited a file**: reread it in the memory below and follow it.
 - **the user turned verification on or off**: done handoffs made from then
   on are checked, or reach you unverified.

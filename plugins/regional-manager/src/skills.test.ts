@@ -20,3 +20,19 @@ test("every skill's name and description are plain one-line YAML that bb reads, 
     assert.ok(description.length <= 1024, `${skill}: the description has ${description.length} characters`);
   }
 });
+
+const GH = /\bgh\b/;
+const GLAB = /\bglab\b/;
+// A pull request named any way a skill names one, or the CLI that reaches it.
+const CHANGE_REQUEST = /pull requests?|\bPRs?\b|\bCLI\b/;
+
+// why: a GitLab project's agents, verifiers and managers read these skills too, and a line that
+// sends them to gh alone for a pull request would have them reach a merge request with the wrong CLI.
+test("no skill line names `gh` as the way to reach a pull request without naming `glab` beside it", () => {
+  for (const skill of readdirSync(SKILLS)) {
+    const lines = readFileSync(join(SKILLS, skill, "SKILL.md"), "utf8").split("\n");
+    for (const [i, line] of lines.entries()) {
+      if (GH.test(line) && CHANGE_REQUEST.test(line)) assert.match(line, GLAB, `${skill}/SKILL.md:${i + 1} names gh for a pull request without glab`);
+    }
+  }
+});

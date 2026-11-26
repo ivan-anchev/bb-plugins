@@ -335,14 +335,14 @@ function cutRef(previous: Previous, to: Placement): Cut | { refused: string } {
   if (head !== null && pushed?.kind === "read" && pushed.pr?.headSha === head) return { kind: "cut", from: agent.id, branch, via: "origin", head };
   const at = head === null ? "the head it left" : `its head ${head.slice(0, 7)}`;
   if (pushed?.kind === "unread") {
-    const then = environmentId === null ? `Call again once GitHub can be read, or ${CLEAN}` : "Continue in its environment (leave out placement), or call again once GitHub can be read.";
+    const then = environmentId === null ? `Call again once it can be read, or ${CLEAN}` : "Continue in its environment (leave out placement), or call again once it can be read.";
     return { refused: `Whether ${agent.id}'s branch \`${branch}\` is on origin at ${at} can't be read now: ${pushed.reason}. ${then}` };
   }
-  const reaches = "a move with a sandbox on either side reaches the branch only through origin, and only a pull request whose head is that commit shows it was pushed";
+  const reaches = "a move with a sandbox on either side reaches the branch only through origin, and only a pull request or merge request whose head is that commit shows it was pushed";
   if (environmentId !== null) {
-    return { refused: `${agent.id}'s branch \`${branch}\` isn't shown on origin at ${at}: ${reaches}. Continue in its environment (leave out placement), or ask ${agent.id} to push and open a pull request, then call again.` };
+    return { refused: `${agent.id}'s branch \`${branch}\` isn't shown on origin at ${at}: ${reaches}. Continue in its environment (leave out placement), or call again once a pull request or merge request on \`${branch}\` has that commit as its head.` };
   }
-  const removed = `bb removed ${agent.id}'s ${placementName(agent.placement)}, and nothing shows its branch \`${branch}\` reached origin at ${at} (no pull request has that head)`;
+  const removed = `bb removed ${agent.id}'s ${placementName(agent.placement)}, and nothing shows its branch \`${branch}\` reached origin at ${at} (no pull request or merge request has that head)`;
   return { refused: `${removed}: ${keptText(agent.placement)}` };
 }
 
@@ -351,7 +351,7 @@ function keptText(placement: Placement): string {
   switch (placement.kind) {
     // A worktree's branch outlives it (bb-facts P1c).
     case "worktree":
-      return `its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request, and a move to a sandbox works after that. Or ${CLEAN}`;
+      return `its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; a move to a sandbox works once a pull request or merge request on its branch has its head. Or ${CLEAN}`;
     case "provider":
       return `its unpushed commits went with it. ${CLEAN.charAt(0).toUpperCase()}${CLEAN.slice(1)}`;
     default:
