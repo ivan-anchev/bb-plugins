@@ -28,34 +28,34 @@ async function capped() {
   await failsVerification(kit, coordinatorId, agentThreadId);
   const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
   await openPr(kit, fresh, "OPEN");
-  kit.reviewers.reportAtOnce = false;
-  await failsOnMustFix(kit, coordinatorId, fresh);
-  kit.reviewers.reportAtOnce = true;
+  await failsOnMustFix(kit, coordinatorId, fresh, { findings: [MUST_FIX, SHOULD_FIX] }, [ANCHORED, { finding: 2, result: "confirmed", reason: "Both calls sit on line 7." }]);
   kit.thread(threadId).status = "idle";
   const catchUp = async () => textOf(await kit.call("crew_catch_up", {}, threadId));
   return { kit, threadId, coordinatorId, fresh, catchUp };
 }
 
-/** The agent in `agentThreadId` hands off done, its reviewer reports MUST_FIX and SHOULD_FIX, and its verifier passes every criterion but anchors MUST_FIX to the brief. */
-async function failsOnMustFix(kit: Kit, coordinatorId: CoordinatorId, agentThreadId: string): Promise<void> {
+/** The verifier's word on MUST_FIX: it holds, and breaks the brief. */
+const ANCHORED = { finding: 1, result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." };
+
+/** a2, in `agentThreadId`, hands off done, its reviewer reports `review`, and its verifier passes every criterion but triages as `triage`, so an anchored finding fails it. */
+async function failsOnMustFix(kit: Kit, coordinatorId: CoordinatorId, agentThreadId: string, review: object, triage: readonly object[]): Promise<void> {
   const check = () => kit.store.latestHandoff(coordinatorId, a2)?.check ?? assert.fail("no check");
+  kit.reviewers.reportAtOnce = false;
   await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   await settled();
-  const { review } = check();
-  const reviewer = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
-  await kit.call("issue_review", { findings: [MUST_FIX, SHOULD_FIX] }, reviewer);
+  const reviewing = check().review;
+  const reviewer = reviewing.state === "running" ? reviewing.reviewerThreadId : assert.fail(`the review is ${reviewing.state}`);
+  assert.match(textOf(await kit.call("issue_review", review, reviewer)), /^Review recorded/);
   await kit.idle(reviewer, "Reviewed.");
   await settled();
   const { verdict, criteria } = check();
   const verifier = verdict.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict.state}`);
-  const triage = [
-    { finding: 1, result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." },
-    { finding: 2, result: "confirmed", reason: "Both calls sit on line 7." },
-  ];
-  await kit.call("issue_verdict", { criteria: criteria.map((_, i) => ({ criterion: i + 1, result: "pass", evidence: "# pass" })), findings: [], triage }, verifier);
+  const passes = criteria.map((_, i) => ({ criterion: i + 1, result: "pass", evidence: "# pass" }));
+  assert.match(textOf(await kit.call("issue_verdict", { criteria: passes, findings: [], triage }, verifier)), /^Verdict recorded/);
   await kit.idle(verifier, "Verdict returned.");
   await settled();
+  kit.reviewers.reportAtOnce = true;
 }
 
 /** GitHub reports pull request #41, in `state`, on the branch of the agent in `agentThreadId`, and the PR watch reads it. */
@@ -104,7 +104,8 @@ test("after the merge answer, agent_message on the issue is allowed, a later fai
   assert.ok(!isRefusal(message), textOf(message));
   assert.match(textOf(message), /^(Sent to|Queued for) a2\./);
   const sentBefore = kit.sent().length;
-  await failsVerification(kit, coordinatorId, fresh);
+  // why the reviewer answers the earlier must-fix: a later round's review covers only the change since, and answers that round's blocking findings.
+  await failsOnMustFix(kit, coordinatorId, fresh, { findings: [], earlier: [{ finding: 1, fixed: false, note: "The backoff still never caps." }] }, [ANCHORED]);
 
   const fourth = kit.store.latestHandoff(coordinatorId, a2)?.check?.verdict;
   assert.equal(fourth?.state === "returned" && fourth.settlement.kind, "checked", "settled as checked, never sent back");
