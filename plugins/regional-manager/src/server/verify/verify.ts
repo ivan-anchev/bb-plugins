@@ -49,7 +49,7 @@ import { refusalOf } from "./send-refusal.ts";
 import type { AsksBb } from "../hidden/asks.ts";
 import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { verifierExecution } from "./verifier-model.ts";
-import { checkedIssue, scopeOf } from "../review/checker-brief.ts";
+import { checkedIssue, earlierDefectsOf, scopeOf } from "../review/checker-brief.ts";
 import { verifierBrief } from "./verifier-brief.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
@@ -220,7 +220,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       title: `Verify ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId: thread.environmentId },
       execution,
-      prompt: verifierBrief(issue, check, checkout, scopeOf(store, check)),
+      prompt: verifierBrief(issue, check, checkout, scopeOf(store, check), earlierDefectsOf(store, check)),
     };
   }
 

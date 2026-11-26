@@ -154,7 +154,7 @@ An issue's status is derived from what its agents did, never stored:
 | Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
-| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or it passed every criterion with no must-fix finding anchored and waits for CI. |
+| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
 | Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
@@ -658,7 +658,10 @@ before its verifier starts. The plugin starts a **reviewer**:
   verifier's also says a defect its creed-qa run finds outside the criteria
   fails the verdict only when it meets a blocking anchor: it reports one in
   `issue_verdict`'s `blocking`, with its anchor and, for a bug, its steps,
-  and each fails the verdict, as "a blocking defect the verifier found",
+  and each fails the verdict, as "a blocking defect the verifier found";
+  the next round's verifier gets every one still open, numbered, and
+  `issue_verdict` refuses a verdict that doesn't answer each in
+  `earlierDefects`, fixed or still blocking, one still blocking failing it too,
   which the agent's fix round, the manager's update and the board's round
   name; every other defect goes in `findings`, which never fail it. A reviewer reports
   each finding at the severity CREW.md gives it: the verifier, not the
@@ -857,8 +860,9 @@ with `gh` on the machine running bb, on the same once-a-minute tick:
   github.com are read.
 - **A merge makes the issue Done**, whatever its agent is doing; a check still
   pending or failed then is never sent back.
-- **A verdict waits for CI**: a done handoff that passed every criterion, with
-  no must-fix finding anchored, when
+- **A verdict waits for CI**: a done handoff whose verdict passed every other
+  check (every criterion, no anchored must-fix finding, no blocking defect,
+  the claimed commit on a clean tree), when
   it names a pull request or one is known for the issue, waits under Verifying
   as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the pull
   request is seen) until CI finishes on the very commit the handoff claims;

@@ -305,7 +305,7 @@ In progress, Reviewing, Verifying or In review.
 | Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff as CREW.md instructs reviewers, before its verifier starts. |
-| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or it passed every criterion with no must-fix finding anchored and waits for CI on the claimed commit. A build parent: its final check is due or running. |
+| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI on the claimed commit. A build parent: its final check is due or running. |
 | In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
 | Done | A build issue: its pull request merged, or you accepted it; final. A build parent: its final check passed, or you accepted it. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
 | Canceled | You canceled it. |
@@ -571,14 +571,17 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   rules that must block in the brief. A defect the verifier finds itself
   outside the criteria, as with creed-qa, fails the verdict only when it
   meets a blocking anchor: the verifier reports it as a blocking defect,
-  with its anchor and steps, and your update names it as the cause. The
-  rest reach you as its findings, which never fail it. Confirmed and downgraded
+  with its anchor and, for a bug, safety or regression anchor, the
+  normal-use steps that reach it, and your update names it as the cause.
+  The next round's verifier gets every blocking defect still open and must
+  answer each fixed or still blocking, so one stays until a verifier sees it
+  fixed. The rest reach you as its findings, which never fail it. Confirmed and downgraded
   findings never fail it. When a failed verdict
   goes back to the agent as its automatic fix round, every finding that held
   goes with it. When the issue has a pull
-  request, a verdict that passed every criterion, with no must-fix finding
-  anchored, also waits for CI on the claimed commit; CI
-  failing fails it.
+  request, a verdict that passed every other check (every criterion, no
+  anchored must-fix finding, no blocking defect, the claimed commit on a
+  clean tree) also waits for CI on the claimed commit; CI failing fails it.
   - **verified**: In review. Report it to the user as checked, naming what
     the verifier ran. Its pull request merging makes it Done; to accept it
     without a merge, `issue_update` with `status: "done"`. "verified, CI not

@@ -5,11 +5,11 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { ANCHOR_RULE, anchorProblem, blockingDefectSchema, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, anchorProblem, blockingDefectSchema, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
-import { scopeOf } from "../review/checker-brief.ts";
+import { earlierDefectsOf, scopeOf } from "../review/checker-brief.ts";
 import { failed, numbersRefusal, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Verify, VerifierReport } from "./verify.ts";
 
@@ -33,6 +33,15 @@ const verdictInputSchema = z.object({
     .max(20)
     .default([])
     .describe(`Defects you found yourself, as with creed-qa's checks of the surrounding code, that no criterion covers and that meet a blocking anchor: each with its anchor and, for a bug, the normal-use steps that reach it. Each one fails the verdict. ${ANCHOR_RULE} [] for none.`),
+  earlierDefects: z
+    .array(
+      z.object({
+        defect: z.number().int().min(1).describe("The earlier blocking defect's number in your first message."),
+        fixed: z.boolean().describe("true only when you ran its steps again on this commit and they no longer reach it. false keeps it blocking: it fails this verdict too."),
+      }),
+    )
+    .default([])
+    .describe("One answer for every blocking defect an earlier verifier found that your first message numbers, none skipped. [] when it lists none."),
   triage: z
     .array(
       triageVariants({
@@ -61,7 +70,7 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       // why throw: a verifier is started for a check, and checks are kept while their regional manager is.
       if (check === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
       if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
-      const report = reportOf(input, check.criteria, triagedOf(store, check));
+      const report = reportOf(input, check.criteria, triagedOf(store, check), earlierOf(store, check));
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
       const received = await verify.returned(check.id, threadId, report);
       if (received === "not-running") return failed(NOT_RUNNING);
@@ -91,8 +100,25 @@ function triagedOf(store: Pick<Store, "record" | "finalChecks">, check: Check): 
   }
 }
 
-/** The verdict, each criterion named by its text and the verifier's triage of each finding it triages (`findings`), in the check's order; or why it can't be taken. */
-function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: readonly ReviewFinding[]): VerifierReport | string {
+/** The blocking defects an earlier verifier of the issue found, for this one to answer (checker-brief.ts earlierDefectsOf); none for a final check. */
+function earlierOf(store: Pick<Store, "record">, check: Check): BlockingDefect[] {
+  const { subject } = check;
+  switch (subject.kind) {
+    case "handoff":
+      return earlierDefectsOf(store, { ...check, subject });
+    case "final":
+      return [];
+    default:
+      return subject satisfies never;
+  }
+}
+
+/**
+ * The verdict, each criterion named by its text, the verifier's triage of each finding it triages
+ * (`findings`), in the check's order, and its blocking defects: each earlier one (`earlier`) it
+ * answered not fixed, then its own; or why it can't be taken.
+ */
+function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: readonly ReviewFinding[], earlier: readonly BlockingDefect[]): VerifierReport | string {
   const refused =
     numbersRefusal(
       input.criteria.map(({ criterion }) => criterion),
@@ -108,13 +134,18 @@ function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: re
       findings,
     ) ??
     triageRefusal(input.triage, findings) ??
+    numbersRefusal(
+      input.earlierDefects.map(({ defect }) => defect),
+      earlier.length,
+      { verb: "answer", each: "earlier blocking defect", all: "earlier blocking defects" },
+    ) ??
     blockingRefusal(input.blocking);
   if (refused !== null) return refused;
   const byNumber = new Map(input.criteria.map((check) => [check.criterion, check]));
   const byFinding = new Map(input.triage.map(({ finding, ...triage }) => [finding, triage]));
   return {
     findings: input.findings,
-    blocking: input.blocking,
+    blocking: [...earlier.filter((_, i) => input.earlierDefects.some(({ defect, fixed }) => defect === i + 1 && !fixed)), ...input.blocking],
     criteria: criteria.map((criterion, i) => {
       const check = byNumber.get(i + 1);
       // why throw: missing numbers were refused above.
@@ -163,8 +194,9 @@ function blockingRefusal(blocking: VerdictInput["blocking"]): string | null {
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or once it refuses because the check no longer waits for your verdict or your worktree couldn't be read. The plugin judges the commit and the tree itself, through bb's git plugin ; you judge the criteria, and triage the reviewer's findings.
+const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or refuses because the check no longer waits for it or your worktree couldn't be read. The plugin judges the commit and the tree itself; you judge the criteria and triage the reviewer's findings.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
-- blocking: defects you found yourself, as with creed-qa, that no criterion covers and that meet a blocking anchor (the anchor rule below), up to 20: each its claim, its anchor and, for a bug, safety or regression anchor, steps. Each fails the verdict, as a failed criterion does. [] for none.
-- findings: every other problem no criterion covers, up to 20, with its severity: they never fail the verdict. [] for none.
-- triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor (and steps for a bug, safety or regression anchor), or downgraded with to, the lower severity. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`;
+- blocking: defects you found yourself outside the criteria, as with creed-qa, that meet a blocking anchor (below), up to 20: claim, anchor, and steps for a bug, safety or regression anchor. Each fails the verdict. [] for none.
+- earlierDefects: an answer for each earlier blocking defect your first message numbers: fixed only when its steps no longer reach it; one not fixed fails this verdict. [] for none.
+- findings: other problems no criterion covers, up to 20, with their severity; they never fail the verdict. [] for none.
+- triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor and steps, or downgraded with to, the lower severity. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`;

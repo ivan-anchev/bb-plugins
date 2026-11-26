@@ -1166,6 +1166,37 @@ test("a defect the verifier finds itself outside the criteria, hit in normal use
   assert.deepEqual(shown?.state === "returned" && [shown.blocking, shown.findings], [[{ ...crash, steps }], advisory], "the board lists the defect and the finding");
 });
 
+test("blocking defects an earlier verifier found carry into the next round's first message: each needs an answer, and one still blocking fails that round though its own verifier found nothing new", async () => {
+  const { kit, threadId, verifier, handOff, check } = await withAgent();
+  await handOff();
+  const crash = { claim: "`node cli.js` crashes on an empty counts.json.", anchor: "bug", steps: "1. Kill a run mid-save. 2. Run node cli.js signup: SyntaxError." } as const;
+  const lost = { claim: "A count written twice in one run is lost.", anchor: "regression", steps: "1. Run node cli.js a b. 2. counts.json holds only b." } as const;
+  const first = verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, blocking: [crash, lost] }, first)), /^Verdict recorded/);
+  await kit.idle(first, "Verdict returned.");
+  await settled();
+
+  // Round 2 fixes only the lost count.
+  await handOff();
+  const second = verifier();
+  const prompt = kit.thread(second).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.ok(
+    prompt.includes(`## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Run each one's steps again on this commit, and answer every one in issue_verdict's earlierDefects by its number: fixed only when its steps no longer reach it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a bug hit in normal use, reached by: ${crash.steps}: ${crash.claim}\n2. Blocks, as a regression: existing behaviour that breaks in normal use, reached by: ${lost.steps}: ${lost.claim}`),
+    "the second verifier's first message lists both defects, numbered, with their anchors and steps",
+  );
+  const skipped = await kit.call("issue_verdict", PASSES, second);
+  assert.ok(isRefusal(skipped));
+  assert.equal(textOf(skipped), "issue_verdict is refused and nothing was saved: answer every earlier blocking defect; missing 1, 2 of 1 to 2.", "no verdict passes that leaves an earlier defect unanswered");
+  assert.equal(check().verdict.state, "running", "nothing was saved");
+
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, earlierDefects: [{ defect: 1, fixed: false }, { defect: 2, fixed: true }] }, second)), /^Verdict recorded: 2 of 2 criteria passed/);
+  await kit.idle(second, "Verdict returned.");
+  await settled();
+  const round2 = check().verdict;
+  assert.deepEqual(round2.state === "returned" && round2.blocking, [crash], "the crash stays blocking; the fixed one is gone");
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Failed verification: a blocking defect the verifier found\. 2 of 2 criteria passed/, "round 2 does not pass");
+});
+
 test("a verifier's first message and its role's rules state the four blocking anchors, list principle violations and contrived-setup bugs as should-fix, and say a creed-qa defect outside the criteria fails the verdict only when it meets a blocking anchor", async () => {
   const { kit, verifier, handOff } = await withAgent();
   await handOff();

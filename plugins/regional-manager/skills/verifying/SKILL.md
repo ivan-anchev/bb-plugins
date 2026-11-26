@@ -130,6 +130,11 @@ For a final check:
    section gives it: findings never fail the verdict. A principle violation
    or a contrived-setup bug meets no anchor: it never fails a criterion and
    never goes in `blocking`.
+6. **Blocking defects an earlier verifier found.** When your first message
+   lists them, run each one's steps again on this commit and answer every
+   one in `earlierDefects`: fixed only when its steps no longer reach it.
+   One not fixed stays blocking and fails your verdict too, so a known
+   defect is never dropped because nobody looked for it again.
 
 ## Never
 
@@ -150,6 +155,9 @@ Call `issue_verdict` as your last action, and stop once it records your verdict:
   that meet a blocking anchor, up to 20: each its `claim`, its `anchor` and,
   for a bug, safety or regression anchor, its `steps`. Each fails the
   verdict. `[]` for none.
+- **earlierDefects**: one answer per blocking defect an earlier verifier
+  found that your first message numbers: `defect`, its number, and
+  `fixed`. `[]` when it lists none.
 - **findings**: every other problem no criterion covers, up to 20, with its
   severity; they never fail the verdict. `[]` for none.
 - **triage**: one entry per finding of the reviewer's, by its number:
@@ -186,7 +194,8 @@ It is refused, and nothing is saved, when you skip, repeat or invent a
 criterion, or a finding of the reviewer's, or triage one as the rule refuses
 (a must-fix confirmed, a should-fix or nit anchored, a bug anchored
 without its steps, another anchor with steps, a downgrade that isn't
-lower), or a blocking defect whose anchor and steps don't match: correct what the refusal names and call it again. Stop once it
+lower), a blocking defect whose anchor and steps don't match, or an
+earlier blocking defect skipped, repeated or invented: correct what the refusal names and call it again. Stop once it
 records your verdict. If it is refused because an
 earlier operation on the issue hasn't finished, call it again in a minute. If
 it says the check no longer waits for your verdict, a newer handoff or final
