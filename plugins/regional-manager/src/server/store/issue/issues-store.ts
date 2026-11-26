@@ -12,16 +12,31 @@ import { planProblem } from "../../../model/issue/plan.ts";
 import { knownClose, type CloseKey, type Closes, type KnownCloses } from "../../../model/issue/relations.ts";
 import { planChanges } from "../../../model/feed/log-event.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
+import type { CheckId } from "../../../model/verdict/check.ts";
 import { appendLog } from "../feed/log-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 
 /**
  * A change to an issue's plan; a field left out stays as it is. Dependencies change by what is added
  * and removed, so two edits at once both apply. `decision`: one more recorded among its decisions.
+ * `accept`: the issue's latest check of a done handoff, whose failed verdict the manager accepts as
+ * it is (issues.ts statusEdit), written with the decision that says why.
  */
 export type IssueEdit = Partial<Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "closed" | "parentId">> & {
   dependsOn?: DependencyChange;
   decision?: Omit<RecordedDecision, "kind">;
+  accept?: CheckId;
+};
+
+/**
+ * The checks' part of an accept (checks-store.ts), handed to this store (store.ts) so that it
+ * needn't import the checks' store, which imports it. Call each inside the edit's transaction.
+ */
+export type Acceptance = {
+  /** Why the check can't be accepted now: it is no longer the issue's latest check of a done handoff, or it was accepted already; null when it can. Writes nothing. */
+  refusal(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId): string | null;
+  /** Stamps the check accepted at `at` and files the issue's follow-up with its unfixed findings (rounds/follow-up.ts); returns the follow-up's id. */
+  accept(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, at: number): IssueId;
 };
 
 /** Dependencies an edit adds and removes. */
@@ -54,7 +69,7 @@ export function issuesOf(db: Db, coordinatorId: CoordinatorId, id: IssueId | nul
   return db().prepare(`SELECT ${ISSUE_COLUMNS} FROM issues WHERE coordinator_id = ? AND (? IS NULL OR id = ?) ORDER BY rowid`).all(coordinatorId, id, id).map(toIssue);
 }
 
-export function issuesStore(db: Db) {
+export function issuesStore(db: Db, acceptance: Acceptance) {
   const issues = (coordinatorId: CoordinatorId, id: IssueId | null): Issue[] => issuesOf(db, coordinatorId, id);
 
   return {
@@ -73,9 +88,11 @@ export function issuesStore(db: Db) {
      * writeDependencies). Decided in the same transaction, so an agent starting meanwhile is seen:
      * the kind is fixed once any agent has started on the issue, the issue as it would be must stand
      * (verifierProblem), and so must the plan, among the issues as they are now (plan.ts), and a new
-     * parent must be one no agent holds. What it changed of the plan is logged at `at` (log-event.ts
-     * planChanges), after every other write of the edit: the store's one plan writer is its one
-     * plan logger, so no edit goes unlogged and none is logged that didn't apply.
+     * parent must be one no agent holds; an accept, of the check that is still the issue's latest
+     * (Acceptance refusal). What it changed of the plan is logged at `at` (log-event.ts
+     * planChanges), and an accept, after the edit's other writes: the store's one plan writer is
+     * its one plan logger, so no edit goes unlogged and none is logged that didn't apply. An accept
+     * then files its follow-up, last, so a failure there takes the whole edit back.
      */
     updateIssue(coordinatorId: CoordinatorId, id: IssueId, edit: IssueEdit, { requireUnheld, closes, at }: { requireUnheld: boolean; closes: Closes; at: number }): { issue: Issue } | { refused: string } {
       return db().transaction(() => {
@@ -87,18 +104,21 @@ export function issuesStore(db: Db) {
         if (edit.kind !== undefined && edit.kind !== now.kind && db().prepare("SELECT 1 FROM agents WHERE coordinator_id = ? AND issue_id = ?").get(coordinatorId, id) !== undefined) {
           return { refused: `An agent has started on ${id}, so its kind stays ${now.kind}. File a new issue of the other kind instead.` };
         }
-        const { dependsOn, decision, ...fields } = edit;
+        const { dependsOn, decision, accept, ...fields } = edit;
         const next: Issue = { ...now, ...fields, dependsOn: dependsOn === undefined ? now.dependsOn : changedDependencies(now.dependsOn, dependsOn) };
         const problem = verifierProblem(next.kind, next.verifier !== null);
         if (problem !== null) return { refused: `${id} can't be changed so: ${problem}. Give verifier: null with the change to drop the one named.` };
         const plan = planProblem(issues(coordinatorId, null), next, closes) ?? splitProblem(db, next, now);
         if (plan !== null) return { refused: `${plan}.` };
+        const stale = accept === undefined ? null : acceptance.refusal(coordinatorId, id, accept);
+        if (stale !== null) return { refused: stale };
         db()
           .prepare("UPDATE issues SET kind = ?, title = ?, description = ?, brief = ?, done_criteria = ?, verifier = ?, rest = ?, closed_as = ?, closed_at = ?, parent_id = ? WHERE coordinator_id = ? AND id = ?")
           .run(next.kind, next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, next.parentId, coordinatorId, id);
         if (dependsOn !== undefined) writeDependencies(db, next, closes);
         if (decision !== undefined) db().prepare("INSERT INTO issue_decisions (coordinator_id, issue_id, text, at) VALUES (?, ?, ?, ?)").run(coordinatorId, id, decision.text, decision.at);
-        appendLog(db, coordinatorId, id, at, planChanges(now, next));
+        appendLog(db, coordinatorId, id, at, [...planChanges(now, next), ...(accept === undefined ? [] : [{ kind: "accepted" } as const])]);
+        if (accept !== undefined) acceptance.accept(coordinatorId, id, accept, at);
         return { issue: next };
       })();
     },

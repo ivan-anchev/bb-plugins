@@ -58,6 +58,7 @@ const checkOf = (verdict: Verdict): Check => ({
   review: { state: "none" },
   verdict,
   followUpId: null,
+  acceptedAt: null,
 });
 const returned = (results: CriterionResult[], settlement: Extract<Verdict, { state: "returned" }>["settlement"] = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
   state: "returned", at: 5_000,
@@ -76,7 +77,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
 const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
 
 const thread = (status: HolderThread["status"], hasPendingInteraction = false): HolderThread => ({ status, hasPendingInteraction });
-const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, pr: null, openDecisions: [], finalCheck: null, verifierAsks: false, ...over });
+const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, accepted: null, pr: null, openDecisions: [], finalCheck: null, verifierAsks: false, ...over });
 /** WEB-1 named by one unanswered question: the plugin's at its cap when `cap` is a count, else the regional manager's. */
 const asking = (cap: number | null): Partial<IssueFacts> => ({ openDecisions: [question(cap)] });
 const question = (cap: number | null): Decision => ({ id: decisionIdSchema.parse("d1"), issueId: issue.id, question: "Another round?", options: [], askedAt: 1_000, answer: null, cap });

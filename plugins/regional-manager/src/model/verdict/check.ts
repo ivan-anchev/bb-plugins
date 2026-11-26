@@ -44,6 +44,12 @@ export type Check = {
   verdict: Verdict;
   /** The follow-up issue its findings that held without blocking were filed in when its issue passed, or, on the passing check, the one its pass filed (rounds/follow-up.ts); null: none. */
   followUpId: IssueId | null;
+  /**
+   * When the regional manager accepted its failed verdict as it is, into In review (issues.ts
+   * statusEdit); null: never. why only the time: the manager is always the one who accepts, and its
+   * reason is a decision recorded on the issue in the same write.
+   */
+  acceptedAt: number | null;
 };
 
 /** A check as its row stores it: its verdict not yet joined with the findings its verifier triaged (rounds/delta.ts readInOrder). */

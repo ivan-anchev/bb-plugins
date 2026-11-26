@@ -15,6 +15,7 @@ import { roundKeySchema } from "../model/feed/round.ts";
 import type { IssueId } from "../model/issue/issue.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../model/role.ts";
 import type { CheckId } from "../model/verdict/check.ts";
+import { deltaOf } from "../model/verdict/rounds/delta.ts";
 import { DISPLAY_NAME } from "../name.ts";
 import { registerAgentTools } from "./agents/agent-tools.ts";
 import { createAgents } from "./agents/agents.ts";
@@ -1256,35 +1257,60 @@ export async function startedAgent(kit: ReturnType<typeof harness>, threadId: st
   return { issue, agentThreadId: threadIn(textOf(await kit.call("agent_start", { issue, ...start }, threadId))) };
 }
 
+/** The must-fix a review-only failure's reviewer reports (failsVerification `on` "review"), which its verifier anchors to the brief. */
+export const MUST_FIX = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
+
 /**
  * The agent in `agentThreadId` hands off done (its summary "Retries land with backoff") and ends
- * its turn, and the verifier the plugin starts on it fails its first criterion and passes the rest.
+ * its turn, and the verdict fails: `on` "criterion", as its verifier fails the first criterion and
+ * passes the rest; `on` "review", as its reviewer reports MUST_FIX and its verifier passes every
+ * criterion and anchors that finding to the brief, a failure on review findings alone.
  */
-export async function failsVerification(kit: ReturnType<typeof harness>, coordinatorId: CoordinatorId, agentThreadId: string): Promise<void> {
+export async function failsVerification(kit: ReturnType<typeof harness>, coordinatorId: CoordinatorId, agentThreadId: string, on: "criterion" | "review" = "criterion"): Promise<void> {
   const done = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD };
+  kit.reviewers.reportAtOnce = on === "criterion";
   await kit.call("agent_handoff", done, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   await settled();
   const agent = kit.store.agents(coordinatorId).find(({ threadId }) => threadId === agentThreadId) ?? assert.fail(`no agent in ${agentThreadId}`);
-  const check = kit.store.latestHandoff(coordinatorId, agent.id)?.check ?? assert.fail("no check");
-  const { verdict } = check;
+  const check = () => kit.store.latestHandoff(coordinatorId, agent.id)?.check ?? assert.fail("no check");
+  // why answered as not fixed on a later round: the reviewer is asked about each earlier blocking finding, and one not fixed goes to the verifier again (rounds/delta.ts).
+  const blocking = (): number => {
+    const delta = deltaOf(kit.store.record(coordinatorId, agent.issueId).flatMap(({ check: made }) => (made === null || made.id === check().id ? [] : [made])));
+    return delta.kind === "after" ? delta.blocking.length : 0;
+  };
+  const unfixed = on === "review" ? blocking() : 0;
+  if (on === "review") {
+    const { review } = check();
+    const reviewerThreadId = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
+    const earlier = Array.from({ length: unfixed }, (_, i) => ({ finding: i + 1, fixed: false, note: "Still doubles." }));
+    await kit.call("issue_review", unfixed === 0 ? { findings: [MUST_FIX] } : { findings: [], earlier }, reviewerThreadId);
+    await kit.idle(reviewerThreadId, "Reviewed.");
+    await settled();
+    kit.reviewers.reportAtOnce = true;
+  }
+  const { verdict, criteria: all } = check();
   const verifierThreadId = verdict.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict.state}`);
-  const criteria = check.criteria.map((_, i) => ({ criterion: i + 1, result: i === 0 ? "fail" : "pass", evidence: i === 0 ? "# fail 1" : "# pass" }));
-  await kit.call("issue_verdict", { criteria, findings: [] }, verifierThreadId);
+  const fails = (i: number): boolean => on === "criterion" && i === 0;
+  const criteria = all.map((_, i) => ({ criterion: i + 1, result: fails(i) ? "fail" : "pass", evidence: fails(i) ? "# fail 1" : "# pass" }));
+  const anchored = { result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." };
+  const triage = on === "review" ? Array.from({ length: Math.max(unfixed, 1) }, (_, i) => ({ finding: i + 1, ...anchored })) : [];
+  await kit.call("issue_verdict", { criteria, findings: [], triage }, verifierThreadId);
   await kit.idle(verifierThreadId, "Verdict returned.");
   await settled();
 }
 
 /**
- * Drives `issue` to its cap of failed verdicts: its agent `agentThreadId` fails verification twice,
- * the first going back to it as its fix round, then the regional manager `threadId` hands the issue
- * to a fresh agent, which fails once more, and the plugin asks the user. Returns the fresh agent's thread.
+ * Drives `issue` to its cap of failed verdicts, each failing `on` its first criterion or its review
+ * (failsVerification): its agent `agentThreadId` fails verification twice, the first going back to
+ * it as its fix round, then the regional manager `threadId` hands the issue to a fresh agent, which
+ * fails once more, and the plugin asks the user. Returns the fresh agent's thread.
  */
-export async function toCap(kit: ReturnType<typeof harness>, threadId: string, coordinatorId: CoordinatorId, issue: string, agentThreadId: string): Promise<string> {
-  await failsVerification(kit, coordinatorId, agentThreadId);
-  await failsVerification(kit, coordinatorId, agentThreadId);
+export async function toCap(kit: ReturnType<typeof harness>, threadId: string, coordinatorId: CoordinatorId, issue: string, agentThreadId: string, on: "criterion" | "review" = "criterion"): Promise<string> {
+  await failsVerification(kit, coordinatorId, agentThreadId, on);
+  await failsVerification(kit, coordinatorId, agentThreadId, on);
   const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
-  await failsVerification(kit, coordinatorId, fresh);
+  await failsVerification(kit, coordinatorId, fresh, on);
   return fresh;
 }
 

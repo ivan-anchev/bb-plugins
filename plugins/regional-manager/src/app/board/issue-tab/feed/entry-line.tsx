@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
+import type { FiledWhen } from "../../../../model/verdict/rounds/follow-up.ts";
 import { AgentName, MovedTo, Status, When, Who, type FeedAgents } from "./byline.tsx";
 
 /** The entries drawn as lines with a who and a what: everything but rounds, decisions and comments, which are cards, and a status move alone. */
@@ -29,10 +30,19 @@ export function MovedLine({ entry }: { entry: Extract<Entry, { kind: "moved" }> 
   );
 }
 
+/** When a follow-up was filed, as the follow-up's own feed says it. */
+const FILED_WHEN: Record<FiledWhen, string> = { passed: "when it passed", accepted: "when it was accepted as it was" };
+
+/** What a follow-up holds, as its origin's feed says it. */
+const FOLLOW_UP_HOLDS: Record<FiledWhen, string> = {
+  passed: "the review findings that held without blocking it",
+  accepted: "the review findings it was accepted with, its unfixed must-fixes among them",
+};
+
 function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
   switch (entry.kind) {
     case "created":
-      return entry.followUpOf === null ? "filed the issue" : `Filed as the follow-up of ${entry.followUpOf}, when it passed`;
+      return entry.followUpOf === null ? "filed the issue" : `Filed as the follow-up of ${entry.followUpOf.issueId}, ${FILED_WHEN[entry.followUpOf.when]}`;
     case "agent-started":
       return (
         <>
@@ -47,7 +57,7 @@ function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
     case "thread":
       return <ThreadSaid event={entry.event} />;
     case "follow-up":
-      return `Follow-up ${entry.issueId} filed in Backlog, with the review findings that held without blocking it`;
+      return `Follow-up ${entry.issueId} filed in Backlog, with ${FOLLOW_UP_HOLDS[entry.when]}`;
     case "unblocked":
       return `Unblocked: ${entry.by}, the last of its dependencies, closed`;
     case "logged":
@@ -72,6 +82,8 @@ function loggedText(event: Extract<Entry, { kind: "logged" }>["event"]): string 
       return event.as === "canceled" ? "canceled it" : "accepted it as Done";
     case "reopened":
       return "reopened it";
+    case "accepted":
+      return "accepted it as it is, into In review";
     case "parent-set":
       return event.parentId === null ? "made it top-level" : `set its parent to ${event.parentId}`;
     case "dependency-added":

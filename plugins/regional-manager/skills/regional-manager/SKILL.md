@@ -297,7 +297,8 @@ verifier: the kind is shown to the user on every issue.
 ### Statuses
 
 The plugin derives an issue's status from what its agents did. You never set
-In progress, Reviewing, Verifying or In review.
+In progress, Reviewing or Verifying, and In review only by accepting a
+failure on review findings alone (below).
 
 | Status | When |
 | --- | --- |
@@ -306,7 +307,7 @@ In progress, Reviewing, Verifying or In review.
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff as CREW.md instructs reviewers, before its verifier starts. |
 | Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI on the claimed commit. A build parent: its final check is due or running. |
-| In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
+| In review | A build issue: its done handoff passed verification (or was made with verification off), or you accepted its failure on review findings alone ("Accepted with follow-ups"). It waits for its pull request to merge, or for you to accept it as Done. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
 | Done | A build issue: its pull request merged, or you accepted it; final. A build parent: its final check passed, or you accepted it. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
 | Canceled | You canceled it. |
 
@@ -318,7 +319,7 @@ done-criteria for one, bb never confirmed starting its agent's thread ("No threa
 `agent_start` again replaces that agent), or a decision you asked names it,
 or the plugin's own question at its cap of failed verdicts, which leads its reason. The board shows these first.
 
-`issue_update` with `status` does only four things:
+`issue_update` with `status` does only five things:
 
 - `backlog` or `todo`: rest an issue no agent holds (this also reopens a
   canceled one).
@@ -327,6 +328,21 @@ or the plugin's own question at its cap of failed verdicts, which leads its reas
 - `done`: accept an issue that is In review. Refused otherwise, naming its
   status. A research issue is never In review: its done handoff makes it Done,
   and a research parent is Done with its last sub-issue.
+- `in-review`, only with a `decision` saying why: accept as it is a build
+  issue whose latest verdict failed on review findings alone, every criterion
+  passing on a clean tree and CI not failed, even while its agent still holds
+  it. It reads In review, "Accepted with follow-ups: <summary>": its pull
+  request stays watched, issues that depend on it stay blocked, and its merge
+  makes it Done. The findings it was accepted with, its unfixed must-fixes
+  among them, are filed as one follow-up in Backlog, which the result names;
+  plan it or cancel it as any follow-up. If an agent still holds the issue,
+  stop it with `agent_stop`: a done handoff of its would replace the accepted
+  work. Refused, with the reason first, when a criterion failed, the commit
+  wasn't on a clean tree, CI failed on it, the latest verdict didn't fail, a
+  newer handoff replaced it, or the plugin's question at the issue's cap is
+  still open: then accepting is the user's call there, and you accept once
+  they answer if that is what they want. Use it when the remaining must-fixes
+  aren't worth another round: say so to the user, naming the follow-up.
 
 While an agent holds the issue, `backlog`, `todo` and `canceled` are refused:
 stop the agent with `agent_stop` first. A build issue's Done is final either

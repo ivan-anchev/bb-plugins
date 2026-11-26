@@ -52,6 +52,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review
     review,
     verdict,
     followUpId: null,
+    acceptedAt: null,
   },
 });
 

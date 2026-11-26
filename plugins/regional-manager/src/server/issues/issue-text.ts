@@ -15,6 +15,7 @@ import type { Comment } from "../../model/feed/comment.ts";
 import { checkOnRecordInFlight, commentsText, finalCheckText, handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
 import type { FinalCheck } from "../../model/verdict/check.ts";
+import type { Accepted } from "./issues.ts";
 import { recipientsText, type Withdrawn } from "./quiet.ts";
 import type { IssueRead } from "./views/issue-facts.ts";
 
@@ -84,10 +85,22 @@ export const filedText = (issue: Issue, blockedBy: readonly Related[], pluginId:
   `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${linksOf(pluginId, issue)(issue.parentId)}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
 
 /** What issue_update says it did: anything its change implies, the issues it made ready, by their links, and its own link. */
-export function updatedText(issue: Issue, { note, nowReady }: { note: string | null; nowReady: readonly IssueId[] }, pluginId: string): string {
+export function updatedText(issue: Issue, { note, nowReady, accepted }: { note: string | null; nowReady: readonly IssueId[]; accepted: Accepted | null }, pluginId: string): string {
   const link = linksOf(pluginId, issue);
   const ready = nowReady.length === 0 ? null : `Now ready: ${nowReady.map(link).join(", ")}.`;
-  return [`Updated ${issue.id}.`, note, ready, `Link: ${link(issue.id)}`].filter((line) => line !== null).join(" ");
+  return [`Updated ${issue.id}.`, accepted === null ? null : acceptedText(issue.id, accepted, link), note, ready, `Link: ${link(issue.id)}`].filter((line) => line !== null).join(" ");
+}
+
+/**
+ * What an accept into In review did: where the issue stands until its merge, the follow-up it
+ * filed, and, when an agent still holds the issue, that the manager stops it. why stop it: a done
+ * handoff of its would replace the accepted one.
+ */
+function acceptedText(issueId: IssueId, { followUpId, holder }: Accepted, link: (id: IssueId) => string): string {
+  const stands = `It is accepted as it is, into In review: its pull request stays watched, issues that depend on it stay blocked, and its merge makes it Done.`;
+  const filed = `The review findings it was accepted with, its unfixed must-fixes among them, are filed as ${link(followUpId)}, top-level in Backlog and depending on ${issueId}: agent_start on it is refused until ${issueId} is Done. It has no done-criteria yet: plan it with issue_update, or cancel it if the user doesn't want it.`;
+  const stop = holder === null ? "" : ` ${holder} still holds ${issueId}: stop it with agent_stop, as a done handoff of its would replace the accepted work.`;
+  return `${stands} ${filed}${stop}`;
 }
 
 /** What agent_start did. */

@@ -34,6 +34,7 @@ function stored(n: number, review: Review, verdict: StoredVerdict): StoredCheck 
     review,
     verdict,
     followUpId: null,
+    acceptedAt: null,
   };
 }
 

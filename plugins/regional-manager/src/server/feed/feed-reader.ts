@@ -7,6 +7,7 @@ import { bodyOf, roundTarget, type RoundBody, type RoundKey } from "../../model/
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import type { Handed } from "../../model/issue/status.ts";
 import { dependentsOf } from "../../model/issue/relations.ts";
+import { filedWhen, type FiledWhen } from "../../model/verdict/rounds/follow-up.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { threadsById, type ListBb } from "../agents/threads.ts";
 import type { Store } from "../store/store.ts";
@@ -16,13 +17,14 @@ type FeedStore = Pick<Store, "issue" | "issues" | "agents" | "record" | "finalCh
 export type FeedReader = ReturnType<typeof createFeedReader>;
 
 export function createFeedReader(bb: ListBb<{ id: string; deletedAt: number | null }>, store: FeedStore) {
-  /** The follow-ups the issue's passes filed: each one its record's checks name, once. why throw: an issue is kept while its regional manager is. */
-  function followUpsOf(coordinatorId: CoordinatorId, handed: readonly Handed[]): Issue[] {
-    const ids = new Set(handed.flatMap(({ check }) => (check === null || check.followUpId === null ? [] : [check.followUpId])));
+  /** The follow-ups the issue's passes or its accept filed: each one its record's checks name, once, with how (rounds/follow-up.ts filedWhen). why throw: an issue is kept while its regional manager is. */
+  function followUpsOf(coordinatorId: CoordinatorId, handed: readonly Handed[]): (Issue & { when: FiledWhen })[] {
+    const checks = handed.flatMap(({ check }) => (check === null ? [] : [check]));
+    const ids = new Set(checks.flatMap(({ followUpId }) => (followUpId === null ? [] : [followUpId])));
     return [...ids].map((id) => {
       const followUp = store.issue(coordinatorId, id);
       if (followUp === null) throw new Error(`The follow-up ${id} of ${coordinatorId} is missing.`);
-      return followUp;
+      return { ...followUp, when: filedWhen(checks, id) };
     });
   }
 

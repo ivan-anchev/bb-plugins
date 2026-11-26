@@ -272,6 +272,17 @@ export function failureReasons(verdict: Returned, ci: CiVerdict | null = ciVerdi
 export const firstFailure = (verdict: Verdict): FailureReason | null => (verdict.state === "returned" ? (failureReasons(verdict)[0] ?? null) : null);
 
 /**
+ * Whether a verdict failed on review findings alone: it failed, and every reason is the reviewer's
+ * must-fix findings that fail it (failsVerdict), so every criterion passed, the claimed commit was
+ * on a clean tree, the verifier found no blocking defect of its own, and CI didn't fail. The one
+ * rule the manager's accept (issues.ts) and catch-up read.
+ */
+export function failedOnReviewOnly(verdict: Verdict): boolean {
+  if (verdict.state !== "returned" || outcome(verdict) !== "fail") return false;
+  return failureReasons(verdict).every(({ kind }) => kind === "must-fix");
+}
+
+/**
  * Whether a finding fails its verdict on its own: the verifier anchored it to what it breaks, or,
  * on a verdict from before the anchor rule, confirmed it as a must-fix while that rule
  * (`mustFixFails`) held. Should-fix and nit findings never do. The one failing rule.

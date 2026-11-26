@@ -1,14 +1,18 @@
 // What a regional manager does to its issues: file one, change its plan, its dependencies or where it
 // rests, close it, and read it whole. A status the manager writes is checked against the one derived
-// from the facts (issue-facts.ts): it may rest an issue no agent holds, cancel one, or accept one In
-// review, and nothing else; every other status is evidence.
+// from the facts (issue-facts.ts): it may rest an issue no agent holds, cancel one, accept one In
+// review as Done, or accept a failure on review findings alone into In review, and nothing else;
+// every other status is evidence.
 import type { z } from "zod";
-import type { Agent } from "../../model/agent/agent.ts";
+import type { Agent, AgentId } from "../../model/agent/agent.ts";
 import { sameModel, type Execution, type RequestedExecution } from "../../model/agent/execution.ts";
 import { verifierProblem, type Issue, type IssueId, type managerStatusSchema, type NewIssue } from "../../model/issue/issue.ts";
 import { blockedBy, closesOf, newlyReady, relationsOf, type Related } from "../../model/issue/relations.ts";
-import { headlineText, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
+import { headlineText, latestChecked, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import type { Check, CheckId } from "../../model/verdict/check.ts";
+import { capMovesText } from "../../model/verdict/rounds/cap.ts";
+import { failedOnReviewOnly, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
 import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { DependencyChange, IssueEdit } from "../store/issue/issues-store.ts";
@@ -45,6 +49,9 @@ type IssueChange = Partial<Pick<Issue, "kind" | "title" | "description" | "doneC
 
 type Refused = { refused: string };
 
+/** What an accept into In review did: the follow-up it filed, and the agent that still holds the issue (null: none). */
+export type Accepted = { followUpId: IssueId; holder: AgentId | null };
+
 /** Why a write judged on every issue viewed made none: changes kept coming while they were read. */
 const OVERTAKEN = "your issues kept changing while they were read, so nothing was written. Try again.";
 
@@ -61,6 +68,13 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
     return "refused" in resolved ? { refused: `On bb's primary machine: ${resolved.refused}` } : resolved;
   }
 
+  /** The follow-up an accepted check filed, as its row names it. why throw: an accept files one in the transaction that stamps it (issues-store.ts updateIssue). */
+  function followUpOf(checkId: CheckId): IssueId {
+    const followUpId = store.check(checkId)?.followUpId ?? null;
+    if (followUpId === null) throw new Error(`The accepted check ${checkId} filed no follow-up.`);
+    return followUpId;
+  }
+
   const holderOf = (issue: Issue): Agent | null => store.agents(issue.coordinatorId).find((agent) => agent.issueId === issue.id && agent.ended === null) ?? null;
 
   const viewsOf = async (coordinatorId: CoordinatorId): Promise<IssueView[]> => (await readIssues(bb, store, coordinatorId)).map(({ view }) => view);
@@ -71,15 +85,40 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
    * (updateIssue checks that again). A parent's open sub-issues are the plan's to refuse (plan.ts).
    * A close is at `at`; a canceled issue canceled again keeps its close.
    */
-  function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>, at: number): IssueEdit | Refused {
+  function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>, decision: string | undefined, at: number): IssueEdit | Refused {
     const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${headlineText(view)})`;
     if (status === "done") return view.status === "in-review" ? { closed: { as: "accepted", at } } : { refused: `${now}, so it can't be marked Done: only an issue In review can.` };
+    if (status === "in-review") return acceptEdit(view, decision);
     const holder = holderOf(issue);
     if (holder !== null) return { refused: `${holder.id} holds ${issue.id}, so it can't be ${status === "canceled" ? "canceled" : `moved to ${STATUS_LABELS[status]}`}. Stop ${holder.id} with agent_stop first.` };
     if (view.status === "done") return { refused: `${now}, and Done is final.` };
     if (status !== "canceled") return { rest: status, closed: null };
     // why the closure kept: canceling a canceled issue again, as a retried call, changes nothing, its time included.
     return { closed: view.issue.closed?.as === "canceled" ? view.issue.closed : { as: "canceled", at } };
+  }
+
+  /**
+   * The edit that accepts the issue's failure as it is, into In review, or why it can't be: it needs
+   * a decision saying why, an open issue, no cap question of it still open (the user's call there,
+   * rounds/cap.ts), and a latest verdict that failed on review findings alone (verdict.ts
+   * failedOnReviewOnly), not yet accepted, on a commit CI didn't fail on as its pull request was
+   * last read. why the issue's record, never `view.placing`: no check places the issue while its
+   * agent's thread works, nor the one its ended agent didn't leave. updateIssue checks again that
+   * the check is still the latest as it writes.
+   */
+  function acceptEdit(view: IssueView, decision: string | undefined): IssueEdit | Refused {
+    const { id } = view.issue;
+    if (decision === undefined) return { refused: `${id} wasn't accepted: an accept into In review needs a decision saying why its work is accepted as it is. Send status "in-review" again with decision.` };
+    const closed = closedRefusal(view);
+    if (closed !== null) return { refused: closed };
+    if (view.capLock !== null) {
+      const { cap, id: question } = view.capLock;
+      return { refused: `${id} failed verification ${cap} times, so the plugin asked the user (${question}), and until they answer, accepting it is theirs to decide there. Once they answer, accept it if that is their call. ${capMovesText(id, question, view)}` };
+    }
+    const latest = latestChecked(store.record(view.issue.coordinatorId, id));
+    if (latest === null) return { refused: `${id} has no done handoff with a verdict, so there is no failure to accept.` };
+    const problem = acceptProblem(latest.check, view);
+    return problem === null ? { accept: latest.check.id } : { refused: problem };
   }
 
   return {
@@ -109,20 +148,20 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
     /**
      * Applies the change, or says why it can't, changing nothing: a verifier bb can't run or that is
      * the model of the agent holding the issue, a status the issue as it stands can't take, or a
-     * plan that can't stand (plan.ts). Returns the issue, what a verifier change applies to, and the
-     * issues a status, parent or dependency change made ready (a cancel or an accept closes a
-     * dependency; a removed dependency may have been the last open one, a parent left the last
-     * blocking one).
+     * plan that can't stand (plan.ts). Returns the issue, what a verifier change applies to, the
+     * issues a status, parent or dependency change made ready (a cancel or an accept as Done closes
+     * a dependency; a removed dependency may have been the last open one, a parent left the last
+     * blocking one), and what an accept into In review did (null: none was made).
      */
-    async update(issue: Issue, { verifier: requested, status, dependsOn, decision, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[] } | Refused> {
+    async update(issue: Issue, { verifier: requested, status, dependsOn, decision, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[]; accepted: Accepted | null } | Refused> {
       // undefined: unchanged; null: the plugin picks.
       const verifier = requested === undefined || requested === null ? requested : await verifierOf(requested);
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
       /** Writes the change judged on `before`: every issue viewed, or null when nothing changed is judged by them. */
-      const write = (before: IssueView[] | null): { issue: Issue; before: IssueView[] | null } | Refused => {
+      const write = (before: IssueView[] | null): { issue: Issue; before: IssueView[] | null; accepted: Accepted | null } | Refused => {
         // why one moment: a close, a decision and the log of what changed tell one edit.
         const at = Date.now();
-        const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status, at);
+        const statusChange = before === null || status === undefined ? {} : statusEdit(issue, viewOf(before, issue.id), status, decision, at);
         if ("refused" in statusChange) return statusChange;
         // why the holder read here, with no await before the write: an agent started meanwhile may run on the verifier's model.
         const holder = holderOf(issue);
@@ -138,17 +177,19 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
           ...(verifier === undefined ? {} : { verifier }),
           ...(decision === undefined ? {} : { decision: { text: decision, at } }),
         };
-        const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done", closes: closesOf(before ?? []), at });
-        return "refused" in updated ? updated : { issue: updated.issue, before };
+        // why an accept may leave its agent holding the issue: it may still be working, and the manager is told to stop it (issue-text.ts updatedText).
+        const updated = store.updateIssue(issue.coordinatorId, issue.id, edit, { requireUnheld: status !== undefined && status !== "done" && status !== "in-review", closes: closesOf(before ?? []), at });
+        if ("refused" in updated) return updated;
+        return { issue: updated.issue, before, accepted: edit.accept === undefined ? null : { followUpId: followUpOf(edit.accept), holder: holder?.id ?? null } };
       };
       // why views current as it is written (current-views.ts), whenever a status, parent or dependency changes: the only changes judged by them.
       const written = status === undefined && dependsOn === undefined && plan.parentId === undefined ? { acted: write(null) } : await current.whileCurrent(issue.coordinatorId, write);
       if (written === null) return { refused: `${issue.id} is unchanged: ${OVERTAKEN}` };
       if ("refused" in written.acted) return written.acted;
-      const { issue: updated, before } = written.acted;
+      const { issue: updated, before, accepted } = written.acted;
       onChange(issue.coordinatorId);
       const nowReady = before === null ? [] : newlyReady(before, await viewsOf(issue.coordinatorId));
-      return { issue: updated, note: requested === undefined ? null : verifierText(updated), nowReady };
+      return { issue: updated, note: requested === undefined ? null : verifierText(updated), nowReady, accepted };
     },
 
     /** The issue whole, as issue_read returns it, with the issues it depends on and those that depend on it, and its decisions. */
@@ -163,6 +204,49 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       return issueText(read, relationsOf(views, read.view.issue), agents, record, store.issueDecisions(coordinatorId, id), store.commentsOf(coordinatorId, id), output, { agents: () => store.agents(coordinatorId) }, bb.pluginId);
     },
   };
+}
+
+/**
+ * Why the issue's latest check can't be accepted as it is, leading with the reason, then the moves
+ * that work; null when it can: its verdict failed on review findings alone, it isn't accepted yet,
+ * and CI didn't fail on its commit as the issue's pull request was last read (`view.pr`).
+ */
+function acceptProblem(latest: Check, { issue: { id }, pr }: Pick<IssueView, "issue" | "pr">): string | null {
+  const { verdict, subject, acceptedAt } = latest;
+  if (acceptedAt !== null) return `${id}'s latest verdict was accepted already, so nothing changed.`;
+  const result = outcome(verdict);
+  if (result === "pending" || result === "waiting-for-ci") return `${id}'s latest done handoff is still being checked, so there is no failed verdict to accept yet. Wait for its verdict, which crew_catch_up brings you.`;
+  if (result !== "fail") return `${id}'s latest verdict didn't fail (${OUTCOME_WORDS[result]}), so there is no failure on review findings to accept.`;
+  // why throw: only a returned verdict fails (verdict.ts outcome).
+  if (verdict.state !== "returned") throw new Error(`${id}'s failed verdict hasn't returned.`);
+  if (!failedOnReviewOnly(verdict)) return `${id}'s latest verdict failed on more than review findings (${notReviewOnly(verdict)}), so it can't be accepted as it is: only a failure on review findings alone can. ${FIX_IT}`;
+  const ciFailed = subject.kind === "handoff" && pr !== null && pr.headSha === subject.headSha && pr.ci === "fail";
+  return ciFailed ? `CI failed on #${pr.number} at ${subject.headSha.slice(0, 7)}, the commit ${id}'s latest verdict checked, so it can't be accepted as it is. ${FIX_IT}` : null;
+}
+
+/** Why a verdict that failed didn't fail on review findings alone: its reasons besides those findings, in the order every surface reads them. */
+function notReviewOnly(verdict: Extract<Check["verdict"], { state: "returned" }>): string {
+  const reasons = failureReasons(verdict).filter(({ kind }) => kind !== "must-fix");
+  const criteria = reasons.flatMap((reason) => (reason.kind === "criteria" ? [`${reason.failed} of ${reason.of} criteria didn't pass`] : []));
+  return [...failurePhrases(reasons, "handoff"), ...criteria].join("; ");
+}
+
+/** What a verdict that didn't fail says, as an accept's refusal words it. */
+const OUTCOME_WORDS: Record<Exclude<Outcome, "fail" | "pending" | "waiting-for-ci">, string> = {
+  pass: "it passed",
+  unverified: "it was made with verification off",
+  "could-not-run": "it couldn't be had",
+  superseded: "a newer handoff replaced it",
+};
+
+/** The moves left on a failure that isn't the manager's to accept. */
+const FIX_IT = "Message its agent with agent_message, stop it and start a fresh agent on the issue with agent_start, or ask the user.";
+
+/** Why a closed issue (`view`) can't be accepted into In review; null while it is open. */
+function closedRefusal(view: IssueView): string | null {
+  const now = `${view.issue.id} is ${STATUS_LABELS[view.status]} (${headlineText(view)})`;
+  if (view.status === "done") return `${now}, and Done is final, so there is nothing to accept.`;
+  return view.status === "canceled" ? `${now}, so it can't be accepted. Reopen it with status "todo" first if its work is wanted, then accept it.` : null;
 }
 
 /** why throw: an id here names an issue of the same regional manager, and issues are never deleted. */

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
-import { coordinating, doorbellOf, isRefusal, settled, startedAgent, textOf, withoutLinks, type FakePr } from "../test-harness.ts";
+import { coordinating, doorbellOf, failsVerification, isRefusal, settled, startedAgent, textOf, withoutLinks, type FakePr } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
@@ -579,6 +579,21 @@ test("an issue In review whose agent's thread was archived still becomes Done wh
   await kit.emit("thread.archived", { thread: kit.ref(agentThreadId) });
   await settled();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "#41 open CI pass" }, "its work survives its thread");
+
+  pr({ state: "MERGED", rollup: "SUCCESS" });
+  kit.clock.now += 5 * MINUTE;
+  await minute();
+  assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pass" });
+});
+
+test("an issue accepted In review after a failure on review findings alone stays watched, and its merge, read by the watch, makes it Done", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, row, pr, minute } = await agentOnGitHub();
+  pr({ rollup: "SUCCESS" });
+  await minute();
+  await failsVerification(kit, coordinatorId, agentThreadId, "review");
+  const accepted = await kit.call("issue_update", { id: "WEB-1", status: "in-review", decision: "Every criterion passes; the cap is polish." }, threadId);
+  assert.ok(!isRefusal(accepted), textOf(accepted));
+  assert.deepEqual(await row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff", pr: "#41 open CI pass" });
 
   pr({ state: "MERGED", rollup: "SUCCESS" });
   kit.clock.now += 5 * MINUTE;

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
+import { randomUUID } from "node:crypto";
+import { agentIdSchema } from "../../model/agent/agent.ts";
+import { handoffIdSchema } from "../../model/agent/handoff.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../test-harness.ts";
+import { coordinating, failsVerification, HEAD, holdingThreadLists, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap, withoutLinks } from "../test-harness.ts";
 
 const ISSUE_ID = issueIdSchema.parse("WEB-1");
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -75,7 +78,7 @@ test("issue_update changes the plan it names, and only a status the manager may 
   await call("issue_create", { ...ISSUE, brief: undefined, doneCriteria: undefined });
   assert.deepEqual(await update({ title: "Retry deliveries", brief: "Back off.", doneCriteria: ["npm test passes"] }), { refused: false, text: "Updated WEB-1." });
   assert.deepEqual(kit.store.issue(coordinatorId, ISSUE_ID)?.brief, "Back off.");
-  for (const status of ["in-progress", "verifying", "in-review"]) await assert.rejects(call("issue_update", { id: "WEB-1", status }), status);
+  for (const status of ["in-progress", "verifying", "reviewing"]) await assert.rejects(call("issue_update", { id: "WEB-1", status }), status);
   assert.deepEqual(await update({ status: "backlog" }), { refused: false, text: "Updated WEB-1." });
   const unknown = await call("issue_update", { id: "WEB-9", title: "Nothing" });
   assert.ok(isRefusal(unknown));
@@ -236,4 +239,160 @@ test("a verifier on the model of the agent holding the issue is refused naming t
     text: "a1 holds WEB-1 on codex gpt-default (high), so a verifier on it couldn't check that work independently. Name another model, or stop a1 with agent_stop and start an agent on another execution.",
   });
   assert.equal(kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, null);
+});
+
+/** WEB-1 with its agent a1, after `on` failed its first verdict (failsVerification), which went back to a1 as its fix round; the board's row and helpers to read what an accept wrote. */
+async function failedOnce(on: "criterion" | "review" = "review", options: Parameters<typeof coordinating>[0] = {}) {
+  const managed = await managing(options);
+  const { kit, threadId, coordinatorId } = managed;
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  await failsVerification(kit, coordinatorId, agentThreadId, on);
+  const row = async () => {
+    const issue = (await kit.rpc.board({ coordinatorId })).issues.find(({ id }) => id === "WEB-1") ?? assert.fail("no row");
+    return { lane: laneOf(issue), headline: issue.headline };
+  };
+  /** The issue's latest check, as the store reads it. */
+  const latest = () => kit.store.record(coordinatorId, ISSUE_ID).flatMap(({ check }) => (check === null ? [] : [check])).at(-1) ?? assert.fail("no check");
+  return { ...managed, agentThreadId, row, latest };
+}
+
+const REASON = "Every criterion passes; the backoff cap is polish the user can take later.";
+
+test("an accept into In review is refused without a decision, and with one it places the issue In review, records the decision, stamps the check and files a follow-up holding the unfixed must-fix", async () => {
+  const { kit, coordinatorId, call, update, row, latest } = await failedOnce();
+  assert.deepEqual(await update({ status: "in-review" }), {
+    refused: true,
+    text: 'WEB-1 wasn\'t accepted: an accept into In review needs a decision saying why its work is accepted as it is. Send status "in-review" again with decision.',
+  });
+  assert.equal(latest().acceptedAt, null, "nothing written");
+
+  const accepted = await update({ status: "in-review", decision: REASON });
+  assert.equal(accepted.refused, false);
+  assert.equal(
+    accepted.text,
+    "Updated WEB-1. It is accepted as it is, into In review: its pull request stays watched, issues that depend on it stay blocked, and its merge makes it Done. The review findings it was accepted with, its unfixed must-fixes among them, are filed as WEB-2, top-level in Backlog and depending on WEB-1: agent_start on it is refused until WEB-1 is Done. It has no done-criteria yet: plan it with issue_update, or cancel it if the user doesn't want it. a1 still holds WEB-1: stop it with agent_stop, as a done handoff of its would replace the accepted work.",
+  );
+  assert.deepEqual(await row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" });
+  assert.deepEqual(await recorded(kit, coordinatorId), [REASON]);
+  assert.equal(typeof latest().acceptedAt, "number");
+  assert.equal(latest().followUpId, "WEB-2");
+  assert.deepEqual(kit.store.logOf(coordinatorId, ISSUE_ID).flatMap(({ event }) => (event.kind === "accepted" ? [event] : [])), [{ kind: "accepted" }]);
+
+  const followUp = kit.store.issue(coordinatorId, issueIdSchema.parse("WEB-2")) ?? assert.fail("no follow-up");
+  assert.deepEqual([followUp.kind, followUp.rest, followUp.parentId, followUp.dependsOn, followUp.doneCriteria], ["build", "backlog", null, ["WEB-1"], []]);
+  assert.match(followUp.description, /^A review finding left unfixed when WEB-1 was accepted as it is\./);
+  assert.match(followUp.brief ?? "", /- Round 1: `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\./);
+
+  await call("agent_stop", { agent: "a1" });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" }, "stopped as the result says, it stays In review");
+  assert.ok(!kit.store.unannounced(coordinatorId).some(({ event }) => event.kind === "returned-to-todo"), "nothing returned to Todo");
+  assert.deepEqual(await update({ status: "in-review", decision: REASON }), { refused: true, text: "WEB-1's latest verdict was accepted already, so nothing changed." });
+});
+
+test("an accept is refused leading with the reason when a criterion failed, when CI failed on the checked commit as its pull request was last read, and when the latest verdict didn't fail", async () => {
+  const criterion = await failedOnce("criterion");
+  assert.deepEqual(await criterion.update({ status: "in-review", decision: REASON }), {
+    refused: true,
+    text: "WEB-1's latest verdict failed on more than review findings (1 of 1 criteria didn't pass), so it can't be accepted as it is: only a failure on review findings alone can. Message its agent with agent_message, stop it and start a fresh agent on the issue with agent_start, or ask the user.",
+  });
+
+  const ci = await failedOnce();
+  const branch = ci.kit.thread(ci.agentThreadId).environmentBranchName ?? assert.fail("no branch");
+  ci.kit.github.prs.set(branch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "FAILURE", failed: ["test"] });
+  ci.kit.clock.now += 6 * 60_000;
+  await ci.kit.tick();
+  assert.deepEqual(await ci.update({ status: "in-review", decision: REASON }), {
+    refused: true,
+    text: "CI failed on #41 at 0123456, the commit WEB-1's latest verdict checked, so it can't be accepted as it is. Message its agent with agent_message, stop it and start a fresh agent on the issue with agent_start, or ask the user.",
+  });
+  assert.equal(ci.latest().acceptedAt, null);
+
+  const { kit, threadId, coordinatorId, update } = await managing();
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  await kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  await settled();
+  assert.deepEqual(await update({ status: "in-review", decision: REASON }), {
+    refused: true,
+    text: "WEB-1's latest done handoff is still being checked, so there is no failed verdict to accept yet. Wait for its verdict, which crew_catch_up brings you.",
+  });
+  const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
+  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", evidence: "# pass" }], findings: [] }, verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict?.state}`));
+  await settled();
+  assert.deepEqual(await update({ status: "in-review", decision: REASON }), { refused: true, text: "WEB-1's latest verdict didn't fail (it passed), so there is no failure on review findings to accept." });
+  assert.deepEqual(kit.store.issues(coordinatorId).map(({ id }) => id), ["WEB-1"], "no follow-up filed");
+});
+
+test("an accept succeeds while the agent's thread works on its fix round, and after its agent ended; it is refused when a newer handoff replaced the check while the views were read", async () => {
+  const working = await failedOnce();
+  await working.kit.startTurn(working.agentThreadId);
+  assert.equal(working.kit.thread(working.agentThreadId).status, "active");
+  assert.equal((await working.update({ status: "in-review", decision: REASON })).refused, false);
+  assert.deepEqual(await working.row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" }, "In review while its thread still works");
+  await working.call("agent_stop", { agent: "a1" });
+  assert.deepEqual(await working.row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" }, "and once it is stopped after a turn without a handoff");
+
+  const ended = await failedOnce();
+  await ended.call("agent_stop", { agent: "a1" });
+  const accepted = await ended.update({ status: "in-review", decision: REASON });
+  assert.equal(accepted.refused, false);
+  assert.doesNotMatch(accepted.text, /still holds/, "no agent to stop");
+  assert.deepEqual(await ended.row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" });
+
+  const raced = await failedOnce();
+  const stale = raced.latest().id;
+  const { started, release } = await holdingThreadLists(raced.kit, 1, () => raced.update({ status: "in-review", decision: REASON }));
+  newerHandoff(raced.kit.store, raced.coordinatorId);
+  release();
+  const refused = await started;
+  assert.equal(refused.refused, true);
+  assert.match(refused.text, /^WEB-1's latest done handoff is still being checked/, "read again, the views show the newer handoff");
+  const direct = raced.kit.store.updateIssue(raced.coordinatorId, ISSUE_ID, { decision: { text: REASON, at: 9_000 }, accept: stale }, { requireUnheld: false, closes: new Map(), at: 9_000 });
+  assert.deepEqual(direct, { refused: "A newer handoff of WEB-1 replaced the verdict you accepted before the accept was written, so nothing changed. Read WEB-1 with issue_read, and decide once its new verdict comes." }, "the write itself refuses a check that is no longer the latest");
+  assert.equal(raced.kit.store.issues(raced.coordinatorId).length, 1, "no follow-up filed");
+  assert.deepEqual(await recorded(raced.kit, raced.coordinatorId), [], "no decision recorded");
+});
+
+/** a1 hands off done again on WEB-1, written straight to the store, as a handoff that lands while the manager's views are read. */
+function newerHandoff(store: Awaited<ReturnType<typeof managing>>["kit"]["store"], coordinatorId: CoordinatorId): void {
+  const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId: ISSUE_ID, agentId: agentIdSchema.parse("a1"), at: Date.now(), turnSeq: 99, ...REPORT };
+  store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha: HEAD, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } });
+}
+
+test("an accept is refused while the plugin's question at the issue's cap is open, naming it, and succeeds once the user answers", async () => {
+  const { kit, threadId, coordinatorId, update, call } = await managing();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await toCap(kit, threadId, coordinatorId, issue, agentThreadId, "review");
+  const [question] = kit.store.decisions(coordinatorId);
+  assert.equal(question?.cap, 3);
+  assert.match(textOf(await call("crew_catch_up", {})), /Until the user answers d1, agent_start, agent_message and an accept of WEB-1 are refused\. .* Once they answer, if they want it as it is: It failed on review findings alone, so you may accept it as it is/);
+  const refused = await update({ status: "in-review", decision: REASON });
+  assert.equal(refused.refused, true);
+  assert.match(refused.text, /^WEB-1 failed verification 3 times, so the plugin asked the user \(d1\), and until they answer, accepting it is theirs to decide there\. Once they answer, accept it if that is their call\. Wait for their answer/);
+
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: question.id, answer: "Merge it as is" });
+  assert.equal((await update({ status: "in-review", decision: "The user chose to take it as it is (d1)." })).refused, false);
+  assert.match(textOf(await call("issue_read", { id: "WEB-1" })), /In review: Accepted with follow-ups: Retries land with backoff/);
+});
+
+test("a canceled issue is refused an accept, and once reopened as the refusal says, the accept goes through", async () => {
+  const { update, call } = await failedOnce();
+  await call("agent_stop", { agent: "a1" });
+  assert.deepEqual(await update({ status: "canceled" }), { refused: false, text: "Updated WEB-1." });
+  const refused = await update({ status: "in-review", decision: REASON });
+  assert.equal(refused.refused, true);
+  assert.match(refused.text, /^WEB-1 is Canceled \(Canceled\), so it can't be accepted\. Reopen it with status "todo" first if its work is wanted, then accept it\.$/);
+  assert.equal((await update({ status: "todo" })).refused, false);
+  assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
+});
+
+test("catch-up offers the accept after a failure on review findings alone that reaches the manager, and not after a criterion's", async () => {
+  const offer = /It failed on review findings alone, so you may accept it as it is: issue_update \{ id: "WEB-1", status: "in-review", decision: "<why>" \} puts it In review until its pull request merges, and files the findings it leaves, its unfixed must-fixes among them, as a follow-up\./;
+  const review = await failedOnce();
+  await failsVerification(review.kit, review.coordinatorId, review.agentThreadId, "review");
+  assert.match(textOf(await review.call("crew_catch_up", {})), offer);
+
+  const criterion = await failedOnce("criterion");
+  await failsVerification(criterion.kit, criterion.coordinatorId, criterion.agentThreadId);
+  assert.doesNotMatch(textOf(await criterion.call("crew_catch_up", {})), /failed on review findings alone/);
 });

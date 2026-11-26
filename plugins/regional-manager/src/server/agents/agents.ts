@@ -32,11 +32,12 @@ import { catalogRouting, sameModel, type Execution, type RequestedExecution } fr
 import { handoffIsCurrent, type HandoffId } from "../../model/agent/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import type { Related } from "../../model/issue/relations.ts";
-import { headlineText, keepsPlaceAfterEnd, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
+import { acceptedOf, headlineText, keepsPlaceAfterEnd, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { PrRead } from "../../model/verdict/pr.ts";
 import { capMovesText, capQuestionsOf, mergeAnswer, unansweredCapQuestion } from "../../model/verdict/rounds/cap.ts";
+import type { FollowUpOrigin } from "../../model/verdict/rounds/follow-up.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
@@ -467,7 +468,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const leftId = leftBy(agent, turnSeq);
     const left = leftId === null ? null : store.handoff(leftId);
     const issue = issueOf(coordinatorId, agent.issueId);
-    inbox.endAgent(agent, how, leftId, keepsPlaceAfterEnd(issue, left, view.pr));
+    inbox.endAgent(agent, how, leftId, keepsPlaceAfterEnd(issue, left, acceptedOf(store.record(coordinatorId, agent.issueId)), view.pr));
     onChange(coordinatorId);
   }
 
@@ -636,13 +637,14 @@ function mergeRefusal(id: IssueId, merge: { id: string } | null, { from, placeme
 }
 
 /**
- * Why no agent may start on a follow-up yet: the issue whose pass filed it (`origin`, checks-store.ts
+ * Why no agent may start on a follow-up yet: the issue whose pass or accept filed it (`origin`, checks-store.ts
  * originOf; null: it is no follow-up) is still open among what blocks it (`view`, read just now), so
  * its default branch lacks the work the follow-up's findings are about. why only a follow-up's
  * origin: every other dependency informs and never refuses (relations.ts). null when one may start.
  */
-function followUpRefusal(view: IssueView, origin: IssueId | null): string | null {
-  const open = view.blockedBy.find(({ id }) => id === origin);
+function followUpRefusal(view: IssueView, origin: FollowUpOrigin | null): string | null {
+  if (origin === null) return null;
+  const open = view.blockedBy.find(({ id }) => id === origin.issueId);
   if (open === undefined) return null;
   const { id } = view.issue;
   return `${id} is the follow-up of ${open.id}, which is ${STATUS_LABELS[open.status]}: its agent starts only once ${open.id} is Done, from a default branch that has ${open.id}'s work. Wait for ${open.id} to close, which crew_catch_up announces as unblocking ${id}; or cancel ${id} with issue_update if it isn't wanted.`;

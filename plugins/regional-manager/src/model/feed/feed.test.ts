@@ -54,7 +54,7 @@ function returned(results: readonly CriterionResult[], at: number, settlement: E
 
 function handed(made: Handoff, verdict: Verdict | null, review: Review = { state: "none" }): Handed {
   if (verdict === null) return { handoff: made, check: null };
-  const check: Check = { id: checkIdSchema.parse(uuid(100 + Number(made.turnSeq))), coordinatorId: MANAGER, issueId: BBP_19, at: made.at, criteria: CRITERIA, verifier: null, subject: { kind: "handoff", agentId: made.agentId, handoffId: made.id, headSha: SHA, prUrl: null }, review, verdict, followUpId: null };
+  const check: Check = { id: checkIdSchema.parse(uuid(100 + Number(made.turnSeq))), coordinatorId: MANAGER, issueId: BBP_19, at: made.at, criteria: CRITERIA, verifier: null, subject: { kind: "handoff", agentId: made.agentId, handoffId: made.id, headSha: SHA, prUrl: null }, review, verdict, followUpId: null, acceptedAt: null };
   return { handoff: made, check };
 }
 
@@ -168,7 +168,7 @@ test("a round in flight says so and scores by its stage; a blocked handoff's rou
 });
 
 test("a build parent's final checks are rounds among its handoffs, numbered by when they began", () => {
-  const final = (n: number, at: number): FinalCheck => ({ id: checkIdSchema.parse(uuid(n)), coordinatorId: MANAGER, issueId: BBP_19, at, criteria: CRITERIA, verifier: null, subject: { kind: "final", defaultBranch: "main", merged: [] }, review: { state: "none" }, verdict: { state: "waived" }, followUpId: null });
+  const final = (n: number, at: number): FinalCheck => ({ id: checkIdSchema.parse(uuid(n)), coordinatorId: MANAGER, issueId: BBP_19, at, criteria: CRITERIA, verifier: null, subject: { kind: "final", defaultBranch: "main", merged: [] }, review: { state: "none" }, verdict: { state: "waived" }, followUpId: null, acceptedAt: null });
   const rounds = roundsIn(feedOf({ ...bbp19(), handed: [handed(handoff(1, A1, 3_000), null)], finalChecks: [final(7, 2_500), final(8, 4_000)], events: [] }));
   assert.deepEqual(
     rounds.map(({ number, key, by }) => [number, key.slice(0, 2), by.kind]),

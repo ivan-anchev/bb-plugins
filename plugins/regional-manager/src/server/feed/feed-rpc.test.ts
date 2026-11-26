@@ -9,7 +9,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
 import type { PrSnapshot } from "../../model/verdict/pr.ts";
 import type { Store } from "../store/store.ts";
-import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, passWithShouldFix, startAgent } from "../store/test-store.ts";
+import { failOnMustFix, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, passWithShouldFix, startAgent } from "../store/test-store.ts";
 import type { ListBb } from "../agents/threads.ts";
 import { createFeedReader } from "./feed-reader.ts";
 import { coordinating, doorbellOf, ISSUE, issueIn, settled, startedAgent, textOf, newSubmission, toCap } from "../test-harness.ts";
@@ -120,7 +120,7 @@ const EXPECTED_KEYS: Record<FedEntry["kind"], string[]> = {
   comment: ["comment", "kind"],
   pr: ["at", "changes", "kind", "moved", "number"],
   thread: ["agentId", "at", "event", "kind", "moved"],
-  "follow-up": ["at", "issueId", "kind", "moved"],
+  "follow-up": ["at", "issueId", "kind", "moved", "when"],
   unblocked: ["at", "by", "kind", "moved"],
   moved: ["at", "kind", "status"],
 };
@@ -295,11 +295,30 @@ test("the feed of an issue whose pass filed a follow-up sends one follow-up entr
 
   const feed = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: origin });
   const followUps = feed.entries.filter(({ kind }) => kind === "follow-up");
-  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", moved: null }]);
+  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", when: "passed", moved: null }]);
   assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
   const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
-  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: "WEB-1", moved: null }], "the follow-up's own feed names its origin as it begins");
+  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: { issueId: "WEB-1", when: "passed" }, moved: null }], "the follow-up's own feed names its origin as it begins");
   assert.match(followUp.brief ?? "", /- Round 1: `src\/retry\.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./, "its tab gets the brief that lists the finding, its round and the verifier's reason");
   const own = feed.entries.find(({ kind }) => kind === "created");
   assert.deepStrictEqual(own, { kind: "created", at: 1_000, followUpOf: null, moved: null });
+});
+
+test("the feed of an issue accepted as it is sends the manager's accept as a logged line and its follow-up entry filed on the accept, with exactly their keys; the follow-up's own feed begins filed on that accept", async () => {
+  const { store } = freshStore();
+  const origin = filedIssue(store, MANAGER, newIssue(), 1_000).id;
+  const failed = failOnMustFix(store, origin, startAgent(store, origin, "agent-1"), 1, 2_000);
+  const accepted = store.updateIssue(MANAGER, origin, { decision: { text: "Criteria pass; the cap is polish.", at: 3_000 }, accept: failed.id }, { requireUnheld: false, closes: new Map(), at: 3_000 });
+  assert.ok("issue" in accepted, JSON.stringify(accepted));
+  const handlers = feedHandlers({ store, reader: createFeedReader(bb, store), inbox: { commentIssue: () => assert.fail("posted") } });
+
+  const { entries } = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: origin });
+  const logged = entries.filter((entry) => entry.kind === "logged");
+  assert.deepStrictEqual(logged, [{ kind: "logged", at: 3_000, event: { kind: "accepted" }, moved: null }]);
+  assert.deepStrictEqual(keysOf(logged[0] ?? assert.fail("no accept")), EXPECTED_KEYS.logged);
+  const followUps = entries.filter(({ kind }) => kind === "follow-up");
+  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", when: "accepted", moved: null }]);
+  assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
+  const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
+  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: { issueId: "WEB-1", when: "accepted" }, moved: null }]);
 });

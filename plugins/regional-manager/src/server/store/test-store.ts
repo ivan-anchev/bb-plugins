@@ -1,12 +1,14 @@
 // Tests only: a fresh store with one regional manager whose thread is bound, and the steps most
 // store tests take before what they test.
 import type Database from "better-sqlite3";
+import type { z } from "zod";
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { memoryStorage } from "../memory-storage.ts";
 import { randomUUID } from "node:crypto";
 import type { AgentId } from "../../model/agent/agent.ts";
 import { handoffIdSchema } from "../../model/agent/handoff.ts";
 import type { Check } from "../../model/verdict/check.ts";
+import type { ReviewFinding, triageSchema } from "../../model/verdict/review.ts";
 import type { Issue, IssueId, NewIssue } from "../../model/issue/issue.ts";
 import { issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import type { Avatar } from "../../model/profile/avatar.ts";
@@ -95,7 +97,24 @@ export function takeUnread(store: Pick<Store, "unread" | "markRead">, coordinato
  * issue's follow-up. Its reviewer's and verifier's tickets are `reviewer-<n>` and `verifier-<n>` of
  * MANAGER, suffixed with the manager's id for any other, bound as `thr_` and the ticket.
  */
-export function passWithShouldFix(store: Store, issueId: IssueId, agentId: AgentId, n: number, at: number, coordinatorId = MANAGER): Check {
+export const passWithShouldFix = (store: Store, issueId: IssueId, agentId: AgentId, n: number, at: number, coordinatorId = MANAGER): Check =>
+  settledRound(store, { coordinatorId, issueId, agentId, n, at }, { severity: "should-fix", claim: "Log each retry." }, { result: "confirmed", reason: "Nobody sees a retry." });
+
+/**
+ * A done handoff as passWithShouldFix makes one, whose reviewer reported one must-fix that the
+ * verifier anchored to the brief as every criterion passed, settled at `at`: a failure on review
+ * findings alone, which the manager may accept.
+ */
+export const failOnMustFix = (store: Store, issueId: IssueId, agentId: AgentId, n: number, at: number, coordinatorId = MANAGER): Check =>
+  settledRound(store, { coordinatorId, issueId, agentId, n, at }, { severity: "must-fix", claim: "The backoff never caps." }, { result: "anchored", anchor: "brief", steps: null, reason: "The brief says retries back off." });
+
+/** A done handoff (the `n`th of the agent, at `at`) whose reviewer reported `finding` at `src/retry.ts:10`, triaged so as every criterion passed, settled as checked. */
+function settledRound(
+  store: Store,
+  { coordinatorId, issueId, agentId, n, at }: { coordinatorId: CoordinatorId; issueId: IssueId; agentId: AgentId; n: number; at: number },
+  finding: Pick<ReviewFinding, "severity" | "claim">,
+  triage: z.infer<typeof triageSchema>,
+): Check {
   const headSha = "a".repeat(40);
   const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId, agentId, at, turnSeq: n, summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
   const check = store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha, changedFiles: [], changedFileCount: 0 } });
@@ -105,12 +124,12 @@ export function passWithShouldFix(store: Store, issueId: IssueId, agentId: Agent
   store.insertCheckerTicket(`reviewer-${of}`, { kind: "reviewer", ...on }, at);
   store.bindTicket(`reviewer-${of}`, `thr_reviewer-${of}`);
   const model = { providerId: "codex", model: "gpt-default" };
-  store.receiveReview(check.id, `thr_reviewer-${of}`, { findings: [{ file: "src/retry.ts", line: 10, severity: "should-fix", claim: "Log each retry.", origin: "new" }], earlier: [] }, model, at);
+  store.receiveReview(check.id, `thr_reviewer-${of}`, { findings: [{ file: "src/retry.ts", line: 10, origin: "new", ...finding }], earlier: [] }, model, at);
   store.insertCheckerTicket(`verifier-${of}`, { kind: "verifier", ...on }, at);
   store.bindTicket(`verifier-${of}`, `thr_verifier-${of}`);
   const criteria = [{ criterion: "npm test passes", result: "pass" as const, evidence: "ok" }];
-  store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier-${of}`, headSha, checkout: { headSha, changedFiles: [], changedFileCount: 0 }, criteria, blocking: [], findings: [], triage: [{ result: "confirmed", reason: "Nobody sees a retry." }], model, sameModel: false }, at);
-  if (store.settleReturned(check.id, { kind: "checked", refused: null, ci: { kind: "none" } }, at, null) === null) throw new Error(`${issueId}'s pass didn't settle`);
+  store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier-${of}`, headSha, checkout: { headSha, changedFiles: [], changedFileCount: 0 }, criteria, blocking: [], findings: [], triage: [triage], model, sameModel: false }, at);
+  if (store.settleReturned(check.id, { kind: "checked", refused: null, ci: { kind: "none" } }, at, null) === null) throw new Error(`${issueId}'s round didn't settle`);
   return check;
 }
 

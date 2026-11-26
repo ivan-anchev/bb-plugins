@@ -98,6 +98,7 @@ test("a done handoff makes a queued check that copies its issue's criteria and v
     review: { state: "queued" },
     verdict: { state: "queued", checkout: CLEAN.checkout },
     followUpId: null,
+    acceptedAt: null,
   });
   assert.deepEqual(store.handoff(done.id), { handoff: done, check });
   assert.deepEqual(store.latestHandoff(MANAGER, agentId), { handoff: done, check });
@@ -673,7 +674,7 @@ const knownClose = (db: ReturnType<typeof freshStore>["db"], followUp: string) =
 
 /** Every issue of MANAGER viewed as the board would with no agent placing it, WEB-1's pull request `#41` merged when `merged`. */
 const viewsWith = (store: Store, merged: boolean) =>
-  issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, pr: merged && issue.id === "WEB-1" ? MERGED_41 : null, openDecisions: [], finalCheck: null, verifierAsks: false })));
+  issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, accepted: null, pr: merged && issue.id === "WEB-1" ? MERGED_41 : null, openDecisions: [], finalCheck: null, verifierAsks: false })));
 const MERGED_41: PrSnapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] };
 const unblockedEvents = (store: Store) => events(store).filter(({ kind }) => kind === "unblocked");
 

@@ -45,13 +45,14 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
   }
 
   const inbox = inboxStore(db);
-  const issues = issuesStore(db);
+  const { acceptance, ...checks } = checksStore(db);
+  const issues = issuesStore(db, acceptance);
 
   return {
     ...inbox,
     ...issues,
     ...agentsStore(db),
-    ...checksStore(db),
+    ...checks,
     ...prStore(db),
     ...issueKeysStore(db),
     ...logStore(db),

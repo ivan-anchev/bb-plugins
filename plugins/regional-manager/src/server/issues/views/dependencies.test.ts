@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
-import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks, type FakePr } from "../../test-harness.ts";
+import { coordinating, failsVerification, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks, type FakePr } from "../../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.";
@@ -147,6 +147,28 @@ test("a build dependency whose pull request merges unblocks its dependent once; 
   await settled();
   assert.deepEqual(await unblocked(), ["WEB-3 by WEB-1 done"]);
   assert.equal(await readyLine(), "Ready: WEB-2, WEB-3 (in Todo, no sub-issues, nothing they or their parent depend on is open, and no question at their cap of failed verifications waits for the user).");
+});
+
+test("an issue depending on one accepted In review stays blocked until that one's pull request merges, which unblocks it", async () => {
+  const { kit, coordinatorId, text, call, row, managerIdle, unblocked } = await managing();
+  await text("issue_create", ISSUE);
+  const builder = threadIn(await text("agent_start", { issue: "WEB-1" }));
+  await text("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["WEB-1"] });
+  await failsVerification(kit, coordinatorId, builder, "review");
+  assert.equal((await call("issue_update", { id: "WEB-1", status: "in-review", decision: "Every criterion passes; the cap is polish." })).refused, false);
+  managerIdle();
+  await kit.tick();
+  await settled();
+  assert.match(await row("WEB-2"), /: Not started; blocked by WEB-1 \(In review\)$/);
+  assert.deepEqual(await unblocked(), [], "the accept unblocks nothing");
+
+  const branch = kit.thread(builder).environmentBranchName ?? assert.fail("no branch");
+  kit.github.prs.set(branch, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 10 * 60_000;
+  await kit.tick();
+  await settled();
+  assert.deepEqual(await unblocked(), ["WEB-2 by WEB-1 done", "WEB-3 by WEB-1 done"], "WEB-3, the accept's follow-up, with it");
+  assert.equal(await row("WEB-2"), '- WEB-2 "Dead letters" (Build; no agent): Not started');
 });
 
 test("two dependencies closing at once announce their dependent once, and its status is right", async () => {
