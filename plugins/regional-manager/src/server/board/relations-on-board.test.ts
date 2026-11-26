@@ -22,7 +22,7 @@ test("a row sends the open issues it depends on, and an opened issue what it dep
   assert.deepEqual([first.dependsOn, first.blocks], [[], ["WEB-2", "WEB-3"]]);
   const last = await opened("WEB-3");
   assert.deepEqual([last.dependsOn, last.blocks], [["WEB-1", "WEB-2"], []]);
-  assert.deepEqual(Object.keys(last).sort(), ["agents", "blocks", "dependsOn", "description", "doneCriteria", "entries"], "an opened issue sends only what its tab reads");
+  assert.deepEqual(Object.keys(last).sort(), ["agents", "blocks", "brief", "dependsOn", "description", "doneCriteria", "entries"], "an opened issue sends only what its tab reads");
 
   await kit.call("issue_update", { id: "WEB-1", status: "canceled" }, threadId);
   assert.deepEqual(await blockers(), { "WEB-1": [], "WEB-2": [], "WEB-3": ["WEB-2"] }, "a closed dependency blocks no more");

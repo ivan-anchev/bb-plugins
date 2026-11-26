@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { agentIdSchema } from "../../agent/agent.ts";
+import { handoffIdSchema } from "../../agent/handoff.ts";
 import { issueIdSchema } from "../../issue/issue.ts";
 import type { Triaged } from "../review.ts";
 import type { Verdict } from "../verdict.ts";
-import { followUpPlan, leftoversOf } from "./follow-up.ts";
+import { followUpPlan, leftoversOf, onlyNits, unfiledAtMerge } from "./follow-up.ts";
+import type { Check } from "../check.ts";
 
 const ORIGIN = issueIdSchema.parse("WEB-4");
 const SHA = "a".repeat(40);
@@ -37,8 +40,7 @@ test("a confirmed should-fix plans one top-level Backlog build issue depending o
   assert.match(plan.brief ?? "", /check that each still holds/);
   assert.equal(
     plan.description,
-    "2 review findings held without blocking WEB-4 when it passed. A later round may have fixed one: check each still holds first. Plan this issue's done-criteria before an agent starts.\n\n- src/retry.ts:42, round 2, nit: Name the constant. The verifier: It reads better.\n- src/retry.ts:42, round 2, should-fix: Log the retry. The verifier: Nobody sees a retry.",
-    "the tab and the board show each finding with its round, its severity as triaged and the verifier's reason",
+    "2 review findings held without blocking WEB-4 when it passed. Its brief lists each, with its round and the verifier's reason: check each still holds first. Plan this issue's done-criteria before an agent starts.",
   );
   assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(nit\): Name the constant\.\n {2}The verifier: Confirmed\. It reads better\./);
   assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./);
@@ -68,15 +70,15 @@ test("a follow-up of a follow-up is titled after the first origin, and depends o
   assert.match(plan?.brief ?? "", /The reviews of WEB-9 held/);
 });
 
-test("a description lists as many findings as fit its 2,000 characters, then how many more the brief lists", () => {
-  const many = Array.from({ length: 40 }, (_, i): Triaged => ({ ...shouldFix, claim: `Finding ${i}: ${"x".repeat(60)}` }));
-  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: many }]);
-  const description = plan?.description ?? assert.fail("no plan");
-  assert.ok(description.length <= 2_000, `${description.length} characters`);
-  const listed = description.split("\n").filter((line) => line.startsWith("- ")).length;
-  assert.ok(listed > 0 && listed < 40);
-  assert.ok(description.endsWith(`… and ${40 - listed} more, each in the brief.`));
-  assert.equal((plan?.brief ?? "").split("Finding ").length - 1, 40, "the brief lists every one");
+test("a should-fix an earlier round held still files when a later round holds the same finding only as a nit, listed once from the later round", () => {
+  const asNit: Triaged = { ...shouldFix, result: "downgraded", to: "nit", reason: "A later look: only taste." };
+  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [
+    { round: 1, leftovers: [shouldFix] },
+    { round: 2, leftovers: [asNit] },
+  ]);
+  assert.ok(plan !== null, "round 1's should-fix qualifies");
+  assert.equal((plan.brief ?? "").split("Log the retry.").length - 1, 1);
+  assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Downgraded to nit\. A later look: only taste\./);
 });
 
 test("a title past the 80 characters an issue's title holds is cut with an ellipsis", () => {
@@ -104,4 +106,35 @@ test("a check's leftovers are what it held without failing it: an anchored must-
   };
   assert.deepEqual(leftoversOf({ verdict }), [shouldFix, downgraded, nit]);
   assert.deepEqual(leftoversOf({ verdict: { state: "queued", checkout: null } }), []);
+});
+
+/** A returned verdict on one criterion, `result`, triaging `triage`, settled as checked. */
+const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Verdict => ({
+  state: "returned",
+  at: 5_000,
+  verifierThreadId: "thr_v",
+  headSha: SHA,
+  checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
+  criteria: [{ criterion: "npm test passes", result, evidence: "ok" }],
+  findings: [],
+  triage,
+  mustFixFails: true,
+  model: { providerId: "codex", model: "gpt-default" },
+  sameModel: false,
+  settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
+});
+const HANDOFF: Check["subject"] = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: SHA, prUrl: null };
+const round = (verdict: Verdict, followUpId: Check["followUpId"] = null) => ({ subject: HANDOFF, verdict, followUpId });
+const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", reason: "Criterion 2 fails." };
+
+test("a merge leaves unfiled every uncollected round's leftovers, and the findings that failed the latest verdict when nothing fixed them", () => {
+  assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored]))]), [anchored], "a held blocker of the latest, failed verdict");
+  assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored, nit])), round(verdictOf("pass", [shouldFix]))]), [nit, shouldFix], "a later pass fixed the blocker; the leftovers of both rounds stay");
+  assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored, nit]), issueIdSchema.parse("WEB-9")), round(verdictOf("pass", []), issueIdSchema.parse("WEB-9"))]), [], "a follow-up collected them");
+});
+
+test("only nits is every leftover a nit as triaged: a should-fix downgraded to a nit counts as one, a downgraded must-fix never does", () => {
+  assert.equal(onlyNits([nit, downgradedShouldFix]), true);
+  assert.equal(onlyNits([nit, downgraded]), false);
+  assert.equal(onlyNits([]), true);
 });

@@ -425,7 +425,7 @@ test("a verdict that passes every criterion is In review with ✓ and the models
   assert.match(doorbells()[0] ?? "", /handed off: done, verified$/);
 });
 
-test("an issue opened on the board reads what it is about, its criteria and each handoff with its verdict, names no model and no brief, and an issue it hasn't is refused", async () => {
+test("an issue opened on the board reads what it is about, its brief, its criteria and each handoff with its verdict, names no model, and an issue it hasn't is refused", async () => {
   const { kit, coordinatorId, agentThreadId, opened, verifier, handOff, verdictReturned } = await withAgent();
   await handOff();
   // why its turn ends: the findings go back to a1 before its next handoff, as they do once a verifier stops.
@@ -435,7 +435,7 @@ test("an issue opened on the board reads what it is about, its criteria and each
   await settled();
 
   const { feed, rounds } = await opened();
-  assert.deepEqual([feed.description, feed.doneCriteria, feed.agents], ["Failed webhook deliveries are lost.", CRITERIA, [{ id: "a1", threadId: agentThreadId }]]);
+  assert.deepEqual([feed.description, feed.brief, feed.doneCriteria, feed.agents], ["Failed webhook deliveries are lost.", "Retry failed deliveries with backoff.", CRITERIA, [{ id: "a1", threadId: agentThreadId }]]);
   assert.deepEqual(
     rounds.map(({ round, body }) => [round.number, round.by, round.verdict?.results, body.handoff?.did, body.verdict?.state === "returned" && body.verdict.criteria.map((check) => check.result)]),
     [
@@ -444,7 +444,7 @@ test("an issue opened on the board reads what it is about, its criteria and each
     ],
   );
   const sent = JSON.stringify({ feed, rounds });
-  for (const unshown of ["gpt-default", "codex", "Retry failed deliveries with backoff."]) assert.ok(!sent.includes(unshown), `the feed and its rounds carry no ${unshown}`);
+  for (const unshown of ["gpt-default", "codex"]) assert.ok(!sent.includes(unshown), `the feed and its rounds carry no ${unshown}`);
 
   await assert.rejects(async () => kit.rpc.issueFeed({ coordinatorId, issueId: issueIdSchema.parse("WEB-9") }), { code: "not_found", message: "This regional manager has no issue WEB-9." });
 });

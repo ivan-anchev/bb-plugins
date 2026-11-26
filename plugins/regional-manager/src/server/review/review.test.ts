@@ -396,7 +396,7 @@ test("confirmed should-fix and nit findings, a downgraded must-fix and a rejecte
   const update = await catchUp();
   assert.match(update, /Verified: 2 of 2 criteria passed/);
   assert.match(update, /the verifier anchored 0, downgraded 1, confirmed 2 and rejected 1\. They are filed in WEB-2, its follow-up\./);
-  assert.match(update, /It passed, so the plugin filed every review finding its rounds held without blocking it as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and blocked by WEB-1 until it is Done\./);
+  assert.match(update, /It passed, so the plugin filed every review finding its rounds held without blocking it as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and depending on WEB-1: agent_start on it is refused while WEB-1 is open\./);
   assert.match(update, /\n- `src\/retry\.ts` \(nit\)[^\n]*\n {2}Confirmed: The name says retry, not backoff\.\n- `src\/retry\.ts:7` \(should-fix\)[^\n]*\n {2}Confirmed: Both calls sit on line 7\.\n- `src\/retry\.ts:3` \(must-fix\)[^\n]*\n {2}Downgraded to nit: Neither the brief/);
   assert.doesNotMatch(update, /must-fix review finding upheld/);
 
@@ -877,4 +877,28 @@ test("a reviewer started before scopes, on a later round whose verdict failed on
   assert.match(textOf(await kit.call("issue_review", { findings: [{ ...whole.findings[0], origin: "missed" }] }, threadId)), /^Review recorded: 1 finding\./, "its corrected report is taken");
   const stored = review();
   assert.deepEqual(stored.state === "reported" && stored.findings.map(({ origin }) => origin), ["missed"]);
+});
+
+test("agent_start on a follow-up is refused while its origin is open, naming the way forward, and starts once the origin's merge makes it Done, which catch-up announces", async () => {
+  const { kit, threadId, agentThreadId, handOff, reported, returned, catchUp } = await withAgent();
+  await handOff();
+  await reported([{ file: "src/retry.ts", line: 7, severity: "should-fix", claim: "Log each retry." }]);
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "confirmed", reason: "Nobody sees a retry." }] });
+  await settled();
+  await catchUp();
+  await kit.call("issue_update", { id: "WEB-2", doneCriteria: ["npm test passes"], status: "todo" }, threadId);
+
+  const refused = await kit.call("agent_start", { issue: "WEB-2" }, threadId);
+  assert.ok(isRefusal(refused));
+  assert.equal(
+    textOf(refused),
+    "agent_start is refused: WEB-2 is the follow-up of WEB-1, which is In review: its agent starts only once WEB-1 is Done, from a default branch that has WEB-1's work. Wait for WEB-1 to close, which crew_catch_up announces as unblocking WEB-2; or cancel WEB-2 with issue_update if it isn't wanted.",
+  );
+
+  kit.github.prs.set(kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch"), { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 10 * 60_000;
+  await kit.tick();
+  await settled();
+  assert.match(await catchUp(), /### WEB-2 "Follow-ups from WEB-1: Add retries" is unblocked: WEB-1 done/, "the origin's merge unblocks it, announced once");
+  assert.match(textOf(await kit.call("agent_start", { issue: "WEB-2" }, threadId)), /^Started a2 on WEB-2/, "the way forward works");
 });

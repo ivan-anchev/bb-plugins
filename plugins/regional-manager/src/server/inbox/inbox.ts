@@ -256,9 +256,9 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
       if (id !== null) recorded(id);
     },
 
-    /** Settles a returned verdict as `as` says and announces it, unless it was settled already (see settleReturned). */
-    settleCheck(checkId: CheckId, as: Settlement): void {
-      const id = store.settleReturned(checkId, as, Date.now());
+    /** Settles a returned verdict as `as` says and announces it, unless it was settled already (see settleReturned, and its `merged`). */
+    settleCheck(checkId: CheckId, as: Settlement, merged: boolean): void {
+      const id = store.settleReturned(checkId, as, Date.now(), merged);
       if (id !== null) recorded(id);
     },
 

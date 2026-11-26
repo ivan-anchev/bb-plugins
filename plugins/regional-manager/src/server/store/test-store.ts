@@ -110,7 +110,7 @@ export function passWithShouldFix(store: Store, issueId: IssueId, agentId: Agent
   store.bindTicket(`verifier-${of}`, `thr_verifier-${of}`);
   const criteria = [{ criterion: "npm test passes", result: "pass" as const, evidence: "ok" }];
   store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier-${of}`, headSha, checkout: { headSha, changedFiles: [], changedFileCount: 0 }, criteria, findings: [], triage: [{ result: "confirmed", reason: "Nobody sees a retry." }], model, sameModel: false }, at);
-  if (store.settleReturned(check.id, { kind: "checked", refused: null, ci: { kind: "none" } }, at) === null) throw new Error(`${issueId}'s pass didn't settle`);
+  if (store.settleReturned(check.id, { kind: "checked", refused: null, ci: { kind: "none" } }, at, false) === null) throw new Error(`${issueId}'s pass didn't settle`);
   return check;
 }
 

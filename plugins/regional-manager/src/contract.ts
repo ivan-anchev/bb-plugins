@@ -57,11 +57,13 @@ export const issueTag = (coordinatorId: CoordinatorId, issueId: IssueId): string
 
 /**
  * An issue in its tab, beyond its board row (which the tab reads with the board): what it is about,
- * its done-criteria, what it depends on and what depends on it, every agent that held it with its
+ * its agent's brief, its done-criteria, what it depends on and what depends on it, every agent that held it with its
  * thread while bb still has it (null: none to open), and its feed, oldest first (entry.ts).
  */
 const issueFeedSchema = z.object({
   description: descriptionSchema,
+  /** Its agent's brief, which its tab folds under the description (null: not written yet). why sent: a follow-up's lists the findings it is about (rounds/follow-up.ts). why no length check: a follow-up's is written by the plugin, and may run past what issue_create takes. */
+  brief: z.string().nullable(),
   doneCriteria: doneCriteriaSchema,
   dependsOn: z.array(issueIdSchema),
   blocks: z.array(issueIdSchema),

@@ -15,13 +15,13 @@ export type IssueId = z.infer<typeof issueIdSchema>;
 /** The id of the regional manager's issue numbered `number`, whose key is `key`. */
 export const issueIdOf = (key: IssueKey, number: number): IssueId => issueIdSchema.parse(`${key}-${number}`);
 
-export const titleSchema = z.string().trim().min(1).max(80).regex(ONE_LINE, "A title is one line");
+/** The most characters a title holds. */
+export const MAX_TITLE_CHARS = 80;
 
-/** The most characters a description holds. */
-export const MAX_DESCRIPTION_CHARS = 2_000;
+export const titleSchema = z.string().trim().min(1).max(MAX_TITLE_CHARS).regex(ONE_LINE, "A title is one line");
 
 /** What the issue is about, in plain words, for the user. why short: the board shows it whole. */
-export const descriptionSchema = z.string().trim().min(1).max(MAX_DESCRIPTION_CHARS);
+export const descriptionSchema = z.string().trim().min(1).max(2_000);
 
 /** The agent's instructions: everything it needs to start without asking. */
 export const briefSchema = z.string().trim().min(1).max(20_000);

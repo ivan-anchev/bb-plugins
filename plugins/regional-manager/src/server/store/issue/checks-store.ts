@@ -9,7 +9,7 @@ import { executionSchema } from "../../../model/agent/execution.ts";
 import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/agent/handoff.ts";
 import { doneCriteriaSchema, issueIdSchema, type Issue, type IssueId } from "../../../model/issue/issue.ts";
 import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
-import type { Handed } from "../../../model/issue/status.ts";
+import type { Closure, Handed } from "../../../model/issue/status.ts";
 import type { DecisionId } from "../../../model/decision.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
 import { checkIdSchema, checkSubjectSchema, type Check, type CheckId, type FinalCheck, type StoredCheck } from "../../../model/verdict/check.ts";
@@ -176,15 +176,17 @@ export function checksStore(db: Db) {
   }
 
   /**
-   * When the check just settled as a pass of its issue's done handoff, files the issue's follow-up,
-   * as the one plan says (rounds/follow-up.ts followUpPlan), from every round of the issue no
-   * follow-up collected yet, and stamps with it each round's check it collected, and the passing
-   * check, which names the follow-up its pass filed. A round is so collected once. Call inside the
-   * settling transaction, after its settlement is written, so the check reads as passed.
+   * When the check just settled as a pass of its issue, a done handoff's or a build parent's final
+   * check, files the issue's follow-up, as the one plan says (rounds/follow-up.ts followUpPlan),
+   * from every handoff round of the issue no follow-up collected yet, and stamps with it each
+   * round's check it collected, and the passing check, which names the follow-up its pass filed. A
+   * round is so collected once. `merged`: whether the issue's pull request had merged as the pass
+   * was judged (closeOfPass). Call inside the settling transaction, after its settlement is
+   * written, so the check reads as passed.
    */
-  function fileFollowUp(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, at: number): void {
+  function fileFollowUp(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, merged: boolean, at: number): void {
     const passed = check(checkId);
-    if (passed?.subject.kind !== "handoff" || outcome(passed.verdict) !== "pass") return;
+    if (passed === null || outcome(passed.verdict) !== "pass") return;
     const record = handed("WHERE h.coordinator_id = ? AND h.issue_id = ? ORDER BY h.rowid", coordinatorId, issueId);
     const collected = numberedRounds(record, finalChecksOf(coordinatorId, issueId)).flatMap((begun) => {
       const uncollected = begun.kind === "handoff" && begun.handed.check?.followUpId === null ? begun.handed.check : null;
@@ -193,8 +195,9 @@ export function checksStore(db: Db) {
     });
     const plan = followUpPlan(issueId, firstOriginOf(coordinatorId, issueId), collected);
     if (plan === null) return;
-    // why no closes: no view is read here, so its origin reads open; one closed already is announced as unblocking its follow-up, an announcement more, never one lost (issues-store.ts writeDependencies).
-    const filed = fileIssue(db, coordinatorId, plan, new Map(), at);
+    // why the pass's own close, never a view's: none is read here, and a pass closes its issue by itself or with a merge it was judged on, so the dependency starts knowing it and no later read announces it as news (issues-store.ts writeDependencies).
+    const close = closeOfPass(passed, merged);
+    const filed = fileIssue(db, coordinatorId, plan, new Map(close === null ? [] : [[issueId, close]]), at);
     // why throw, which rolls the settlement back: a top-level issue that depends only on its origin, which exists and that nothing depends on yet, breaks no plan rule (plan.ts).
     if ("refused" in filed) throw new Error(`The follow-up of ${issueId} can't be filed: ${filed.refused}`);
     const stamp = db().prepare("UPDATE checks SET follow_up_id = ? WHERE id = ?");
@@ -464,11 +467,12 @@ export function checksStore(db: Db) {
      * and `maybe-sent-back` need a claimed round, and keep it and its CI; `checked` gives back a
      * round claimed for findings that never left. A failure at the issue's cap also puts the cap
      * question to the user, and a pass files its issue's follow-up, in the same transaction (askAtCap,
-     * fileFollowUp). `waiting-for-ci` moves a pending
+     * fileFollowUp); `merged` says whether the issue's pull request had merged as the settler judged
+     * it (verify.ts stepOf), which closes the issue as it passes. `waiting-for-ci` moves a pending
      * verdict to wait, and records nothing: nobody is told until it settles. Returns whose it was,
      * or null when it was already settled or waiting, or there is no claim to keep.
      */
-    settleReturned(checkId: CheckId, as: Settlement, at: number): CoordinatorId | null {
+    settleReturned(checkId: CheckId, as: Settlement, at: number, merged: boolean): CoordinatorId | null {
       return db().transaction(() => {
         const verdict = unsettled(checkId);
         if (verdict === null) return null;
@@ -483,7 +487,7 @@ export function checksStore(db: Db) {
           if (settlement.kind === "sending-back") countFixRound(db, coordinatorId, handingAgentOf(checkId), -1);
           writeSettlement(db, checkId, as);
           insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId, asked: askAtCap(coordinatorId, issueId, checkId, at) }, at);
-          fileFollowUp(coordinatorId, issueId, checkId, at);
+          fileFollowUp(coordinatorId, issueId, checkId, merged, at);
           return coordinatorId;
         }
         if (settlement.kind !== "sending-back") return null;
@@ -503,6 +507,22 @@ export function checksStore(db: Db) {
       return db().prepare("SELECT id FROM checks WHERE json_extract(verdict, '$.settlement.kind') IN ('pending', 'sending-back', 'waiting-for-ci') ORDER BY rowid").all().map(toCheckId);
     },
   };
+}
+
+/**
+ * How a pass closes its issue as it settles, as the issue's view will say (status.ts): a build
+ * parent's passed final check closes it; a done handoff's pass, only once its pull request merged
+ * (`merged`), and by that handoff; else it is still open.
+ */
+function closeOfPass({ id, subject }: Check, merged: boolean): Closure | null {
+  switch (subject.kind) {
+    case "final":
+      return { by: "final-check", checkId: id };
+    case "handoff":
+      return merged ? { by: "handoff", handoffId: subject.handoffId } : null;
+    default:
+      return subject satisfies never;
+  }
 }
 
 const verdictOf = (db: Db, checkId: CheckId): Verdict | null => readCheck(db, checkId)?.verdict ?? null;

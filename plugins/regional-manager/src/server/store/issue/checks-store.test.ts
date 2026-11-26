@@ -182,8 +182,8 @@ test("a fix round claimed before its findings are sent survives a reload, and se
 
   const reloaded = openStore(storage);
   assert.equal(reloaded.agent(MANAGER, agentId)?.fixRounds, 1);
-  assert.equal(reloaded.settleReturned(check.id, { kind: "sent-back" }, 4_000), MANAGER);
-  assert.equal(reloaded.settleReturned(check.id, { kind: "sent-back" }, 4_000), null, "settled once");
+  assert.equal(reloaded.settleReturned(check.id, { kind: "sent-back" }, 4_000, false), MANAGER);
+  assert.equal(reloaded.settleReturned(check.id, { kind: "sent-back" }, 4_000, false), null, "settled once");
   assert.deepEqual(reloaded.unsettledChecks(), []);
   assert.deepEqual(events(reloaded), [{ kind: "sent-back", issueId: issue.id, agentId, checkId: check.id, round: 1 }]);
 });
@@ -203,7 +203,7 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
 
   const passed = runningCheck(store, issue.id, agentId, 1);
   store.receiveVerdict(passed.id, returned("thr_verifier_1", "pass"), 4_500);
-  assert.equal(store.settleReturned(passed.id, { kind: "waiting-for-ci" }, 4_000), MANAGER);
+  assert.equal(store.settleReturned(passed.id, { kind: "waiting-for-ci" }, 4_000, false), MANAGER);
   assert.deepEqual(store.waitingForCi(MANAGER, agentId), [passed.id]);
   assert.deepEqual(events(store), [], "nobody is told while it waits for CI");
 
@@ -212,7 +212,7 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
   assert.deepEqual(store.check(passed.id)?.verdict, { ...waiting, settlement: { kind: "superseded" } }, "a newer done handoff supersedes one waiting for CI, its verdict kept whole");
   store.receiveVerdict(failed.id, returned("thr_verifier_2", "fail"), 4_500);
   store.claimFixRound(failed.id, { kind: "none" });
-  assert.equal(store.settleReturned(failed.id, { kind: "checked", refused: "bb refused the message", ci: { kind: "none" } }, 4_100), MANAGER);
+  assert.equal(store.settleReturned(failed.id, { kind: "checked", refused: "bb refused the message", ci: { kind: "none" } }, 4_100, false), MANAGER);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0);
   assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: failed.id, asked: null }]);
 });
@@ -235,11 +235,11 @@ test("a done handoff that fails partway keeps the checks waiting for CI whole an
   // As a verdict that waited for CI before a confirmed must-fix finding could fail one is left (migrations.ts).
   const fails = reviewedCheck(store, issue.id, agentId, 1);
   store.receiveVerdict(fails.id, confirmedMustFix("thr_verifier_1"), 3_900);
-  assert.equal(store.settleReturned(fails.id, { kind: "waiting-for-ci" }, 4_000), MANAGER);
+  assert.equal(store.settleReturned(fails.id, { kind: "waiting-for-ci" }, 4_000, false), MANAGER);
   const passed = runningCheck(store, issue.id, agentId, 2);
   assert.deepEqual(store.waitingForCi(MANAGER, agentId), [fails.id], "the newer handoff left the one the rule fails waiting");
   store.receiveVerdict(passed.id, returned("thr_verifier_2", "pass"), 4_050);
-  assert.equal(store.settleReturned(passed.id, { kind: "waiting-for-ci" }, 4_100), MANAGER);
+  assert.equal(store.settleReturned(passed.id, { kind: "waiting-for-ci" }, 4_100, false), MANAGER);
   const before = [store.check(fails.id)?.verdict, store.check(passed.id)?.verdict];
   const newer = handoff(issue.id, agentId, "done", 5_000);
   const restore = failWrites(db, "INSERT", "checks");
@@ -297,13 +297,13 @@ test("a settlement that fails before the manager is told leaves the verdict unse
   store.receiveVerdict(check.id, returned("thr_verifier_1", "fail"), 4_500);
   store.claimFixRound(check.id, { kind: "none" });
   const restore = failWrites(db, "INSERT", "events");
-  assert.throws(() => store.settleReturned(check.id, { kind: "sent-back" }, 4_000), /forced failure/);
+  assert.throws(() => store.settleReturned(check.id, { kind: "sent-back" }, 4_000, false), /forced failure/);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 1);
   assert.deepEqual(store.unsettledChecks(), [check.id]);
   assert.deepEqual(events(store), []);
 
   restore();
-  assert.equal(store.settleReturned(check.id, { kind: "sent-back" }, 4_000), MANAGER);
+  assert.equal(store.settleReturned(check.id, { kind: "sent-back" }, 4_000, false), MANAGER);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 1, "the round claimed once");
   const settled = store.check(check.id)?.verdict;
   assert.deepEqual(settled?.state === "returned" && settled.settlement, { kind: "sent-back", round: 1, ci: { kind: "none" } });
@@ -322,11 +322,11 @@ test("a settlement as checked that fails before the manager is told keeps its ro
     return verdict?.state === "returned" ? verdict.settlement : assert.fail("not returned");
   };
   const restore = failWrites(db, "INSERT", "events");
-  assert.throws(() => store.settleReturned(check.id, CHECKED, 4_000), /forced failure/);
+  assert.throws(() => store.settleReturned(check.id, CHECKED, 4_000, false), /forced failure/);
   assert.deepEqual([settlementOf(), store.agent(MANAGER, agentId)?.fixRounds, events(store)], [claimed, 1, []], "the claim and its round stand, and nobody is told");
 
   restore();
-  assert.equal(store.settleReturned(check.id, CHECKED, 4_000), MANAGER);
+  assert.equal(store.settleReturned(check.id, CHECKED, 4_000, false), MANAGER);
   assert.deepEqual(settlementOf(), CHECKED);
   assert.equal(store.agent(MANAGER, agentId)?.fixRounds, 0, "the claimed round released once");
   assert.deepEqual(events(store), [{ kind: "checked", issueId: issue.id, checkId: check.id, asked: null }], "the manager is told once");
@@ -339,20 +339,20 @@ test("a verdict, a give-up or a CI result that arrives after its check settled o
 
   const settled = runningCheck(store, issue.id, agentId, 1);
   store.receiveVerdict(settled.id, returned("thr_verifier_1", "pass"), 4_500);
-  store.settleReturned(settled.id, CHECKED, 4_000);
+  store.settleReturned(settled.id, CHECKED, 4_000, false);
   const final = store.check(settled.id)?.verdict;
   assert.equal(store.receiveVerdict(settled.id, returned("thr_verifier_1", "fail"), 4_500), false);
   assert.equal(store.giveUpCheck(settled.id, running(1), gaveUp(1), 4_100), null);
-  assert.equal(store.settleReturned(settled.id, { kind: "sent-back" }, 4_100), null);
+  assert.equal(store.settleReturned(settled.id, { kind: "sent-back" }, 4_100, false), null);
   assert.deepEqual(store.check(settled.id)?.verdict, final);
 
   const waiting = runningCheck(store, issue.id, agentId, 2);
   store.receiveVerdict(waiting.id, returned("thr_verifier_2", "pass"), 4_500);
-  store.settleReturned(waiting.id, { kind: "waiting-for-ci" }, 4_200);
+  store.settleReturned(waiting.id, { kind: "waiting-for-ci" }, 4_200, false);
   const waited = store.check(waiting.id)?.verdict;
   const superseded = runningCheck(store, issue.id, agentId, 3);
   runningCheck(store, issue.id, agentId, 4);
-  assert.equal(store.settleReturned(waiting.id, CHECKED, 4_300), null, "CI on a superseded commit");
+  assert.equal(store.settleReturned(waiting.id, CHECKED, 4_300, false), null, "CI on a superseded commit");
   assert.equal(store.receiveVerdict(superseded.id, returned("thr_verifier_3", "pass"), 4_500), false);
   assert.equal(store.giveUpCheck(superseded.id, running(3), gaveUp(3), 4_300), null);
   assert.deepEqual([store.check(waiting.id)?.verdict, store.check(superseded.id)?.verdict], [{ ...waited, settlement: { kind: "superseded" } }, { state: "superseded" }]);
@@ -486,20 +486,20 @@ test("a third failure that settles asks the user at the cap in the same transact
     store.receiveVerdict(check.id, returned(`thr_verifier_${n}`, "fail"), 4_000 + n);
     return check;
   };
-  for (const n of [1, 2]) assert.equal(store.settleReturned(failedOnce(n).id, CHECKED, 4_500 + n), MANAGER);
+  for (const n of [1, 2]) assert.equal(store.settleReturned(failedOnce(n).id, CHECKED, 4_500 + n, false), MANAGER);
   assert.deepEqual(store.decisions(MANAGER), [], "two failures ask nothing");
   const third = failedOnce(3);
   const before = events(store);
 
   const restore = failWrites(db, "INSERT", "decisions");
-  assert.throws(() => store.settleReturned(third.id, CHECKED, 4_600), /forced failure/);
+  assert.throws(() => store.settleReturned(third.id, CHECKED, 4_600, false), /forced failure/);
   assert.deepEqual(store.unsettledChecks(), [third.id], "the settlement was undone");
   assert.deepEqual(events(store), before, "and nobody was told");
   assert.deepEqual(store.decisions(MANAGER), []);
 
   restore();
-  assert.equal(store.settleReturned(third.id, CHECKED, 4_600), MANAGER);
-  assert.equal(store.settleReturned(third.id, CHECKED, 4_700), null, "settled once");
+  assert.equal(store.settleReturned(third.id, CHECKED, 4_600, false), MANAGER);
+  assert.equal(store.settleReturned(third.id, CHECKED, 4_700, false), null, "settled once");
   const settled = store.check(third.id)?.verdict;
   assert.deepEqual(settled?.state === "returned" && settled.settlement, CHECKED);
   const [asked = assert.fail("nothing asked"), ...more] = store.decisions(MANAGER);
@@ -517,10 +517,10 @@ test("a third failure whose send-back a reload cut short settles as maybe sent b
     store.receiveVerdict(check.id, returned(`thr_verifier_${n}`, "fail"), 4_000 + n);
     return check;
   };
-  for (const n of [1, 2]) store.settleReturned(returnedOnce(n).id, CHECKED, 4_500 + n);
+  for (const n of [1, 2]) store.settleReturned(returnedOnce(n).id, CHECKED, 4_500 + n, false);
   const third = returnedOnce(3);
   store.claimFixRound(third.id, { kind: "none" });
-  assert.equal(store.settleReturned(third.id, { kind: "maybe-sent-back" }, 4_600), MANAGER);
+  assert.equal(store.settleReturned(third.id, { kind: "maybe-sent-back" }, 4_600, false), MANAGER);
 
   const settled = store.check(third.id)?.verdict;
   assert.deepEqual(settled?.state === "returned" && settled.settlement, { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } });
@@ -535,14 +535,14 @@ test("the question stays with the failure whose settling asked it, whatever orde
     store.receiveVerdict(check.id, returned(`thr_verifier_${n}`, "fail"), 4_000 + n);
     return check;
   };
-  for (const n of [1, 2]) store.settleReturned(returnedOnce(n).id, CHECKED, 4_500 + n);
+  for (const n of [1, 2]) store.settleReturned(returnedOnce(n).id, CHECKED, 4_500 + n, false);
   const third = returnedOnce(3);
   const restore = failWrites(db, "INSERT", "decisions");
-  assert.throws(() => store.settleReturned(third.id, CHECKED, 4_600), /forced failure/);
+  assert.throws(() => store.settleReturned(third.id, CHECKED, 4_600, false), /forced failure/);
   restore();
   const fourth = returnedOnce(4);
-  assert.equal(store.settleReturned(fourth.id, CHECKED, 4_700), MANAGER, "round 4 settles as the third counted failure, and asks");
-  assert.equal(store.settleReturned(third.id, CHECKED, 4_800), MANAGER, "round 3's retry settles as the fourth, while the question is open");
+  assert.equal(store.settleReturned(fourth.id, CHECKED, 4_700, false), MANAGER, "round 4 settles as the third counted failure, and asks");
+  assert.equal(store.settleReturned(third.id, CHECKED, 4_800, false), MANAGER, "round 3's retry settles as the fourth, while the question is open");
 
   assert.deepEqual(store.decisions(MANAGER).map(({ id, cap }) => [id, cap]), [["d1", 3]], "one question");
   const asked = events(store).flatMap((event) => (event.kind === "checked" ? [[event.checkId, event.asked]] : []));
@@ -568,7 +568,7 @@ function passWithLeftovers() {
   const made = withAgent();
   const { store, issue, agentId } = made;
   const first = roundWith(store, issue.id, agentId, 1, [LOG_IT, NAME_IT], "fail", [confirmed("Nobody sees a retry."), confirmed("It reads better.")]);
-  assert.equal(store.settleReturned(first.id, CHECKED, 4_500), MANAGER);
+  assert.equal(store.settleReturned(first.id, CHECKED, 4_500, false), MANAGER);
   assert.equal(store.issues(MANAGER).length, 1, "a failure files nothing");
   const second = roundWith(store, issue.id, agentId, 2, [CAPLESS, LOG_IT], "pass", [toShouldFix, confirmed("Still no log.")]);
   return { ...made, first, second };
@@ -578,7 +578,7 @@ const followUpsOf = (store: Store, checks: readonly Check[]) => checks.map(({ id
 
 test("a pass with leftovers in two rounds files one top-level Backlog build issue, no done-criteria, depending on its origin, whose brief lists each finding once, and stamps both checks; a second settle files none", () => {
   const { store, issue, agentId, first, second } = passWithLeftovers();
-  assert.equal(store.settleReturned(second.id, CHECKED, 4_600), MANAGER);
+  assert.equal(store.settleReturned(second.id, CHECKED, 4_600, false), MANAGER);
 
   const [, filed = assert.fail("no follow-up filed"), ...more] = store.issues(MANAGER);
   assert.deepEqual(more, [], "one follow-up");
@@ -596,8 +596,7 @@ test("a pass with leftovers in two rounds files one top-level Backlog build issu
     closed: null,
     createdAt: 4_600,
   });
-  assert.match(description, /^3 review findings held without blocking WEB-1 when it passed\./);
-  assert.match(description, /\n- src\/retry.ts:42, round 2, must-fix downgraded to should-fix: The backoff never caps\. The verifier: No criterion names a cap\./);
+  assert.match(description, /^3 review findings held without blocking WEB-1 when it passed\. Its brief lists each/);
   const listed = brief ?? assert.fail("no brief");
   for (const claim of [LOG_IT.claim, NAME_IT.claim, CAPLESS.claim]) assert.equal(listed.split(claim).length - 1, 1, `${claim} is listed once`);
   assert.match(listed, /- Round 2: `src\/retry.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Still no log\./);
@@ -605,9 +604,9 @@ test("a pass with leftovers in two rounds files one top-level Backlog build issu
   assert.match(listed, /- Round 2: `src\/retry.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Downgraded to should-fix\. No criterion names a cap\./);
   assert.deepEqual(followUpsOf(store, [first, second]), ["WEB-2", "WEB-2"], "both checks are stamped");
 
-  assert.equal(store.settleReturned(second.id, CHECKED, 4_700), null, "settled once");
+  assert.equal(store.settleReturned(second.id, CHECKED, 4_700, false), null, "settled once");
   const third = roundWith(store, issue.id, agentId, 3, [NAME_IT], "pass", [confirmed("It reads better.")]);
-  store.settleReturned(third.id, CHECKED, 4_800);
+  store.settleReturned(third.id, CHECKED, 4_800, false);
   assert.equal(store.issues(MANAGER).length, 2, "a later pass collects no round twice, and its nit alone files nothing");
   assert.deepEqual(followUpsOf(store, [third]), [null]);
 });
@@ -615,18 +614,18 @@ test("a pass with leftovers in two rounds files one top-level Backlog build issu
 test("a pass with only nits left files none and stamps nothing, and neither does a pass with none", () => {
   const { store, issue, agentId } = withAgent();
   const nits = roundWith(store, issue.id, agentId, 1, [NAME_IT, { ...LOG_IT, claim: "Split the module." }], "pass", [confirmed("It reads better."), { result: "downgraded", to: "nit", reason: "Taste." }]);
-  assert.equal(store.settleReturned(nits.id, CHECKED, 4_600), MANAGER);
+  assert.equal(store.settleReturned(nits.id, CHECKED, 4_600, false), MANAGER);
   assert.deepEqual(store.issues(MANAGER).map(({ id }) => id), [issue.id]);
   assert.deepEqual(followUpsOf(store, [nits]), [null]);
 });
 
 test("a follow-up of a follow-up is titled after the first origin and depends on its own", () => {
   const { store, second } = passWithLeftovers();
-  store.settleReturned(second.id, CHECKED, 4_600);
+  store.settleReturned(second.id, CHECKED, 4_600, false);
   const followUp = issueIdSchema.parse("WEB-2");
   const agentId = startAgent(store, followUp, "agent-2");
   const round = roundWith(store, followUp, agentId, 3, [LOG_IT], "pass", [confirmed("Still no log.")]);
-  store.settleReturned(round.id, CHECKED, 4_900);
+  store.settleReturned(round.id, CHECKED, 4_900, false);
   const filed = store.issue(MANAGER, issueIdSchema.parse("WEB-3"));
   assert.deepEqual(filed && [filed.title, filed.dependsOn], ["Follow-ups from WEB-1: Add retries", [followUp]]);
 });
@@ -635,14 +634,14 @@ test("a pass whose follow-up's insert fails undoes the settlement and every othe
   const { db, store, first, second } = passWithLeftovers();
   const before = events(store);
   const restore = failWrites(db, "INSERT", "issues");
-  assert.throws(() => store.settleReturned(second.id, CHECKED, 4_600), /forced failure/);
+  assert.throws(() => store.settleReturned(second.id, CHECKED, 4_600, false), /forced failure/);
   assert.deepEqual(store.unsettledChecks(), [second.id], "the settlement was undone");
   assert.deepEqual(events(store), before, "and nobody was told");
   assert.equal(store.issues(MANAGER).length, 1);
   assert.deepEqual(followUpsOf(store, [first, second]), [null, null]);
 
   restore();
-  assert.equal(store.settleReturned(second.id, CHECKED, 4_600), MANAGER);
+  assert.equal(store.settleReturned(second.id, CHECKED, 4_600, false), MANAGER);
   assert.deepEqual(store.issues(MANAGER).map(({ id }) => id), ["WEB-1", "WEB-2"]);
   assert.deepEqual(followUpsOf(store, [first, second]), ["WEB-2", "WEB-2"]);
 });
@@ -651,7 +650,7 @@ test("a pass whose stamp of a check's follow-up fails undoes the settlement, the
   const { db, store, issue, first, second } = passWithLeftovers();
   const before = events(store);
   const restore = failWrites(db, "UPDATE", "checks", `NEW.follow_up_id IS NOT NULL AND NEW.id = '${second.id}'`);
-  assert.throws(() => store.settleReturned(second.id, CHECKED, 4_600), /forced failure/);
+  assert.throws(() => store.settleReturned(second.id, CHECKED, 4_600, false), /forced failure/);
   assert.deepEqual(store.unsettledChecks(), [second.id], "the settlement was undone");
   assert.deepEqual(events(store), before, "and nobody was told");
   assert.deepEqual(store.issues(MANAGER).map(({ id }) => id), [issue.id], "the follow-up was undone");
@@ -659,7 +658,41 @@ test("a pass whose stamp of a check's follow-up fails undoes the settlement, the
   assert.deepEqual(followUpsOf(store, [first, second]), [null, null], "the first check's stamp was undone too");
 
   restore();
-  assert.equal(store.settleReturned(second.id, CHECKED, 4_600), MANAGER);
+  assert.equal(store.settleReturned(second.id, CHECKED, 4_600, false), MANAGER);
   assert.deepEqual(store.issues(MANAGER).map(({ id, dependsOn }) => [id, dependsOn]), [[issue.id, []], ["WEB-2", [issue.id]]]);
   assert.deepEqual(followUpsOf(store, [first, second]), ["WEB-2", "WEB-2"]);
+});
+
+/** The close the follow-up's relation to its origin starts knowing (issues-store.ts writeDependencies): null while it was open as the pass settled. */
+const knownClose = (db: ReturnType<typeof freshStore>["db"], followUp: string) =>
+  db.prepare("SELECT known_close AS close FROM issue_relations WHERE issue_id = ?").get(followUp);
+
+test("a pass settled on a merged pull request files its follow-up knowing the origin closed by that handoff, so no later read announces it unblocked; one before the merge knows nothing yet", () => {
+  const merged = passWithLeftovers();
+  assert.equal(merged.store.settleReturned(merged.second.id, CHECKED, 4_600, true), MANAGER);
+  const handoffId = merged.second.subject.kind === "handoff" ? merged.second.subject.handoffId : assert.fail("not a handoff");
+  assert.deepEqual(knownClose(merged.db, "WEB-2"), { close: `handed off ${handoffId}` });
+
+  const open = passWithLeftovers();
+  open.store.settleReturned(open.second.id, CHECKED, 4_600, false);
+  assert.deepEqual(knownClose(open.db, "WEB-2"), { close: null });
+});
+
+test("a build parent whose own handoff left a should-fix files its follow-up when its final check passes, stamping both checks and knowing the parent closed by that check", () => {
+  const { db, store, issue, agentId } = withAgent();
+  const failed = roundWith(store, issue.id, agentId, 1, [LOG_IT], "fail", [confirmed("Nobody sees a retry.")]);
+  store.settleReturned(failed.id, CHECKED, 4_500, false);
+  store.endAgent({ coordinatorId: MANAGER, id: agentId, issueId: issue.id }, "stopped", null, false, 4_550);
+  const sub = filedIssue(store, MANAGER, newIssue({ parentId: issue.id }), 4_560);
+  const final = store.insertFinalCheck(MANAGER, issue.id, { defaultBranch: "main", merged: [sub.id] }, 5_000);
+  store.insertCheckerTicket("final-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: final.id }, 5_000);
+  store.bindTicket("final-1", "thr_final_1");
+  assert.ok(store.receiveVerdict(final.id, returned("thr_final_1", "pass"), 5_100));
+  assert.equal(store.settleReturned(final.id, CHECKED, 5_200, false), MANAGER);
+
+  const followUp = store.issue(MANAGER, issueIdSchema.parse("WEB-3")) ?? assert.fail("no follow-up filed");
+  assert.deepEqual([followUp.title, followUp.parentId, followUp.dependsOn, followUp.rest], ["Follow-ups from WEB-1: Add retries", null, [issue.id], "backlog"]);
+  assert.match(followUp.brief ?? "", /- Round 1: `src\/retry.ts:10` \(should-fix\): Log each retry\./);
+  assert.deepEqual(followUpsOf(store, [failed, final]), ["WEB-3", "WEB-3"]);
+  assert.deepEqual(knownClose(db, "WEB-3"), { close: `final check ${final.id}` });
 });

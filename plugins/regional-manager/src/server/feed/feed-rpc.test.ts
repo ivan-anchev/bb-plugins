@@ -56,7 +56,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
   const criteria = [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }] as const;
   store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
   store.claimFixRound(check.id, { kind: "none" });
-  store.settleReturned(check.id, { kind: "sent-back" }, 3_600);
+  store.settleReturned(check.id, { kind: "sent-back" }, 3_600, false);
   return handoff;
 }
 
@@ -128,7 +128,7 @@ const EXPECTED_KEYS: Record<FedEntry["kind"], string[]> = {
 test("an issue's feed sends exactly what its tab reads: its plan's text and relations, its agents' threads, and each entry kind's own fields", async () => {
   const { handlers, issueId } = seeded();
   const feed = await handlers.issueFeed({ coordinatorId: MANAGER, issueId });
-  assert.deepStrictEqual(keysOf(feed), ["agents", "blocks", "dependsOn", "description", "doneCriteria", "entries"]);
+  assert.deepStrictEqual(keysOf(feed), ["agents", "blocks", "brief", "dependsOn", "description", "doneCriteria", "entries"]);
   assert.deepStrictEqual([feed.dependsOn, feed.blocks, feed.agents], [["WEB-1"], ["WEB-3"], [{ id: "a1", threadId: "thr_agent-1" }]]);
   assert.deepStrictEqual(
     feed.entries.map(({ kind }) => kind),
@@ -299,6 +299,7 @@ test("the feed of an issue whose pass filed a follow-up sends one follow-up entr
   assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
   const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
   assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: "WEB-1", moved: null }], "the follow-up's own feed names its origin as it begins");
+  assert.match(followUp.brief ?? "", /- Round 1: `src\/retry\.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./, "its tab gets the brief that lists the finding, its round and the verifier's reason");
   const own = feed.entries.find(({ kind }) => kind === "created");
   assert.deepStrictEqual(own, { kind: "created", at: 1_000, followUpOf: null, moved: null });
 });

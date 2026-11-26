@@ -52,6 +52,7 @@ export function createFeedReader(bb: ListBb<{ id: string; deletedAt: number | nu
       const openable = (threadId: string | null): string | null => (threadId !== null && threads.get(threadId)?.deletedAt === null ? threadId : null);
       return {
         description: issue.description,
+        brief: issue.brief,
         doneCriteria: issue.doneCriteria,
         dependsOn: issue.dependsOn,
         blocks,

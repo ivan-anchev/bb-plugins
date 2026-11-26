@@ -347,3 +347,18 @@ test("a follow-up's feed begins with a line by no one saying the plugin filed it
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [created] }) });
   assert.match(activity(tab()).texts()[0] ?? "", /^Filed as the follow-up of WEB-1, when it passed · Backlog/);
 });
+
+test("the brief folds under the description, closed until the reader opens it, showing the text whole, a long one included", async () => {
+  const brief = `- Round 1: \`notes.txt:1\` (must-fix): ${"A claim the reviewer wrote at length. ".repeat(48)}\n  The verifier: Downgraded to should-fix. ${"Its reason, in many words. ".repeat(14)}`;
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, brief }) });
+  const fold = tab().getByText("Brief").closest("details") ?? assert.fail("no Brief fold");
+  assert.equal(fold.open, false, "folded at first");
+  fireEvent.click(within(fold).getByText("Brief"));
+  assert.equal(fold.open, true);
+  assert.equal(fold.querySelector("p")?.textContent, brief, "the whole brief, as written");
+});
+
+test("an issue with no brief yet draws no Brief fold", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, brief: null }) });
+  assert.equal(tab().queryAllByText("Brief").length, 0);
+});

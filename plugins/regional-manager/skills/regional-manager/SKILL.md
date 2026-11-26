@@ -568,7 +568,8 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   finding its rounds held without blocking it, nits included, as one
   follow-up: a top-level build issue in Backlog, titled "Follow-ups from
   BBP-2: …" (after the first issue of a chain of follow-ups), that depends
-  on the issue, so it stays blocked until the issue is Done. Its brief lists
+  on the issue, so it stays blocked until the issue is Done: `agent_start`
+  on it is refused while the issue is open and among what blocks it. Its brief lists
   each finding once with its round and the verifier's reason; it has no
   done-criteria, so plan it with `issue_update` before an agent starts on it,
   or cancel it if the user doesn't want it. A pass whose leftovers are all

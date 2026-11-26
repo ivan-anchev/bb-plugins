@@ -20,7 +20,7 @@ import { askedQuestion, askedText, capMovesText, unansweredCapQuestion, type Cap
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
 import { checkInFlight, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
-import { leftoversOf } from "../../model/verdict/rounds/follow-up.ts";
+import { onlyNits, unfiledAtMerge } from "../../model/verdict/rounds/follow-up.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
 /** What the texts look up, all within one regional manager. */
@@ -74,7 +74,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
         return `### ${issueName(event.issueId, titles, subject.agentId)} handed off: done\n\n${when} Its report, in its own words:\n\n${handoffText(handed, lookups)}${yours}`;
       }
       case "final":
-        return `### ${titled(event.issueId, titles)} final check\n\n${when} ${finalCheckText({ ...check, subject }, lookups)}\n\n${finalNextStep({ ...check, subject }, lookups.view(event.issueId))}`;
+        return `### ${titled(event.issueId, titles)} final check\n\n${when} ${finalCheckText({ ...check, subject }, lookups)}\n\n${finalNextStep({ ...check, subject }, lookups.view(event.issueId))}${passedLine(check, titles)}`;
       default:
         return subject satisfies never;
     }
@@ -241,18 +241,18 @@ export function reminderText({ id, note, dueAt, everyMs }: Reminder): string {
  */
 function passedLine({ issueId, followUpId }: Check, titles: Lookups["titles"]): string {
   if (followUpId === null) return "";
-  return `\n\nIt passed, so the plugin filed every review finding its rounds held without blocking it as ${titled(followUpId, titles)}, top-level in Backlog and blocked by ${issueId} until it is Done. It has no done-criteria yet: plan it with issue_update before an agent starts on it, or cancel it if the user doesn't want it.`;
+  return `\n\nIt passed, so the plugin filed every review finding its rounds held without blocking it as ${titled(followUpId, titles)}, top-level in Backlog and depending on ${issueId}: agent_start on it is refused while ${issueId} is open. It has no done-criteria yet: plan it with issue_update before an agent starts on it, or cancel it if the user doesn't want it.`;
 }
 
 /**
- * What a merge leaves of the issue's review: how many findings its rounds held without blocking
- * that no follow-up collected, as when it passed with only nits left, or merged without passing.
- * Nothing is filed now; nothing when there are none.
+ * What a merge leaves of the issue's review: how many findings its rounds held that no follow-up
+ * collected (rounds/follow-up.ts unfiledAtMerge), as when it passed with only nits left, or merged
+ * with a failed verdict. Nothing is filed now; nothing when there are none.
  */
 function unfiledLine(record: readonly Handed[]): string {
-  const unfiled = record.reduce((count, { check }) => count + (check === null || check.followUpId !== null ? 0 : leftoversOf(check).length), 0);
+  const unfiled = unfiledAtMerge(record.flatMap(({ check }) => (check === null ? [] : [check]))).length;
   if (unfiled === 0) return "";
-  return ` It merged with ${unfiled === 1 ? "1 review finding" : `${unfiled} review findings`} its rounds held without blocking that no follow-up collected. Nothing is filed for ${unfiled === 1 ? "it" : "them"} now; ${unfiled === 1 ? "it stays" : "they stay"} in the issue's feed.`;
+  return ` It merged with ${unfiled === 1 ? "1 review finding" : `${unfiled} review findings`} its rounds held that no follow-up collected. Nothing is filed for ${unfiled === 1 ? "it" : "them"} now; ${unfiled === 1 ? "it stays" : "they stay"} in the issue's feed.`;
 }
 
 /** The handoff an event or a check names. why throw: each is inserted with its handoff, in one transaction. */
@@ -490,13 +490,16 @@ function heldSent(verdict: Extract<Verdict, { state: "returned" }>, followUpId: 
 
 /**
  * Where the findings that held without failing a verdict went: into the follow-up that collected
- * them; nowhere, when its pass filed none, as every finding left was a nit (rounds/follow-up.ts);
- * or to the issue's pass, still to come.
+ * them; to the issue's pass, still to come; or nowhere, when its pass filed none, because every one
+ * was a nit (rounds/follow-up.ts onlyNits), or, for a pass settled before follow-ups, with no reason
+ * the plugin can give.
  */
 function othersWent(they: string, verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string {
   if (followUpId !== null) return `${they} are filed in ${followUpId}, its follow-up.`;
-  if (outcome(verdict) === "pass") return `${they} don't go back to the agent, and its pass filed no follow-up, as every finding left was a nit: they stay in the issue's feed.`;
-  return `${they} don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit.`;
+  if (outcome(verdict) !== "pass") return `${they} don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit.`;
+  // why only when they are: a pass settled before follow-ups existed filed none whatever was left.
+  if (onlyNits(heldFindings(verdict).others)) return `${they} don't go back to the agent, and its pass filed no follow-up, as every finding left was a nit: they stay in the issue's feed.`;
+  return `${they} didn't go back to the agent, and its pass filed no follow-up.`;
 }
 
 /** Whether the findings that fail a verdict reached the agent, as far as its settlement shows. */
