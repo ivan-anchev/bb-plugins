@@ -104,7 +104,7 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
 
 test("a verdict's review says whether the findings that held reached the agent only as far as its settlement shows", () => {
   const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" }], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
-  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new", result: "anchored", anchor: "criterion", reason: "It never caps." }] };
+  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new", result: "anchored", anchor: "criterion", steps: null, reason: "It never caps." }] };
   const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
     [{ kind: "pending" }, "None has gone to the agent yet."],
     [{ kind: "waiting-for-ci" }, "None has gone to the agent yet."],
@@ -128,7 +128,7 @@ test("catch-up words a round's review as the verifier's totals, anchored, downgr
     { file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
   ] as const;
   const triage = [
-    { result: "anchored", anchor: "brief", reason: "The brief says capped." },
+    { result: "anchored", anchor: "brief", steps: null, reason: "The brief says capped." },
     { result: "downgraded", to: "nit", reason: "Breaks none of the five." },
     { result: "confirmed", reason: "Both calls on line 12." },
     { result: "rejected", reason: "Matches the row." },
@@ -144,7 +144,7 @@ test("catch-up words a round's review as the verifier's totals, anchored, downgr
     text.includes(
       [
         "Review: a reviewer on claude-code sonnet reported 4 findings; the verifier anchored 1, downgraded 1, confirmed 1 and rejected 1. The ones that held went back to the agent with the failed verdict.",
-        "- `src/retry.ts:4` (must-fix): No cap.\n  Anchored, as it breaks the issue's brief: The brief says capped.\n- `src/retry.ts:9` (must-fix): The name says nothing.\n  Downgraded to nit: Breaks none of the five.\n- `src/retry.ts:12` (should-fix): Jitter computed twice.\n  Confirmed: Both calls on line 12.\n- `src/retry.css` (nit): Padding.\n  Rejected: Matches the row.",
+        "- `src/retry.ts:4` (must-fix): No cap.\n  Anchored, as it breaks a requirement the issue's brief states explicitly: The brief says capped.\n- `src/retry.ts:9` (must-fix): The name says nothing.\n  Downgraded to nit: Breaks none of the five.\n- `src/retry.ts:12` (should-fix): Jitter computed twice.\n  Confirmed: Both calls on line 12.\n- `src/retry.css` (nit): Padding.\n  Rejected: Matches the row.",
       ].join("\n\n"),
     ),
     text,

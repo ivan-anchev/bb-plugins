@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
@@ -32,11 +32,11 @@ const verdictInputSchema = z.object({
     .array(
       triageVariants({
         finding: z.number().int().min(1).describe("The reviewer's finding's number in your first message."),
-        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five, or that it is marked missed."),
+        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it meets no anchor, as a principle violation or a bug that needs a contrived setup, or that it is marked missed."),
       }),
     )
     .default([])
-    .describe(`One entry for every finding of the reviewer's in your first message, none skipped, by its number. ${TRIAGE_RULE} [] when it lists none.`),
+    .describe(`One entry for every finding of the reviewer's in your first message, none skipped, by its number. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`),
 });
 type VerdictInput = z.infer<typeof verdictInputSchema>;
 
@@ -150,4 +150,4 @@ const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no 
 const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or once it refuses because the check no longer waits for your verdict or your worktree couldn't be read. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge the criteria, and triage the reviewer's findings.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
 - findings: problems no criterion covers, up to 20. [] for none.
-- triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor, or downgraded with to, the lower severity. ${TRIAGE_RULE} [] when it lists none.`;
+- triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor (and steps for a bug, safety or regression anchor), or downgraded with to, the lower severity. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`;

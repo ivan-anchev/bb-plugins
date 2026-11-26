@@ -57,7 +57,7 @@ function readWith(triaged: [Severity, Triage][], mustFixFails = true): Extract<V
 }
 type Triage = Extract<StoredVerdict, { state: "returned" }>["triage"][number];
 
-const ANCHORED: Triage = { result: "anchored", anchor: "brief", reason: "The brief says retries back off." };
+const ANCHORED: Triage = { result: "anchored", anchor: "brief", steps: null, reason: "The brief says retries back off." };
 const DOWNGRADED: Triage = { result: "downgraded", to: "should-fix", reason: "It breaks none of the five." };
 const CONFIRMED: Triage = { result: "confirmed", reason: "Seen." };
 const REJECTED: Triage = { result: "rejected", reason: "It caps at 5 minutes." };

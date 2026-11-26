@@ -644,21 +644,29 @@ before its verifier starts. The plugin starts a **reviewer**:
   that follows a decision is never a finding. A final check's first message
   has none.
 - **The anchor rule**: CREW.md says what a reviewer looks for; this rule
-  alone says what blocks. A must-fix blocks only when it breaks a
-  done-criterion, the issue's brief text, a recorded decision, safety (data
-  loss, a crash or a security hole), or existing behaviour, as a regression.
-  A CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion
-  names it. The reviewer's first message, its rules and `issue_review`'s
-  instructions say so. A reviewer reports each finding at the severity
-  CREW.md gives it, a must-fix that breaks none of the five included: the
-  verifier, not the reviewer, anchors or downgrades it.
+  alone says what blocks (the user's decision d68). A must-fix blocks only
+  when it meets one of four anchors: a bug a user or agent hits in normal
+  use, with the steps that reach it (as safety when it loses data or does
+  something irreversible, as a regression when existing behaviour breaks);
+  a broken done-criterion; a broken requirement the issue's brief states
+  explicitly; or a broken recorded decision. A REVIEW.md or schrute-code
+  principle violation, a missing test, unclear text and a bug that needs a
+  contrived setup to reach never block: should-fix at most. A CREW.md or
+  REVIEW.md rule blocks only when the brief states it or a done-criterion
+  names it. The reviewer's and the verifier's first messages, their rules
+  and `issue_review`'s and `issue_verdict`'s instructions say so; the
+  verifier's also says a defect its creed-qa run finds outside the criteria
+  fails the verdict only through a criterion it breaks. A reviewer reports
+  each finding at the severity CREW.md gives it: the verifier, not the
+  reviewer, anchors or downgrades a must-fix.
 - **Triage**: the verifier's first message lists the findings, numbered, as
   claims to check; its verdict triages each, with a reason in a line:
   rejected; confirmed, a should-fix or nit that holds; anchored, a must-fix
-  that holds, naming which of the five it breaks; or downgraded, to a lower
-  severity it names. `issue_verdict` refuses a must-fix triaged confirmed, an
-  anchored should-fix or nit, and a downgrade that isn't lower, naming the
-  finding. Only an anchored finding fails the verdict, as a failed
+  that holds, naming the anchor it meets, with the normal-use steps that
+  reach it for a bug, safety or regression anchor; or downgraded, to a
+  lower severity it names. `issue_verdict` refuses a must-fix triaged
+  confirmed, an anchored should-fix or nit, a bug anchored without its
+  steps, and a downgrade that isn't lower, naming the finding. Only an anchored finding fails the verdict, as a failed
   criterion does, even when every criterion passed: it goes back to the
   agent while it has its fix round left, and the manager's update names it
   as the cause. The manager's update counts how many it anchored,
@@ -670,7 +678,8 @@ before its verifier starts. The plugin starts a **reviewer**:
   before. A verdict from before the anchor rule keeps its confirmed and
   rejected findings as they were: one returned under the must-fix rule
   still fails on a confirmed must-fix, and one that settled before that rule
-  keeps the outcome it settled with.
+  keeps the outcome it settled with. A safety or regression anchor from
+  before d68 keeps its place with no steps.
 
 ## Verification
 

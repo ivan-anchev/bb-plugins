@@ -77,7 +77,7 @@ test("an open round shows its steps: the handoff and its report, the reviewer's 
 test("a finding reads as its place, severity, origin and claim, its path byte for byte as the reviewer wrote it, a leading space, a zero-width character and a bidi mark kept; a rejected claim is struck, and each triage gives its word and reason: what an anchored one breaks, a downgraded one's new severity", async () => {
   const path = " src/\u200bretry\u200f\u202e.ts";
   const findings = [
-    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "brief", reason: "Seen: it grows without bound." } },
+    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "brief", steps: null, reason: "Seen: it grows without bound." } },
     { file: path, line: null, severity: "nit", claim: "The padding differs from the row's.", origin: "missed", triage: { result: "rejected", reason: "It matches the row." } },
     { file: path, line: 9, severity: "must-fix", claim: "The helper's name says nothing.", origin: "unfixed", triage: { result: "downgraded", to: "nit", reason: "Breaks none of the five." } },
     { file: path, line: 12, severity: "should-fix", claim: "The jitter is computed twice.", origin: "new", triage: { result: "confirmed", reason: "Both calls on line 12." } },
@@ -111,7 +111,7 @@ test("a finding reads as its place, severity, origin and claim, its path byte fo
   );
   assert.deepEqual(
     items.map((item) => item.querySelector(".rmi-triage")?.textContent),
-    ["Anchored, as it breaks the issue's brief. Seen: it grows without bound.", "Rejected. It matches the row.", "Downgraded to nit. Breaks none of the five.", "Confirmed. Both calls on line 12."],
+    ["Anchored, as it breaks a requirement the issue's brief states explicitly. Seen: it grows without bound.", "Rejected. It matches the row.", "Downgraded to nit. Breaks none of the five.", "Confirmed. Both calls on line 12."],
   );
 });
 

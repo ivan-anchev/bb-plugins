@@ -119,7 +119,7 @@ export function bodyOf(n: number): RoundBody {
     handoff: { did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], report: null },
     verdict: verdictOf(n, results),
     findings: [
-      { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "criterion", reason: "Seen: it grows without bound." } },
+      { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound." } },
       { file: "src/retry.css", line: null, severity: "nit", claim: "The padding differs from the row's.", origin: "new", triage: { result: "rejected", reason: "It matches the row." } },
     ],
     reviewMissed: null,

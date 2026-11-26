@@ -545,8 +545,8 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   reviewers: the plugin names no review of its own, so say in CREW.md what a
   reviewer runs. The issue sits in Reviewing. Then an independent verifier
   checks it there, and triages each of the reviewer's findings with a reason:
-  rejected, confirmed, anchored to what a must-fix breaks, or downgraded to
-  a lower severity. The issue sits in Verifying. Both get the issue's
+  rejected, confirmed, anchored to the anchor a must-fix meets, or
+  downgraded to a lower severity. The issue sits in Verifying. Both get the issue's
   decisions; work that follows one is never a finding. A reviewer that can't
   start, stalls or stops without reporting never holds the issue: the verifier
   starts anyway, and the verdict says no review was had. You hear of the
@@ -554,13 +554,24 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   with the output the verifier ran, and the model it ran on, then the review:
   how many it anchored, downgraded, confirmed and rejected, then each finding
   with the verifier's word and reason. A must-fix fails the verdict only when
-  the verifier anchors it to what it breaks: a done-criterion, the issue's
-  brief text, a recorded decision, safety (data loss, a crash, a security
-  hole) or existing behaviour, as a regression. It fails it as a failed
-  criterion does, even when every criterion passed, and your update names it
-  as the cause. A CREW.md or REVIEW.md rule anchors only when the brief or a
-  criterion names it: name the rules that must block in the brief.
-  Confirmed and downgraded findings never fail it. When a failed verdict
+  the verifier anchors it to one of four anchors (the user's decision d68):
+  a bug a user or agent hits in normal use, with the steps that reach it (as
+  safety when it loses data or does something irreversible, as a regression
+  when existing behaviour breaks); a broken done-criterion; a broken
+  requirement the issue's brief states explicitly, not one inferred from its
+  intent; or a broken recorded decision. It fails it as a failed criterion
+  does, even when every criterion passed, and your update names it as the
+  cause. A REVIEW.md or schrute-code principle violation, a missing test,
+  unclear text, and a bug that needs a contrived setup to reach (a read held
+  mid-await, a plugin disposed mid-call, calls interleaved by hand, a ref
+  with shell or Markdown metacharacters, a reply lost in transit, a state
+  reachable only across an upgrade) never block: the verifier downgrades
+  them to should-fix, so file them as follow-ups. A CREW.md or REVIEW.md rule
+  anchors only when the brief states it or a criterion names it: name the
+  rules that must block in the brief. A defect the verifier's creed-qa run
+  finds outside the criteria fails the verdict only through a criterion it
+  breaks; the rest reach you as its findings. Confirmed and downgraded
+  findings never fail it. When a failed verdict
   goes back to the agent as its automatic fix round, every finding that held
   goes with it. When the issue has a pull
   request, a verdict that passed every criterion, with no must-fix finding

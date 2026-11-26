@@ -172,9 +172,13 @@ verifier or your regional manager.
 
 Your brief, its done-criteria and your issue's decisions are what blocks.
 The verifier rejects a finding that doesn't hold, and anchors a must-fix
-that holds to what it breaks: a done-criterion, the brief, a recorded
-decision, safety (data loss, a crash, a security hole), or existing
-behaviour. A must-fix that breaks none of these is downgraded. Only an
+that holds to one of four anchors: a bug hit in normal use, with the steps
+that reach it (safety when it loses data or does something irreversible, a
+regression when existing behaviour breaks); a broken done-criterion; a
+broken requirement the brief states explicitly; or a broken recorded
+decision. A must-fix that meets none, as a principle or REVIEW.md violation
+or a bug that needs a contrived setup to reach, is downgraded to
+should-fix: fix it if you can, but it never fails your verdict. Only an
 anchored must-fix fails your verdict, even when every done-criterion passes;
 a confirmed or downgraded finding never does. Work that follows a recorded
 decision is never a finding.

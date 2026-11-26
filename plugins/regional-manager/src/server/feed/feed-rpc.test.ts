@@ -67,7 +67,7 @@ const FINDINGS = [
   { file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
 ] as const;
 const TRIAGE = [
-  { result: "anchored", anchor: "brief", reason: "No cap in retry.ts; the brief says capped." },
+  { result: "anchored", anchor: "brief", steps: null, reason: "No cap in retry.ts; the brief says capped." },
   { result: "downgraded", to: "should-fix", reason: "Breaks none of the five." },
   { result: "rejected", reason: "Matches the row." },
 ] as const;
@@ -187,7 +187,7 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
     ["claim", "file", "line", "origin", "severity", "triage"],
     ["claim", "file", "line", "origin", "severity", "triage"],
   ]);
-  assert.deepStrictEqual(body.findings.map(({ triage }) => keysOf(triage ?? assert.fail("no triage"))), [["anchor", "reason", "result"], ["reason", "result", "to"], ["reason", "result"]], "an anchored finding names what it breaks, a downgraded one its new severity");
+  assert.deepStrictEqual(body.findings.map(({ triage }) => keysOf(triage ?? assert.fail("no triage"))), [["anchor", "reason", "result", "steps"], ["reason", "result", "to"], ["reason", "result"]], "an anchored finding names the anchor it meets and its steps, a downgraded one its new severity");
   assert.deepStrictEqual(
     body.findings,
     FINDINGS.map((finding, i) => ({ ...finding, triage: TRIAGE[i] })),

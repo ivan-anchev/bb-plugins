@@ -9,7 +9,7 @@ import type { IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
-import { findingText, MISSED_RULE, numberedText, TRIAGE_RULE, type Review } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, findingText, MISSED_RULE, numberedText, TRIAGE_RULE, type Review } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import { decisionsPart, type Scope } from "../review/checker-brief.ts";
@@ -39,8 +39,18 @@ export function verifierBrief(
     `## The issue's brief, for context\n\n${issue.brief.trim()}`,
     ...decisionsPart(issue.id, issue.decisions),
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: you share ${agentId}'s working tree.`,
+    `## What blocks\n\nThe anchor rule: ${ANCHOR_RULE}\n\n${QA_RULE}`,
   ].join("\n\n");
 }
+
+/**
+ * What a defect a handoff's verifier finds outside the done-criteria does, as when creed-qa's checks
+ * of the surrounding code turn one up (CREW.md's Verifiers section). why "in findings": the
+ * verifier's own findings never fail a verdict (verdict.ts), so one fails it only through a
+ * criterion it breaks; the regional manager reads the rest with the verdict.
+ */
+export const QA_RULE =
+  "When you run creed-qa, a defect its checks of the surrounding code turn up outside the done-criteria fails the verdict only if it meets a blocking anchor: when it breaks a done-criterion, fail that criterion on your own evidence. Report every other one in findings, with the severity CREW.md's Reviewers section gives it and, for a must-fix, the anchor it meets and the normal-use steps that reach it: your findings reach the regional manager with your verdict, and never fail it themselves. A defect that meets no anchor, as a REVIEW.md or principle violation or a bug that needs a contrived setup, never fails a criterion and never makes your verdict NOT_VERIFIED.";
 
 /**
  * A final check's verifier's: the parent's own criteria, on the default branch as origin has it,
