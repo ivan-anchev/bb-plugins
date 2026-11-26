@@ -3,11 +3,11 @@ Experimental: it may break with a bb update.
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. While you have regional
-managers, a Managers | Threads segment tops it: Managers shows the pinned
-ones as a grid of avatars above the rest, listed oldest first by their avatar,
-name and the first sentence of their latest message, and Threads is the list
-without them. A filter narrows it to one
-project, and rows are one line or two. Each row shows the thread's agent, its project's coloured initial, its
+managers, a row tops it with a small Managers | Threads icon segment and the
+shown view's options: Managers shows the pinned ones as a grid of avatars above
+the rest, listed oldest first by their avatar, name and the first sentence of
+their latest message, and Threads is the list without them. Each view has its
+own project filter and a Compact switch for one-line rows. Each row shows the thread's agent, its project's coloured initial, its
 title, its pull request, how many threads run under it, and its state or how
 long ago it last moved. Right-click a row for bb's own thread menu, with Sleep (or
 Wake) added; under the pointer, its corner offers Archive. A thread put to
@@ -17,8 +17,11 @@ its plan while it works, and a tree of its subthreads to open.
 
 ## What you get
 
-- **Managers | Threads**, only while a regional manager is open: a segment at
-  the top that switches the whole list. Managers shows each regional manager
+- **Managers | Threads**, only while a regional manager is open: a small
+  segment of two icons (a plain white blob for Managers, a list for Threads,
+  each named in a tooltip) at the left of a row at the top, which switches the
+  whole list. The shown view's options button sits at the row's right end.
+  Managers shows each regional manager
   by its avatar, its name and, under it, the first sentence of its latest
   message (one line), oldest first; a click opens its thread and right-click opens bb's thread menu.
   Pinned managers leave that list for a grid of tiles above it, at most three
@@ -27,7 +30,9 @@ its plan while it works, and a tree of its subthreads to open.
   or tile.
   Threads is everything below, with the open managers taken out of every
   section but Archived. The choice is remembered in this browser; ← and →
-  move between the tabs.
+  move between the tabs. Managers' own options hold a Compact switch (off by
+  default), which makes each manager one line, its avatar and name, and, once
+  your managers span two or more projects, a filter among those projects.
 - **Pinned** at the top, only while something is pinned, in bb's pin order.
 - **Activity** below it: every parent thread from every project, the one whose
   turn most recently ended first; opening or reading a thread doesn't move it.
@@ -41,8 +46,9 @@ its plan while it works, and a tree of its subthreads to open.
   Archived counts every archived parent thread, loaded or not (only the
   chosen project's while the list is narrowed to one). Opened,
   Archived shows its latest 10 and loads more 25 at a time.
-- Click any section's title to fold or unfold it. The view button at the end
-  of Activity's title narrows every section to one project, and the title
+- Click any section's title to fold or unfold it. The threads' options button
+  (at the end of Activity's title, or at the right of the top row while there
+  are managers) narrows every section to one project, and the title
   then reads "Activity · project". Its Compact switch picks one line a row
   (the default) or two. The folds, the filter and the density are remembered
   in this browser.

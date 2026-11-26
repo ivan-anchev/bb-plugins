@@ -15,10 +15,13 @@ import { ManagerRow } from "./manager-row.tsx";
 import { ManagerTile } from "./pins/manager-tile.tsx";
 import { usePinMotion } from "./pins/use-pin-motion.ts";
 
-/** `underWaySince`: since when each thread has worked, for a card's state line; null where no card shows (a compact viewport). */
-type Props = { managers: Managers; underWaySince: ReadonlyMap<string, number> | null; onNavigate(): void };
+/**
+ * `underWaySince`: since when each thread has worked, for a card's state line; null where no card shows (a compact viewport).
+ * `compact`: each row one line, its name alone.
+ */
+type Props = { managers: Managers; compact: boolean; underWaySince: ReadonlyMap<string, number> | null; onNavigate(): void };
 
-export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
+export function ManagerList({ managers, compact, underWaySince, onNavigate }: Props) {
   const shown = usePanelShown();
   const scroller = useRef<HTMLDivElement>(null);
   const keys = useMemo(() => [...managers.pinned, ...managers.unpinned].map((m) => m.thread.id), [managers]);
@@ -64,7 +67,7 @@ export function ManagerList({ managers, underWaySince, onNavigate }: Props) {
           {managers.pinned.map((manager) => item(manager, <ManagerTile manager={manager} follow={followOf(manager.thread.id)} onNavigate={onNavigate} />))}
         </div>
       )}
-      {managers.unpinned.map((manager) => item(manager, <ManagerRow manager={manager} follow={followOf(manager.thread.id)} onNavigate={onNavigate} />))}
+      {managers.unpinned.map((manager) => item(manager, <ManagerRow manager={manager} compact={compact} follow={followOf(manager.thread.id)} onNavigate={onNavigate} />))}
       {/* why: in here, so focus leaving the card (portaled; it adds nothing here) bubbles to onBlur above, as a menu's does.
           Put away while the Managers panel is hidden, as every overlay is (portal-scope.ts). */}
       {underWaySince !== null && shown && <ManagerCard scroller={scroller} managers={managers} underWaySince={underWaySince} listFocus={listFocus} onNavigate={onNavigate} />}
