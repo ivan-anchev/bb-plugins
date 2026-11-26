@@ -272,6 +272,7 @@ test("removing a regional manager removes everything it owns, and nothing of ano
     store.insertHandoff(
       { id: handoffIdSchema.parse(randomUUID()), coordinatorId: manager, issueId: id, agentId, at: 3_000, turnSeq: 1, status: "blocked", summary: "Stuck", did: [], evidence: [], concerns: [], deviations: [], findings: [] },
       { kind: "unread", reason: "unused" },
+      null,
     );
     store.insertDecision(manager, { question: "Which queue?", options: [], issueId: id }, 3_000);
     store.insertReminder(manager, { note: "Look again", dueAt: 9_000, everyMs: null });
@@ -372,7 +373,7 @@ test("every write to what an issue's view is read from counts for its regional m
   counted("its thread bound", () => store.bindTicket("agent-1", "thr_agent-1"));
   const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
   const done: Handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: i1, agentId, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
-  counted("a done handoff", () => store.insertHandoff(done, { kind: "unread", reason: "unused" }));
+  counted("a done handoff", () => store.insertHandoff(done, { kind: "unread", reason: "unused" }, null));
   counted("a pull request read", () => store.savePrRead(MANAGER, "bb/retries", { issueId: i1, agentId }, null, null, 3_000));
   const decision = counted("a decision asked", () => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: i1 }, 3_000));
   counted("a decision answered", () => store.answerDecision(MANAGER, decision.id, "SQS", 3_100));
@@ -394,7 +395,7 @@ function handingOver() {
   const handoffId = handoffIdSchema.parse(randomUUID());
   const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
   const done: Handoff = { id: handoffId, coordinatorId: MANAGER, issueId, agentId: holder.id, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
-  const check = store.insertHandoff(done, { kind: "read", branch: null, checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 } }) ?? assert.fail("no check");
+  const check = store.insertHandoff(done, { kind: "read", branch: null, checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 } }, null) ?? assert.fail("no check");
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId, checkId: check.id }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier");
   const next: NewAgent = { coordinatorId: MANAGER, issueId, ticket: "agent-2", placement: { kind: "worktree" }, base: { kind: "joined", from: holder.id }, checkout: { environmentId: "env_1", branch: "bb/a1", head: null }, execution: EXECUTION, at: 4_000 };
@@ -486,7 +487,7 @@ test("every write to what an issue's feed reads counts for that issue as it comm
   const done = (at: number): Handoff => ({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: bbp19, agentId, at, turnSeq: at, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } });
   const unheld = { requireUnheld: false, closes: new Map(), at: 3_000 };
 
-  assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" })), [bbp19], "a handoff");
+  assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" }, null)), [bbp19], "a handoff");
   assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { dependsOn: { add: [bbp7], remove: [] } }, unheld)).sort(), [bbp19, bbp7].sort(), "a dependency");
   assert.deepEqual(moved(() => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: bbp7 }, 3_100)), [bbp7], "a question about it");
   assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { decision: { text: "SQS", at: 3_200 } }, unheld)), [bbp19], "a decision recorded on it");
@@ -500,9 +501,9 @@ test("every write to what an issue's feed reads counts for that issue as it comm
   assert.deepEqual(moved(() => filedIssue(store, OTHER_MANAGER, newIssue(), 3_500)), [], "another manager's issue");
 
   const allow = failWrites(db, "INSERT", "checks");
-  assert.deepEqual(moved(() => assert.throws(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" }), /forced failure/)), [], "a handoff whose check failed to write");
+  assert.deepEqual(moved(() => assert.throws(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" }, null), /forced failure/)), [], "a handoff whose check failed to write");
   allow();
-  assert.deepEqual(moved(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" })), [bbp19], "the same handoff, retried");
+  assert.deepEqual(moved(() => store.insertHandoff(done(4_000), { kind: "unread", reason: "unused" }, null)), [bbp19], "the same handoff, retried");
 });
 
 test("a verdict and a review stored before they kept their time take their check's announcement's time as the plugin upgrades, else the check's own", () => {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { parseGitHubRepo, parsePrs, prQueryArgs } from "./pr-query.ts";
+import { parseGitHubRepo, parsePrHead, parsePrs, parsePrUrl, prHeadQueryArgs, prQueryArgs } from "./pr-query.ts";
 
 // gh's answer to this exact query, run read-only against ivan-anchev/bb-plugins for three branches
 // with merged pull requests and one with none (gh 2.97.0, 2026-11-16).
@@ -102,4 +102,23 @@ test("an answer that isn't the pull requests asked for is not read as data", () 
   assert.equal(parsePrs(JSON.stringify({ data: { repository: {} } }), ["feat"]), null, "a branch's field is missing");
   assert.equal(parsePrs(JSON.stringify({ errors: [{ message: "Something went wrong" }] }), ["feat"]), null);
   assert.equal(parsePrs(answer({ state: "SOMETHING_ELSE" }), ["feat"]), null);
+});
+
+// gh's answer to prHeadQueryArgs for ivan-anchev/bb-plugins#142, run read-only (gh 2.97.0, 2026-11-26).
+const RECORDED_HEAD = readFileSync(new URL("./fixtures/bb-plugins-pr-head.json", import.meta.url), "utf8");
+
+test("a real answer names the branch a pull request is from; one naming none, or not an answer, names nothing", () => {
+  assert.equal(parsePrHead(RECORDED_HEAD), "fix-pr-reviews-sticky-gap");
+  assert.equal(parsePrHead(JSON.stringify({ data: { repository: { pullRequest: null } } })), null);
+  assert.equal(parsePrHead("not json"), null);
+  assert.equal(parsePrHead(JSON.stringify({ data: { repository: { pullRequest: { headRefName: "" } } } })), null);
+});
+
+test("a github.com pull request's URL names its repository and number, and the head query takes both as variables", () => {
+  const named = parsePrUrl("https://github.com/Octo-Org/widgets/pull/41/files#diff-1") ?? assert.fail("a pull request URL");
+  assert.deepEqual(named, { repo: "Octo-Org/widgets", number: 41 });
+  const args = prHeadQueryArgs(named.repo, named.number);
+  assert.deepEqual(args.slice(4), ["-f", "owner=Octo-Org", "-f", "name=widgets", "-F", "number=41"]);
+  assert.doesNotMatch(args[3] ?? "", /widgets|41/);
+  for (const other of ["https://github.com/octo-org/widgets/issues/41", "https://gitlab.com/octo-org/widgets/pull/41", "https://github.com/octo-org/widgets/pull/", "https://github.com/octo-org/widgets/pull/41x"]) assert.equal(parsePrUrl(other), null, other);
 });

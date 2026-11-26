@@ -456,7 +456,7 @@ test("an issue opened on the board sends of each verdict only what the board sho
   const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
   const { headSha, ...report } = DONE;
   const handoff = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId, issueId: i1, agentId: a1, at: Date.now(), turnSeq, ...report, status: "done" as const };
-  kit.inbox.handoff({ ...handoff, delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } });
+  kit.inbox.handoff({ ...handoff, delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } }, null);
   assert.deepEqual(await shown(), { state: "queued" });
 
   kit.thread(agentThreadId).status = "idle"; // its turn ended while no plugin heard it
@@ -659,7 +659,7 @@ test("a verdict whose verifier never started is started by the next tick", async
   const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
   const checkout = { headSha: HEAD, changedFiles: [], changedFileCount: 0 };
   const { headSha, ...report } = DONE;
-  kit.inbox.handoff({ id, coordinatorId, issueId: i1, agentId: a1, at: Date.now(), turnSeq, ...report, status: "done", delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout });
+  kit.inbox.handoff({ id, coordinatorId, issueId: i1, agentId: a1, at: Date.now(), turnSeq, ...report, status: "done", delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout }, null);
   const spawned = kit.spawned();
   assert.deepEqual(verdict(), { state: "queued", checkout });
 

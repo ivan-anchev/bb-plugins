@@ -394,9 +394,10 @@ export function issueBranch<A extends Pick<Agent, "id" | "checkout">>(own: reado
 
 /**
  * The branch of the work an accepted check judged, as the check kept it when its agent handed off
- * (check.ts), with that agent; when it kept none, as on a detached HEAD, the one bb made the agent's
- * environment on. why never the agent's own (branchOf): its later handoffs move it, and the accepted
- * work stays where it was. why throw: an issue's record holds only its own agents' handoffs' checks.
+ * (check.ts), with that agent; when it kept none, as a check stored before checks kept one whose
+ * agent had no branch on record, the one bb made the agent's environment on. why never the agent's
+ * own (branchOf): its later handoffs move it, and the accepted work stays where it was. why throw:
+ * an issue's record holds only its own agents' handoffs' checks.
  */
 function acceptedBranch<A extends Pick<Agent, "id">>(own: readonly A[], threadOf: (agent: A) => BranchThread | null, { id, subject }: Check): { agent: A; branch: string } | null {
   if (subject.kind !== "handoff") throw new Error(`The accepted check ${id} judged no handoff.`);

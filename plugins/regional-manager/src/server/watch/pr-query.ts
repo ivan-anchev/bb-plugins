@@ -1,6 +1,6 @@
-// The one GitHub read the PR watch makes: every watched branch of one repository in one
+// The GitHub reads the PR watch makes: every watched branch of one repository in one
 // `gh api graphql` call, each as an aliased pullRequests(headRefName:) field, and its answer parsed
-// at this boundary into snapshots.
+// at this boundary into snapshots; and the branch a pull request named by its URL is from.
 import { z } from "zod";
 import { commitSchema } from "../../model/agent/handoff.ts";
 import type { PrSnapshot } from "../../model/verdict/pr.ts";
@@ -35,6 +35,30 @@ export function prQueryArgs(repo: Repo, branches: readonly string[]): string[] {
   const fields = branches.map((_, i) => `b${i}: pullRequests(headRefName: $b${i}, first: 1, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ${PR_FIELDS} } }`).join("\n");
   const query = `query($owner: String!, $name: String!, ${variables}) { repository(owner: $owner, name: $name) {\n${fields}\n} }`;
   return ["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`, ...branches.flatMap((branch, i) => ["-f", `b${i}=${branch}`])];
+}
+
+// A pull request's page on github.com: https://github.com/owner/name/pull/41, with any path, query or fragment after it.
+const PR_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:[/?#].*)?$/i;
+
+/** The repository and number of a github.com pull request's URL, or null for any other URL. */
+export function parsePrUrl(url: string): { repo: Repo; number: number } | null {
+  const match = PR_URL.exec(url.trim());
+  return match === null ? null : { repo: repoSchema.parse(`${match[1]}/${match[2]}`), number: Number(match[3]) };
+}
+
+/** The `gh api graphql` arguments that read the branch a pull request is from. Every value goes as a variable, never into the query's text. */
+export function prHeadQueryArgs(repo: Repo, number: number): string[] {
+  const [owner, name] = repo.split("/");
+  const query = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { headRefName } } }";
+  return ["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`, "-F", `number=${number}`];
+}
+
+const headResponseSchema = z.object({ data: z.object({ repository: z.object({ pullRequest: z.object({ headRefName: z.string().min(1) }).nullable() }) }) });
+
+/** The branch a pull request is from, from gh's answer to prHeadQueryArgs; null when it names none or isn't an answer. */
+export function parsePrHead(stdout: string): string | null {
+  const parsed = headResponseSchema.safeParse(jsonOrNull(stdout));
+  return parsed.success ? (parsed.data.data.repository.pullRequest?.headRefName ?? null) : null;
 }
 
 // why `catch` on each state: GitHub can add a value later, and one this plugin doesn't know is not

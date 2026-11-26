@@ -242,10 +242,10 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
     /**
      * Stores the handoff with its check, and its event unless a verifier is still to check it, saving
      * a report it delivers to its file together with it (see storeReport), then wakes its regional
-     * manager. Returns what the store did (see insertHandoff).
+     * manager. Returns what the store did (see insertHandoff, and its `branch`).
      */
-    handoff(given: GivenHandoff, checkout: CheckoutRead): ReturnType<Store["insertHandoff"]> {
-      const inserted = stored(given, (handoff) => store.insertHandoff(handoff, checkout));
+    handoff(given: GivenHandoff, checkout: CheckoutRead, branch: string | null): ReturnType<Store["insertHandoff"]> {
+      const inserted = stored(given, (handoff) => store.insertHandoff(handoff, checkout, branch));
       recorded(given.coordinatorId);
       return inserted;
     },

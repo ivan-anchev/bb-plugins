@@ -24,10 +24,11 @@ const finalSubjectSchema = z.object({ kind: z.literal("final"), defaultBranch: z
 
 /**
  * What a check judges: an agent's done handoff, the commit it claims, the pull request it names, and
- * `branch`, the one its environment had checked out as it handed off (null: none, as on a detached
- * HEAD), where that work's pull request is read; or a build parent's final check. why kept on the
- * check: the agent's own branch (agent.ts branchOf) moves with its later handoffs, and an accepted
- * check's pull request must not.
+ * `branch`, the agent's branch as it handed off (agent.ts branchOf, on the checkout read then: the
+ * one checked out; on a detached HEAD, the one its pull request is from, else the one an earlier
+ * handoff had; else the one bb made its environment on; null: none), where that work's pull
+ * request is read; or a build parent's final check. why kept on the check: the agent's own branch moves with its later handoffs, and an
+ * accepted check's pull request must not.
  */
 export const checkSubjectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("handoff"), agentId: agentIdSchema, handoffId: handoffIdSchema, headSha: commitSchema, prUrl: z.string().nullable(), branch: z.string().nullable() }),
