@@ -94,7 +94,9 @@ test("the filter shows All, only Rounds, or only the Discussion, each pressed as
 test("an open question's options are buttons: pressing one answers it with that option's words, once", async () => {
   const { tab, answers } = await opened("WEB-1", WEB_1);
   const question = within(activity(tab()).section.getByRole("article", { name: "Question d2" }));
-  assert.deepEqual(within(question.getByRole("list", { name: "Options" })).getAllByRole("button").map((button) => button.textContent), ["Ship now", "Wait a day"]);
+  const options = within(question.getByRole("list", { name: "Options" }));
+  assert.deepEqual(["Ship now", "Wait a day"].map((name) => options.getByRole("button", { name }).getAttribute("aria-keyshortcuts")), ["1", "2"], "a button per option, pressed by its number");
+  assert.equal(options.getAllByRole("button").length, 2, "nothing else to press until the user types");
   fireEvent.click(question.getByRole("button", { name: "Ship now" }));
   await waitFor(() => assert.deepEqual(answers, [{ coordinatorId: COORDINATOR.id, decisionId: "d2", answer: "Ship now" }]));
   assert.ok(question.getByRole("status"));

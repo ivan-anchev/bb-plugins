@@ -988,7 +988,7 @@ send it or the decision is answered elsewhere. An issue the decision names
 also waits under Needs you until you answer. Your answer takes the decision
 off the board and wakes the thread; a decision that names an issue stays,
 with your answer and when you gave it, in that issue's **Activity**, where an
-open one's options answer it too (see [The board](#the-board)). The thread's
+open one is answered too, by an option or in your own words (see [The board](#the-board)). The thread's
 `crew_catch_up` returns your answer, as the option you chose or in your own
 words, with its question. A decision is answered once: a second answer, as
 from another window, is refused.
@@ -1178,9 +1178,15 @@ fails to read says so beside its steps, with Retry.
 Between the rounds sit the **decisions**, each a card under the manager's
 avatar and name and when: each question the manager put to you about the
 issue, with its options, the one you chose marked, and your answer once under
-them only when it was in your own words; one still open has a button per
-option that answers it, as on the Board (one with no options is answered on
-the Board, in your words); and each decision the manager recorded on it with
+them only when it was in your own words. One still open is a card of numbered
+rows, one per option, the one the manager recommended tagged Recommended,
+then a last row, "Something else…", for your own words: pressing a row, or
+its number while focus is in the card, answers with it; the number after the
+options goes to the field, ↑ and ↓ move between the rows, and the field
+sends with Enter, as on the Board, keeping what you typed there too. While
+your answer sends, its row says "Sending…" and the others dim; answered, the
+chosen row keeps the selected look with a ✓ where its number was. And each
+decision the manager recorded on it with
 `issue_update`, its first sentence whole and the rest cut to two lines, which
 a press opens (a later one stands over an earlier one, and every agent
 started on the issue gets them in its first message). So do the

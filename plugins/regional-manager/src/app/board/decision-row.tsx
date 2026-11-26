@@ -3,15 +3,13 @@
 // It sits under Needs you with a button for each option and a field for an answer in the user's own
 // words, which the browser keeps until the board reads it answered (see answer-draft.ts). Answered, it
 // leaves the board, and focus in it goes to the page; the question and its answer stay among its
-// issue's feed (issue-tab/feed/decision-card.tsx).
-import { useId, type KeyboardEvent } from "react";
+// issue's feed (issue-tab/feed/decision/decision-card.tsx).
+import { useId } from "react";
 import { MAX_ANSWER_CHARS, type OpenDecision } from "../../model/decision.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import { Button } from "../ui/button.tsx";
 import { GrowingTextarea } from "../ui/growing-textarea.tsx";
-import { useHoldEscape } from "../ui/hold-escape.ts";
-import { useStored } from "../ui/stored.ts";
-import { answerDraftKeyOf, answerDraftSchema } from "./answer-draft.ts";
+import { useAnswerDraft } from "./answer-draft.ts";
 import { useAnswer } from "./use-answer.ts";
 
 // why these sizes: an issue row's (issue/row/issue-row.css `.rmi-slot`, `.rmi-row`, `.rmi-row-id`), so the question lines up with the titles.
@@ -29,19 +27,10 @@ type DecisionRowProps = { coordinatorId: CoordinatorId; decision: OpenDecision }
  */
 export function DecisionRow({ coordinatorId, decision }: DecisionRowProps) {
   const ids = useId();
-  // What the user typed and hasn't sent, as the browser keeps it.
-  const typed = useStored(localStorage, answerDraftKeyOf(coordinatorId, decision.id), answerDraftSchema);
-  const draft = typed.value ?? "";
   // The answer sent, from the click until the board reads it back answered and the row leaves.
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
-  useHoldEscape(draft.trim() !== "");
-
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    // Enter sends and Shift+Enter breaks the line, as in bb's composer.
-    if (event.key !== "Enter" || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey || event.nativeEvent.isComposing) return;
-    event.preventDefault();
-    send(draft);
-  }
+  // What the user typed and hasn't sent, as the browser keeps it; the question's card in its issue's feed shares it.
+  const { draft, type, onKeyDown } = useAnswerDraft(coordinatorId, decision.id, send);
 
   // why aria-disabled, not disabled: a disabled button drops focus to the page while the answer sends.
   const busy = sent !== null;
@@ -78,7 +67,7 @@ export function DecisionRow({ coordinatorId, decision }: DecisionRowProps) {
         >
           <GrowingTextarea
             value={draft}
-            onChange={(event) => typed.store(event.target.value === "" ? null : event.target.value)}
+            onChange={(event) => type(event.target.value)}
             onKeyDown={onKeyDown}
             readOnly={busy}
             maxLength={MAX_ANSWER_CHARS}

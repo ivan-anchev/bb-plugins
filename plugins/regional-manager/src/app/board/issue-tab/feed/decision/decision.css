@@ -1,0 +1,161 @@
+/* A question's rows in its card (open-rows.tsx, settled-rows.tsx): a key slot, then the option's
+   words. Open, the slot holds the row's number and the row presses; settled, the rows keep that shape,
+   the chosen one on the theme's selected surface with a ✓ in its slot, the rest receded. Theme tokens
+   only; every class carries the `rmi-` prefix, since bb does not scope a plugin's stylesheet. */
+
+/* why the negative inset: the key slots line up with the question's words above them. why under the
+   card: the tab's own reset of a list's margin (issue-tab.css) would otherwise win. */
+.rmi-decision .rmi-q-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0 -6px;
+  padding: 0;
+  list-style: none;
+}
+.rmi-q-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--foreground);
+}
+button.rmi-q-row {
+  cursor: pointer;
+  transition: background-color 150ms ease-out, opacity 150ms ease-out;
+}
+@media (hover: hover) {
+  button.rmi-q-row:not([aria-disabled="true"]):hover {
+    background: var(--state-hover);
+  }
+}
+button.rmi-q-row:not([aria-disabled="true"]):active {
+  background: var(--state-active);
+}
+button.rmi-q-row[aria-disabled="true"] {
+  cursor: default;
+}
+button.rmi-q-row:focus-visible,
+.rmi-q-own:has(textarea:focus-visible) {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+/* While an answer sends, every row but its own steps back. */
+.rmi-q-rows[data-busy] .rmi-q-row:not([data-sending]) {
+  opacity: 0.45;
+}
+
+.rmi-q-key {
+  display: inline-flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-q-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+/* The option the regional manager recommended: a quiet tag at the row's end, never a louder row. */
+.rmi-q-tag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 18px;
+  margin-top: 1px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--muted);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.rmi-q-side {
+  flex: none;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.rmi-q-spin {
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--subtle-foreground);
+  border-top-color: var(--foreground);
+  border-radius: 50%;
+}
+
+/* The user's own words: a borderless field in the row, its words where an option's sit. why the
+   field's sizing copy too: it sets the field's height only while its box and text metrics match. */
+.rmi-q-own textarea,
+.rmi-q-own textarea + span {
+  padding: 0;
+  border-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+}
+.rmi-q-own textarea:focus-visible {
+  box-shadow: none;
+}
+.rmi-q-own textarea[readonly] {
+  color: var(--muted-foreground);
+}
+.rmi-q-own > button {
+  margin-block: -2px;
+}
+/* On touch: 16px text, so iOS doesn't zoom, and a larger target to send. */
+@media (pointer: coarse) {
+  .rmi-q-own textarea,
+  .rmi-q-own textarea + span {
+    font-size: 16px;
+    line-height: 24px;
+  }
+  .rmi-q-own > .rmi-q-key {
+    margin-top: 2px;
+  }
+  .rmi-q-own > button {
+    height: 32px;
+    margin-block: -4px;
+  }
+}
+
+/* Settled: nothing presses. The chosen row is the selected row, as a list draws one: the theme's
+   selected surface and edge, its words at full contrast and a ✓ in its slot; the rest recede. */
+.rmi-q-rows[data-settled] .rmi-q-key {
+  background: transparent;
+}
+.rmi-q-rows[data-settled] .rmi-q-row:not([data-chosen]) .rmi-q-label {
+  color: var(--muted-foreground);
+}
+.rmi-q-row[data-chosen] {
+  background: var(--surface-selected);
+  box-shadow: inset 0 0 0 1px var(--surface-selected-border);
+}
+.rmi-q-row[data-chosen] .rmi-q-label {
+  font-weight: 500;
+}
+.rmi-q-row[data-chosen] .rmi-result-glyph {
+  margin-top: 0;
+}
+
+/* An answer in the user's own words, once, under the options. */
+.rmi-q-reply {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
