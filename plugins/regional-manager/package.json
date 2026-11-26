@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-regional-manager",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "type": "module",
   "private": true,
   "license": "MIT",
