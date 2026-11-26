@@ -98,7 +98,7 @@ export function takeUnread(store: Pick<Store, "unread" | "markRead">, coordinato
  * MANAGER, suffixed with the manager's id for any other, bound as `thr_` and the ticket.
  */
 export const passWithShouldFix = (store: Store, issueId: IssueId, agentId: AgentId, n: number, at: number, coordinatorId = MANAGER): Check =>
-  settledRound(store, { coordinatorId, issueId, agentId, n, at }, { severity: "should-fix", claim: "Log each retry." }, { result: "confirmed", reason: "Nobody sees a retry." });
+  settledRound(store, { coordinatorId, issueId, agentId, n, at }, { title: "Log each retry", severity: "should-fix", claim: "Log each retry." }, { result: "confirmed", reason: "Nobody sees a retry." });
 
 /**
  * A done handoff as passWithShouldFix makes one, whose reviewer reported one must-fix that the
@@ -106,13 +106,13 @@ export const passWithShouldFix = (store: Store, issueId: IssueId, agentId: Agent
  * findings alone, which the manager may accept.
  */
 export const failOnMustFix = (store: Store, issueId: IssueId, agentId: AgentId, n: number, at: number, coordinatorId = MANAGER): Check =>
-  settledRound(store, { coordinatorId, issueId, agentId, n, at }, { severity: "must-fix", claim: "The backoff never caps." }, { result: "anchored", anchor: "brief", steps: null, reason: "The brief says retries back off." });
+  settledRound(store, { coordinatorId, issueId, agentId, n, at }, { title: "The backoff never caps", severity: "must-fix", claim: "The backoff never caps." }, { result: "anchored", anchor: "brief", steps: null, reason: "The brief says retries back off." });
 
 /** A done handoff (the `n`th of the agent, at `at`) whose reviewer reported `finding` at `src/retry.ts:10`, triaged so as every criterion passed, settled as checked. */
 function settledRound(
   store: Store,
   { coordinatorId, issueId, agentId, n, at }: { coordinatorId: CoordinatorId; issueId: IssueId; agentId: AgentId; n: number; at: number },
-  finding: Pick<ReviewFinding, "severity" | "claim">,
+  finding: Pick<ReviewFinding, "title" | "severity" | "claim">,
   triage: z.infer<typeof triageSchema>,
 ): Check {
   const headSha = "a".repeat(40);

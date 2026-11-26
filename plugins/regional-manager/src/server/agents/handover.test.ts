@@ -537,8 +537,8 @@ test("the first message of an agent taking the issue over words an earlier ancho
   const review = kit.store.latestHandoff(coordinatorId, a1)?.check?.review;
   const reviewer = review?.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review?.state}`);
   const findings = [
-    { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
-    { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports are out of order." },
+    { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
+    { title: "The imports are out of order", file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports are out of order." },
   ];
   await kit.call("issue_review", { findings }, reviewer);
   await kit.idle(reviewer, "Reviewed.");
@@ -555,7 +555,7 @@ test("the first message of an agent taking the issue over words an earlier ancho
   const message = firstMessage(threadIn(textOf(await handover())));
   assert.ok(
     message.includes(
-      "Its reviewer's findings, as the verifier triaged them, in their words:\n\n```\n- `src/retry.ts:42` (must-fix): The backoff never caps.\n  Anchored, as it breaks a requirement the issue's brief states explicitly: The brief says retries back off; this never stops doubling.\n- `src/retry.ts:3` (must-fix): The imports are out of order.\n  Downgraded to nit: No criterion, brief line or decision covers import order.\n```",
+      "Its reviewer's findings, as the verifier triaged them, in their words:\n\n```\n- The backoff never caps\n  `src/retry.ts:42` (must-fix): The backoff never caps.\n  Anchored, as it breaks a requirement the issue's brief states explicitly: The brief says retries back off; this never stops doubling.\n- The imports are out of order\n  `src/retry.ts:3` (must-fix): The imports are out of order.\n  Downgraded to nit: No criterion, brief line or decision covers import order.\n```",
     ),
     message,
   );

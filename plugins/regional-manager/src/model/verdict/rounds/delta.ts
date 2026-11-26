@@ -58,7 +58,7 @@ export function triageList(review: Review, delta: Blocking): ReviewFinding[] {
 }
 
 /** An earlier finding as an unfixed finding of a later round: its place, severity and claim as its reviewer gave them. */
-export const unfixed = ({ file, line, severity, claim }: ReviewFinding): ReviewFinding => ({ file, line, severity, claim, origin: "unfixed" });
+export const unfixed = ({ title, file, line, severity, claim }: ReviewFinding): ReviewFinding => ({ title, file, line, severity, claim, origin: "unfixed" });
 
 /**
  * An issue's checks as stored (`stored`, oldest first), each read whole, in one pass: its verdict

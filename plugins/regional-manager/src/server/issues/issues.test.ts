@@ -281,7 +281,7 @@ test("an accept into In review is refused without a decision, and with one it pl
   const followUp = kit.store.issue(coordinatorId, issueIdSchema.parse("WEB-2")) ?? assert.fail("no follow-up");
   assert.deepEqual([followUp.kind, followUp.rest, followUp.parentId, followUp.dependsOn, followUp.doneCriteria], ["build", "backlog", null, ["WEB-1"], []]);
   assert.match(followUp.description, /^A review finding left unfixed when WEB-1 was accepted as it is\./);
-  assert.match(followUp.brief ?? "", /- Round 1: `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\./);
+  assert.match(followUp.brief ?? "", /- Round 1: The backoff never caps\n {2}`src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\./);
 
   await call("agent_stop", { agent: "a1" });
   assert.deepEqual(await row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" }, "stopped as the result says, it stays In review");

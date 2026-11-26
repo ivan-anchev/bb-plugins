@@ -22,12 +22,18 @@ type Severity = z.infer<typeof severitySchema>;
 const originSchema = z.enum(["new", "missed", "unfixed"]);
 type Origin = z.infer<typeof originSchema>;
 
+/** How long a finding's title runs at most: the feed shows it as one row. */
+export const MAX_FINDING_TITLE = 80;
+
 /**
- * One thing the reviewer found: where in the diff (its file, and its line, null when it names
- * none), how much it matters, what it claims is wrong, and where it comes from. why the default:
- * a finding stored before origins existed was the whole diff's, so new.
+ * One thing the reviewer found: its title, what goes wrong in a line; where in the diff (its
+ * file, and its line, null when it names none); how much it matters; what it claims is wrong; and
+ * where it comes from. why the default: a finding stored before origins existed was the whole
+ * diff's, so new. why no caps: they are issue_review's, on what a reviewer passes; a stored
+ * finding keeps parsing whatever caps came later.
  */
 export const reviewFindingSchema = z.object({
+  title: z.string().min(1),
   file: z.string().min(1),
   line: z.number().int().min(1).nullable(),
   severity: severitySchema,
@@ -35,6 +41,27 @@ export const reviewFindingSchema = z.object({
   origin: originSchema.default("new"),
 });
 export type ReviewFinding = z.infer<typeof reviewFindingSchema>;
+
+/**
+ * A finding as a check stores it. why a title derived when it has none: findings stored before
+ * titles existed have only their claim, so each gets its claim's first sentence once, here, and
+ * every reader gets the one shape.
+ */
+const storedFindingSchema = reviewFindingSchema
+  .extend({ title: reviewFindingSchema.shape.title.optional() })
+  .transform(({ title, ...finding }): ReviewFinding => ({ ...finding, title: title ?? titleOf(finding.claim) }));
+
+/**
+ * A claim's first sentence, cut to MAX_FINDING_TITLE with an ellipsis: the title of a finding
+ * stored without one. why its whitespace collapsed first: a claim wrapped mid-sentence keeps its
+ * whole first sentence, on one line.
+ */
+function titleOf(claim: string): string {
+  const text = claim.trim().replace(/\s+/g, " ");
+  const end = text.search(/[.!?]( |$)/);
+  const sentence = end === -1 ? text : text.slice(0, end + 1);
+  return sentence.length <= MAX_FINDING_TITLE ? sentence : `${sentence.slice(0, MAX_FINDING_TITLE - 1).trimEnd()}…`;
+}
 
 /**
  * How many findings a reviewer reports at most, its own, in one review. why only its own: the
@@ -70,7 +97,7 @@ export const reviewSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("none") }),
   z.object({ state: z.literal("queued") }),
   z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema, scoped: z.boolean().default(false) }),
-  z.object({ state: z.literal("reported"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), earlier: z.array(earlierAnswerSchema).default([]), model: modelRefSchema }),
+  z.object({ state: z.literal("reported"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(storedFindingSchema), earlier: z.array(earlierAnswerSchema).default([]), model: modelRefSchema }),
   z.object({ state: z.literal("missed"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
 ]);
 export type Review = z.infer<typeof reviewSchema>;
@@ -310,12 +337,13 @@ const isLegacyConfirmed = ({ severity }: ReviewFinding, { result }: Triage): boo
 const isStepless = (triage: Triage): boolean => triage.result === "anchored" && triage.steps === null && (triage.anchor === "safety" || triage.anchor === "regression");
 
 /**
- * A finding in a line: its place, its severity and, when it isn't new, its origin, then its claim,
- * the claim's later lines indented by `indent` to sit under it in a list. why only the claim's: the
- * place keeps its path byte for byte, a newline in it included.
+ * A finding as every message gives it: its title on a line of its own, so it reads in one line;
+ * then its place, its severity and, when it isn't new, its origin, and its claim, each later line
+ * indented by `indent` to sit under the title in a list. why the claim's lines alone re-indented:
+ * the place keeps its path byte for byte, a newline in it included.
  */
 export const findingText = (finding: ReviewFinding, indent = ""): string =>
-  `${placeText(finding)} (${finding.severity}${finding.origin === "new" ? "" : `, ${finding.origin}`}): ${finding.claim.replaceAll("\n", `\n${indent}`)}`;
+  `${finding.title}\n${indent}${placeText(finding)} (${finding.severity}${finding.origin === "new" ? "" : `, ${finding.origin}`}): ${finding.claim.replaceAll("\n", `\n${indent}`)}`;
 
 /** Findings as a numbered list, from 1, as issue_review's earlier and issue_verdict's triage take them (findingText). */
 export const numberedText = (findings: readonly ReviewFinding[]): string => findings.map((finding, i) => `${i + 1}. ${findingText(finding, "   ")}`).join("\n");

@@ -59,7 +59,7 @@ function runningCheck(store: Store, issueId: IssueId, agentId: AgentId, n: numbe
 const reviewedCheck = (store: Store, issueId: IssueId, agentId: AgentId, n: number): Check => reviewedWith(store, issueId, agentId, n, [CAPLESS]);
 
 type Finding = ReviewFinding;
-const CAPLESS: Finding = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps.", origin: "new" };
+const CAPLESS: Finding = { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps.", origin: "new" };
 
 /** A done handoff's check whose reviewer reported `findings`, running in the verifier thread `thr_verifier_<n>`. */
 function reviewedWith(store: Store, issueId: IssueId, agentId: AgentId, n: number, findings: Finding[]): Check {
@@ -376,7 +376,7 @@ test("a review starts running as its reviewer's ticket binds, and takes its find
   assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer", scoped: true });
 
   assert.equal(store.missReview(check.id, { state: "queued" }, "never started", 4_100), false, "it isn't queued any more");
-  const finding = { file: "src/retry.ts", line: 4, severity: "should-fix", claim: "No cap.", origin: "new" } as const;
+  const finding = { title: "No cap", file: "src/retry.ts", line: 4, severity: "should-fix", claim: "No cap.", origin: "new" } as const;
   const model = { providerId: "claude-code", model: "sonnet" };
   assert.equal(store.receiveReview(check.id, "thr_other", { findings: [finding], earlier: [] }, model, 4_200), false);
   assert.equal(store.receiveReview(check.id, "thr_reviewer", { findings: [finding], earlier: [] }, model, 4_200), true);
@@ -554,8 +554,8 @@ test("the question stays with the failure whose settling asked it, whatever orde
   assert.deepEqual(asked.slice(-2), [[fourth.id, "d1"], [third.id, null]], "round 4's settling asked d1; round 3's asked nothing");
 });
 
-const LOG_IT: Finding = { file: "src/retry.ts", line: 10, severity: "should-fix", claim: "Log each retry.", origin: "new" };
-const NAME_IT: Finding = { file: "src/retry.ts", line: 3, severity: "nit", claim: "Name the constant.", origin: "new" };
+const LOG_IT: Finding = { title: "Log each retry", file: "src/retry.ts", line: 10, severity: "should-fix", claim: "Log each retry.", origin: "new" };
+const NAME_IT: Finding = { title: "Name the constant", file: "src/retry.ts", line: 3, severity: "nit", claim: "Name the constant.", origin: "new" };
 
 type Triage = Received["triage"][number];
 const confirmed = (reason: string): Triage => ({ result: "confirmed", reason });
@@ -604,9 +604,9 @@ test("a pass with leftovers in two rounds files one top-level Backlog build issu
   assert.match(description, /^3 review findings held without blocking WEB-1 when it passed\. Its brief lists each/);
   const listed = brief ?? assert.fail("no brief");
   for (const claim of [LOG_IT.claim, NAME_IT.claim, CAPLESS.claim]) assert.equal(listed.split(claim).length - 1, 1, `${claim} is listed once`);
-  assert.match(listed, /- Round 2: `src\/retry.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Still no log\./);
-  assert.match(listed, /- Round 1: `src\/retry.ts:3` \(nit\): Name the constant\./);
-  assert.match(listed, /- Round 2: `src\/retry.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Downgraded to should-fix\. No criterion names a cap\./);
+  assert.match(listed, /- Round 2: Log each retry\n {2}`src\/retry.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Still no log\./);
+  assert.match(listed, /- Round 1: Name the constant\n {2}`src\/retry.ts:3` \(nit\): Name the constant\./);
+  assert.match(listed, /- Round 2: The backoff never caps\n {2}`src\/retry.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Downgraded to should-fix\. No criterion names a cap\./);
   assert.deepEqual(followUpsOf(store, [first, second]), ["WEB-2", "WEB-2"], "both checks are stamped");
 
   assert.equal(store.settleReturned(second.id, CHECKED, 4_700, null), null, "settled once");
@@ -707,7 +707,7 @@ test("a build parent whose own handoff left a should-fix files its follow-up whe
 
   const followUp = store.issue(MANAGER, issueIdSchema.parse("WEB-3")) ?? assert.fail("no follow-up filed");
   assert.deepEqual([followUp.title, followUp.parentId, followUp.dependsOn, followUp.rest], ["Follow-ups from WEB-1: Add retries", null, [issue.id], "backlog"]);
-  assert.match(followUp.brief ?? "", /- Round 1: `src\/retry.ts:10` \(should-fix\): Log each retry\./);
+  assert.match(followUp.brief ?? "", /- Round 1: Log each retry\n {2}`src\/retry.ts:10` \(should-fix\): Log each retry\./);
   assert.deepEqual(followUpsOf(store, [failed, final]), ["WEB-3", "WEB-3"]);
   assert.deepEqual(knownClose(db, "WEB-3"), { close: `final check ${final.id}` });
 });

@@ -127,7 +127,7 @@ function followUpText(issueId: IssueId, followUp: FollowUp): string {
       return `Your accept of ${issueId}'s last failure filed its open must-fix findings as ${followUp.id}, the one follow-up this answer files, so file no other.`;
     case "by-hand":
       if (followUp.mustFix.length === 0) return "Its last failed verdict upheld no must-fix finding, so there is no follow-up to file.";
-      return `File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n${followUp.mustFix.map((finding) => `- ${findingText(finding)}`).join("\n")}`;
+      return `File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n${followUp.mustFix.map((finding) => `- ${findingText(finding, "  ")}`).join("\n")}`;
     default:
       return followUp satisfies never;
   }

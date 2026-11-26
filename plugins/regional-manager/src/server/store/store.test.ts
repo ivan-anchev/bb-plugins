@@ -543,16 +543,18 @@ test("a verdict and a review stored before they kept their time take their check
   assert.deepEqual([second?.verdict.state === "could-not-run" && second.verdict.at, second?.review.state === "missed" && second.review.at], [2_500, 2_500], "none announced it: the check's own time");
 });
 
-test("a reported review stored before findings had an origin and reviews had earlier answers reads with every finding new and no earlier answers, its verdict's triage joined to them", () => {
+test("a reported review stored before findings had an origin, a title or earlier answers reads with every finding new, titled by its claim's first sentence clipped to 80 characters, and no earlier answers, its verdict's triage joined to them", () => {
   const { db, storage } = memoryStorage();
   storage.migrate(db, [...MIGRATIONS]);
   db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
   db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at, issue_key) VALUES (?, 'ticket-1', 'prj_1', 1, 1000, 'WEB')").run(MANAGER);
   db.prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, done_criteria, rest, created_at) VALUES (?, 'WEB-1', 'build', 'Retries', 'Lost deliveries.', '[\"npm test passes\"]', 'todo', 1000)").run(MANAGER);
-  // As a release before origins stored them: no origin on a finding, no earlier on the review.
+  // As a release before origins and titles stored them: no origin or title on a finding, no earlier on the review.
+  const long = "The retry loop doubles its delay on every failure with no upper bound at all, so a dead endpoint waits for hours";
   const findings = [
-    { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." },
-    { file: "src/retry.css", line: null, severity: "nit", claim: "Padding." },
+    { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap. The delay doubles forever." },
+    { file: "src/retry.css", line: null, severity: "nit", claim: "The rollback never\nclears the cache. A retry sees stale state." },
+    { file: "src/retry.ts", line: 9, severity: "should-fix", claim: `${long}.\nSee line 9.` },
   ];
   const review = { state: "reported", at: 3_000, reviewerThreadId: "thr_reviewer", findings, model: { providerId: "codex", model: "gpt-5.4" } };
   const verdict = {
@@ -566,6 +568,7 @@ test("a reported review stored before findings had an origin and reviews had ear
     triage: [
       { result: "anchored", anchor: "brief", reason: "Seen." },
       { result: "rejected", reason: "Matches." },
+      { result: "confirmed", reason: "Seen." },
     ],
     mustFixFails: true,
     model: { providerId: "claude-code", model: "sonnet" },
@@ -584,10 +587,14 @@ test("a reported review stored before findings had an origin and reviews had ear
   );
 
   const check = openStore(storage).check(checkIdSchema.parse(id)) ?? assert.fail("no check");
-  assert.deepEqual(check.review.state === "reported" && [check.review.findings, check.review.earlier], [findings.map((finding) => ({ ...finding, origin: "new" })), []]);
-  assert.deepEqual(check.verdict.state === "returned" && check.verdict.triage.map(({ origin, result }) => [origin, result]), [
-    ["new", "anchored"],
-    ["new", "rejected"],
+  // why the second whole: a claim wrapped mid-sentence keeps its first sentence, on one line.
+  const titles = ["No cap.", "The rollback never clears the cache.", `${long.slice(0, 79)}…`];
+  assert.equal(titles[2]?.length, 80);
+  assert.deepEqual(check.review.state === "reported" && [check.review.findings, check.review.earlier], [findings.map((finding, i) => ({ ...finding, title: titles[i], origin: "new" })), []]);
+  assert.deepEqual(check.verdict.state === "returned" && check.verdict.triage.map(({ title, origin, result }) => [title, origin, result]), [
+    ["No cap.", "new", "anchored"],
+    [titles[1], "new", "rejected"],
+    [titles[2], "new", "confirmed"],
   ]);
 });
 

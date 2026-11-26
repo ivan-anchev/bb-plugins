@@ -1,25 +1,35 @@
-// A reviewer's own tool: issue_review, the findings of its review of a done handoff's diff, each at
-// a file and line with a severity, its claim and its origin, and, on a later round, its answer on
-// each of the earlier round's blocking findings. The verifier triages them next (verdict-tool.ts).
-// The caller's role comes from the plugin's database by its thread id.
+// A reviewer's own tool: issue_review, the findings of its review of a done handoff's diff, each
+// with its title, at a file and line with a severity, its claim and its origin, and, on a later
+// round, its answer on each of the earlier round's blocking findings. The verifier triages them
+// next (verdict-tool.ts). The caller's role comes from the plugin's database by its thread id.
 import { z } from "zod";
-import { ANCHOR_RULE, FOLLOW_UP_RULE, MAX_REPORTED, MISSED_RULE, severitySchema } from "../../model/verdict/review.ts";
+import { ONE_LINE } from "../../model/one-line.ts";
+import { ANCHOR_RULE, FOLLOW_UP_RULE, MAX_FINDING_TITLE, MAX_REPORTED, MISSED_RULE, severitySchema } from "../../model/verdict/review.ts";
 import type { Store } from "../store/store.ts";
 import { failed, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
 import type { Review } from "./review.ts";
 
 export const REVIEW = "issue_review";
 
+// why each text's caps and line rule run before it is trimmed: they hold what the reviewer passed,
+// a line break or a space at either end included.
 const reviewInputSchema = z.object({
   findings: z
     .array(
       z.object({
+        title: z
+          .string()
+          .regex(ONE_LINE, "A title is one line")
+          .max(MAX_FINDING_TITLE)
+          .trim()
+          .min(1)
+          .describe(`What goes wrong, as a user or agent meets it, in one line of at most ${MAX_FINDING_TITLE} characters (aim for 60). No fix, no severity words, no file name.`),
         file: z.string().min(1).max(500).describe("The file the finding is in, as the diff names it."),
         line: z.number().int().min(1).nullable().describe("The line in that file at the reviewed commit; null when the finding names no one line."),
         severity: severitySchema.describe(
           `must-fix: a finding CREW.md gives that severity. Say in the claim which anchor below it meets, with the normal-use steps that reach it when it is a bug, or that it meets none: the verifier anchors or downgrades it, never you. should-fix: worth fixing, but never blocking: a principle or REVIEW.md violation, a missing test, unclear text, or a bug that needs a contrived setup. nit: a small improvement. ${ANCHOR_RULE}`,
         ),
-        claim: z.string().trim().min(1).max(2_000).describe("What is wrong there, and why, in a few lines."),
+        claim: z.string().max(1_200).trim().min(1).describe("The failure scenario first, in a sentence; then why the code does it; then the fix in one sentence. At most 1,200 characters."),
         origin: z
           .enum(["new", "missed"])
           .default("new")
@@ -33,7 +43,7 @@ const reviewInputSchema = z.object({
       z.object({
         finding: z.number().int().min(1).describe("The earlier blocking finding's number in your first message."),
         fixed: z.boolean().describe("Whether this diff fixes it."),
-        note: z.string().trim().min(1).max(1_000).describe("What you saw that shows it, in a line or two."),
+        note: z.string().regex(ONE_LINE, "A note is one line").max(300).trim().min(1).describe("What you saw that shows it fixed or not, in one line of at most 300 characters."),
       }),
     )
     .default([])
@@ -46,7 +56,7 @@ type Deps = { store: Pick<Store, "roleOfThread" | "check">; review: Pick<Review,
 export function registerReviewTool(bb: ToolsBb, { store, review }: Deps): void {
   bb.agents.registerTool({
     name: REVIEW,
-    description: "Your review of the diff your first message names: every finding, each with its file, line, severity and claim. Call it last; when it refuses what you passed, correct that and call it again.",
+    description: "Your review of the diff your first message names: every finding, each with its title, file, line, severity and claim. Call it last; when it refuses what you passed, correct that and call it again.",
     instructions: REVIEW_INSTRUCTIONS,
     presentation: { label: { pending: "Reporting the review", completed: "Reported the review" }, icon: { glyph: "Search" } },
     parameters: reviewInputSchema,
@@ -76,4 +86,4 @@ function recordedText({ findings, earlier }: ReviewInput): string {
 
 const NOT_RUNNING = `${REVIEW} is refused and nothing was saved: this review no longer waits for your findings (a newer handoff replaced it, or it ended without them). Stop here.`;
 
-const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} as your last action. When it refuses what you passed, nothing was saved: correct what it names and call it again. Stop once it records your review, or once it refuses because this review no longer waits for it. Each finding names its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit), its claim and, on a later round, its origin: new, or missed when it sits on code an earlier round reviewed unchanged. [] when you found nothing. On a later round, earlier answers each blocking finding of the earlier round your first message numbers: fixed or not, with a note; [] on a first round. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} A verifier checks each finding: it rejects one that doesn't hold, anchors a must-fix to the anchor it meets, downgrades one that meets none, and confirms the rest. ${FOLLOW_UP_RULE} A turn that ends before you call it ends your review unheard, so run what you need in the foreground and don't end your turn to wait for it.`;
+const REVIEW_INSTRUCTIONS = `Reporting your review: call ${REVIEW} as your last action. When it refuses what you passed, nothing was saved: correct what it names and call it again. Stop once it records your review, or once it refuses because this review no longer waits for it. Each finding names its title (what goes wrong, one line of at most ${MAX_FINDING_TITLE} characters), its file, its line (null when it names no one line), its severity (must-fix, should-fix or nit), its claim and, on a later round, its origin: new, or missed when it sits on code an earlier round reviewed unchanged. [] when you found nothing. On a later round, earlier answers each blocking finding of the earlier round your first message numbers: fixed or not, with a one-line note; [] on a first round. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} A verifier checks each finding: it rejects one that doesn't hold, anchors a must-fix to the anchor it meets, downgrades one that meets none, and confirms the rest. ${FOLLOW_UP_RULE} A turn that ends before you call it ends your review unheard, so run what you need in the foreground and don't end your turn to wait for it.`;
