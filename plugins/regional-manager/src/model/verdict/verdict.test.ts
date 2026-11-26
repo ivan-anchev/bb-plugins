@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { agentIdSchema } from "../agent/agent.ts";
 import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
 import type { Review, ReviewFinding } from "./review.ts";
-import { failedOnReviewOnly, failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type StoredVerdict, type Verdict } from "./verdict.ts";
+import { acceptableAsIs, failedOnReviewOnly, failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type StoredVerdict, type Verdict } from "./verdict.ts";
 
 /** The claimed commit, on a clean tree, as bb's git plugin read it. */
 const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
@@ -177,4 +178,14 @@ test("a verdict failed on review findings alone only when every reason it failed
   assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "pending" } }), false, "still to settle");
   assert.equal(failedOnReviewOnly(readWith([["must-fix", DOWNGRADED]])), false, "it passed");
   assert.equal(failedOnReviewOnly(returned(["fail"])), false, "a criterion alone");
+});
+
+test("a check is acceptable as it is only when it failed on review findings alone and CI didn't fail on its commit as its pull request was last read", () => {
+  const verdict = readWith([["must-fix", ANCHORED]]);
+  const subject = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: HANDOFF, headSha: HEAD, prUrl: PR_URL } as const;
+  assert.equal(acceptableAsIs({ verdict, subject }, null), true, "no pull request read");
+  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "pass" })), true);
+  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "fail" })), false, "CI failed on the checked commit");
+  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "fail", headSha: "b".repeat(40) })), true, "CI failed on another commit");
+  assert.equal(acceptableAsIs({ verdict: returned(["fail"]), subject }, null), false, "a criterion failed");
 });

@@ -287,6 +287,27 @@ test("an accept into In review is refused without a decision, and with one it pl
   assert.deepEqual(await row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" }, "stopped as the result says, it stays In review");
   assert.ok(!kit.store.unannounced(coordinatorId).some(({ event }) => event.kind === "returned-to-todo"), "nothing returned to Todo");
   assert.deepEqual(await update({ status: "in-review", decision: REASON }), { refused: true, text: "WEB-1's latest verdict was accepted already, so nothing changed." });
+  assert.deepEqual(await update({ status: "done" }), {
+    refused: true,
+    text: "WEB-1 is In review (Accepted with follow-ups: Retries land with backoff): it was accepted as it is, so it stays In review, its pull request watched and what depends on it blocked, until that pull request merges, which makes it Done. Wait for the merge; it is never marked Done before.",
+  });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "Accepted with follow-ups: Retries land with backoff" }, "not closed by the refused Done");
+  assert.equal(kit.store.issue(coordinatorId, ISSUE_ID)?.closed, null);
+});
+
+test("while an accept stands, agent_start on a new branch is refused naming why, and one continuing in its last agent's environment goes", async () => {
+  const { call, update } = await failedOnce();
+  await call("agent_stop", { agent: "a1" });
+  assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
+  const fresh = await call("agent_start", { issue: "WEB-1", from: "default" });
+  assert.ok(isRefusal(fresh));
+  assert.equal(
+    textOf(fresh),
+    "agent_start is refused: Nothing changed. WEB-1 was accepted as it is and waits In review for its pull request to merge, so an agent starts on it only in its last agent's environment, on its pull request's branch: on a new branch, that pull request would be left behind and its merge wouldn't make WEB-1 Done. Start one with no from or placement.",
+  );
+  const joined = await call("agent_start", { issue: "WEB-1" });
+  assert.ok(!isRefusal(joined), textOf(joined));
+  assert.match(textOf(joined), /^Started a2 on WEB-1 as @thread:\w+ in a1's worktree/);
 });
 
 test("an accept is refused leading with the reason when a criterion failed, when CI failed on the checked commit as its pull request was last read, and when the latest verdict didn't fail", async () => {
@@ -386,13 +407,16 @@ test("a canceled issue is refused an accept, and once reopened as the refusal sa
   assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
 });
 
-test("catch-up offers the accept after a failure on review findings alone that reaches the manager, and not after a criterion's", async () => {
+test("catch-up offers the accept after a failure on review findings alone, sent back to its agent or reaching the manager, and not after a criterion's", async () => {
   const offer = /It failed on review findings alone, so you may accept it as it is: issue_update \{ id: "WEB-1", status: "in-review", decision: "<why>" \} puts it In review until its pull request merges, and files the findings it leaves, its unfixed must-fixes among them, as a follow-up\./;
   const review = await failedOnce();
+  const sentBack = textOf(await review.call("crew_catch_up", {}));
+  assert.match(sentBack, /findings sent back to it\n\n[^\n]* as its automatic fix round 1\. Nothing to do yet: [^\n]* Or, to take it as it is instead: It failed on review findings alone, so you may accept it as it is: [^\n]* Then stop a1 with agent_stop, as a done handoff of its would replace the accepted work\./, "its first failure, sent back to its agent");
   await failsVerification(review.kit, review.coordinatorId, review.agentThreadId, "review");
   assert.match(textOf(await review.call("crew_catch_up", {})), offer);
 
   const criterion = await failedOnce("criterion");
+  assert.doesNotMatch(textOf(await criterion.call("crew_catch_up", {})), /failed on review findings alone/);
   await failsVerification(criterion.kit, criterion.coordinatorId, criterion.agentThreadId);
   assert.doesNotMatch(textOf(await criterion.call("crew_catch_up", {})), /failed on review findings alone/);
 });

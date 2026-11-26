@@ -337,7 +337,9 @@ or the plugin's own question at its cap of failed verdicts, which leads its reas
   among them, are filed as one follow-up in Backlog, which the result names;
   plan it or cancel it as any follow-up. If an agent still holds the issue,
   stop it with `agent_stop`: a done handoff of its would replace the accepted
-  work. Refused, with the reason first, when a criterion failed, the commit
+  work. While the accept stands, `done` is refused (only its merge makes it
+  Done), and `agent_start` only continues in its last agent's environment, on
+  its pull request's branch: a start on a new branch is refused. Refused, with the reason first, when a criterion failed, the commit
   wasn't on a clean tree, CI failed on it, the latest verdict didn't fail, a
   newer handoff replaced it, or the plugin's question at the issue's cap is
   still open: then accepting is the user's call there, and you accept once

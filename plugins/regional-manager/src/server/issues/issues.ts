@@ -12,7 +12,7 @@ import { headlineText, latestChecked, STATUS_LABELS, type IssueView } from "../.
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Check, CheckId } from "../../model/verdict/check.ts";
 import { capMovesText } from "../../model/verdict/rounds/cap.ts";
-import { failedOnReviewOnly, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
+import { ciFailedAt, failedOnReviewOnly, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
 import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { DependencyChange, IssueEdit } from "../store/issue/issues-store.ts";
@@ -87,7 +87,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
    */
   function statusEdit(issue: Issue, view: IssueView, status: NonNullable<IssueChange["status"]>, decision: string | undefined, at: number): IssueEdit | Refused {
     const now = `${issue.id} is ${STATUS_LABELS[view.status]} (${headlineText(view)})`;
-    if (status === "done") return view.status === "in-review" ? { closed: { as: "accepted", at } } : { refused: `${now}, so it can't be marked Done: only an issue In review can.` };
+    if (status === "done") return doneEdit(view, now, at);
     if (status === "in-review") return acceptEdit(view, decision);
     const holder = holderOf(issue);
     if (holder !== null) return { refused: `${holder.id} holds ${issue.id}, so it can't be ${status === "canceled" ? "canceled" : `moved to ${STATUS_LABELS[status]}`}. Stop ${holder.id} with agent_stop first.` };
@@ -220,8 +220,7 @@ function acceptProblem(latest: Check, { issue: { id }, pr }: Pick<IssueView, "is
   // why throw: only a returned verdict fails (verdict.ts outcome).
   if (verdict.state !== "returned") throw new Error(`${id}'s failed verdict hasn't returned.`);
   if (!failedOnReviewOnly(verdict)) return `${id}'s latest verdict failed on more than review findings (${notReviewOnly(verdict)}), so it can't be accepted as it is: only a failure on review findings alone can. ${FIX_IT}`;
-  const ciFailed = subject.kind === "handoff" && pr !== null && pr.headSha === subject.headSha && pr.ci === "fail";
-  return ciFailed ? `CI failed on #${pr.number} at ${subject.headSha.slice(0, 7)}, the commit ${id}'s latest verdict checked, so it can't be accepted as it is. ${FIX_IT}` : null;
+  return pr !== null && ciFailedAt(subject, pr) ? `CI failed on #${pr.number} at ${verdict.headSha.slice(0, 7)}, the commit ${id}'s latest verdict checked, so it can't be accepted as it is. ${FIX_IT}` : null;
 }
 
 /** Why a verdict that failed didn't fail on review findings alone: its reasons besides those findings, in the order every surface reads them. */
@@ -241,6 +240,19 @@ const OUTCOME_WORDS: Record<Exclude<Outcome, "fail" | "pending" | "waiting-for-c
 
 /** The moves left on a failure that isn't the manager's to accept. */
 const FIX_IT = "Message its agent with agent_message, stop it and start a fresh agent on the issue with agent_start, or ask the user.";
+
+/**
+ * The manager's close of an issue In review as Done (`now`: where it stands, in words), or why it
+ * can't be: only an issue In review is, and never one whose failure the manager accepted as it is,
+ * which stays open until its pull request merges.
+ */
+function doneEdit(view: IssueView, now: string, at: number): IssueEdit | Refused {
+  if (view.status !== "in-review") return { refused: `${now}, so it can't be marked Done: only an issue In review can.` };
+  if (view.placing !== null && view.placing.acceptedAt !== null) {
+    return { refused: `${now}: it was accepted as it is, so it stays In review, its pull request watched and what depends on it blocked, until that pull request merges, which makes it Done. Wait for the merge; it is never marked Done before.` };
+  }
+  return { closed: { as: "accepted", at } };
+}
 
 /** Why a closed issue (`view`) can't be accepted into In review; null while it is open. */
 function closedRefusal(view: IssueView): string | null {

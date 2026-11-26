@@ -140,6 +140,23 @@ test("the merge answer's accept, followed as its update says, puts the issue In 
   assert.equal((await row())?.status, "done");
 });
 
+test("a merge answer after a review-only failure whose commit's CI has since failed keeps the manual follow-up, as the accept would be refused", async () => {
+  const { kit, threadId, coordinatorId, fresh, catchUp } = await capped();
+  const branch = kit.thread(fresh).environmentBranchName ?? assert.fail("no branch");
+  kit.github.prs.set(branch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "FAILURE", failed: ["test"] });
+  kit.clock.now += 5 * 60_000;
+  await kit.tick();
+  await settled();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
+  await settled();
+  const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
+  assert.doesNotMatch(answered, /status: "in-review"/, "no accept is offered");
+  assert.match(answered, /File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  const accept = await kit.call("issue_update", { id: "WEB-1", status: "in-review", decision: "The user chose to merge it as is (d1)." }, threadId);
+  assert.ok(isRefusal(accept), "the accept the update didn't offer is refused");
+  assert.match(textOf(accept), /^CI failed on #41 at 0123456/);
+});
+
 test("answering one more round or cancel the issue gives each its own guidance: a round to direct, or stop, close the PR and cancel", async () => {
   const round = await capped();
   await round.catchUp();

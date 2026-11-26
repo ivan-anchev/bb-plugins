@@ -340,7 +340,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const asked: Asked = { kind: filed.kind, from, placement: named };
     const spot = await spotOf(coordinatorId, filed.id, asked, prove);
     if ("refused" in spot) return { refused: `Nothing changed. ${spot.refused}` };
-    const merging = mergeRefusal(filed.id, mergeAnswer(capQuestionsOf(store.decisions(coordinatorId), filed.id)), asked, spot);
+    const merging = branchRefusal(filed.id, keptBranch(coordinatorId, filed.id), asked, spot);
     if (merging !== null) return { refused: `Nothing changed. ${merging}` };
     const runsOn = await executionFor(coordinatorOf(coordinatorId), execution, spot.environment, whereText(spot));
     if ("refused" in runsOn) return runsOn;
@@ -479,6 +479,13 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    */
   async function endIfFree(agent: Agent, how: "archived" | "deleted"): Promise<void> {
     await turns.runIfFree(agent.coordinatorId, agent.issueId, () => end(agent, how));
+  }
+
+  /** What keeps the issue on its pull request's branch now (see KeptBranch); null: nothing. */
+  function keptBranch(coordinatorId: CoordinatorId, issueId: IssueId): KeptBranch | null {
+    const merge = mergeAnswer(capQuestionsOf(store.decisions(coordinatorId), issueId));
+    if (merge !== null) return { kind: "merge", questionId: merge.id };
+    return acceptedOf(store.record(coordinatorId, issueId)) === null ? null : { kind: "accepted" };
   }
 
   /**
@@ -623,15 +630,22 @@ function capRefusal(view: IssueView): string | null {
 }
 
 /**
- * Why no agent may start on the issue `id` where `spot` places it: the user's answer to merge it as
- * is (`merge`, rounds/cap.ts mergeAnswer) stands, and the start would leave the branch its pull
- * request is on, which the issue's branch (agent.ts issueBranch) would no longer name, so its merge
- * would never make it Done. Only a join, in its last agent's environment on that branch, goes. null:
- * nothing stands, or it joins.
+ * What keeps an issue on its pull request's branch: the user's answer to merge it as is (`merge`,
+ * rounds/cap.ts mergeAnswer, by its question's id), or the manager's accept of its latest failure
+ * (`accepted`, status.ts acceptedOf), which waits In review for that pull request's merge.
  */
-function mergeRefusal(id: IssueId, merge: { id: string } | null, { from, placement }: Asked, spot: Spot): string | null {
-  if (merge === null || spot.base.kind === "joined") return null;
-  const why = `The user chose to merge ${id} as it is (${merge.id}), so an agent starts on it only in its last agent's environment, on its pull request's branch: on a new branch, that pull request would be left behind and its merge wouldn't make ${id} Done.`;
+type KeptBranch = { kind: "merge"; questionId: string } | { kind: "accepted" };
+
+/**
+ * Why no agent may start on the issue `id` where `spot` places it: something keeps it on its pull
+ * request's branch (`kept`, null: nothing), and the start would leave that branch, which the issue's
+ * branch (agent.ts issueBranch) would no longer name, so its merge would never make it Done. Only a
+ * join, in its last agent's environment on that branch, goes. null: nothing keeps it, or it joins.
+ */
+function branchRefusal(id: IssueId, kept: KeptBranch | null, { from, placement }: Asked, spot: Spot): string | null {
+  if (kept === null || spot.base.kind === "joined") return null;
+  const because = kept.kind === "merge" ? `The user chose to merge ${id} as it is (${kept.questionId})` : `${id} was accepted as it is and waits In review for its pull request to merge`;
+  const why = `${because}, so an agent starts on it only in its last agent's environment, on its pull request's branch: on a new branch, that pull request would be left behind and its merge wouldn't make ${id} Done.`;
   if (from === "default" || placement !== null) return `${why} Start one with no from or placement.`;
   return `${why} bb has removed that environment, so no agent can continue there: ask the user to merge the pull request themselves, which makes ${id} Done.`;
 }

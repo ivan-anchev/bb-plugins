@@ -34,10 +34,10 @@ export function capChoice({ options, answer }: Pick<Decision, "options" | "answe
 /**
  * Where the issue stood when the user answered: its pull request's number as last read (null: none
  * read), its branch as its agents' handoffs recorded it (null: none recorded), the must-fix
- * findings its last failed verdict before the answer upheld, and whether that verdict failed on
- * review findings alone (verdict.ts failedOnReviewOnly), which the manager's accept takes.
+ * findings its last failed verdict before the answer upheld, and whether the manager may accept
+ * that verdict as it is (verdict.ts acceptableAsIs: on review findings alone, CI not failed on its commit).
  */
-export type AnsweredAt = { pr: number | null; branch: string | null; mustFix: readonly Triaged[]; reviewOnly: boolean };
+export type AnsweredAt = { pr: number | null; branch: string | null; mustFix: readonly Triaged[]; acceptable: boolean };
 
 /** The choice in a phrase, as a doorbell gives it after the question's id: "merge it as is, with no further round, and file its open must-fix findings as a follow-up". */
 export function choicePhrase(choice: CapChoice): string {
@@ -57,7 +57,7 @@ export function choicePhrase(choice: CapChoice): string {
 export function choiceText(issueId: IssueId, choice: CapChoice | null, at: AnsweredAt): string {
   switch (choice) {
     case "merge":
-      return at.reviewOnly
+      return at.acceptable
         ? `They chose to merge ${issueId} as it is, so it gets no further round. ${acceptFirst(issueId)} ${mergeMoves(issueId, at.pr)}`
         : `They chose to merge ${issueId} as it is, so it gets no further round. ${mergeMoves(issueId, at.pr)} ${followUpText(at.mustFix)}`;
     case "round":

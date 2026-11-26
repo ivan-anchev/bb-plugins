@@ -7,7 +7,7 @@ import { modelRefSchema } from "../agent/execution.ts";
 import type { Check, CheckSubject } from "./check.ts";
 import { blockingDefectSchema, holds, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
-import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
+import { ciVerdictSchema, type Ci, type CiVerdict, type PrSnapshot } from "./pr.ts";
 
 /** One done-criterion as the verifier judged it. why three: a criterion it couldn't check is not a pass. */
 export const criterionResultSchema = z.enum(["pass", "fail", "unverifiable"]);
@@ -281,6 +281,18 @@ export function failedOnReviewOnly(verdict: Verdict): boolean {
   if (verdict.state !== "returned" || outcome(verdict) !== "fail") return false;
   return failureReasons(verdict).every(({ kind }) => kind === "must-fix");
 }
+
+/** Whether CI failed on the commit a check of a done handoff judged, as its pull request was last read (`pr`, null: none read). */
+export const ciFailedAt = (subject: CheckSubject, pr: Pick<PrSnapshot, "headSha" | "ci"> | null): boolean =>
+  subject.kind === "handoff" && pr !== null && pr.headSha === subject.headSha && pr.ci === "fail";
+
+/**
+ * Whether the manager may accept a check as it is (issues.ts acceptEdit): its verdict failed on
+ * review findings alone, and CI didn't fail on its commit as the pull request was last read (`pr`).
+ * The one eligibility rule the accept, catch-up and the cap question's merge answer read.
+ */
+export const acceptableAsIs = ({ verdict, subject }: Pick<Check, "verdict" | "subject">, pr: Pick<PrSnapshot, "headSha" | "ci"> | null): boolean =>
+  failedOnReviewOnly(verdict) && !ciFailedAt(subject, pr);
 
 /**
  * Whether a finding fails its verdict on its own: the verifier anchored it to what it breaks, or,
