@@ -379,6 +379,58 @@ test("an accept is refused when CI failed on the checked commit's own pull reque
   assert.deepEqual(kit.store.issues(coordinatorId).map(({ id }) => id), ["WEB-1"], "no follow-up filed");
 });
 
+/** The branch an agent publishes its work on: named apart from the one bb made its environment on. */
+const PUBLISHED = "work/published";
+
+/**
+ * As failedOnce, but its agent first hands off blocked on PUBLISHED, then hands off done with HEAD
+ * detached at that published commit, so the done handoff's own read names no branch.
+ */
+async function failedDetachedOnPublished() {
+  const managed = await managing();
+  const { kit, threadId, coordinatorId } = managed;
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  assert.notEqual(kit.thread(agentThreadId).environmentBranchName, PUBLISHED, "bb made the environment on another branch");
+  const environment = kit.environment(agentThreadId);
+  kit.git.checkouts.set(environment, PUBLISHED);
+  await kit.call("agent_handoff", { ...REPORT, status: "blocked", summary: "Published; the backoff cap needs a decision" }, agentThreadId);
+  await kit.idle(agentThreadId, "Handed off.");
+  kit.git.checkouts.delete(environment);
+  await failsVerification(kit, coordinatorId, agentThreadId, "review");
+  const row = async () => (await kit.rpc.board({ coordinatorId })).issues.find(({ id }) => id === "WEB-1") ?? assert.fail("no row");
+  return { ...managed, row };
+}
+
+test("an issue accepted on work handed off with HEAD detached at its published branch, named apart from its environment's, follows that branch's pull request: its merge makes it Done", async () => {
+  const { kit, update, row } = await failedDetachedOnPublished();
+  kit.github.prs.set(PUBLISHED, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
+  kit.clock.now += 6 * 60_000;
+  await kit.tick();
+  await settled();
+  assert.deepEqual([laneOf(await row()), (await row()).pr?.number], ["in-review", 41], "the board shows the published branch's pull request");
+
+  kit.github.prs.set(PUBLISHED, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 6 * 60_000;
+  await kit.tick();
+  await settled();
+  assert.equal(laneOf(await row()), "done");
+});
+
+test("an accept is refused when CI failed on the checked commit's pull request, on the branch published apart from its environment's while HEAD was detached", async () => {
+  const { kit, coordinatorId, update } = await failedDetachedOnPublished();
+  kit.github.prs.set(PUBLISHED, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "FAILURE", failed: ["test"] });
+  kit.clock.now += 6 * 60_000;
+  await kit.tick();
+  await settled();
+
+  assert.deepEqual(await update({ status: "in-review", decision: REASON }), {
+    refused: true,
+    text: "CI failed on #41 at 0123456, the commit WEB-1's latest verdict checked, so it can't be accepted as it is. Message its agent with agent_message, stop it and start a fresh agent on the issue with agent_start, or ask the user.",
+  });
+  assert.deepEqual(kit.store.issues(coordinatorId).map(({ id }) => id), ["WEB-1"], "no follow-up filed");
+});
+
 test("an accept is refused leading with the reason when a criterion failed, when CI failed on the checked commit as its pull request was last read, and when the latest verdict didn't fail", async () => {
   const criterion = await failedOnce("criterion");
   assert.deepEqual(await criterion.update({ status: "in-review", decision: REASON }), {
@@ -446,7 +498,7 @@ test("an accept succeeds while the agent's thread works on its fix round, and af
 /** a1 hands off done again on WEB-1, written straight to the store, as a handoff that lands while the manager's views are read. */
 function newerHandoff(store: Awaited<ReturnType<typeof managing>>["kit"]["store"], coordinatorId: CoordinatorId): void {
   const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId: ISSUE_ID, agentId: agentIdSchema.parse("a1"), at: Date.now(), turnSeq: 99, ...REPORT };
-  store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha: HEAD, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } });
+  store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha: HEAD, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 } }, null);
 }
 
 test("an accept is refused while the plugin's question at the issue's cap is open, naming it, and succeeds once the user answers", async () => {

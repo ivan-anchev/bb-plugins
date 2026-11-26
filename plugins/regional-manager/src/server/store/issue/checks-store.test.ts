@@ -49,7 +49,7 @@ const returned = (verifierThreadId: string, result: "pass" | "fail"): Received =
 
 /** A done handoff's check, running in the verifier thread `thr_verifier_<n>`. */
 function runningCheck(store: Store, issueId: IssueId, agentId: AgentId, n: number): Check {
-  const check = checkOf(store.insertHandoff(handoff(issueId, agentId, "done", 3_000 + n), CLEAN));
+  const check = checkOf(store.insertHandoff(handoff(issueId, agentId, "done", 3_000 + n), CLEAN, null));
   store.insertCheckerTicket(`verifier-${n}`, { kind: "verifier", coordinatorId: MANAGER, issueId, checkId: check.id }, 3_000);
   store.bindTicket(`verifier-${n}`, `thr_verifier_${n}`);
   return check;
@@ -63,7 +63,7 @@ const CAPLESS: Finding = { file: "src/retry.ts", line: 42, severity: "must-fix",
 
 /** A done handoff's check whose reviewer reported `findings`, running in the verifier thread `thr_verifier_<n>`. */
 function reviewedWith(store: Store, issueId: IssueId, agentId: AgentId, n: number, findings: Finding[]): Check {
-  const check = checkOf(store.insertHandoff(handoff(issueId, agentId, "done", 3_000 + n), CLEAN));
+  const check = checkOf(store.insertHandoff(handoff(issueId, agentId, "done", 3_000 + n), CLEAN, null));
   const at = { coordinatorId: MANAGER, issueId, checkId: check.id };
   store.insertCheckerTicket(`reviewer-${n}`, { kind: "reviewer", ...at }, 3_000);
   store.bindTicket(`reviewer-${n}`, `thr_reviewer_${n}`);
@@ -83,7 +83,7 @@ const events = (store: Store) => store.unannounced(MANAGER).map(({ event }) => e
 test("a done handoff makes a queued check that copies its issue's criteria and verifier as they are then, and tells nobody yet", () => {
   const { store, issue, agentId } = withAgent();
   const done = handoff(issue.id, agentId, "done");
-  const check = checkOf(store.insertHandoff(done, CLEAN));
+  const check = checkOf(store.insertHandoff(done, CLEAN, "bb/thr_1"));
 
   store.updateIssue(MANAGER, issue.id, { doneCriteria: ["npm test passes"], verifier: null }, { requireUnheld: false, closes: new Map(), at: 3_000 });
 
@@ -108,9 +108,9 @@ test("a done handoff makes a queued check that copies its issue's criteria and v
 test("a done handoff no verifier will check is announced at once: verification off, or its environment unread", () => {
   const { store, issue, agentId } = withAgent();
   store.setVerify(MANAGER, false, 2_500);
-  const waived = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
+  const waived = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN, null));
   store.setVerify(MANAGER, true, 2_600);
-  const unread = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), { kind: "unread", reason: "the sandbox is asleep" }));
+  const unread = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), { kind: "unread", reason: "the sandbox is asleep" }, null));
 
   assert.deepEqual(waived.verdict, { state: "waived" });
   assert.equal(unread.verdict.state, "could-not-run");
@@ -125,18 +125,18 @@ test("a done handoff no verifier will check is announced at once: verification o
 test("a blocked handoff gets no check and is announced at once", () => {
   const { store, issue, agentId } = withAgent();
   const blocked = handoff(issue.id, agentId, "blocked");
-  assert.equal(store.insertHandoff(blocked, CLEAN), null);
+  assert.equal(store.insertHandoff(blocked, CLEAN, null), null);
   assert.deepEqual(events(store), [{ kind: "handoff", issueId: issue.id, agentId, handoffId: blocked.id, status: "blocked" }]);
 });
 
 test("a newer done handoff supersedes the issue's checks still waiting", () => {
   const { store, issue, agentId } = withAgent();
-  const queued = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN));
-  const running = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN));
+  const queued = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN, null));
+  const running = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN, null));
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: running.id }, 3_100);
   store.bindTicket("verifier-1", "thr_verifier");
 
-  const newest = store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
+  const newest = store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN, null);
 
   assert.deepEqual([store.check(queued.id)?.verdict, store.check(running.id)?.verdict], [{ state: "superseded" }, { state: "superseded" }]);
   assert.deepEqual(store.openChecks().map(({ id }) => id), [checkOf(newest).id]);
@@ -145,7 +145,7 @@ test("a newer done handoff supersedes the issue's checks still waiting", () => {
 
 test("a check starts running as its verifier's ticket binds, is nudged once, un-nudged once, and is given up only from where it is", () => {
   const { store, issue, agentId } = withAgent();
-  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
+  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN, null));
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   assert.deepEqual(store.bindTicket("verifier-1", "thr_verifier"), { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id });
   assert.deepEqual(store.check(check.id)?.verdict, { state: "running", verifierThreadId: "thr_verifier", nudged: false, declined: [], checkout: CLEAN.checkout });
@@ -165,7 +165,7 @@ test("a check starts running as its verifier's ticket binds, is nudged once, un-
 
 test("a fix round claimed before its findings are sent survives a reload, and settles once, with the event that says it was sent back", () => {
   const { storage, store, issue, agentId } = withAgent();
-  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
+  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN, null));
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier");
   const failed: Received = {
@@ -224,12 +224,12 @@ test("a verdict that passed waits for CI, and one settled as checked gives back 
 
 test("a done handoff that fails partway leaves no handoff, no check, the checks it would supersede waiting, and nothing told", () => {
   const { db, store, issue, agentId } = withAgent();
-  checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN));
+  checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN, null));
   store.setVerify(MANAGER, false, 3_050);
   failWrites(db, "INSERT", "events");
 
   const failing = handoff(issue.id, agentId, "done", 3_100);
-  assert.throws(() => store.insertHandoff(failing, CLEAN), /forced failure/);
+  assert.throws(() => store.insertHandoff(failing, CLEAN, null), /forced failure/);
   assert.equal(store.handoff(failing.id), null);
   assert.deepEqual(store.record(MANAGER, issue.id).map(({ check }) => check?.verdict.state), ["queued"]);
   assert.deepEqual(events(store), [{ kind: "verification-toggled", verify: false }]);
@@ -248,13 +248,13 @@ test("a done handoff that fails partway keeps the checks waiting for CI whole an
   const before = [store.check(fails.id)?.verdict, store.check(passed.id)?.verdict];
   const newer = handoff(issue.id, agentId, "done", 5_000);
   const restore = failWrites(db, "INSERT", "checks");
-  assert.throws(() => store.insertHandoff(newer, CLEAN), /forced failure/);
+  assert.throws(() => store.insertHandoff(newer, CLEAN, null), /forced failure/);
   assert.equal(store.handoff(newer.id), null);
   assert.deepEqual([store.check(fails.id)?.verdict, store.check(passed.id)?.verdict], before, "both verdicts and settlements kept");
   assert.deepEqual(store.waitingForCi(MANAGER, agentId), [fails.id, passed.id]);
 
   restore();
-  const made = checkOf(store.insertHandoff(newer, CLEAN));
+  const made = checkOf(store.insertHandoff(newer, CLEAN, null));
   assert.deepEqual(store.check(passed.id)?.verdict, { ...before[1], settlement: { kind: "superseded" } }, "superseded, its verdict kept whole");
   assert.deepEqual(store.check(fails.id)?.verdict, before[0], "left for its settlement to judge failed");
   assert.deepEqual(store.waitingForCi(MANAGER, agentId), [fails.id]);
@@ -265,7 +265,7 @@ test("a done handoff that fails partway keeps the checks waiting for CI whole an
 
 test("a verifier's ticket whose check fails to start stays unbound", () => {
   const { db, store, issue, agentId } = withAgent();
-  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
+  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN, null));
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   failWrites(db, "UPDATE", "checks");
   assert.throws(() => store.bindTicket("verifier-1", "thr_verifier_1"), /forced failure/);
@@ -366,7 +366,7 @@ test("a verdict, a give-up or a CI result that arrives after its check settled o
 
 test("a review starts running as its reviewer's ticket binds, and takes its findings or its miss only from where it is, while its check waits", () => {
   const { store, issue, agentId } = withAgent();
-  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
+  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN, null));
   store.insertCheckerTicket("reviewer-1", { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   assert.deepEqual(store.bindTicket("reviewer-1", "thr_reviewer"), { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id });
   assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer", scoped: true });
@@ -385,17 +385,17 @@ test("a review starts running as its reviewer's ticket binds, and takes its find
   assert.equal(store.missReview(check.id, { state: "running", reviewerThreadId: "thr_reviewer" }, "stalled", 4_100), false, "nor a late miss");
   assert.deepEqual(events(store), [], "nobody is told of a review");
 
-  const next = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN));
+  const next = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN, null));
   store.insertCheckerTicket("reviewer-2", { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: next.id }, 3_100);
   store.bindTicket("reviewer-2", "thr_reviewer_2");
-  store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
+  store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN, null);
   assert.equal(store.receiveReview(next.id, "thr_reviewer_2", { findings: [], earlier: [] }, model, 4_200), false, "its check was superseded");
   assert.deepEqual(store.check(next.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_2", scoped: true });
 });
 
 test("a reviewer's ticket whose review fails to start stays unbound, and binds once a retry's write succeeds", () => {
   const { db, store, issue, agentId } = withAgent();
-  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
+  const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN, null));
   store.insertCheckerTicket("reviewer-1", { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   const allow = failWrites(db, "UPDATE", "checks");
   assert.throws(() => store.bindTicket("reviewer-1", "thr_reviewer_1"), /forced failure/);
@@ -407,9 +407,9 @@ test("a reviewer's ticket whose review fails to start stays unbound, and binds o
 
 test("a verifier's ticket that binds after its check was superseded leaves the check superseded", () => {
   const { store, issue, agentId } = withAgent();
-  const stale = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN));
+  const stale = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done", 3_000), CLEAN, null));
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: issue.id, checkId: stale.id }, 3_000);
-  store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN);
+  store.insertHandoff(handoff(issue.id, agentId, "done", 3_100), CLEAN, null);
   store.bindTicket("verifier-1", "thr_verifier_1");
   assert.deepEqual(store.check(stale.id)?.verdict, { state: "superseded" });
 });

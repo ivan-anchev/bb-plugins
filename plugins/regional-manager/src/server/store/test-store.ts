@@ -117,7 +117,7 @@ function settledRound(
 ): Check {
   const headSha = "a".repeat(40);
   const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId, agentId, at, turnSeq: n, summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
-  const check = store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha, changedFiles: [], changedFileCount: 0 } });
+  const check = store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha, changedFiles: [], changedFileCount: 0 } }, null);
   if (check === null) throw new Error(`${issueId}'s done handoff made no check`);
   const on = { coordinatorId, issueId, checkId: check.id };
   const of = coordinatorId === MANAGER ? `${n}` : `${n}-${coordinatorId}`;

@@ -44,7 +44,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
     status: "done",
     delivery: { kind: "commit", headSha: SHA, prUrl: null },
   };
-  const check = store.insertHandoff(handoff, CLEAN) ?? assert.fail("no check");
+  const check = store.insertHandoff(handoff, CLEAN, null) ?? assert.fail("no check");
   const checker = (kind: "reviewer" | "verifier") => {
     store.insertCheckerTicket(`${kind}-${ticket}`, { kind, coordinatorId, issueId, checkId: check.id }, 3_100);
     store.bindTicket(`${kind}-${ticket}`, `thr_${kind}_${ticket}`);

@@ -121,9 +121,9 @@ type Received = "recorded" | "not-running" | { unread: string };
 /**
  * An agent's handoff as its tool made it, before it waits for its issue's turn: the handoff and the
  * plugin's read of its checkout; where its work is as seen and what it ran on, to record on the
- * agent (null: not read).
+ * agent (null: not read); and the branch bb made its environment on (null: none recorded).
  */
-type Handing = { handoff: GivenHandoff; checkout: CheckoutRead; seen: AgentCheckout | null; execution: Execution | null };
+type Handing = { handoff: GivenHandoff; checkout: CheckoutRead; seen: AgentCheckout | null; environmentBranchName: string | null; execution: Execution | null };
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 type Running = Extract<Verdict, { state: "running" }>;
@@ -520,7 +520,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
      * unless the agent ended while it waited. Returns its check (null: not done). why no verifier
      * yet: the agent's turn runs until this tool returns; its verifier starts once bb reports it idle.
      */
-    handoff: ({ handoff, checkout, seen, execution }: Handing): Promise<{ check: Check | null } | { ended: EndedHow } | Busy> =>
+    handoff: ({ handoff, checkout, seen, environmentBranchName, execution }: Handing): Promise<{ check: Check | null } | { ended: EndedHow } | Busy> =>
       turns.run(handoff.coordinatorId, handoff.issueId, async () => {
         const agent = store.agent(handoff.coordinatorId, handoff.agentId);
         // why throw: the tool resolved the agent from its bound role, and agents are kept while their regional manager is.
@@ -528,7 +528,8 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
         if (agent.ended !== null) return { ended: agent.ended.how };
         if (seen !== null) store.recordCheckout(agent.coordinatorId, agent.id, seen);
         if (execution !== null) store.recordExecution(agent.coordinatorId, agent.id, execution);
-        return { check: inbox.handoff(handoff, checkout) };
+        // why branchOf on the checkout just recorded: it is the branch the board and the PR watch read this work's pull request on, so a detached HEAD keeps the branch an earlier handoff named.
+        return { check: inbox.handoff(handoff, checkout, branchOf({ checkout: seen ?? agent.checkout }, { environmentBranchName })) };
       }),
 
     /**

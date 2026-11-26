@@ -313,10 +313,11 @@ export function checksStore(db: Db) {
      * firstVerdict gives it on `checkout`, the agent's environment as read as it handed off: queued
      * for a verifier and announced with its verdict later, or else announced at once. A done handoff
      * supersedes every earlier check of its issue still waiting. A blocked or gave-up one, and a done
-     * one nothing verifies, is announced at once.
+     * one nothing verifies, is announced at once. The check keeps `branch`, the one its work was on
+     * as it was handed off (check.ts).
      * Returns its check (null: not done).
      */
-    insertHandoff(handoff: Handoff, checkout: CheckoutRead): Check | null {
+    insertHandoff(handoff: Handoff, checkout: CheckoutRead, branch: string | null): Check | null {
       const { id, coordinatorId, issueId, agentId, at, turnSeq, ...report } = handoff;
       return db().transaction(() => {
         const stored = handoffReportSchema.parse(report);
@@ -344,7 +345,7 @@ export function checksStore(db: Db) {
           at,
           criteria,
           verifier,
-          subject: { kind: "handoff", agentId, handoffId: id, headSha, prUrl, branch: checkout.kind === "read" ? checkout.branch : null },
+          subject: { kind: "handoff", agentId, handoffId: id, headSha, prUrl, branch },
           review: firstReview(verdict),
           verdict,
           followUpId: null,

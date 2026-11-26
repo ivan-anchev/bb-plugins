@@ -17,7 +17,7 @@ import { agentOf, failed, refusedBusy, type ToolsBb } from "./tool-kit.ts";
 
 export const HANDOFF = "agent_handoff";
 
-type ListedThread = { id: string; providerId: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
+type ListedThread = { id: string; providerId: string; environmentId: string | null; environmentBranchName: string | null; archivedAt: number | null; deletedAt: number | null };
 
 /** The parts of bb the handoff uses: registering it, the thread's turns, what it runs on, its environment and bb's git plugin's read of it. */
 type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
@@ -25,10 +25,11 @@ type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { 
 type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff"> };
 
 export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): void {
-  /** The agent's environment, and bb's git plugin's read of it, once, now, while the agent is awake to hand off; null when its thread has none. */
+  /** The agent's environment, the branch bb made it on, and bb's git plugin's read of it, once, now, while the agent is awake to hand off; null when its thread has none. */
   async function readEnvironment(threadId: string): Promise<EnvironmentRead | null> {
-    const environmentId = (await listedThreads(bb, [threadId])).get(threadId)?.environmentId ?? null;
-    return environmentId === null ? null : { environmentId, status: await gitStatusOf(bb, environmentId) };
+    const thread = (await listedThreads(bb, [threadId])).get(threadId);
+    if (thread === undefined || thread.environmentId === null) return null;
+    return { environmentId: thread.environmentId, environmentBranchName: thread.environmentBranchName, status: await gitStatusOf(bb, thread.environmentId) };
   }
 
   bb.agents.registerTool({
@@ -56,7 +57,7 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
       if ("refused" in report) return failed(`${HANDOFF} is refused and nothing was saved: ${report.refused}`);
       const checkout = reading === null ? NOT_READ : checkoutRead(environment);
       const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: caller.coordinatorId, issueId: issue.id, agentId: caller.id, at: Date.now(), turnSeq, ...report };
-      const outcome = await verify.handoff({ handoff, checkout, seen: environment === null ? null : checkoutSeen(caller, environment), execution });
+      const outcome = await verify.handoff({ handoff, checkout, seen: environment === null ? null : checkoutSeen(caller, environment), environmentBranchName: environment?.environmentBranchName ?? null, execution });
       if ("busy" in outcome) return refusedBusy(HANDOFF, outcome);
       if ("ended" in outcome) return endedText(issue.id, outcome.ended);
       const verdict = outcome.check?.verdict ?? null;
@@ -72,8 +73,8 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
 /** The checkout of an agent whose issue ships no code: never read, and never checked. */
 const NOT_READ: CheckoutRead = { kind: "unread", reason: "its issue ships no code, so the plugin read no checkout" };
 
-/** An agent's environment and bb's git plugin's read of it. */
-type EnvironmentRead = { environmentId: string; status: GitStatus };
+/** An agent's environment, the branch bb made it on (null: none recorded), and bb's git plugin's read of it. */
+type EnvironmentRead = { environmentId: string; environmentBranchName: string | null; status: GitStatus };
 
 /** Where the agent's work is, as read: a field the read can't name keeps what was recorded. */
 function checkoutSeen(agent: Agent, { environmentId, status }: EnvironmentRead): AgentCheckout {
