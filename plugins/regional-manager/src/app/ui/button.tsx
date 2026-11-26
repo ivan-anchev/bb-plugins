@@ -19,6 +19,8 @@ const VARIANTS = {
 const SIZES = {
   default: "h-9 whitespace-nowrap px-4 py-2 text-sm",
   sm: "h-8 whitespace-nowrap rounded-md px-3 text-xs",
+  // why `xs`: an action inside a row as tall as its text, as Send in an open question's own-words row.
+  xs: "h-6 whitespace-nowrap rounded-md px-2 text-xs",
   "sm-wrap": "min-h-8 max-w-full rounded-md px-3 py-1.5 text-left text-xs [overflow-wrap:anywhere]",
   // why `touch`: a small button a finger must hit, as Shuffle above the avatar's tiles: sm's text in a 44px tap target.
   touch: "min-h-11 whitespace-nowrap rounded-md px-3 text-xs",

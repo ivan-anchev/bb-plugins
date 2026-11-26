@@ -14,7 +14,7 @@ import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
 import type { DecisionId } from "../../../../model/decision.ts";
 import { CommentCard } from "./comment-card.tsx";
 import { CommentComposer } from "./comment-composer.tsx";
-import { DecisionCard } from "./decision-card.tsx";
+import { DecisionCard } from "./decision/decision-card.tsx";
 import { EntryLine, MovedLine } from "./entry-line.tsx";
 import { CriteriaGrid } from "./round/criteria-grid.tsx";
 import { RoundCard } from "./round/round-card.tsx";
