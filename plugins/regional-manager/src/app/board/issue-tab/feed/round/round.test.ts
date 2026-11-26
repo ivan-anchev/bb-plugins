@@ -71,7 +71,7 @@ test("an open round shows its steps: the handoff and its report, the reviewer's 
   assert.match(one.getByLabelText("Evidence for criterion 2").textContent ?? "", /1 failing: caps the backoff/);
   const passes = one.getByText("1 passed").closest("details") ?? assert.fail("no passes");
   assert.equal(passes.open, false, "the passes stay folded");
-  assert.match(one.getByText(/^Sent back to/).closest("p")?.textContent ?? "", /^Sent back to a1 as fix round 1, with the 1 finding that held/);
+  assert.match(one.getByText(/^Sent back to/).closest("p")?.textContent ?? "", /^Sent back to a1 as fix round 1(?!,)/);
 });
 
 test("a finding reads as its place, severity, origin and claim, its path byte for byte as the reviewer wrote it, a leading space, a zero-width character and a bidi mark kept; a rejected claim is struck, and each triage gives its word and reason: what an anchored one breaks, a downgraded one's new severity", async () => {
@@ -290,7 +290,7 @@ test("a round whose findings may have reached its agent, and whose failure asked
   const { card, head } = rounds(tab());
   fireEvent.click(head(1));
   const outcome = (await card(1).findByText(/sent back to/)).closest("p");
-  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 finding that held: at its cap, the plugin asked you \(d4\)/);
+  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1: at its cap, the plugin asked you \(d4\)/);
 });
 
 test("a round whose findings may or may not have reached its agent says so, and that the manager decides", async () => {
@@ -301,7 +301,7 @@ test("a round whose findings may or may not have reached its agent says so, and 
   const { card, head } = rounds(tab());
   fireEvent.click(head(1));
   const outcome = (await card(1).findByText(/sent back to/)).closest("p");
-  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1, with the 1 finding that held: the regional manager decides/);
+  assert.match(outcome?.textContent ?? "", /^Maybe sent back to a1 as fix round 1: the regional manager decides/);
 });
 
 test("a cell shows its result by glyph, and its tooltip names it on focus and hover, until Escape, wherever focus is", async () => {

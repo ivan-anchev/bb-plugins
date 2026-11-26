@@ -138,7 +138,8 @@ Call `issue_verdict` as your last action, and stop once it records your verdict:
 A failed verdict on a done handoff, whatever failed it (a criterion, a
 must-fix finding you anchored, the plugin's read of the commit and the tree,
 or CI on its pull request), goes back to the agent as its one automatic fix
-round when:
+round, with the must-fixes you anchored and only a count of the other
+findings that held, when:
 
 - it is the agent's first failed verdict: it has its fix round left;
 - the agent still holds the issue, and the handoff is still its latest turn;
@@ -146,9 +147,11 @@ round when:
 
 Then the plugin sends the agent what failed it: each criterion that didn't
 pass, with your evidence, the commit and the tree or CI when they failed it,
-your findings, and every finding of the reviewer's that held, the anchored
-ones first, with your word and reasons, as a message from your thread (never
-one you rejected),
+your findings, and each must-fix of the reviewer's you anchored, with your
+word and reason, and how many more held, as a message from your thread
+(never what a confirmed, downgraded or rejected one says: the others that
+held are filed as a follow-up issue when the issue passes, unless every one
+is a nit),
 once your turn ends and your thread is stopped, which ends any command you
 left running in the background: the agent never works beside you. Any other
 failed verdict goes to the regional manager. A final check's verdict goes to

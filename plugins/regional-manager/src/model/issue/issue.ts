@@ -65,6 +65,9 @@ export type Issue = {
   createdAt: number;
 };
 
+/** An issue as it is filed: what the manager gives it, or a follow-up the plugin files (rounds/follow-up.ts). */
+export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "parentId" | "dependsOn">;
+
 /** The brief an agent starts from, or why none can start on the issue as it is planned. */
 export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneCriteria">): { brief: string } | { refused: string } {
   if (issue.brief === null) return { refused: `${issue.id} has no brief yet. Write one with issue_update.` };

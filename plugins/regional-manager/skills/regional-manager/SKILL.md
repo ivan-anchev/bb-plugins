@@ -561,8 +561,21 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   as the cause. A CREW.md or REVIEW.md rule anchors only when the brief or a
   criterion names it: name the rules that must block in the brief.
   Confirmed and downgraded findings never fail it. When a failed verdict
-  goes back to the agent as its automatic fix round, every finding that held
-  goes with it. When the issue has a pull
+  goes back to the agent as its automatic fix round, only the anchored
+  must-fixes go with it, and the others that held only as a count.
+  **Follow-ups**: when the issue passes with a confirmed should-fix or a
+  downgraded must-fix left from any of its rounds, the plugin files every
+  finding its rounds held without blocking it, nits included, as one
+  follow-up: a top-level build issue in Backlog, titled "Follow-ups from
+  BBP-2: …" (after the first issue of a chain of follow-ups), that depends
+  on the issue, so it stays blocked until the issue is Done. Its brief lists
+  each finding once with its round and the verifier's reason; it has no
+  done-criteria, so plan it with `issue_update` before an agent starts on it,
+  or cancel it if the user doesn't want it. A pass whose leftovers are all
+  nits files nothing: they stay in the issue's feed. Your update for the pass
+  names the follow-up, and the issue's feed shows it. When the issue's pull
+  request merges with held findings no follow-up collected, its update says
+  how many; nothing is filed then. When the issue has a pull
   request, a verdict that passed every criterion, with no must-fix finding
   anchored, also waits for CI on the claimed commit; CI
   failing fails it.

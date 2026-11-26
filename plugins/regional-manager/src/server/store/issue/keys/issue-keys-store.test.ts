@@ -6,7 +6,7 @@ import { handoffIdSchema } from "../../../../model/agent/handoff.ts";
 import { issueKeySchema } from "../../../../model/issue/key/issue-key.ts";
 import { issueIdSchema } from "../../../../model/issue/issue.ts";
 import type { CheckoutRead } from "../../../../model/verdict/checkout.ts";
-import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../../test-store.ts";
+import { asBeforeKeys, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../../test-store.ts";
 
 const BBP = issueKeySchema.parse("BBP");
 const id = issueIdSchema.parse;
@@ -42,24 +42,8 @@ function storedBy050() {
   const asked = store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "user" }, text: "Why three?", replyTo: null, submission: null }, 5_100) ?? assert.fail("not posted");
   store.commentIssue(MANAGER, { issueId: dependent.id, author: { kind: "manager" }, text: "It is enough.", replyTo: asked, submission: null }, 5_200);
   filedIssue(store, OTHER_MANAGER, newIssue(), 2_000);
-  asBefore(db);
+  asBeforeKeys(db);
   return { db, store };
-}
-
-/** MANAGER's rows as a release before issue keys wrote them: every WEB-N it stores, as data or in text, is iN, and it has no key. */
-function asBefore(db: Database.Database): void {
-  db.transaction(() => {
-    db.pragma("defer_foreign_keys = ON");
-    for (const { name: table } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '_bb_migrations'").all() as { name: string }[]) {
-      const columns = (db.pragma(`table_info(${table})`) as { name: string }[]).map(({ name }) => name);
-      const mine = columns.includes("coordinator_id") ? "coordinator_id = @id" : table === "roles" ? "json_extract(role, '$.coordinatorId') = @id" : null;
-      // why skipped: issue_writes came after issue keys, and the renames above count their writes under the i-style ids already.
-      if (mine === null || table === "issue_writes") continue;
-      for (const column of columns) db.prepare(`UPDATE ${table} SET ${column} = replace(${column}, 'WEB-', 'i') WHERE ${mine} AND typeof(${column}) = 'text'`).run({ id: MANAGER });
-    }
-    db.prepare("DELETE FROM issue_writes WHERE coordinator_id = ? AND issue_id GLOB 'WEB-*'").run(MANAGER);
-    db.prepare("UPDATE coordinators SET issue_key = NULL WHERE id = ?").run(MANAGER);
-  })();
 }
 
 /** Every row of every table, to compare one state of the database with another. */

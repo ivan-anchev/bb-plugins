@@ -53,6 +53,7 @@ function handed(verdict: Verdict, subject: CheckSubject = handoffBy(A1)): { chec
       subject,
       review: { state: "none" },
       verdict,
+      followUpId: null,
     },
   };
 }

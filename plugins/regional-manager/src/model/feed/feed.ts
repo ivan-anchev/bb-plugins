@@ -26,6 +26,8 @@ type FeedFacts = {
   log: readonly Logged[];
   /** The issue's comments, in the order posted. */
   comments: readonly Comment[];
+  /** The follow-ups its passes filed, each named by the passing check (checks-store.ts fileFollowUp), as filed. */
+  followUps: readonly Pick<Issue, "id" | "createdAt">[];
 };
 
 /** The issue's feed, oldest first; two moments at one millisecond keep the order listed here, the log's rows in the order written. */
@@ -37,6 +39,7 @@ export function feedOf(facts: FeedFacts): Entry[] {
     ...roundsOf(facts).map((round): Entry => ({ kind: "round", round })),
     ...facts.decisions.map((decision): Entry => ({ kind: "decision", decision, moved: null })),
     ...facts.comments.map((comment): Entry => ({ kind: "comment", comment })),
+    ...facts.followUps.map(({ id, createdAt }): Entry => ({ kind: "follow-up", at: createdAt, issueId: id, moved: null })),
     ...facts.events.flatMap(({ at, event }) => eventEntries(at, event)),
   ];
   const placed = inOrder([...others.map((entry) => ({ at: timeOf(entry), seq: NOT_LOGGED, entry })), ...lines]);
@@ -125,6 +128,7 @@ function momentsOf({ entry, at, seq }: Placed, index: number): Moment[] {
     case "decision":
     case "pr":
     case "thread":
+    case "follow-up":
     case "unblocked":
       return [{ at, seq, entry: index, step: null }];
     default:
@@ -155,6 +159,7 @@ function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus 
     case "decision":
     case "pr":
     case "thread":
+    case "follow-up":
     case "unblocked":
       return { ...entry, moved: movedOf(null) };
     default:

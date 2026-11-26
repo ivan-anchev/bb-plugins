@@ -1,18 +1,18 @@
 // What a verdict found, written for an agent: a checkout that wasn't the claimed commit on a clean
 // tree, as bb's git plugin read it, each done-criterion it didn't pass, with the verifier's
-// evidence, CI's failure on its pull request, its findings, and the reviewer's findings that
-// held, the ones that fail it first, never one it rejected, or that no review was had. It reaches the agent as the verifier's message when a failed verdict goes back for its fix
-// round. And what an earlier agent's
+// evidence, CI's failure on its pull request, its findings, and the reviewer's findings that fail
+// it, with only a count of the others that held, or that no review was had. It reaches the agent as
+// the verifier's message when a failed verdict goes back for its fix round. And what an earlier agent's
 // verdict found, whole and in the past tense, for the agent that takes its issue over.
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { findingText, triageText, type Review } from "../../model/verdict/review.ts";
+import { findingText, FOLLOW_UP_RULE, triageText, type Review } from "../../model/verdict/review.ts";
 import { ciVerdictOf, heldFindings, failedCheckout, failureReasons, failureText, type CriterionResult, type FailureReason, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
-/** The message an agent gets from its verifier when its done handoff failed and goes back to it, with what CI said about its commit and what of its review held. */
+/** The message an agent gets from its verifier when its done handoff failed and goes back to it, with what CI said about its commit and what of its review fails it. */
 export function findingsMessage(review: Review, verdict: Returned, ci: CiVerdict): string {
   return [
     `## Verifier findings: ${notPassed(failureReasons(verdict, ci))}`,
@@ -23,20 +23,27 @@ export function findingsMessage(review: Review, verdict: Returned, ci: CiVerdict
 }
 
 /**
- * The findings that held, each with the verifier's word on it and its reason, for the agent to
- * fix: those that failed the verdict on their own, then the others; after a missed review, that
- * none was had first, and then the earlier blocking findings that held as unfixed. Nothing when
- * none held and a review was had, or the check had no review stage.
+ * The findings that fail the verdict on their own, each with what it breaks in the verifier's
+ * word and its reason, for the agent to fix; then how many more held, never what they say, as they
+ * don't go back (review.ts FOLLOW_UP_RULE). After a missed review, that none was had first, and
+ * the earlier blocking findings that failed it again as unfixed among them. Nothing when none held
+ * and a review was had, or the check had no review stage.
  */
 function heldPart(review: Review, verdict: Returned): string[] {
   const missed = review.state === "missed" ? [`### Review\n\nNo review was had: ${review.reason}.`] : [];
   const { failing, others } = heldFindings(verdict);
-  const list = (findings: Returned["triage"]) => findings.map((finding) => `- ${findingText(finding, "  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason}`).join("\n");
+  const list = failing.map((finding) => `- ${findingText(finding, "  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason}`).join("\n");
   return [
     ...missed,
-    ...(failing.length === 0 ? [] : [`### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${list(failing)}`]),
-    ...(others.length === 0 ? [] : [`### ${failing.length === 0 ? "Review findings" : "Other review findings"} that held\n\n${list(others)}`]),
+    ...(failing.length === 0 ? [] : [`### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${list}`]),
+    ...(others.length === 0 ? [] : [othersText(others.length)]),
   ];
+}
+
+/** How many more of the reviewer's findings held without failing the verdict, which the round doesn't carry. */
+function othersText(count: number): string {
+  const more = count === 1 ? "1 more review finding" : `${count} more review findings`;
+  return `### Other review findings\n\n${more} held without failing the verdict, so this round doesn't carry ${count === 1 ? "it" : "them"}. ${FOLLOW_UP_RULE}`;
 }
 
 /**

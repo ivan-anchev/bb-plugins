@@ -99,7 +99,7 @@ function laterRoundParts({ round, blocking, known }: After): string[] {
       : `Each of these failed round ${round}'s verdict. Answer every one in ${REVIEW}'s earlier, by its number: fixed or not, with a note on what you saw. One not fixed goes to the verifier again, as unfixed; don't report it again as a finding.\n\n${numberedText(blocking)}`;
   return [
     `## Round ${round}'s blocking findings\n\n${answer}`,
-    ...(known.length === 0 ? [] : [`## Findings already known\n\nEarlier rounds' findings that held. Don't report them again.\n\n${known.map((finding) => `- ${findingText(finding, "  ")}`).join("\n")}`]),
+    ...(known.length === 0 ? [] : [`## Findings already known\n\nEarlier rounds' findings that held without blocking. Don't report them again: they don't go back to the agent, and when the issue passes they are filed as a follow-up, unless every one is a nit.\n\n${known.map((finding) => `- ${findingText(finding, "  ")}`).join("\n")}`]),
     `## Marking your findings\n\nMark each finding you report with its origin: new, on code changed since round ${round}'s commit, or missed, on code round ${round} reviewed unchanged. ${MISSED_RULE} Report a missed one at the severity CREW.md gives it all the same.`,
   ];
 }

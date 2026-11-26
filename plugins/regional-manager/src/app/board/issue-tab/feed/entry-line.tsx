@@ -46,6 +46,8 @@ function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
       return `#${entry.number} ${entry.changes.flatMap((change) => PR_CHANGE_WORDS[change] ?? []).join(", ")}`;
     case "thread":
       return <ThreadSaid event={entry.event} />;
+    case "follow-up":
+      return `filed the review findings that held without blocking it as the follow-up ${entry.issueId}, in Backlog`;
     case "unblocked":
       return `Unblocked: ${entry.by}, the last of its dependencies, closed`;
     case "logged":

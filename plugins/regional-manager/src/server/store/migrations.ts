@@ -267,6 +267,12 @@ export const MIGRATIONS: readonly string[] = [
   // or bb sent it at once), written with announced_at. why kept: a catch-up takes a queued doorbell
   // back only once no event it announced is unread (inbox.ts withdraw).
   `ALTER TABLE events ADD COLUMN doorbell TEXT`,
+
+  // The follow-up issue a check's findings that held without blocking were filed in when its issue
+  // passed, or, on the passing check, the one its pass filed (rounds/follow-up.ts); null: none. why on the check: a round is collected
+  // once, and its issue's feed and catch-up read it from the check it describes, written in the
+  // settling transaction that files the follow-up (checks-store.ts settleReturned).
+  `ALTER TABLE checks ADD COLUMN follow_up_id TEXT`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

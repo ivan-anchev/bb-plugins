@@ -7,7 +7,7 @@ import { z } from "zod";
 import { agentIdSchema, type AgentId } from "../../../model/agent/agent.ts";
 import { executionSchema } from "../../../model/agent/execution.ts";
 import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/agent/handoff.ts";
-import { doneCriteriaSchema, issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
+import { doneCriteriaSchema, issueIdSchema, type Issue, type IssueId } from "../../../model/issue/issue.ts";
 import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
 import type { Handed } from "../../../model/issue/status.ts";
 import type { DecisionId } from "../../../model/decision.ts";
@@ -16,13 +16,16 @@ import { checkIdSchema, checkSubjectSchema, type Check, type CheckId, type Final
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../../model/verdict/pr.ts";
 import { firstReview, reviewSchema, type Review } from "../../../model/verdict/review.ts";
-import { failureReasons, firstVerdict, isSettled, storedVerdictSchema, type FirstVerdict, type StoredVerdict, type Verdict } from "../../../model/verdict/verdict.ts";
+import { failureReasons, firstVerdict, isSettled, outcome, storedVerdictSchema, type FirstVerdict, type StoredVerdict, type Verdict } from "../../../model/verdict/verdict.ts";
 import type { ModelRef } from "../../../model/agent/execution.ts";
 import { capAsks, capQuestionsOf, capQuestionText, CAP_OPTIONS, countedFailures } from "../../../model/verdict/rounds/cap.ts";
 import { readInOrder } from "../../../model/verdict/rounds/delta.ts";
+import { followUpPlan, leftoversOf } from "../../../model/verdict/rounds/follow-up.ts";
+import { numberedRounds } from "../../../model/feed/feed.ts";
 import { decisionsOf, insertDecision, insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 import { countFixRound } from "./agents-store.ts";
+import { fileIssue, issuesOf } from "./issues-store.ts";
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
 export type VerdictFrom = { state: "queued" } | { state: "running"; verifierThreadId: string };
@@ -41,8 +44,8 @@ export type GivenUp = Omit<Extract<Verdict, { state: "could-not-run" }>, "state"
 /** A verifier's verdict as the store takes it: its triage only the verifier's result and reason for each finding, in the review's order, stored as it is. */
 export type ReceivedVerdict = Omit<Extract<StoredVerdict, { state: "returned" }>, "settlement" | "mustFixFails" | "at">;
 
-/** A check as it is made, with its first verdict (verdict.ts firstVerdict), which is stored as it is. */
-type NewCheck<C extends Check> = C & { verdict: FirstVerdict };
+/** A check as it is made, with its first verdict (verdict.ts firstVerdict), which is stored as it is, and no follow-up yet. */
+type NewCheck<C extends Check> = C & { verdict: FirstVerdict; followUpId: null };
 
 /** A verdict before it returns: every state but returned, stored and read alike. */
 type Unreturned = Exclude<Verdict, { state: "returned" }>;
@@ -172,6 +175,52 @@ export function checksStore(db: Db) {
     return cap === null ? null : insertDecision(db, coordinatorId, { issueId, question: capQuestionText(issueId, settled, cap), options: CAP_OPTIONS, cap }, at).id;
   }
 
+  /**
+   * When the check just settled as a pass of its issue's done handoff, files the issue's follow-up,
+   * as the one plan says (rounds/follow-up.ts followUpPlan), from every round of the issue no
+   * follow-up collected yet, and stamps with it each round's check it collected, and the passing
+   * check, which names the follow-up its pass filed. A round is so collected once. Call inside the
+   * settling transaction, after its settlement is written, so the check reads as passed.
+   */
+  function fileFollowUp(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, at: number): void {
+    const passed = check(checkId);
+    if (passed?.subject.kind !== "handoff" || outcome(passed.verdict) !== "pass") return;
+    const record = handed("WHERE h.coordinator_id = ? AND h.issue_id = ? ORDER BY h.rowid", coordinatorId, issueId);
+    const collected = numberedRounds(record, finalChecksOf(coordinatorId, issueId)).flatMap((begun) => {
+      const uncollected = begun.kind === "handoff" && begun.handed.check?.followUpId === null ? begun.handed.check : null;
+      const leftovers = uncollected === null ? [] : leftoversOf(uncollected);
+      return uncollected === null || leftovers.length === 0 ? [] : [{ round: begun.number, checkId: uncollected.id, leftovers }];
+    });
+    const plan = followUpPlan(issueId, firstOriginOf(coordinatorId, issueId), collected);
+    if (plan === null) return;
+    // why no closes: no view is read here, so its origin reads open; one closed already is announced as unblocking its follow-up, an announcement more, never one lost (issues-store.ts writeDependencies).
+    const filed = fileIssue(db, coordinatorId, plan, new Map(), at);
+    // why throw, which rolls the settlement back: a top-level issue that depends only on its origin, which exists and that nothing depends on yet, breaks no plan rule (plan.ts).
+    if ("refused" in filed) throw new Error(`The follow-up of ${issueId} can't be filed: ${filed.refused}`);
+    const stamp = db().prepare("UPDATE checks SET follow_up_id = ? WHERE id = ?");
+    for (const stamped of new Set([...collected.map((round) => round.checkId), checkId])) stamp.run(filed.issue.id, stamped);
+  }
+
+  /** The issue a chain of follow-ups began at: `issueId` when it is no follow-up, else its origin's, following checks.follow_up_id back. why throw: a check is kept while its issue is. */
+  function firstOriginOf(coordinatorId: CoordinatorId, issueId: IssueId): Issue {
+    const row = db().prepare("SELECT issue_id AS origin FROM checks WHERE coordinator_id = ? AND follow_up_id = ? LIMIT 1").get(coordinatorId, issueId);
+    if (row !== undefined) return firstOriginOf(coordinatorId, z.object({ origin: issueIdSchema }).parse(row).origin);
+    const [issue] = issuesOf(db, coordinatorId, issueId);
+    if (issue === undefined) throw new Error(`The issue ${issueId} of ${coordinatorId} is missing.`);
+    return issue;
+  }
+
+  /** Every final check of the issue, oldest first: none but a build parent's. */
+  function finalChecksOf(coordinatorId: CoordinatorId, issueId: IssueId): FinalCheck[] {
+    const ids = db()
+      .prepare("SELECT id FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(subject, '$.kind') = 'final' ORDER BY rowid")
+      .all(coordinatorId, issueId)
+      .map(toCheckId);
+    if (ids.length === 0) return [];
+    const read = issueChecks(db, coordinatorId, issueId);
+    return ids.map((id) => toFinalCheck(read.get(id) ?? null));
+  }
+
   /** Inserts a check made of the handoff `handoffId` (null: a final check, made of none), with its first verdict. Call inside a transaction. */
   function insertCheck({ id, coordinatorId, issueId, subject, criteria, verifier, review, verdict, at }: NewCheck<Check>, handoffId: HandoffId | null): void {
     db()
@@ -253,6 +302,7 @@ export function checksStore(db: Db) {
           subject: { kind: "handoff", agentId, handoffId: id, headSha, prUrl },
           review: firstReview(verdict),
           verdict,
+          followUpId: null,
         };
         insertCheck(made, id);
         if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id, asked: null }, at);
@@ -283,6 +333,7 @@ export function checksStore(db: Db) {
           subject: { kind: "final", ...subject },
           review: { state: "none" },
           verdict: firstVerdict(verifies(coordinatorId), null, at),
+          followUpId: null,
         };
         insertCheck(made, null);
         if (made.verdict.state !== "queued") insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId: made.id, asked: null }, at);
@@ -291,15 +342,7 @@ export function checksStore(db: Db) {
     },
 
     /** Every final check of the issue, oldest first: none but a build parent's. */
-    finalChecks(coordinatorId: CoordinatorId, issueId: IssueId): FinalCheck[] {
-      const ids = db()
-        .prepare("SELECT id FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(subject, '$.kind') = 'final' ORDER BY rowid")
-        .all(coordinatorId, issueId)
-        .map(toCheckId);
-      if (ids.length === 0) return [];
-      const read = issueChecks(db, coordinatorId, issueId);
-      return ids.map((id) => toFinalCheck(read.get(id) ?? null));
-    },
+    finalChecks: finalChecksOf,
 
     /** One handoff with its check, or null when there is none by that id. */
     handoff: (id: HandoffId): Handed | null => handed("WHERE h.id = ?", id)[0] ?? null,
@@ -411,7 +454,8 @@ export function checksStore(db: Db) {
      * Settles an unsettled verdict and records it for its regional manager, together. `sent-back`
      * and `maybe-sent-back` need a claimed round, and keep it and its CI; `checked` gives back a
      * round claimed for findings that never left. A failure at the issue's cap also puts the cap
-     * question to the user, in the same transaction (askAtCap). `waiting-for-ci` moves a pending
+     * question to the user, and a pass files its issue's follow-up, in the same transaction (askAtCap,
+     * fileFollowUp). `waiting-for-ci` moves a pending
      * verdict to wait, and records nothing: nobody is told until it settles. Returns whose it was,
      * or null when it was already settled or waiting, or there is no claim to keep.
      */
@@ -430,6 +474,7 @@ export function checksStore(db: Db) {
           if (settlement.kind === "sending-back") countFixRound(db, coordinatorId, handingAgentOf(checkId), -1);
           writeSettlement(db, checkId, as);
           insertEvent(db, coordinatorId, { kind: "checked", issueId, checkId, asked: askAtCap(coordinatorId, issueId, checkId, at) }, at);
+          fileFollowUp(coordinatorId, issueId, checkId, at);
           return coordinatorId;
         }
         if (settlement.kind !== "sending-back") return null;
@@ -489,7 +534,7 @@ const isAt = (verdict: Verdict, from: VerdictFrom): boolean =>
 
 const toCheckId = (row: unknown): CheckId => z.object({ id: checkIdSchema }).parse(row).id;
 
-const CHECK_COLUMNS = "id, coordinator_id AS coordinatorId, issue_id AS issueId, at, criteria, verifier, subject, review, verdict";
+const CHECK_COLUMNS = "id, coordinator_id AS coordinatorId, issue_id AS issueId, at, criteria, verifier, subject, review, verdict, follow_up_id AS followUpId";
 const checkRowSchema = z.object({
   id: checkIdSchema,
   coordinatorId: coordinatorIdSchema,
@@ -500,6 +545,7 @@ const checkRowSchema = z.object({
   subject: json(checkSubjectSchema),
   review: json(reviewSchema),
   verdict: json(storedVerdictSchema),
+  followUpId: issueIdSchema.nullable(),
 });
 /** why throw: the query picks only final checks, by an id it just listed. */
 function toFinalCheck(check: Check | null): FinalCheck {

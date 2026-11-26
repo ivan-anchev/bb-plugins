@@ -104,6 +104,14 @@ export const MISSED_RULE =
   "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so the verifier never anchors it. A missed must-fix that holds is downgraded, its missed origin the reason even when it breaks one of the five; a missed should-fix or nit that holds is confirmed or downgraded as any other.";
 
 /**
+ * Where the findings that hold go, in the one wording every place a reviewer, a verifier, an agent
+ * or the regional manager reads gives it: what fails the verdict goes back; the rest waits for the
+ * pass, which files it (rounds/follow-up.ts).
+ */
+export const FOLLOW_UP_RULE =
+  "Only an anchored must-fix goes back to the agent, in its automatic fix round. The other findings that hold don't: when the issue passes, the plugin files them all as one follow-up issue in Backlog, blocked until the issue is Done, unless every one is a nit, which stays in the issue's feed.";
+
+/**
  * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
  * review's order, each with why in a line: rejected, it doesn't hold or isn't worth fixing;
  * confirmed, a should-fix or nit that holds; anchored, a must-fix that holds and breaks `anchor`;
@@ -129,7 +137,7 @@ type Triage = z.infer<typeof triageSchema>;
 export type Triaged = ReviewFinding & Triage;
 
 /** How a verifier triages the reviewer's findings, and what its triage does, in the one wording each place a verifier reads gives it. */
-export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and breaks one of the five things below; name which as its anchor. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that breaks none of the five is downgraded, never confirmed. Give each its reason in a line. Every finding that holds goes back to the agent in its automatic fix round; a rejected one never does. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and breaks what you name. ${ANCHOR_RULE} ${MISSED_RULE}`;
+export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and breaks one of the five things below; name which as its anchor. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that breaks none of the five is downgraded, never confirmed. Give each its reason in a line. ${FOLLOW_UP_RULE} A rejected one goes nowhere. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and breaks what you name. ${ANCHOR_RULE} ${MISSED_RULE}`;
 
 /**
  * Why a verifier's triage of a finding can't be taken, in a phrase; null when it can: a must-fix
@@ -153,7 +161,7 @@ export function triageProblem({ severity, origin }: ReviewFinding, triage: Triag
   }
 }
 
-/** Whether a finding held, as the verifier triaged it: every one it didn't reject. The one rule for what goes back to the agent and what a round counts as held. */
+/** Whether a finding held, as the verifier triaged it: every one it didn't reject. The one rule for what a round counts as held. */
 export function holds(triage: Triage): boolean {
   switch (triage.result) {
     case "rejected":

@@ -9,7 +9,10 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 import { checkIdSchema } from "../../model/verdict/check.ts";
 import type { Review } from "../../model/verdict/review.ts";
 import { outcome, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
-import { handoffText } from "./inbox-text.ts";
+import { handoffText, updatesText, type Lookups } from "./inbox-text.ts";
+import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
+import type { Check } from "../../model/verdict/check.ts";
+import type { PrSnapshot } from "../../model/verdict/pr.ts";
 
 const SHA = "0123456789abcdef0123456789abcdef01234567";
 const coordinatorId = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
@@ -48,6 +51,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review
     subject: { kind: "handoff", agentId, handoffId: handoff.id, headSha: SHA, prUrl: null },
     review,
     verdict,
+    followUpId: null,
   },
 });
 
@@ -102,15 +106,15 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
   assert.equal(by(checkedWith(returned(["pass"])), CODEX), "codex gpt-default");
 });
 
-test("a verdict's review says whether the findings that held reached the agent only as far as its settlement shows", () => {
+test("a verdict's review says whether the findings that fail it reached the agent only as far as its settlement shows", () => {
   const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" }], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
   const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new", result: "anchored", anchor: "criterion", reason: "It never caps." }] };
   const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
     [{ kind: "pending" }, "None has gone to the agent yet."],
     [{ kind: "waiting-for-ci" }, "None has gone to the agent yet."],
-    [{ kind: "sending-back", round: 1, ci: { kind: "none" } }, "The ones that held are on their way back to the agent with the failed verdict."],
-    [{ kind: "sent-back", round: 1, ci: { kind: "none" } }, "The ones that held went back to the agent with the failed verdict."],
-    [{ kind: "maybe-sent-back", round: 1, ci: { kind: "none" } }, "The ones that held went with the failed verdict's findings, which may or may not have reached the agent."],
+    [{ kind: "sending-back", round: 1, ci: { kind: "none" } }, "The ones that fail it are on their way back to the agent with the failed verdict."],
+    [{ kind: "sent-back", round: 1, ci: { kind: "none" } }, "The ones that fail it went back to the agent with the failed verdict."],
+    [{ kind: "maybe-sent-back", round: 1, ci: { kind: "none" } }, "The ones that fail it went with the failed verdict's findings, which may or may not have reached the agent."],
     [{ kind: "checked", refused: null, ci: { kind: "none" } }, "None of them went to the agent."],
     [{ kind: "superseded" }, "None of them went to the agent."],
   ];
@@ -143,11 +147,59 @@ test("catch-up words a round's review as the verifier's totals, anchored, downgr
   assert.ok(
     text.includes(
       [
-        "Review: a reviewer on claude-code sonnet reported 4 findings; the verifier anchored 1, downgraded 1, confirmed 1 and rejected 1. The ones that held went back to the agent with the failed verdict.",
+        "Review: a reviewer on claude-code sonnet reported 4 findings; the verifier anchored 1, downgraded 1, confirmed 1 and rejected 1. The ones that fail it went back to the agent with the failed verdict. The others don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit.",
         "- `src/retry.ts:4` (must-fix): No cap.\n  Anchored, as it breaks the issue's brief: The brief says capped.\n- `src/retry.ts:9` (must-fix): The name says nothing.\n  Downgraded to nit: Breaks none of the five.\n- `src/retry.ts:12` (should-fix): Jitter computed twice.\n  Confirmed: Both calls on line 12.\n- `src/retry.css` (nit): Padding.\n  Rejected: Matches the row.",
       ].join("\n\n"),
     ),
     text,
   );
   assert.match(text, /Failed verification: a must-fix review finding upheld\. 1 of 1 criteria passed/, "the anchored finding alone fails it");
+});
+
+/** What catch-up looks up for WEB-1, whose record is `record`, and its follow-up WEB-2, titled as filed. */
+const lookupsOf = (record: readonly Handed[]): Lookups => ({
+  titles: new Map([[issueId, "Add retries"], [FOLLOW_UP, "Follow-ups from WEB-1: Add retries"]]),
+  handoff: (id) => record.find((one) => one.handoff.id === id) ?? null,
+  check: (id) => record.find((one) => one.check?.id === id)?.check ?? null,
+  ...agentOn(CODEX),
+  decision: () => null,
+  comment: () => null,
+  record: () => record,
+  view: () => null,
+  capQuestions: () => [],
+});
+
+const FOLLOW_UP = issueIdSchema.parse("WEB-2");
+const LOG_IT = { file: "src/retry.ts", line: 10, severity: "should-fix", claim: "Log each retry.", origin: "new" } as const;
+const NAME_IT = { file: "src/retry.ts", line: 3, severity: "nit", claim: "Name the constant.", origin: "new" } as const;
+
+/** A check of the handoff whose reviewer reported `findings`, each of which the verifier confirmed, with every criterion `result`, stamped with `followUpId`. */
+function confirmedAll(findings: (typeof LOG_IT | typeof NAME_IT)[], result: CriterionResult, followUpId: Check["followUpId"] = null): Handed {
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [...findings], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
+  const handed = checkedWith({ ...returned([result]), triage: findings.map((finding) => ({ ...finding, result: "confirmed", reason: "It holds." })) }, null, review);
+  return { ...handed, check: handed.check === null ? null : { ...handed.check, followUpId } };
+}
+
+test("catch-up's pass line names the follow-up its settling filed, and the round's review says its findings are filed there", () => {
+  const passed = confirmedAll([LOG_IT, NAME_IT], "pass", FOLLOW_UP);
+  const checkId = passed.check?.id ?? assert.fail("no check");
+  const event: StoredEvent = { id: 1, at: 5_000, event: { kind: "checked", issueId, checkId, asked: null } };
+  const text = updatesText([event], lookupsOf([passed]));
+  assert.match(text, /\n\nIt passed, so the plugin filed every review finding its rounds held without blocking it as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and blocked by WEB-1 until it is Done\./);
+  assert.match(text, /confirmed 2 and rejected 0\. They are filed in WEB-2, its follow-up\./);
+
+  assert.doesNotMatch(updatesText([event], lookupsOf([confirmedAll([], "pass")])), /filed/, "a pass that filed nothing says nothing of a follow-up");
+});
+
+test("catch-up's merge line says how many held findings no follow-up collected, and says nothing when a follow-up collected them all", () => {
+  const pr: PrSnapshot = { number: 41, url: "https://github.com/o/r/pull/41", state: "merged", draft: false, review: "none", ci: "pass", failedChecks: [], headSha: SHA };
+  const merged: StoredEvent = { id: 2, at: 6_000, event: { kind: "pr", issueId, agentId, pr, changes: ["merged"] } };
+  const failedEarlier = confirmedAll([LOG_IT, NAME_IT], "fail");
+  const nitLeft = confirmedAll([NAME_IT], "pass");
+  assert.match(updatesText([merged], lookupsOf([failedEarlier, nitLeft])), /It merged with 3 review findings its rounds held without blocking that no follow-up collected\. Nothing is filed for them now; they stay in the issue's feed\./);
+  assert.match(updatesText([merged], lookupsOf([nitLeft])), /It merged with 1 review finding its rounds held without blocking that no follow-up collected\. Nothing is filed for it now; it stays in the issue's feed\./);
+  const collected = [confirmedAll([LOG_IT, NAME_IT], "fail", FOLLOW_UP), confirmedAll([], "pass", FOLLOW_UP)];
+  assert.doesNotMatch(updatesText([merged], lookupsOf(collected)), /no follow-up collected/);
+  const opened: StoredEvent = { ...merged, event: { kind: "pr", issueId, agentId, pr: { ...pr, state: "open" }, changes: ["opened"] } };
+  assert.doesNotMatch(updatesText([opened], lookupsOf([nitLeft])), /no follow-up collected/, "only a merge counts them");
 });

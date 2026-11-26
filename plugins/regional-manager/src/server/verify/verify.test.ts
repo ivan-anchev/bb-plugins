@@ -1041,6 +1041,39 @@ test("a failure settled while a cap question is open, as when a person wakes the
 /** The sections of a first message, each from its heading: what a test compares where a brief must not change. */
 const headingsOf = (prompt: string): string[] => prompt.split("\n\n").filter((part) => part.startsWith("#")).map((part) => part.split("\n")[0] ?? "");
 
+test("the fix round sent back to the agent lists each anchored must-fix with what it breaks, and only counts the confirmed and downgraded findings, which it doesn't carry", async () => {
+  const { kit, agentThreadId, check, verifier, handOff } = await withAgent();
+  kit.reviewers.reportAtOnce = false;
+  const findings = [
+    { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
+    { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." },
+    { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports break REVIEW.md's order." },
+    { file: "src/retry.css", line: 2, severity: "nit", claim: "The padding differs from the row's." },
+  ];
+  await handOff();
+  const review = check().review;
+  const reviewer = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
+  await kit.call("issue_review", { findings }, reviewer);
+  await kit.idle(reviewer, "Reviewed.");
+  await settled();
+  const triage = [
+    { finding: 1, result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." },
+    { finding: 2, result: "confirmed", reason: "Both calls sit on line 7." },
+    { finding: 3, result: "downgraded", to: "nit", reason: "Neither the brief nor a criterion names the import order." },
+    { finding: 4, result: "rejected", reason: "Taste." },
+  ];
+  const verifierThreadId = verifier();
+  await kit.call("issue_verdict", { ...PASSES, triage }, verifierThreadId);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+
+  const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
+  assert.match(sent, /- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks the issue's brief\. The brief says retries back off; this never stops doubling\./);
+  assert.doesNotMatch(sent, /jitter is computed twice|Both calls sit/, "no confirmed should-fix");
+  assert.doesNotMatch(sent, /REVIEW\.md's order|import order/, "no downgraded finding");
+  assert.doesNotMatch(sent, /padding|Taste/, "no rejected finding");
+  assert.match(sent, /### Other review findings\n\n2 more review findings held without failing the verdict, so this round doesn't carry them\. Only an anchored must-fix goes back to the agent/);
+});
+
 test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix or nit and a downgrade to the same severity, each naming the finding and a way forward that works, and stores an anchored and a downgraded entry", async () => {
   const { kit, check, verifier, handOff } = await withAgent();
   kit.reviewers.reportAtOnce = false;

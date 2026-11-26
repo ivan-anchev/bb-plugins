@@ -57,6 +57,7 @@ const checkOf = (verdict: Verdict): Check => ({
   subject: { kind: "handoff", agentId: agent.id, handoffId: done.id, headSha: SHA, prUrl: null },
   review: { state: "none" },
   verdict,
+  followUpId: null,
 });
 const returned = (results: CriterionResult[], settlement: Extract<Verdict, { state: "returned" }>["settlement"] = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
   state: "returned", at: 5_000,

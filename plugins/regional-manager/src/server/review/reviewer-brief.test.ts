@@ -85,6 +85,7 @@ function roundOne(sha: string): StoredCheck {
       sameModel: false,
       settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
     },
+    followUpId: null,
   };
 }
 

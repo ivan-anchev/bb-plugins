@@ -15,7 +15,7 @@ import { memoryStorage } from "../memory-storage.ts";
 import type { NewAgent } from "./issue/agents-store.ts";
 import { MIGRATIONS } from "./migrations.ts";
 import { openStore, type Store } from "./store.ts";
-import { AVATAR, EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "./test-store.ts";
+import { asBeforeKeys, AVATAR, EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, passWithShouldFix, startAgent } from "./test-store.ts";
 
 test("a fresh database holds the design's tables and indexes, and nothing else", () => {
   const { db } = freshStore();
@@ -312,6 +312,39 @@ test("removing a regional manager removes everything it owns, and nothing of ano
   assert.equal(store.roleOfThread("thr_manager_2")?.kind, "coordinator");
   assert.deepEqual([store.factWrites(MANAGER), store.factWrites(OTHER_MANAGER) > 0], [0, true]);
   assert.deepEqual([store.issueWrites(MANAGER).size, store.issueWrites(OTHER_MANAGER).size], [0, 2]);
+});
+
+test("removing a regional manager whose issue passed with a follow-up removes the origin, its follow-up and the check naming it, and nothing of another's", () => {
+  const { db, store } = freshStore();
+  for (const manager of [MANAGER, OTHER_MANAGER]) {
+    const { id } = filedIssue(store, manager, newIssue(), 2_000);
+    passWithShouldFix(store, id, startAgent(store, id, `agent-of-${manager}`, manager), 1, 3_000, manager);
+  }
+  assert.deepEqual(store.issues(MANAGER).map(({ id, dependsOn }) => [id, dependsOn]), [[WEB_1, []], ["WEB-2", [WEB_1]]], "the pass filed a follow-up");
+
+  store.removeCoordinator(MANAGER);
+
+  assert.equal(store.startOf(MANAGER), null);
+  assert.deepEqual(store.issues(MANAGER), []);
+  assert.deepEqual(db.prepare("SELECT follow_up_id AS followUpId FROM checks WHERE coordinator_id = ?").all(MANAGER), []);
+  assert.deepEqual(db.prepare("SELECT issue_id AS issueId FROM issue_relations WHERE coordinator_id = ?").all(MANAGER), []);
+  assert.deepEqual(store.issues(OTHER_MANAGER).map(({ id }) => id), [WEB_1, "WEB-2"]);
+  assert.deepEqual(db.prepare("SELECT follow_up_id AS followUpId FROM checks WHERE coordinator_id = ?").all(OTHER_MANAGER), [{ followUpId: "WEB-2" }]);
+});
+
+test("keying a regional manager whose issues are i1, i2 renames the follow-up each check names, and the follow-up's origin is found under its new id", () => {
+  const { db, store } = freshStore();
+  const origin = filedIssue(store, MANAGER, newIssue(), 2_000);
+  passWithShouldFix(store, origin.id, startAgent(store, origin.id, "agent-1"), 1, 3_000);
+  asBeforeKeys(db);
+  assert.deepEqual(db.prepare("SELECT issue_id AS issueId, follow_up_id AS followUpId FROM checks WHERE coordinator_id = ?").all(MANAGER), [{ issueId: "i1", followUpId: "i2" }]);
+
+  assert.equal(store.keyIssues(MANAGER, issueKeySchema.parse("BBP")), true);
+
+  assert.deepEqual(db.prepare("SELECT issue_id AS issueId, follow_up_id AS followUpId FROM checks WHERE coordinator_id = ?").all(MANAGER), [{ issueId: "BBP-1", followUpId: "BBP-2" }]);
+  const followUp = issueIdSchema.parse("BBP-2");
+  passWithShouldFix(store, followUp, startAgent(store, followUp, "agent-2"), 2, 4_000);
+  assert.equal(store.issue(MANAGER, issueIdSchema.parse("BBP-3"))?.title, "Follow-ups from BBP-1: Add retries", "its follow-up is titled after the first origin");
 });
 
 test("every write to what an issue's view is read from counts for its regional manager as it commits; a write rolled back, another manager's, and one the views never read count nothing", () => {
