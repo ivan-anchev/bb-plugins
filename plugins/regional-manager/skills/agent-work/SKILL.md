@@ -128,10 +128,11 @@ then stop:
 - **summary**: one line, up to 120 characters, your regional manager can pass
   on as it is. Don't open it with the status: the board shows it after the
   status, as in "Blocked: <summary>".
-- **did**, **evidence**, **concerns**, **deviations**, **findings**: lists of
-  up to 50 items, each up to 2,000 characters. On a build issue, evidence
-  takes each done-criterion in turn: the command you ran and what it printed.
-  Use `[]` for an empty list.
+- **did**, **concerns**, **deviations**, **findings**: lists of up to 10
+  items, each one fact of up to 300 characters. **evidence**: up to 10
+  items of up to 1,000 characters; on a build issue, one per done-criterion:
+  the command you ran and the lines that decide it. Use `[]` for an empty
+  list. A handoff past these caps is refused, and nothing is saved.
 - **headSha** (a build issue's done only, required): `git rev-parse HEAD`
   after your last commit. **prUrl**: the pull request, if you opened one. Name
   it: a verdict that passes your criteria then waits for CI on your commit,
@@ -201,3 +202,32 @@ after you handed off, answer them; if that changes your work, hand off again.
 Once you are stopped, `agent_handoff` is refused: you no longer hold the
 issue. If it is refused because an earlier operation on the issue hasn't
 finished, nothing was saved: call it again in a minute.
+
+### How you write your handoff
+
+Your regional manager and the user scan your handoff in the issue's feed, one
+line per item, so write for that:
+
+- **Your summary is the round's headline**: what changed, in plain words,
+  with the change in its first 50 characters. Don't open it with your status
+  or "I".
+  - Good: "Cap agent_handoff's items at 300 characters, 10 per list"
+  - Not: "I have completed the work on handoff caps as described in the brief"
+- **Each item is one fact.** Its first sentence stands alone and fits a line
+  (aim for 160 characters). Put any detail after it, up to 300 characters in
+  all.
+  - Good: "Trimmed issue_verdict's instructions from 4,083 to 3,483 characters.
+    The cut was the repeated anchor list, now named once."
+  - Not: "Worked on the instructions, which were too long, and after some
+    investigation found several places to trim, including…"
+- **Evidence is one item per done-criterion**, opening "Criterion N:", then
+  the command and the lines of its output that decide it, not the whole
+  output, up to 1,000 characters.
+  - Good: "Criterion 2: `node --test src/model/agent/handoff.test.ts` printed
+    `ℹ pass 7` and `ℹ fail 0`."
+- **Concerns are risks your regional manager should act on. Deviations say
+  what you changed beyond the brief, and why.** Leave a list empty rather
+  than pad it, and never repeat an item in two lists.
+- **Write like a senior engineer in chat**: plain words and contractions, no
+  filler or hype, no file lists the diff already shows, no restating the
+  brief. Make it short by cutting content, not grammar.

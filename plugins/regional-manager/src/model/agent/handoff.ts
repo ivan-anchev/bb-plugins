@@ -17,21 +17,30 @@ export const commitSchema = z.string().regex(/^[0-9a-f]{40}$/);
 /** How an agent's work ended. */
 export const handoffStatusSchema = z.enum(["done", "blocked", "gave-up"]);
 
-const itemsSchema = z.array(z.string().trim().min(1).max(2_000)).max(50);
+const summarySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(120)
+  .regex(/^[^\r\n]*$/, "A summary is one line");
 
-const reportFields = {
-  summary: z
-    .string()
-    .trim()
-    .min(1)
-    .max(120)
-    .regex(/^[^\r\n]*$/, "A summary is one line"),
-  did: itemsSchema,
-  evidence: itemsSchema,
-  concerns: itemsSchema,
-  deviations: itemsSchema,
-  findings: itemsSchema,
-};
+/**
+ * A list as stored: the bounds agent_handoff once took, kept so a handoff stored under them still
+ * parses and shows. why wider than what agent_handoff takes now: its caps apply to what an agent
+ * writes next, never to what it wrote then.
+ */
+const storedItemsSchema = z.array(z.string().trim().min(1).max(2_000)).max(50);
+
+const storedLists = { did: storedItemsSchema, evidence: storedItemsSchema, concerns: storedItemsSchema, deviations: storedItemsSchema, findings: storedItemsSchema };
+
+/**
+ * A list as agent_handoff takes it: at most 10 items of at most `max` characters each. why short:
+ * the issue's feed shows each item as one line, so each is one fact (How you write, roles.ts).
+ */
+const givenItemsSchema = (max: number) => z.array(z.string().trim().min(1).max(max)).max(10);
+const givenItems = givenItemsSchema(300);
+/** why longer: an evidence item quotes the command and the lines of its output that decide its criterion. */
+const givenEvidence = givenItemsSchema(1_000);
 
 const prUrlSchema = z.url({ protocol: /^https?$/ });
 
@@ -46,12 +55,12 @@ export const handoffFieldsSchema = z.object({
   status: handoffStatusSchema.describe(
     "done: on a build issue, every done-criterion is met and committed; on a research issue, your report is written. blocked: you need a decision or hit a problem you didn't cause. gave-up: a retried approach failed again.",
   ),
-  summary: reportFields.summary.describe("One line, up to 120 characters, your regional manager can pass on as it is. Don't open it with the status: it is shown after it, as in \"Blocked: <summary>\"."),
-  did: itemsSchema.describe("What you did, one item each."),
-  evidence: itemsSchema.describe("On a build issue, for each done-criterion: the command you ran and what it printed. [] for none."),
-  concerns: itemsSchema.describe("Anything you are unsure of. [] for none."),
-  deviations: itemsSchema.describe("Where you departed from the brief, and why. [] for none."),
-  findings: itemsSchema.describe("Things you noticed outside your brief. [] for none."),
+  summary: summarySchema.describe("One line, up to 120 characters, your regional manager can pass on as it is. Don't open it with the status: it is shown after it, as in \"Blocked: <summary>\"."),
+  did: givenItems.describe("What you did, one fact per item, up to 300 characters each and 10 items."),
+  evidence: givenEvidence.describe("On a build issue, one item per done-criterion: the command you ran and the lines of its output that decide it, up to 1,000 characters each and 10 items. [] for none."),
+  concerns: givenItems.describe("Risks your regional manager should act on, up to 300 characters each and 10 items. [] for none."),
+  deviations: givenItems.describe("Where you departed from the brief, and why, up to 300 characters each and 10 items. [] for none."),
+  findings: givenItems.describe("Things you noticed outside your brief, up to 300 characters each and 10 items. [] for none."),
   headSha: commitSchema.optional().describe("done on a build issue only, and required then: the 40-character output of `git rev-parse HEAD` after your last commit."),
   prUrl: prUrlSchema.optional().describe("done on a build issue only: the pull request you opened, if any."),
   report: reportSchema.optional().describe("done on a research issue only, and required then: your report, in markdown, up to 20,000 characters. It is your result: your regional manager reads it whole."),
@@ -77,11 +86,7 @@ const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, repor
  * status or summary: the folded round carries those; nor a commit: the verdict names the one checked.
  */
 export const handoffBodySchema = z.object({
-  did: reportFields.did,
-  evidence: reportFields.evidence,
-  concerns: reportFields.concerns,
-  deviations: reportFields.deviations,
-  findings: reportFields.findings,
+  ...storedLists,
   report: reportDeliverySchema.omit({ kind: true }).nullable(),
 });
 export type HandoffBody = z.infer<typeof handoffBodySchema>;
@@ -108,8 +113,8 @@ function reportIn(handoff: HandoffReport): HandoffBody["report"] {
 
 /** A handoff as an agent wrote it, stored whole. */
 export const handoffReportSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("done"), ...reportFields, delivery: deliverySchema }),
-  z.object({ status: z.enum(["blocked", "gave-up"]), ...reportFields }),
+  z.object({ status: z.literal("done"), summary: summarySchema, ...storedLists, delivery: deliverySchema }),
+  z.object({ status: z.enum(["blocked", "gave-up"]), summary: summarySchema, ...storedLists }),
 ]);
 export type HandoffReport = z.infer<typeof handoffReportSchema>;
 
