@@ -445,7 +445,7 @@ function reportFileText(issueId: IssueId, file: MemoryFile): string {
 /** A pull request or merge request as the plugin read it from its forge. Check names are the forge's, as the repository's CI names them. */
 function prText(pr: PrSnapshot): string {
   const state = pr.state === "open" && pr.draft ? "open, as a draft" : pr.state;
-  const review = { approved: "approved", "changes-requested": "changes requested", none: "no approval or change request" }[pr.review];
+  const review = { approved: "approved", "changes-requested": "changes requested", "unresolved-discussions": "unresolved discussions", none: "no approval or change request" }[pr.review];
   const ci = {
     none: "no checks reported",
     pending: "still running",

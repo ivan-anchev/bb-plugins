@@ -37,7 +37,7 @@ async function agentOnGitLab({ remote = STATION_WS, host = HOST, project = "fron
     return { lane: laneOf(issue), headline, pr: pr === null ? null : `${prRef(pr)} ${pr.state} CI ${pr.ci}` };
   };
   /** GitLab now has the agent's merge request !41 as given, its pipeline running unless given. */
-  const mr = (fields: Partial<FakeMr> = {}) => kit.gitlab.mrs.set(branch, { iid: 41, state: "opened", draft: false, approved: false, approvers: 0, head: HEAD, pipeline: { status: "RUNNING", jobs: [] }, ...fields });
+  const mr = (fields: Partial<FakeMr> = {}) => kit.gitlab.mrs.set(branch, { iid: 41, state: "opened", draft: false, approved: false, approvers: 0, detailedMergeStatus: "CI_STILL_RUNNING", resolvableDiscussionsCount: 0, resolvedDiscussionsCount: 0, head: HEAD, pipeline: { status: "RUNNING", jobs: [] }, ...fields });
   /** Each glab run so far, its arguments joined. */
   const glabRuns = () => kit.gitlab.runs.map((args) => args.join(" "));
   async function minute(): Promise<void> {
@@ -54,7 +54,13 @@ async function agentOnGitLab({ remote = STATION_WS, host = HOST, project = "fron
     await kit.call("issue_verdict", PASSES, verdict.verifierThreadId);
     await settled();
   }
-  return { kit, threadId, coordinatorId, agentThreadId, branch, board, row, mr, glabRuns, minute, verified };
+  /** The changes of each `pr` entry in the issue's feed, oldest first: one per change the watch recorded. */
+  async function prChanges(): Promise<string[][]> {
+    const issueId = kit.store.issues(coordinatorId)[0]?.id ?? assert.fail("no issue");
+    const { feed } = await kit.opened(coordinatorId, issueId);
+    return feed.entries.flatMap((entry) => (entry.kind === "pr" ? [entry.changes] : []));
+  }
+  return { kit, threadId, coordinatorId, agentThreadId, branch, board, row, mr, glabRuns, minute, verified, prChanges };
 }
 
 test(`GitLab on ${STATION_WS}: the merge request shows as !41, a done verdict waits while its pipeline is RUNNING, and passes on SUCCESS`, async () => {
@@ -201,4 +207,90 @@ test("check names: a GitLab job named with a backtick, a line break, U+202E and 
   await minute();
   assertQuotedHostileName(kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent"), "the agent's findings");
   assertQuotedHostileName(textOf(await kit.call("crew_catch_up", {}, threadId)), "catch-up");
+});
+
+test("discussions: a draft merge request with 2 resolvable discussions and 1 resolved puts MR !41: unresolved discussions in the doorbell and catch-up, once, and resolving them records nothing", async () => {
+  const { kit, threadId, mr, minute, prChanges } = await agentOnGitLab();
+  const draft = { draft: true, detailedMergeStatus: "DRAFT_STATUS" };
+  mr(draft);
+  await minute();
+  mr({ ...draft, resolvableDiscussionsCount: 2, resolvedDiscussionsCount: 1 });
+  await minute();
+  assert.equal(kit.doorbellsSent(threadId).at(-1), doorbellOf('WEB-1 "Add retries" (a1) MR !41: unresolved discussions'));
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /MR !41: unresolved discussions/);
+  assert.deepEqual(await prChanges(), [["opened"], ["unresolved-discussions"]], "the issue's feed: !41 unresolved discussions");
+  const doorbells = kit.doorbellsSent(threadId).length;
+  await minute();
+  mr({ ...draft, resolvableDiscussionsCount: 2, resolvedDiscussionsCount: 2 });
+  await minute();
+  assert.deepEqual(await prChanges(), [["opened"], ["unresolved-discussions"]], "the same counts again, then every discussion resolved: no new entry");
+  assert.equal(kit.doorbellsSent(threadId).length, doorbells);
+});
+
+test("discussions: requested changes read changes requested even with unresolved discussions, an approval with no approver records nothing, and an approver with every discussion resolved reads approved", async () => {
+  const { kit, threadId, mr, minute, prChanges } = await agentOnGitLab();
+  mr();
+  await minute();
+  mr({ approved: true, approvers: 0, resolvableDiscussionsCount: 1, resolvedDiscussionsCount: 1 });
+  await minute();
+  assert.deepEqual(await prChanges(), [["opened"]], "approved with an empty approvedBy: no review change");
+  mr({ detailedMergeStatus: "REQUESTED_CHANGES", resolvableDiscussionsCount: 2, resolvedDiscussionsCount: 0 });
+  await minute();
+  assert.equal(kit.doorbellsSent(threadId).at(-1), doorbellOf('WEB-1 "Add retries" (a1) MR !41: changes requested'));
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /MR !41: changes requested/);
+  mr({ approved: true, approvers: 1, detailedMergeStatus: "MERGEABLE", resolvableDiscussionsCount: 2, resolvedDiscussionsCount: 2 });
+  await minute();
+  assert.equal(kit.doorbellsSent(threadId).at(-1), doorbellOf('WEB-1 "Add retries" (a1) MR !41: approved'));
+  assert.deepEqual(await prChanges(), [["opened"], ["changes-requested"], ["approved"]]);
+});
+
+test("discussions: on an older GitLab whose schema lacks the discussion counts, the merge request is still read, its CI gates the verdict and its merge makes the issue Done, with no review feedback and nothing unavailable", async () => {
+  const { kit, board, row, mr, glabRuns, minute, verified, prChanges } = await agentOnGitLab();
+  kit.gitlab.lacks = new Set(["resolvableDiscussionsCount", "resolvedDiscussionsCount"]);
+  const discussed = { draft: true, detailedMergeStatus: "DRAFT_STATUS", resolvableDiscussionsCount: 2, resolvedDiscussionsCount: 0 };
+  mr(discussed);
+  await minute();
+  assert.deepEqual(await row(), { lane: "in-progress", headline: "Working", pr: "!41 open CI pending" });
+  assert.equal((await board()).prUnavailable, null);
+  await verified();
+  assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on !41: Retries land with backoff", pr: "!41 open CI pending" });
+  mr({ ...discussed, pipeline: { status: "SUCCESS", jobs: [] } });
+  await minute();
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "!41 open CI pass" });
+  mr({ ...discussed, state: "merged", pipeline: { status: "SUCCESS", jobs: [] } });
+  kit.clock.now += 4 * MINUTE;
+  await minute();
+  assert.deepEqual(await row(), { lane: "done", headline: "Merged !41", pr: "!41 merged CI pass" });
+  assert.equal((await board()).prUnavailable, null);
+  assert.deepEqual(await prChanges(), [["opened"], ["ci-passed"], ["merged"]], "no unresolved discussions reported for that host");
+  const reads = glabRuns().filter((run) => run.startsWith("api graphql"));
+  assert.deepEqual(
+    reads.map((run) => run.includes("resolvableDiscussionsCount")),
+    [true, ...reads.slice(1).map(() => false)],
+    "asked for the counts once; every later read leaves them out",
+  );
+  assert.equal(glabRuns().filter((run) => run.startsWith("auth status")).length, 1, "the fallback isn't a failed read: the sign-in isn't asked again");
+});
+
+test("older: a GitLab whose schema lacks a field the read needs shows MR status unavailable naming the host, and a done verdict waiting on its merge request settles with CI not checked", async () => {
+  const { kit, board, row, mr, minute, verified } = await agentOnGitLab();
+  kit.gitlab.lacks = new Set(["draft"]);
+  mr();
+  await minute();
+  assert.deepEqual((await board()).prUnavailable, { forge: "gitlab", reason: `GitLab at ${HOST} lacks a field the plugin's query reads, so it is older than the plugin reads` });
+  await verified();
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
+});
+
+test("discussions: a draft merge request that already has an unresolved discussion when first read announces it with opened, in the doorbell, catch-up and feed, and an unchanged second read adds nothing", async () => {
+  const { kit, threadId, mr, minute, prChanges } = await agentOnGitLab();
+  mr({ draft: true, detailedMergeStatus: "DRAFT_STATUS", resolvableDiscussionsCount: 1, resolvedDiscussionsCount: 0 });
+  await minute();
+  assert.equal(kit.doorbellsSent(threadId).at(-1), doorbellOf('WEB-1 "Add retries" (a1) MR !41: opened, unresolved discussions'));
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /MR !41: opened, unresolved discussions/);
+  assert.deepEqual(await prChanges(), [["opened", "unresolved-discussions"]]);
+  const doorbells = kit.doorbellsSent(threadId).length;
+  await minute();
+  assert.deepEqual(await prChanges(), [["opened", "unresolved-discussions"]], "the same counts again: no new entry");
+  assert.equal(kit.doorbellsSent(threadId).length, doorbells);
 });
