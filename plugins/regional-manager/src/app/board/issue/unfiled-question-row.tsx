@@ -1,8 +1,8 @@
 // A question waiting for the user that names no issue, under Needs you: one the regional manager
 // asked before every question had to name an issue, so no issue's feed holds it. Its row has the
 // manager's avatar in the 30 slot and the question across the id and title columns, up to two
-// lines; pressing it opens the manager's thread, where the user tells it their answer. It leaves the
-// board once answered.
+// lines; pressing it opens the manager's thread, where the user can tell it their answer. It leaves
+// the board once the decision is stored answered, which no surface of the plugin does any more.
 import { useBbNavigate } from "@get-bb/plugin-sdk/app";
 import type { Ref } from "react";
 import type { UnfiledQuestion } from "../../../model/board/board-groups.ts";

@@ -1050,9 +1050,9 @@ through a resize or a reload, until you send it or the question is answered
 elsewhere. Your answer takes the issue off Needs you, unless something else
 holds it there, and wakes the thread; the question stays, with your answer and
 when you gave it, in that issue's Activity. A question asked before every
-question had to name an issue waits under Needs you on its own row, the
-manager's avatar beside it, until you answer; pressing it opens the manager's
-thread. The thread's
+question had to name an issue has its own row under Needs you, the manager's
+avatar beside it; pressing it opens the manager's thread, where you can tell
+it your answer. No surface answers such a question any more, so its row stays. The thread's
 `crew_catch_up` returns your answer, as the option you chose or in your own
 words, with its question. A decision is answered once: a second answer, as
 from another window, is refused.
