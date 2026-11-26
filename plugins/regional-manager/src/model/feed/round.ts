@@ -8,7 +8,8 @@ import { decisionIdSchema, type DecisionId } from "../decision.ts";
 import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
 import { issueStatusSchema, type Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
-import { holds, reviewFindingSchema, reviewPending, severityNow, storedStepsSchema, triageVariants, type Review, type Severity, type Triaged } from "../verdict/review.ts";
+import { holds, reviewFindingSchema, reviewPending, storedStepsSchema, triageVariants, type Review, type Severity, type Triaged } from "../verdict/review.ts";
+import { warrantsFollowUp } from "../verdict/rounds/follow-up.ts";
 import { checkInFlight, criterionResultSchema, failsVerdict, firstFailure, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
 
 /**
@@ -285,15 +286,17 @@ function findingsOf({ review, verdict }: Check): RoundBody["findings"] {
   return review.state === "reported" ? review.findings.map((finding) => ({ ...finding, triage: null })) : [];
 }
 
-/** What a triaged finding does to the work: blocks it when it fails the verdict on its own (verdict.ts failsVerdict), else rejected, or what a held one does by its severity now (heldEffect). */
+/**
+ * What a triaged finding does to the work: blocks it when it fails the verdict on its own
+ * (verdict.ts failsVerdict); else rejected; else goes to the follow-up when it warrants one, as the
+ * issue's pass files it (rounds/follow-up.ts warrantsFollowUp), a downgraded must-fix included
+ * whatever its new severity; else it is a nit.
+ */
 function effectOf(finding: Triaged, mustFixFails: boolean): Effect {
   if (failsVerdict(finding, mustFixFails)) return "blocks";
-  return holds(finding) ? heldEffect(severityNow(finding.severity, finding)) : "rejected";
+  if (!holds(finding)) return "rejected";
+  return warrantsFollowUp(finding) ? "follow-up" : "nit";
 }
 
-/**
- * What a finding that holds without blocking does, by its severity: a nit stays a nit, and anything
- * above goes to the follow-up the issue's pass files (rounds/follow-up.ts). The one rule for a
- * reviewer's held finding and a verifier's own.
- */
-export const heldEffect = (severity: Severity): Effect => (severity === "nit" ? "nit" : "follow-up");
+/** What a verifier's own finding does to the work: it never blocks, and goes to the follow-up above a nit, as the issue's pass files it (rounds/follow-up.ts). */
+export const ownEffect = (severity: Severity): Effect => (severity === "nit" ? "nit" : "follow-up");

@@ -19,6 +19,7 @@ import { useHoverCards } from "../../../issue/hover-card/use-hover-card.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { AgentName, MovedTo, When, type FeedAgents } from "../byline.tsx";
 import { FindingLines } from "./lines/finding-lines.tsx";
+import { NoteLine } from "./lines/fold-line.tsx";
 import { VerdictLines } from "./lines/verdict-lines.tsx";
 
 type Where = { coordinatorId: CoordinatorId; issueId: IssueId };
@@ -50,7 +51,7 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
       )}
       {body === null && <p className="rmi-round-note">This round is no longer on record.</p>}
       <p className="rmi-round-said">{headlineOf(round)}</p>
-      {round.review.state === "missed" && <p className="rmi-round-note">Review missed{loaded?.reviewMissed != null && `: ${loaded.reviewMissed}`}</p>}
+      {round.review.state === "missed" && <ReviewMissed why={loaded?.reviewMissed ?? null} />}
       {loaded !== null && <FindingLines findings={loaded.findings} own={ownFindingsOf(loaded)} cards={cards} />}
       {loaded?.verdict != null && <VerdictLines verdict={loaded.verdict} by={round.by} cards={cards} />}
       {loading && (
@@ -77,6 +78,13 @@ export function headlineOf({ by }: Round): string {
       return "";
   }
 }
+
+/** A review that wasn't had, and why once the body is read. */
+const ReviewMissed = ({ why }: { why: string | null }) => (
+  <ul className="rmi-lines" aria-label="Review">
+    <NoteLine tone={null} headline="Review missed" detail={why === null ? null : <p className="rmi-fold-claim">{why}</p>} />
+  </ul>
+);
 
 /** The verifier's own findings, once its verdict returned. */
 const ownFindingsOf = ({ verdict }: Body) => (verdict?.state === "returned" ? verdict.findings : []);

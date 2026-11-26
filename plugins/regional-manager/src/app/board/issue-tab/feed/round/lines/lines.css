@@ -39,6 +39,11 @@
 .rmi-fold-row[aria-expanded="true"] {
   background: var(--state-hover);
 }
+/* A note with nothing more to say than its row: no press, so no wash. */
+.rmi-fold-row[data-static] {
+  cursor: default;
+  background: none;
+}
 
 /* A finding's mark: a 8px square in what the finding does; before its triage, its severity's colour. */
 .rmi-mark {
@@ -80,6 +85,12 @@
 .rmi-line-title[data-effect="rejected"] {
   color: var(--muted-foreground);
 }
+/* A note on the round: muted, or in its tone's text colour, which reads on --card. */
+.rmi-note-text {
+  color: var(--muted-foreground);
+}
+.rmi-note-text[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-note-text[data-tone="warning"] { color: var(--warning-text); }
 .rmi-line-place {
   flex: 0 0 auto;
   max-width: 40%;
@@ -94,7 +105,13 @@
   margin-top: 0;
 }
 @container rmi-feed (max-width: 420px) {
-  .rmi-line-place {
+  /* A note on the round: muted, or in its tone's text colour, which reads on --card. */
+.rmi-note-text {
+  color: var(--muted-foreground);
+}
+.rmi-note-text[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-note-text[data-tone="warning"] { color: var(--warning-text); }
+.rmi-line-place {
     display: none;
   }
 }
@@ -148,6 +165,17 @@
 .rmi-fold-place {
   font-family: var(--font-mono);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rmi-fold-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 16px;
+  list-style: disc;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--foreground);
   overflow-wrap: anywhere;
 }
 .rmi-fold-detail .rmi-evidence {

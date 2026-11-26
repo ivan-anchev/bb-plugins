@@ -4,13 +4,14 @@
 // origin, place, and the verifier's word and reason; pressed, the line opens to its claim, that word
 // and reason, a bug's steps, and its full path. A blocking defect the verifier found is a line of the
 // same kind, among what failed the round (verdict-lines.tsx).
-import "../../../../issue/hover-card/hover-card.css";
 import { useEffect, useId, type ReactNode } from "react";
-import { heldEffect, type Effect, type RoundBody } from "../../../../../../model/feed/round.ts";
+import { ownEffect, type Effect, type RoundBody } from "../../../../../../model/feed/round.ts";
 import { blocksWord, severityNow, triageWord, type BlockingDefect, type Severity } from "../../../../../../model/verdict/review.ts";
 import type { VerifierFinding } from "../../../../../../model/verdict/verdict.ts";
 import { useEscapeToClose } from "../../../../../ui/hold-escape.ts";
 import type { CardPresence } from "../../../../issue/hover-card/card-intent.ts";
+import { capStyle } from "../../../../issue/hover-card/hover-card.tsx";
+import { useRowPlacement } from "../../../../issue/hover-card/placement.ts";
 import type { HoverCards } from "../../../../issue/hover-card/use-hover-card.ts";
 import { FoldLine } from "./fold-line.tsx";
 import { Mark } from "./mark.tsx";
@@ -89,7 +90,7 @@ function ReviewFindingLine({ cardKey, finding, cards }: { cardKey: string; findi
   );
 }
 
-/** A finding the verifier made itself: it never blocks, so it goes to the follow-up, or stays a nit (round.ts heldEffect). */
+/** A finding the verifier made itself: it never blocks, so it goes to the follow-up, or stays a nit (round.ts ownEffect). */
 function OwnFindingLine({ cardKey, finding, cards }: { cardKey: string; finding: VerifierFinding; cards: HoverCards }) {
   const facts = `${finding.severity} · ${VERIFIERS_OWN}`;
   return (
@@ -97,7 +98,7 @@ function OwnFindingLine({ cardKey, finding, cards }: { cardKey: string; finding:
       cardKey={cardKey}
       cards={cards}
       severity={finding.severity}
-      effect={heldEffect(finding.severity)}
+      effect={ownEffect(finding.severity)}
       title={finding.title}
       place={null}
       facts={facts}
@@ -160,12 +161,19 @@ function FindingLine({ cardKey, cards, severity, effect, title, place, facts, sa
   );
 }
 
-/** A finding's hover card, Activity Sidebar's (hover-card.css): its title whole, its severity and origin, its full place, and the verifier's word. Escape puts it away, wherever focus is. */
+/**
+ * A finding's hover card, Activity Sidebar's (hover-card.css): its title whole, its severity and
+ * origin, its full place, and the verifier's word. Placed as a board row's card is (placement.ts):
+ * under its line, or above it where the panel has no room below, capped and scrolling when it fits
+ * on neither side. Escape puts it away, wherever focus is. why no tab stop when capped: its line
+ * opens on press to the same words, whole.
+ */
 function FindingCard({ id, presence, title, facts, place, said }: { id: string; presence: CardPresence; title: string; facts: string; place: Place | null; said: ReactNode }) {
   useEffect(() => presence.mounted(), [presence]);
   useEscapeToClose(true, presence.close);
+  const { ref, placement } = useRowPlacement();
   return (
-    <div id={id} role="tooltip" className="rmi-card rmi-finding-card">
+    <div ref={ref} id={id} role="tooltip" className="rmi-card rmi-finding-card" data-side={placement.side} style={capStyle(placement)}>
       <div className="rmi-card-body rmi-finding-card-body">
         <p className="rmi-card-title">{title}</p>
         <p className="rmi-fold-facts">{facts}</p>

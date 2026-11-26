@@ -36,14 +36,21 @@ function rounds(tab: ReturnType<typeof within>) {
   const card = (n: number) => within(tab.getByRole("article", { name: `Round ${n}` }));
   const head = (n: number) => card(n).getByRole("button", { name: new RegExp(`^Round ${n}`) });
   const open = () => [1, 2, 3, 4].filter((n) => tab.queryByRole("article", { name: `Round ${n}` }) !== null && head(n).getAttribute("aria-expanded") === "true");
-  return { card, head, open };
+  /** A head's words without its time, which reads in the zone the tests run in. */
+  const words = (n: number) => [...head(n).childNodes].filter((node) => !(node instanceof HTMLElement && node.tagName === "TIME")).map((node) => node.textContent).join("");
+  return { card, head, open, words };
 }
 
-test("each round folds to its number, its summary and its score; the latest is open, and only its body is read", async () => {
+test("each round folds to its number, its summary, its score and when it was handed off; the latest is open, its score a word, and only its body is read", async () => {
   const { tab, bodyReads } = await opened("WEB-1", WEB_1);
-  const { card, head, open } = rounds(tab());
+  const { card, head, open, words } = rounds(tab());
   assert.deepEqual(open(), [3]);
-  assert.deepEqual([1, 2, 3].map((n) => head(n).textContent), ["Round 1Round 1: retries land with backoff2 findings, 1 heldFailed: 1 of 3", "Round 2Round 2: retries land with backoff2 findings, 1 heldFailed: 2 of 3", "Round 3Round 3: retries land with backoff2 findings, 1 heldPassed: 3 of 3"]);
+  assert.deepEqual([1, 2, 3].map(words), ["Round 1Round 1: retries land with backoff2 findings, 1 heldFailed: 1 of 3", "Round 2Round 2: retries land with backoff2 findings, 1 heldFailed: 2 of 3", "Round 3Round 3: retries land with backoff2 findings, 1 heldPassed"]);
+  assert.deepEqual(
+    [1, 2, 3].map((n) => head(n).querySelector("time")?.dateTime),
+    [3_000, 4_000, 5_000].map((at) => new Date(at).toISOString()),
+    "each head ends with when its handoff came",
+  );
   await card(3).findByText("The backoff has no cap.");
   assert.deepEqual(bodyReads.flat(), [keyOf(3)], "a folded round reads nothing");
 });
@@ -96,7 +103,7 @@ test("before its verdict returns, a round's findings show with no triage, each m
     assert.equal(findings.queryByText(/^(Confirmed|Rejected|Anchored|Downgraded)/), null, "no triage yet");
     assert.equal(card(3).queryByRole("list", { name: "What failed" }), null, "nothing judged yet");
     fireEvent.click(head(3));
-    const folded = tab().getByRole("button", { name: /^Round 3 .* 2 findings Verifying…$/ });
+    const folded = tab().getByRole("button", { name: /^Round 3 .* 2 findings Verifying… \S/ });
     assert.equal(folded.getAttribute("aria-expanded"), "false", "folded, the line counts the findings, none held yet");
   });
 });
@@ -109,7 +116,7 @@ test("a review that found nothing lists no findings open, and says so on its fol
     await card(3).findByText("Report");
     assert.equal(card(3).queryByRole("list", { name: "Findings" }), null, "open, no findings list");
     fireEvent.click(head(3));
-    assert.equal(tab().getByRole("button", { name: /^Round 3 .* No findings Passed: 3 of 3$/ }).getAttribute("aria-expanded"), "false");
+    assert.equal(tab().getByRole("button", { name: /^Round 3 .* No findings Passed: 3 of 3 \S/ }).getAttribute("aria-expanded"), "false");
   });
 });
 
@@ -304,7 +311,7 @@ test("a round whose criteria all passed but CI failed leads its line with that r
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "ci" } } } } : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: ciFailed }) });
-  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldCI failed");
+  assert.equal(rounds(tab()).words(3), "Round 3Round 3: retries land with backoff2 findings, 1 heldCI failed");
 });
 
 test("a round whose criteria all passed but whose must-fix finding the verifier anchored leads with that reason, never its score", async () => {
@@ -312,7 +319,7 @@ test("a round whose criteria all passed but whose must-fix finding the verifier 
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "must-fix" } } } } : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: mustFix }) });
-  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldMust-fix upheld");
+  assert.equal(rounds(tab()).words(3), "Round 3Round 3: retries land with backoff2 findings, 1 heldMust-fix upheld");
 });
 
 test("a round whose criteria all passed but whose verifier found a blocking defect of its own leads with that reason, and lists the defect as a line that opens to its claim and steps", async () => {
@@ -323,7 +330,7 @@ test("a round whose criteria all passed but whose verifier found a blocking defe
   const blocking = { title: "cli.js crashes on an empty counts.json", claim: "It reads the file before checking it.", anchor: "bug", steps: ["Kill a run mid-save.", "Run it again."] } as const;
   const verdict = body.verdict?.state === "returned" ? { ...body.verdict, blocking: [{ ...blocking, steps: [...blocking.steps] }] } : assert.fail("no returned verdict");
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: defect }), bodies: () => ({ ...body, verdict }) });
-  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldBlocking defect found");
+  assert.equal(rounds(tab()).words(3), "Round 3Round 3: retries land with backoff2 findings, 1 heldBlocking defect found");
   const three = rounds(tab()).card(3);
   const failed = within(await three.findByRole("list", { name: "What failed" }));
   const line = failed.getByRole("button", { name: /cli\.js crashes/ });
@@ -345,7 +352,7 @@ test("a final check whose own worktree was dirty says so, never that a claimed c
       : entry,
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: dirty }) });
-  assert.equal(rounds(tab()).head(3).textContent, "Round 3Final check on mainNot a clean tree");
+  assert.equal(rounds(tab()).words(3), "Round 3Final check on mainNot a clean tree");
 });
 
 /** FEED with two criteria and two rounds: round 1 failed the second, and round 2, the latest, failed it again. */
@@ -392,7 +399,7 @@ test("a round nothing verified, as with verification off, shows no findings, not
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: waived }), bodies: () => unverified });
   const three = rounds(tab()).card(3);
   await three.findByText("Report");
-  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoffNot verified");
+  assert.equal(rounds(tab()).words(3), "Round 3Round 3: retries land with backoffNot verified");
   assert.equal(three.queryAllByRole("list", { name: "Findings" }).length, 0);
   assert.equal(three.queryAllByRole("list", { name: "What failed" }).length, 0);
   assert.equal(tab().getByRole("article", { name: "Round 3" }).querySelectorAll(".rmi-outcome").length, 0, "no outcome line");
@@ -415,7 +422,11 @@ test("a long history keeps the criterion's words: its cells wrap, six to a line,
 test("a missed review says it was missed, with why once the round's body is read", async () => {
   const missed: Entry[] = FEED.entries.map((entry) => (entry.kind === "round" && entry.round.number === 3 ? { ...entry, round: { ...entry.round, review: { state: "missed", step: { at: 5_100, moved: null } } } } : entry));
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: missed }), bodies: () => ({ ...bodyOf(3), findings: [], reviewMissed: "no independent reviewer model" }) });
-  assert.ok(await rounds(tab()).card(3).findByText(/^Review missed: no independent reviewer model/));
+  const three = rounds(tab()).card(3);
+  const missedLine = within(three.getByRole("list", { name: "Review" })).getByRole("button", { name: "Review missed" });
+  await waitFor(() => assert.equal(document.getElementById(missedLine.getAttribute("aria-controls") ?? "")?.textContent, "no independent reviewer model"));
+  fireEvent.click(missedLine);
+  assert.equal(missedLine.getAttribute("aria-expanded"), "true", "one row, its reason on press");
 });
 
 test("an open round whose review is still to come shows what was handed off and nothing judged yet; its score says it is reviewing", async () => {

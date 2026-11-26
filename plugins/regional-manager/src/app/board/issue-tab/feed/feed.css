@@ -495,8 +495,6 @@
   color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
-.rmi-round-note[data-tone="failed"] { color: var(--destructive-text); }
-.rmi-round-note[data-tone="warning"] { color: var(--warning-text); }
 /* What became of it: a quiet row, its words wrapping within themselves, its time after them. */
 .rmi-outcome {
   display: flex;

@@ -12,7 +12,7 @@ import { ciVerdictOf, failedCheckout, type ShownVerdict } from "../../../../../.
 import type { HoverCards } from "../../../../issue/hover-card/use-hover-card.ts";
 import { RESULT_WORD, ResultGlyph } from "../result-glyph.tsx";
 import { DefectLine } from "./finding-lines.tsx";
-import { FoldLine } from "./fold-line.tsx";
+import { FoldLine, NoteLine } from "./fold-line.tsx";
 
 /** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */
 type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
@@ -25,12 +25,16 @@ export function VerdictLines({ verdict, by, cards }: { verdict: ShownVerdict; by
       return <Returned verdict={verdict} judged={judged} cards={cards} />;
     case "could-not-run":
       return (
-        <p className="rmi-round-note" data-tone="warning">
-          No verdict: {verdict.reason}
-        </p>
+        <ul className="rmi-lines" aria-label="What failed">
+          <NoteLine tone="warning" headline="No verdict" detail={<p className="rmi-fold-claim">{verdict.reason}</p>} />
+        </ul>
       );
     case "superseded":
-      return <p className="rmi-round-note">{judged.kind === "handoff" ? "Replaced before its verdict, by a newer handoff or a new agent" : "Replaced before its verdict, by a newer final check"}</p>;
+      return (
+        <ul className="rmi-lines" aria-label="What failed">
+          <NoteLine tone={null} headline="Replaced before its verdict" detail={<p className="rmi-fold-claim">{judged.kind === "handoff" ? "By a newer handoff or a new agent." : "By a newer final check."}</p>} />
+        </ul>
+      );
     // why nothing: the round's score says it waits for a verifier, is being verified, or wasn't.
     case "queued":
     case "running":
@@ -75,11 +79,7 @@ function Returned({ verdict, judged, cards }: { verdict: ReturnedVerdict; judged
         <DefectLine key={i} cardKey={`d${i}`} defect={defect} cards={cards} />
       ))}
       {ci}
-      {verdict.sameModel && (
-        <li className="rmi-round-note" data-tone="warning">
-          {judged.kind === "handoff" ? "Verified on the agent's own model" : "Verified on the model of an agent whose work it checks"}
-        </li>
-      )}
+      {verdict.sameModel && <NoteLine tone="warning" headline={judged.kind === "handoff" ? "Verified on the agent's own model" : "Verified on the model of an agent whose work it checks"} detail={null} />}
     </ul>
   );
 }
@@ -112,18 +112,15 @@ function CriterionLine({ number, criterion, result, shows, evidence }: Failing) 
   );
 }
 
-/** The checkout as bb's git plugin read it, when it wasn't the claimed commit on a clean tree (for a final check, when its verifier's worktree wasn't clean). */
+/** The checkout as bb's git plugin read it, when it wasn't the claimed commit on a clean tree (for a final check, when its verifier's worktree wasn't clean): what it read, open on press. */
 function checkoutLine(verdict: ReturnedVerdict, judged: Judged): ReactElement | null {
   const failed = failedCheckout(verdict);
   if (failed === null) return null;
-  return (
-    <li className="rmi-round-note" data-tone="failed">
-      {judged.kind === "handoff" ? `${NOT_CLEAN}. ${checkoutText(verdict.headSha, failed)}` : `${NOT_CLEAN_TREE}. ${worktreeText(failed)}`}
-    </li>
-  );
+  const said = judged.kind === "handoff" ? { headline: NOT_CLEAN, detail: checkoutText(verdict.headSha, failed) } : { headline: NOT_CLEAN_TREE, detail: worktreeText(failed) };
+  return <NoteLine tone="failed" headline={said.headline} detail={<p className="rmi-fold-claim">{said.detail}</p>} />;
 }
 
-/** What CI said about the commit, when it failed the verdict, couldn't be read, or is still to come. */
+/** What CI said about the commit, when it failed the verdict, couldn't be read, or is still to come: the failed checks, or why it wasn't checked, open on press. */
 function ciLine(verdict: ReturnedVerdict): ReactElement | null {
   const ci = ciVerdictOf(verdict);
   if (ci === null) return unjudgedCiLine(verdict);
@@ -133,18 +130,9 @@ function ciLine(verdict: ReturnedVerdict): ReactElement | null {
     case "no-checks":
       return null;
     case "fail":
-      return (
-        <li className="rmi-round-note" data-tone="failed">
-          CI failed on {prRef(ci)}
-          {ci.failedChecks.length > 0 && <>: {ci.failedChecks.join(", ")}</>}
-        </li>
-      );
+      return <NoteLine tone="failed" headline={`CI failed on ${prRef(ci)}`} detail={ci.failedChecks.length === 0 ? null : <FailedChecks checks={ci.failedChecks} />} />;
     case "not-checked":
-      return (
-        <li className="rmi-round-note" data-tone="warning">
-          CI not checked: {ci.reason}
-        </li>
-      );
+      return <NoteLine tone="warning" headline="CI not checked" detail={<p className="rmi-fold-claim">{ci.reason}</p>} />;
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
       ci satisfies never;
@@ -152,13 +140,21 @@ function ciLine(verdict: ReturnedVerdict): ReactElement | null {
   }
 }
 
+const FailedChecks = ({ checks }: { checks: readonly string[] }) => (
+  <ul className="rmi-fold-checks" aria-label="Failed checks">
+    {checks.map((check) => (
+      <li key={check}>{check}</li>
+    ))}
+  </ul>
+);
+
 /** Why CI hasn't been judged on the commit, when the round has something to say about it. */
 function unjudgedCiLine(verdict: ReturnedVerdict): ReactElement | null {
   switch (verdict.settlement.kind) {
     case "waiting-for-ci":
-      return <li className="rmi-round-note">Waiting for CI on this commit</li>;
+      return <NoteLine tone={null} headline="Waiting for CI on this commit" detail={null} />;
     case "superseded":
-      return <li className="rmi-round-note">Replaced before CI on this commit was judged</li>;
+      return <NoteLine tone={null} headline="Replaced before CI on this commit was judged" detail={null} />;
     case "pending":
     case "sending-back":
     case "sent-back":

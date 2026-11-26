@@ -188,3 +188,63 @@ test("a round stored before findings had titles renders through the titles deriv
   const failed = within(round.getByRole("list", { name: "What failed" })).getAllByRole("button");
   assert.deepEqual(failed.map((line) => line.querySelector(".rmi-line-title")?.textContent), ["1 failing: caps the backoff."]);
 });
+
+/** The feed laid out as the browser would, in a window `window.innerHeight` tall: each line's box at `line`, a finding card's content `height` tall. why stubs: jsdom lays nothing out. */
+function laidOut(line: { top: number; bottom: number }, height: number): () => void {
+  const rect = (top: number, bottom: number) => DOMRect.fromRect({ x: 0, y: top, width: 549, height: bottom - top });
+  const boxOf = HTMLElement.prototype.getBoundingClientRect;
+  const scrollHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+  HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+    return this.classList.contains("rmi-fold-box") ? rect(line.top, line.bottom) : rect(0, 0);
+  };
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("rmi-finding-card") ? height : 0; } });
+  return () => {
+    HTMLElement.prototype.getBoundingClientRect = boxOf;
+    if (scrollHeight !== undefined) Object.defineProperty(HTMLElement.prototype, "scrollHeight", scrollHeight);
+  };
+}
+
+test("a finding's card opens under its line where it fits, above it at the foot of the panel, and capped to the bigger side when it fits on neither, as a board row's card does", async () => {
+  const foot = window.innerHeight;
+  const cases = [
+    { name: "room below", line: { top: 100, bottom: 128 }, height: 186, want: { side: "below", cap: "" } },
+    { name: "the panel's foot", line: { top: foot - 70, bottom: foot - 42 }, height: 186, want: { side: "above", cap: "" } },
+    { name: "room on neither side, more above", line: { top: foot - 200, bottom: foot - 172 }, height: foot, want: { side: "above", cap: `${foot - 204}px` } },
+  ];
+  for (const { name, line, height, want } of cases) {
+    const { round, lines } = await openRound(FINDINGS);
+    const restore = laidOut(line, height);
+    try {
+      act(() => lines()[1]?.focus());
+      const card = round.getByRole("tooltip");
+      assert.deepEqual({ side: card.dataset.side, cap: card.style.getPropertyValue("--rmi-card-cap") }, want, name);
+    } finally {
+      restore();
+      cleanup();
+    }
+  }
+});
+
+test("what failed a round besides its findings is one row each, a checkout or CI failure opening on press to what was read; an open round's head says its verdict in a word", async () => {
+  const returned = bodyOf(1).verdict;
+  if (returned?.state !== "returned") return assert.fail("no returned verdict");
+  const verdict: ShownVerdict = {
+    ...returned,
+    checkout: { headSha: "0".repeat(40), changedFiles: ["src/retry.ts"], changedFileCount: 1 },
+    settlement: { kind: "checked", ci: { kind: "fail", forge: "github", number: 41, failedChecks: ["check (node 22)", "standalone-install"] } },
+  };
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: () => ({ ...bodyOf(1), verdict }) });
+  fireEvent.click(within(tab().getByRole("article", { name: "Round 1" })).getByRole("button", { name: /^Round 1/ }));
+  const round = within(tab().getByRole("article", { name: "Round 1" }));
+  const failed = within(await round.findByRole("list", { name: "What failed" }));
+  const rows = failed.getAllByRole("listitem").map((item) => item.querySelector(".rmi-fold-row")?.textContent);
+  assert.deepEqual(rows, ["Not the claimed commit on a clean tree", "Criterion 2 failed: 2Ran it.", "Criterion 3 failed: 3Ran it.", "CI failed on #41"], "each its headline alone");
+  const ci = failed.getByRole("button", { name: "CI failed on #41" });
+  fireEvent.click(ci);
+  assert.deepEqual(within(document.getElementById(ci.getAttribute("aria-controls") ?? "") ?? assert.fail("no detail")).getAllByRole("listitem").map((check) => check.textContent), ["check (node 22)", "standalone-install"]);
+  const checkout = failed.getByRole("button", { name: "Not the claimed commit on a clean tree" });
+  fireEvent.click(checkout);
+  assert.match(document.getElementById(checkout.getAttribute("aria-controls") ?? "")?.textContent ?? "", /src\/retry\.ts/, "opened, what bb's git plugin read");
+  const score = round.getByRole("button", { name: /^Round 1/ }).querySelector(".rmi-score");
+  assert.equal(score?.textContent, "Criteria failed", "open, a word: no glyph, no count");
+});

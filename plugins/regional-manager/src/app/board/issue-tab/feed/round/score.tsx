@@ -1,4 +1,5 @@
-// What a round says of its check in a word or two (round.ts scoreOf): ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix upheld,
+// What a round says of its check in a word or two (round.ts scoreOf): folded, ✓ 6 of 6, ✗ 3 of 6, ✗ CI failed, ✗ Must-fix upheld;
+// open, a word with no glyph or count: Passed, Criteria failed, CI failed, Must-fix upheld;
 // Reviewing…, Verifying…, Waiting for CI…, or why it has none; a blocked or abandoned handoff's round says so. Beside
 // it in the round's head only, the failure that put the cap question to the user says "3rd failed verification: asked you".
 import { createContext, useContext } from "react";
@@ -8,31 +9,40 @@ import { ordinal } from "../../../../../model/verdict/rounds/cap.ts";
 import { NOT_CLEAN, NOT_CLEAN_TREE } from "../../../../../model/verdict/checkout.ts";
 import { ResultGlyph } from "./result-glyph.tsx";
 
-export function Score({ round }: { round: Round }) {
+/** `open`: the round is open, so its score is a word, its criteria counted only in the Done when grid. */
+export function Score({ round, open }: { round: Round; open: boolean }) {
   const score = scoreOf(round);
   if (score === null) return <HandoffEnd round={round} />;
   switch (score.kind) {
     case "judged":
       return (
         <span className="rmi-score" data-result="pass">
-          <ResultGlyph result="pass" />
-          <span className="sr-only">Passed: </span>
-          {score.passed} of {score.of}
+          {open ? (
+            "Passed"
+          ) : (
+            <>
+              <ResultGlyph result="pass" />
+              <span className="sr-only">Passed: </span>
+              {score.passed} of {score.of}
+            </>
+          )}
         </span>
       );
     case "failed":
       return (
         <span className="rmi-score" data-result="fail">
-          <ResultGlyph result="fail" />
-          {score.by === "criteria" ? (
+          {!open && <ResultGlyph result="fail" />}
+          {score.by !== "criteria" ? (
+            <span className="rmi-score-text" title={failedByText(score.by, round.by)}>
+              {failedByText(score.by, round.by)}
+            </span>
+          ) : open ? (
+            "Criteria failed"
+          ) : (
             <>
               <span className="sr-only">Failed: </span>
               {score.passed} of {score.of}
             </>
-          ) : (
-            <span className="rmi-score-text" title={failedByText(score.by, round.by)}>
-              {failedByText(score.by, round.by)}
-            </span>
           )}
         </span>
       );

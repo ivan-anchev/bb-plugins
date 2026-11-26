@@ -135,7 +135,7 @@ function useEscapeCloses(onClose: () => void): void {
 const rowOf = (card: HTMLElement): HTMLElement | null => card.closest(".rmi-rowbox")?.querySelector<HTMLElement>(".rmi-row") ?? null;
 
 /** A card's height cap when its side of its anchor has too little room (hover-card.css `.rmi-card-body`). */
-const capStyle = ({ cap }: Side): CSSProperties & Partial<Record<"--rmi-card-cap", string>> => (cap === null ? {} : { "--rmi-card-cap": `${cap}px` });
+export const capStyle = ({ cap }: Side): CSSProperties & Partial<Record<"--rmi-card-cap", string>> => (cap === null ? {} : { "--rmi-card-cap": `${cap}px` });
 
 /** The parent's sub-issues, hung from its heading on the rails, as on the board; none when it has none. */
 function SubIssues({ rows }: { rows: readonly Row[] }) {
