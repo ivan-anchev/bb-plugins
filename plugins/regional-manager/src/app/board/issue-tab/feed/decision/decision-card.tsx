@@ -89,13 +89,21 @@ function useRevealed(onRevealed: (() => void) | null) {
       if (onRevealed === null || shown === null) return;
       shown.scrollIntoView({ block: "center" });
       shown.dataset.revealed = "";
-      (shown.querySelector<HTMLElement>("[aria-keyshortcuts]") ?? shown).focus({ preventScroll: true });
+      (shown.querySelector<HTMLElement>("[aria-keyshortcuts]") ?? shown).focus(FOCUS_SHOWN);
       onRevealed();
     },
     [onRevealed],
   );
   return card;
 }
+
+/**
+ * Focus on the first row, kept where the scroll put it and drawn as from the keyboard. why
+ * focusVisible: the row was reached by pressing the Board's row, and a browser shows no ring for
+ * focus a press moved, so the user wouldn't see which row their number keys start from. TypeScript's
+ * DOM types lack the option; Chromium, which bb runs in, takes it.
+ */
+const FOCUS_SHOWN: FocusOptions & { focusVisible: boolean } = { preventScroll: true, focusVisible: true };
 
 /** Takes the ring off once its animation ends. why its own target only: a spinner's turn in the card ends no ring. */
 function ringGone(event: AnimationEvent<HTMLElement>) {
