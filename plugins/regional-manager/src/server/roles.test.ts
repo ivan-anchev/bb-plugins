@@ -50,6 +50,28 @@ test("only a regional manager's rules say how it writes to the user, every direc
   for (const thread of [agentThreadId, verifierThreadId]) assert.ok(!kit.configurationFor(thread, {}).instructions?.includes(WRITING_HEADING), thread);
 });
 
+test("an agent's rules and its agent-work skill say how it writes its handoff, and only the manager's rules make a decision's first sentence its headline", async () => {
+  const { kit, threadId } = await coordinating();
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  const skill = readFileSync(join(import.meta.dirname, "..", "..", "skills", "agent-work", "SKILL.md"), "utf8").replace(/\s+/g, " ").replaceAll("**", "");
+  const agentRules = kit.configurationFor(agentThreadId, {}).instructions ?? "";
+  for (const [copy, text] of Object.entries({ rules: agentRules, "agent-work": skill })) {
+    for (const direction of [
+      /How you write your handoff/,
+      /summary is the round's headline: what changed, in plain words, with the change in its first 50 characters\. Don't open it with your status or "I"/,
+      /Each item is one fact\. Its first sentence stands alone and fits a line \(aim for 160 characters\)/,
+      /Evidence is one item per done-criterion, opening "Criterion N:"/,
+      /never repeat an item in two lists/,
+      /Make it short by cutting content, not grammar/,
+    ]) assert.match(text, direction, copy);
+  }
+
+  const headline = /When you record a decision, its first sentence is its headline, at most 120 characters: the feed shows that line and folds the rest\./;
+  const managerRules = kit.configurationFor(threadId, {}).instructions ?? "";
+  assert.match(managerRules.slice(managerRules.indexOf(WRITING_HEADING)), headline);
+  assert.doesNotMatch(agentRules, headline);
+});
+
 test("the rules and both skills end a wake that changes nothing for the user with crew_end_turn and no words, never a token reply", async () => {
   const kit = harness();
   const { threadId } = await kit.startManager("Migrate the webhook service");

@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
+import { z } from "zod";
+import { coordinatorContract } from "../../contract.ts";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
+import { handoffIdSchema } from "../../model/agent/handoff.ts";
+import { issueIdSchema, MAX_CRITERIA } from "../../model/issue/issue.ts";
 import { coordinating, isRefusal, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff." };
@@ -9,6 +16,7 @@ const REPORT = { summary: "Retries land with backoff", did: ["Added exponential 
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const DONE = { status: "done", ...REPORT, headSha: HEAD };
 const a1 = agentIdSchema.parse("a1");
+const ISSUE_ID = issueIdSchema.parse("WEB-1");
 
 async function withAgent({ verify = true } = {}) {
   const { kit, threadId, coordinatorId } = await coordinating({ verify });
@@ -86,8 +94,9 @@ test("a handoff outside its bounds is rejected, and a done one needs its commit"
     { ...DONE, headSha: "abc123" },
     { ...DONE, summary: "x".repeat(121) },
     { ...DONE, summary: "Two\nlines" },
-    { ...DONE, evidence: Array.from({ length: 51 }, () => "ran it") },
-    { ...DONE, evidence: ["x".repeat(2_001)] },
+    ...(["did", "evidence", "concerns", "deviations", "findings"] as const).map((list) => ({ ...DONE, [list]: Array.from({ length: 11 }, () => "ran it") })),
+    ...(["did", "concerns", "deviations", "findings"] as const).map((list) => ({ ...DONE, [list]: ["x".repeat(301)] })),
+    { ...DONE, evidence: ["x".repeat(1_001)] },
     { ...DONE, prUrl: "javascript:alert(1)" },
     { ...DONE, status: "finished" },
   ]) {
@@ -96,6 +105,15 @@ test("a handoff outside its bounds is rejected, and a done one needs its commit"
   assert.equal(kit.store.latestHandoff(coordinatorId, a1), null);
 
   assert.ok(!isRefusal(await kit.call("agent_handoff", { ...REPORT, status: "blocked" }, agentThreadId)), "blocked needs no commit");
+});
+
+test("a handoff at its caps is taken whole: 10 items of 300 characters in a list, and evidence items of 1,000", async () => {
+  const { kit, coordinatorId, agentThreadId } = await withAgent({ verify: false });
+  const items = (length: number) => Array.from({ length: 10 }, (_, i) => `${i}${"x".repeat(length - 2)}$`);
+  const lists = { did: items(300), evidence: items(1_000), concerns: items(300), deviations: items(300), findings: items(300) };
+  assert.ok(!isRefusal(await kit.call("agent_handoff", { ...DONE, ...lists }, agentThreadId)));
+  const { handoff } = kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff stored");
+  assert.deepEqual({ did: handoff.did, evidence: handoff.evidence, concerns: handoff.concerns, deviations: handoff.deviations, findings: handoff.findings }, lists);
 });
 
 test("with verification off, once its turn ends a done handoff is In review as Unverified, and a blocked or gave-up one Needs you", async () => {
@@ -120,17 +138,41 @@ test("with verification off, once its turn ends a done handoff is In review as U
   ]);
 });
 
-test("a handoff of 50 evidence items of 2,000 characters comes back whole from crew_catch_up and issue_read", async () => {
-  const { kit, threadId, agentThreadId } = await withAgent({ verify: false });
+test("an issue with more done-criteria than evidence takes items has its agent group them: one item per criterion is refused, grouped ones are taken, and every guide says so", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const doneCriteria = Array.from({ length: MAX_CRITERIA }, (_, i) => `Check ${i + 1} passes`);
+  const { agentThreadId } = await startedAgent(kit, threadId, { ...RETRIES, doneCriteria });
+  const perCriterion = doneCriteria.map((_, i) => `Criterion ${i + 1}: npm test printed ok`);
+  await assert.rejects(kit.call("agent_handoff", { ...DONE, evidence: perCriterion }, agentThreadId));
+  assert.equal(kit.store.latestHandoff(coordinatorId, a1), null);
+
+  const grouped = [...perCriterion.slice(0, 9), `Criteria 10–${MAX_CRITERIA}: npm test printed ok`];
+  assert.ok(!isRefusal(await kit.call("agent_handoff", { ...DONE, evidence: grouped }, agentThreadId)));
+  assert.deepEqual(kit.store.latestHandoff(coordinatorId, a1)?.handoff.evidence, grouped);
+
+  const skill = readFileSync(join(import.meta.dirname, "..", "..", "..", "skills", "agent-work", "SKILL.md"), "utf8").replace(/\s+/g, " ");
+  const tool = kit.tools().find(({ name }) => name === "agent_handoff") ?? assert.fail("no agent_handoff");
+  const guides = { rules: kit.configurationFor(agentThreadId, {}).instructions ?? "", instructions: tool.instructions ?? "", evidence: JSON.stringify(z.toJSONSchema(tool.parameters)), skill };
+  for (const [guide, text] of Object.entries(guides)) assert.match(text, /more (than 10 )?criteria, group neighbouring ones in an item/, guide);
+});
+
+test("a handoff stored under the old caps, 50 items of 2,000 characters in each list, still parses and shows whole in crew_catch_up, issue_read and its round", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId } = await withAgent({ verify: false });
   // Each item is numbered at its start and ends in "$", so a missing or cut one can't match.
-  const evidence = Array.from({ length: 50 }, (_, i) => `${String(i).padStart(2, "0")}${"e".repeat(1_997)}$`);
-  await kit.call("agent_handoff", { ...DONE, evidence }, agentThreadId);
+  const items = (list: string) => Array.from({ length: 50 }, (_, i) => `${list}${String(i).padStart(2, "0")}${"e".repeat(2_000 - list.length - 3)}$`);
+  const lists = { did: items("d"), evidence: items("e"), concerns: items("c"), deviations: items("v"), findings: items("f") };
+  // why the store: agent_handoff takes no such handoff now; one it took before its caps tightened is stored like this.
+  const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
+  const at = Date.now();
+  kit.store.insertHandoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId: ISSUE_ID, agentId: a1, at, turnSeq, ...REPORT, ...lists, status: "done", delivery: { kind: "commit", headSha: HEAD, prUrl: null } }, { kind: "unread", reason: "stored before the caps" }, null);
 
   for (const text of [textOf(await kit.call("crew_catch_up", {}, threadId)), textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId))]) {
-    for (const item of evidence) assert.ok(text.includes(`- ${item}`), `item ${item.slice(0, 2)} is missing or cut`);
+    for (const item of Object.values(lists).flat()) assert.ok(text.includes(`- ${item}`), `item ${item.slice(0, 3)} is missing or cut`);
     assert.match(text, /Status: done\nSummary: Retries land with backoff\nCommit: 0123456789abcdef0123456789abcdef01234567\nPull request: none/);
-    assert.match(text, /#### Verdict\n\nUnverified: verification was off, so nobody has checked it against the done-criteria\./);
   }
+  const { rounds } = await kit.opened(coordinatorId, ISSUE_ID);
+  const body = coordinatorContract.roundBodies.output.parse({ round: rounds[0]?.body ?? assert.fail("no round") }).round;
+  assert.deepEqual(body?.handoff, { ...lists, report: null });
 });
 
 test("issue_read places the issue by its agent's thread once it has had a turn since its handoff, and keeps the handoff on record", async () => {

@@ -546,8 +546,8 @@ work with `agent_handoff`, and the plugin records everything it sees:
   pull request link if there is one; a research issue's with its report,
   required, up to 20,000 characters, and no commit), `blocked` or `gave-up`; a one-line summary (up to 120
   characters); and what it did, its evidence, concerns, deviations and
-  findings (up to 50 items each, each up to 2,000 characters). It is stored
-  whole.
+  findings (up to 10 items each, each up to 300 characters, and evidence
+  items up to 1,000). It is stored whole.
 - **An agent failed**, with bb's error.
 - **An agent waits on the user**: a question or an approval in its thread.
 - **An agent ended a turn without a handoff**, with its last answer.
