@@ -4,7 +4,7 @@
 // link's card floats, fixed, against the window, by the link's box, so the message list it sits in
 // clips none of it, on whichever side of the link has room (chat-links/card/floating-placement.ts
 // follows it), until the link can't be seen. Measured before it paints.
-import { useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 /** The side of its anchor a card opens on, and the most it may be tall (null: as tall as it is). */
 export type Side = { side: "below" | "above"; cap: number | null };
@@ -24,6 +24,41 @@ export function useRowPlacement(): { ref: RefObject<HTMLDivElement | null>; plac
     setPlacement(rowPlacement(card.parentElement, card));
   }, []);
   return { ref, placement };
+}
+
+/**
+ * A row's card that follows its row while it shows: placed again as anything holding the row
+ * scrolls or the window resizes, and put away (`lost`) once the row can't be seen in the panel. Spread
+ * `ref` on the card, whose parent is its row's box, and `body` on its body, which scrolls when capped.
+ * why the body's height: a capped card is as tall as its cap, and only its body's scroll height is
+ * all of it.
+ */
+export function useFollowingRowPlacement(lost: () => void): { ref: RefObject<HTMLDivElement | null>; body: RefObject<HTMLDivElement | null>; placement: Side } {
+  const ref = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [placement, setPlacement] = useState<Side>(UNMEASURED);
+  const follow = useCallback(() => {
+    const row = ref.current?.parentElement;
+    // why: the refs' types only; the card, in its row's box, is mounted as this runs.
+    if (row === null || row === undefined || body.current === null) return;
+    const box = row.getBoundingClientRect();
+    const bounds = visibleBounds(row);
+    if (!overlaps(box, bounds)) return lost();
+    const next = sideOf(box, body.current.scrollHeight, bounds);
+    setPlacement((current) => (current.side === next.side && current.cap === next.cap ? current : next));
+  }, [lost]);
+  // why after every render, before paint: its content may change as the feed reads again, and it must not paint where it doesn't fit.
+  useLayoutEffect(follow);
+  useEffect(() => {
+    // why the document, capturing: a scroll doesn't bubble, and the panel the row moves in is any element.
+    document.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    return () => {
+      document.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+    };
+  }, [follow]);
+  return { ref, body, placement };
 }
 
 /** Where a link's card of `size` floats by `link` as the page is now; null once the link can't be seen, scrolled out of the message list or the window. */

@@ -12,7 +12,7 @@ import type { Verdict } from "./verdict.ts";
 
 /** How much a finding matters, by the reviewer's judgement: must-fix, should-fix, or a nit. */
 export const severitySchema = z.enum(["must-fix", "should-fix", "nit"]);
-type Severity = z.infer<typeof severitySchema>;
+export type Severity = z.infer<typeof severitySchema>;
 
 /**
  * Where a finding comes from, in a later round (rounds/delta.ts): `new`, on code changed since the
@@ -139,7 +139,7 @@ export const RECHECK_RULE =
  * string: one stored before steps were a list is one numbered line, "1. … 2. …", split here once
  * (legacySteps). issue_verdict takes them capped (verdict-tool.ts).
  */
-const storedStepsSchema = z
+export const storedStepsSchema = z
   .union([z.array(z.string().min(1)), z.string().min(1).transform(legacySteps)])
   .nullable()
   .default(null);
@@ -277,19 +277,30 @@ export function holds(triage: Triage): boolean {
 
 /** The verifier's word on a finding, in the one wording catch-up, a handed-over agent and the board give it, on one line to sit in a list: "Anchored, as it breaks a recorded decision", "Anchored, as a bug hit in normal use, reached by: <steps>", "Downgraded to should-fix". */
 export function triageText(triage: Triage): string {
+  return triage.result === "anchored" && triage.steps !== null ? `${triageWord(triage)}, reached by: ${stepsText(triage.steps)}` : triageWord(triage);
+}
+
+/** The verifier's word on a finding without a bug's steps, where they show as a list of their own (the feed's finding): "Anchored, as a bug hit in normal use". */
+export function triageWord(triage: Triage): string {
   switch (triage.result) {
     case "rejected":
       return "Rejected";
     case "confirmed":
       return "Confirmed";
     case "anchored":
-      return `Anchored, ${anchorText(triage)}`;
+      return `Anchored, as ${ANCHOR_WORDS[triage.anchor]}`;
     case "downgraded":
       return `Downgraded to ${triage.to}`;
     default:
       return triage satisfies never;
   }
 }
+
+/** What a blocking defect breaks, without its steps, as the feed's line for it gives it: "Blocks, as a bug hit in normal use". */
+export const blocksWord = ({ anchor }: Pick<BlockingDefect, "anchor">): string => `Blocks, as ${ANCHOR_WORDS[anchor]}`;
+
+/** How much a finding matters now: the severity its verifier downgraded it to, else the reviewer's (`severity`); the reviewer's before its triage (null). */
+export const severityNow = (severity: Severity, triage: Triage | null): Severity => (triage?.result === "downgraded" ? triage.to : severity);
 
 /** The severities lower than `severity`, the most a finding can matter first. */
 const lowerThan = (severity: Severity): Severity[] => severitySchema.options.slice(severitySchema.options.indexOf(severity) + 1);

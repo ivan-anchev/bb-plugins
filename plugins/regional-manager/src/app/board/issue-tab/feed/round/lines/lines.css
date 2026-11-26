@@ -1,0 +1,198 @@
+/* The lines of an open round (fold-line.tsx): one row each, Activity Sidebar's 28px row with its
+   hover wash and focus ring, opening on press to a detail under it. A finding's row is its mark, its
+   severity, its title and, muted, its place, which drops when the feed is narrower than 420px.
+   Every colour is a bb theme token; every class carries the `rmi-` prefix. Text that says what a
+   finding does uses the theme's text tokens (--destructive-text, --warning-text), which read on --card
+   and --popover. */
+.rmi-lines {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  list-style: none;
+}
+.rmi-fold-box {
+  position: relative;
+}
+.rmi-fold-row {
+  all: unset;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% + 12px);
+  min-height: 28px;
+  margin: 0 -6px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .rmi-fold-row:hover {
+    background: var(--state-hover);
+  }
+}
+.rmi-fold-row:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+.rmi-fold-row[aria-expanded="true"] {
+  background: var(--state-hover);
+}
+/* A note with nothing more to say than its row: no press, so no wash. */
+.rmi-fold-row[data-static] {
+  cursor: default;
+  background: none;
+}
+
+/* A finding's mark: a 8px square in what the finding does; before its triage, its severity's colour. */
+.rmi-mark {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: currentColor;
+  color: var(--subtle-foreground);
+}
+.rmi-mark[data-severity="must-fix"] { color: var(--destructive-text); }
+.rmi-mark[data-severity="should-fix"] { color: var(--warning-text); }
+.rmi-mark[data-effect="blocks"] { color: var(--destructive-text); }
+.rmi-mark[data-effect="follow-up"] { color: var(--warning-text); }
+.rmi-mark[data-effect="nit"],
+.rmi-mark[data-effect="rejected"] { color: var(--subtle-foreground); }
+.rmi-mark[data-effect="rejected"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.rmi-line-severity,
+.rmi-line-number {
+  flex: none;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* why it gives way first: the mark and severity say what the finding does; the title ends in an ellipsis, whole in the card. */
+.rmi-line-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+}
+.rmi-line-title[data-effect="rejected"] {
+  color: var(--muted-foreground);
+}
+/* A note on the round: muted, or in its tone's text colour, which reads on --card. */
+.rmi-note-text {
+  color: var(--muted-foreground);
+}
+.rmi-note-text[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-note-text[data-tone="warning"] { color: var(--warning-text); }
+.rmi-line-place {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: pre;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--subtle-foreground);
+}
+.rmi-fold-row > .rmi-result-glyph {
+  margin-top: 0;
+}
+@container rmi-feed (max-width: 420px) {
+  /* A note on the round: muted, or in its tone's text colour, which reads on --card. */
+.rmi-note-text {
+  color: var(--muted-foreground);
+}
+.rmi-note-text[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-note-text[data-tone="warning"] { color: var(--warning-text); }
+.rmi-line-place {
+    display: none;
+  }
+}
+
+/* What a line opens to: under its title, on a hairline. */
+.rmi-fold-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 8px 3px;
+  padding: 2px 0 2px 13px;
+  border-left: 1px solid var(--border);
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--muted-foreground);
+}
+.rmi-fold-detail[hidden] {
+  display: none;
+}
+.rmi-fold-claim {
+  color: var(--foreground);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.rmi-said b {
+  font-weight: 500;
+  color: var(--foreground);
+}
+/* why only what blocks in red and what goes to the follow-up in amber: the word says what the mark does. */
+.rmi-said b[data-effect="blocks"] { color: var(--destructive-text); }
+.rmi-said b[data-effect="follow-up"] { color: var(--warning-text); }
+/* why list-style: Tailwind's preflight, which bb's build adds, takes every list's markers away. */
+.rmi-fold-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 18px;
+  list-style: decimal;
+  color: var(--foreground);
+}
+.rmi-fold-steps ::marker {
+  color: var(--subtle-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.rmi-fold-facts {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--subtle-foreground);
+}
+/* A path whole, left to right, wrapping anywhere, its spaces kept. */
+.rmi-fold-place {
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rmi-fold-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 16px;
+  list-style: disc;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.rmi-fold-detail .rmi-evidence {
+  margin: 0;
+}
+
+/* A finding's hover card: the board's (hover-card.css), under its line. */
+.rmi-finding-card {
+  left: 0;
+  width: min(284px, 100%);
+}
+.rmi-finding-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted-foreground);
+}
+.rmi-finding-card .rmi-card-title {
+  color: var(--popover-foreground);
+}

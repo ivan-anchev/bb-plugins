@@ -9,7 +9,7 @@ import { z } from "zod";
 import { MAX_TITLE_CHARS, type Issue, type IssueId, type NewIssue } from "../../issue/issue.ts";
 import { clipped } from "../../one-line.ts";
 import type { Check } from "../check.ts";
-import { findingText, triageText, type Triaged } from "../review.ts";
+import { findingText, severityNow, triageText, type Triaged } from "../review.ts";
 import { heldFindings, verifierFindingText, type VerifierFinding } from "../verdict.ts";
 import { findingKey } from "./delta.ts";
 
@@ -107,11 +107,8 @@ function countText(review: number, own: number): string {
   return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
-/** Whether a leftover is worth a follow-up of its own: the reviewer's must-fix the verifier downgraded, or one that held as a should-fix. A nit never is. */
-const warrantsFollowUp = (finding: Triaged): boolean => finding.severity === "must-fix" || severityAsTriaged(finding) === "should-fix";
-
-/** How much a finding matters as the verifier triaged it: the severity it downgraded it to, else the reviewer's. */
-const severityAsTriaged = (finding: Triaged): Triaged["severity"] => (finding.result === "downgraded" ? finding.to : finding.severity);
+/** Whether a leftover is worth a follow-up of its own: the reviewer's must-fix the verifier downgraded, or one that held as a should-fix. A nit never is. The one rule the pass files by and the feed marks a finding by (round.ts). */
+export const warrantsFollowUp = (finding: Triaged): boolean => finding.severity === "must-fix" || severityNow(finding.severity, finding) === "should-fix";
 
 /** What a follow-up's findings were left by, as its description words it. */
 const LEFT: Record<FiledWhen, (origin: IssueId) => string> = {

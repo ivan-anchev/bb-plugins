@@ -8,6 +8,7 @@ import { coordinatorIdSchema } from "../role.ts";
 import { checkIdSchema, type Check, type FinalCheck } from "../verdict/check.ts";
 import type { Review, ReviewFinding, Triaged } from "../verdict/review.ts";
 import type { Verdict } from "../verdict/verdict.ts";
+import { followUpPlan } from "../verdict/rounds/follow-up.ts";
 import { bodyOf, finalRoundOf, roundOf } from "./round.ts";
 
 // A round's review: its step on the rail with how many findings the reviewer reported, how many
@@ -75,18 +76,35 @@ test("a reported review counts its findings and, once the verdict triaged them, 
   assert.deepEqual(
     findings.map(({ triage }) => triage),
     [
-      { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound." },
-      { result: "rejected", reason: "It matches the row." },
-      { result: "confirmed", reason: "Only the first attempt is tested." },
-      { result: "downgraded", to: "nit", reason: "It breaks none of the five." },
+      { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound.", effect: "blocks" },
+      { result: "rejected", reason: "It matches the row.", effect: "rejected" },
+      { result: "confirmed", reason: "Only the first attempt is tested.", effect: "follow-up" },
+      { result: "downgraded", to: "nit", reason: "It breaks none of the five.", effect: "follow-up" },
     ],
-    "each triage on its own finding, in the review's order",
+    "each triage on its own finding, in the review's order, with what it does to the work: a must-fix downgraded to a nit goes to the follow-up, as the pass files it",
   );
   assert.deepEqual(
-    findings.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin })),
-    FINDINGS.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin })),
-    "each finding as the reviewer wrote it, with its origin; its title stays on the server, as the tab shows none",
+    findings.map(({ title, file, line, severity, claim, origin }) => ({ title, file, line, severity, claim, origin })),
+    FINDINGS,
+    "each finding as the reviewer wrote it, its title and origin included",
   );
+});
+
+test("a must-fix the verifier confirmed before the anchor rule blocks the work only when it failed that verdict, as it did then", () => {
+  const legacy: Triaged = { title: "The backoff has no cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", result: "confirmed", reason: "It holds." };
+  const effects = [true, false].map((mustFixFails) => bodyOf(HANDOFF, handed(REPORTED, { ...RETURNED, triage: [legacy, ...TRIAGE.slice(1)], mustFixFails }).check).findings[0]?.triage?.effect);
+  assert.deepEqual(effects, ["blocks", "follow-up"]);
+});
+
+test("a finding's mark says it goes to the follow-up exactly when the pass would file it: a must-fix downgraded to a nit alone plans one, a confirmed nit alone doesn't", () => {
+  const downgraded: Triaged = { title: "The helper's name says nothing", file: "src/retry.ts", line: 30, severity: "must-fix", claim: "The helper's name says nothing.", origin: "new", result: "downgraded", to: "nit", reason: "Taste." };
+  const nit: Triaged = { title: "Padding", file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new", result: "confirmed", reason: "Taste." };
+  const marked = [downgraded, nit].map((finding) => {
+    const { title, file, line, severity, claim, origin } = finding;
+    const check = handed({ ...REPORTED, findings: [{ title, file, line, severity, claim, origin }] }, { ...RETURNED, triage: [finding] }).check;
+    return [bodyOf(HANDOFF, check).findings[0]?.triage?.effect, followUpPlan(BBP_19, { id: BBP_19, title: "Retries" }, [{ round: 1, leftovers: [finding], own: [] }], "passed") !== null];
+  });
+  assert.deepEqual(marked, [["follow-up", true], ["nit", false]]);
 });
 
 test("before the verdict returns, the findings show with no triage yet and nothing is counted as held or downgraded", () => {

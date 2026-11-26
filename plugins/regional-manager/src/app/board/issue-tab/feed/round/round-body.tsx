@@ -1,7 +1,10 @@
-// An open round: its steps on a rail, handed off → reviewer → verifier, then what became of it. The
-// steps' lines come from the feed's read; what each opens to (the report, the findings with their
-// triage, the verdict) is the round's body, read with the keyed roundBodies query only while the
-// round is open, so a folded round costs nothing.
+// An open round as a short list: what was handed off, in full; a line per finding (lines/
+// finding-lines.tsx); a line per thing that failed it (lines/verdict-lines.tsx); what became of it;
+// and its report, folded. Each line opens on press to its detail, and a finding's shows its card on
+// hover and focus. The summary and the outcome come from the feed's read; the rest is the round's
+// body, read with the keyed roundBodies query only while the round is open, so a folded round costs
+// nothing. why no step captions, counts or passes: the lines are the review and the verdict, the
+// head's score says how it ended, and the Done when grid marks each criterion.
 import { experimental_useRpcKeyedQuery, Markdown } from "@get-bb/plugin-sdk/app";
 import { useId, type ReactNode } from "react";
 import { coordinatorContract as contract, roundBodyKey } from "../../../../../contract.ts";
@@ -12,12 +15,12 @@ import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { Outcome } from "../../../../../model/verdict/verdict.ts";
 import { ReadFailure } from "../../../../ui/read-failure.tsx";
-import { ThreadLink } from "../../../issue/thread-link.tsx";
+import { useHoverCards } from "../../../issue/hover-card/use-hover-card.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { AgentName, MovedTo, When, type FeedAgents } from "../byline.tsx";
-import { Findings, findingsText } from "./findings.tsx";
-import { Score } from "./score.tsx";
-import { VerdictStep } from "./verdict-step.tsx";
+import { FindingLines } from "./lines/finding-lines.tsx";
+import { NoteLine } from "./lines/fold-line.tsx";
+import { VerdictLines } from "./lines/verdict-lines.tsx";
 
 type Where = { coordinatorId: CoordinatorId; issueId: IssueId };
 
@@ -36,131 +39,55 @@ type RoundBodyProps = Where & { round: Round; agents: FeedAgents };
 
 export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyProps) {
   const { body, error, retry } = useRoundBody({ coordinatorId, issueId }, round.key);
+  const cards = useHoverCards();
   const loaded = body ?? null;
   const loading = body === undefined && error === null;
   return (
-    <div className="rmi-round-body">
+    <div className="rmi-round-body" {...cards.board}>
       {error !== null && (
         <ReadFailure onRetry={retry}>
           Could not read round {round.number}: {error.message}
         </ReadFailure>
       )}
-      {body === null && <p className="rmi-verdict-meta">This round is no longer on record.</p>}
-      <ol className="rmi-steps">
-        <HandedStep round={round} agents={agents} handoff={loaded?.handoff ?? null} />
-        {round.review.state !== "none" && <ReviewStep review={round.review} body={loaded} />}
-        {/* why none when waived, or while the review is to come: no verifier ran, or none has started; the round's score says so. */}
-        {round.verdict !== null && round.verdict.outcome.kind !== "unverified" && round.review.state !== "pending" && (
-          <Step
-            title={
-              <>
-                <ThreadLink name="Verifier" threadId={verifierThreadOf(loaded)} /> <Score round={round} />
-                {round.verdict.step !== null && <StepTime step={round.verdict.step} />}
-              </>
-            }
-          >
-            {loaded?.verdict != null && <VerdictStep verdict={loaded.verdict} by={round.by} />}
-          </Step>
-        )}
-      </ol>
+      {body === null && <p className="rmi-round-note">This round is no longer on record.</p>}
+      <p className="rmi-round-said">{headlineOf(round)}</p>
+      {round.review.state === "missed" && <ReviewMissed why={loaded?.reviewMissed ?? null} />}
+      {loaded !== null && <FindingLines findings={loaded.findings} own={ownFindingsOf(loaded)} cards={cards} />}
+      {loaded?.verdict != null && <VerdictLines verdict={loaded.verdict} by={round.by} cards={cards} />}
       {loading && (
-        <p role="status" className="rmi-verdict-meta">
+        <p role="status" className="rmi-round-note">
           Loading round {round.number}…
         </p>
       )}
       <Outcome round={round} agents={agents} />
+      {loaded?.handoff != null && <Report handoff={loaded.handoff} />}
     </div>
   );
 }
 
-function Step({ title, children }: { title: ReactNode; children?: ReactNode }) {
-  return (
-    <li className="rmi-step">
-      <p className="rmi-step-title">{title}</p>
-      {children}
-    </li>
-  );
-}
-
-function HandedStep({ round, agents, handoff }: { round: Round; agents: FeedAgents; handoff: HandoffBody | null }) {
-  const { by } = round;
+/** What the round was: its handoff's summary, or a build parent's final check on its default branch. */
+export function headlineOf({ by }: Round): string {
   switch (by.kind) {
-    case "final":
-      return <Step title={<>Final check on {by.defaultBranch}<StepTime step={round.handed} /></>} />;
     case "agent":
-      return (
-        <Step
-          title={
-            <>
-              <AgentName agentId={by.agentId} agents={agents} /> {handedText(by.status)}
-              <StepTime step={round.handed} />
-            </>
-          }
-        >
-          <p className="rmi-step-text">{by.summary}</p>
-          {handoff !== null && <Report handoff={handoff} />}
-        </Step>
-      );
+      return by.summary;
+    case "final":
+      return `Final check on ${by.defaultBranch}`;
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
       by satisfies never;
-      return null;
+      return "";
   }
 }
 
-function handedText(status: Extract<Round["by"], { kind: "agent" }>["status"]): string {
-  switch (status) {
-    case "done":
-      return "handed off";
-    case "blocked":
-      return "handed off blocked";
-    case "gave-up":
-      return "gave up";
-    default:
-      // why the plain words: a status this bundle doesn't know still handed off, and claims no more.
-      status satisfies never;
-      return "handed off";
-  }
-}
+/** A review that wasn't had, and why once the body is read. */
+const ReviewMissed = ({ why }: { why: string | null }) => (
+  <ul className="rmi-lines" aria-label="Review">
+    <NoteLine tone={null} headline="Review missed" detail={why === null ? null : <p className="rmi-fold-claim">{why}</p>} />
+  </ul>
+);
 
-/** The review's step: its line from the round, then its findings with their triage, or why none was had, from the body once read. */
-function ReviewStep({ review, body }: { review: Exclude<Round["review"], { state: "none" }>; body: Body | null }) {
-  switch (review.state) {
-    case "pending":
-      return <Step title="Reviewer…" />;
-    case "missed":
-      return (
-        <Step
-          title={
-            <>
-              Review missed{body?.reviewMissed != null && `: ${body.reviewMissed}`}
-              <StepTime step={review.step} />
-            </>
-          }
-        >
-          {/* why findings under a missed review: its verifier triaged the earlier round's blocking findings, as unfixed. */}
-          {body !== null && body.findings.length > 0 && <Findings findings={body.findings} />}
-        </Step>
-      );
-    case "reported":
-      return (
-        <Step
-          title={
-            <>
-              Reviewer · {findingsText(review)}
-              <StepTime step={review.step} />
-            </>
-          }
-        >
-          {body !== null && body.findings.length > 0 && <Findings findings={body.findings} />}
-        </Step>
-      );
-    default:
-      // why nothing, not the object: the server may be newer than this bundle for a moment after an update.
-      review satisfies never;
-      return null;
-  }
-}
+/** The verifier's own findings, once its verdict returned. */
+const ownFindingsOf = ({ verdict }: Body) => (verdict?.state === "returned" ? verdict.findings : []);
 
 /**
  * What became of a returned verdict once it went back to its agent or was made final. why only a
@@ -234,28 +161,21 @@ const StepTime = ({ step }: { step: StepAt }) => (
   </>
 );
 
-const verifierThreadOf = (body: Body | null): string | null => {
-  const verdict = body?.verdict ?? null;
-  return verdict !== null && (verdict.state === "running" || verdict.state === "returned" || verdict.state === "could-not-run") ? verdict.verifierThreadId : null;
-};
-
-/** The handoff's own account, folded: what the agent did, its evidence, concerns and the rest, and a research handoff's report. */
+/** The handoff's own account, folded: what the agent did, its evidence, concerns and the rest, each under its label, and a research handoff's report. */
 function Report({ handoff }: { handoff: HandoffBody }) {
   const parts = [
-    { title: "Did", counted: "did", items: handoff.did },
-    { title: "Evidence", counted: "evidence", items: handoff.evidence, code: true },
-    { title: "Concerns", counted: "concern", items: handoff.concerns },
-    { title: "Deviations", counted: "deviation", items: handoff.deviations },
-    { title: "Findings", counted: "finding", items: handoff.findings },
+    { title: "Did", items: handoff.did },
+    { title: "Evidence", items: handoff.evidence, code: true },
+    { title: "Concerns", items: handoff.concerns },
+    { title: "Deviations", items: handoff.deviations },
+    { title: "Findings", items: handoff.findings },
   ].filter(({ items }) => items.length > 0);
   if (parts.length === 0 && handoff.report === null) return null;
-  // why only some take an s: "3 did" and "2 evidence" read as they are.
-  const counted = parts.map(({ counted: word, items }) => `${items.length} ${items.length === 1 || word === "did" || word === "evidence" ? word : `${word}s`}`).join(" · ");
   return (
     <details className="rmi-report-fold">
       <summary>
         <DiscloseGlyph />
-        Report{counted !== "" && ` · ${counted}`}
+        Report
       </summary>
       <div className="rmi-report-parts">
         {handoff.report !== null && <ResearchReport {...handoff.report} />}

@@ -1,5 +1,5 @@
 // A tooltip's lifetime, for what in a round says more of itself in one: a criterion's cell
-// (criteria-grid.tsx) and a finding's place (findings.tsx). Shown while the pointer is on its slot,
+// (criteria-grid.tsx). Shown while the pointer is on its slot,
 // the trigger and the tip, which touch, or focus is on its trigger; Escape closes it wherever focus is.
 import { useId, useState } from "react";
 import { useEscapeToClose } from "../../../../ui/hold-escape.ts";

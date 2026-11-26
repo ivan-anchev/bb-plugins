@@ -1145,7 +1145,8 @@ nothing when it has none.
 rounds, Discussion only the comments, decisions and questions. The choice holds while
 the tab is open. A **round** is one attempt: an agent's handoff and its
 check, or a build parent's final check. Folded, it is one line: "Round 2",
-what was handed off ("Final check on main" for a parent's) and its score: "✓ 6
+what was handed off ("Final check on main" for a parent's), its score and
+when it was handed off. The score: "✓ 6
 of 6", "✗ 3 of 6", "Reviewing…", "Verifying…", "Waiting for CI…",
 "Couldn't verify", "Replaced", "Not verified", or "Blocked" or "Gave up" for a
 handoff nothing checks. A round whose criteria all passed shows ✓ only once
@@ -1154,26 +1155,38 @@ finding the verifier anchored or CI failed leads with that: "✗ Not the claimed
 commit on a clean tree", "✗ Must-fix upheld", "✗ CI failed". The latest round is open; any other opens when you
 press it, and stays as you left it while the tab is open, also when a new
 round arrives, which opens as the new latest; a round you are reading in,
-having pressed or focused something inside it, stays open too. Open, a round shows its steps on a rail: who
-handed off and when, its summary, and its **Report** folded ("Report · 3 did
-· 2 evidence"), with a research handoff's report as Markdown beside the
-memory file it was saved to (such as `reports/BBP-2.md`), in its own box that
-scrolls; then the reviewer: "Reviewer · 4 findings, 3 held (1 downgraded)",
-each finding with its severity, its place and its claim, and the verifier's
-word with why: **Rejected** (the claim struck through), **Confirmed**,
-**Anchored, as it breaks** what it breaks (in red: it alone fails the
-verdict), or **Downgraded to** its new severity,
-or "No review" and why; then the verifier, with a link to its thread, its
-score and when: the commit checked; the plugin's own read when that commit
-wasn't checked out on a clean tree; what CI said when it failed, couldn't be
-checked or is still to come; each failing or unverifiable criterion with its
-evidence, and the passes folded ("4 passed"); and the verifier's own
-findings. It warns when the check had to run on the agent's own model, but
-names no provider or model. Last comes what became of it: "Sent back to a2
-as fix round 1", "Maybe sent back to a2 as fix round 1: the regional manager
-decides" when the plugin can't tell whether they reached it, "Not sent back:
-the regional manager decides", "Passed" and the like, with when. A round's body is read only while it is open; one that
-fails to read says so beside its steps, with Retry.
+having pressed or focused something inside it, stays open too. Open, its
+head says its verdict in a word, with no count: "Passed", "Criteria failed",
+"Must-fix upheld"; the Done when grid counts the criteria. Open, a round
+is a short list. First what was handed off, whole. Then a line per finding,
+the reviewer's and then the verifier's own: a small mark, its severity
+(must-fix, should-fix or nit), its title and, muted, its file and line, which
+drop when the feed is narrower than 420px. The mark's colour says what the
+finding does: red when it blocks the work, amber when it goes to the
+follow-up (a must-fix downgraded to a nit does, as the follow-up files it), grey for a nit, an outline when rejected; before the verdict, its
+severity's colour. A screen reader names both. Hover or focus a finding for
+its card, under it, or above it near the panel's foot: its title, its severity and origin, its full path, and the
+verifier's word with why: **Anchored, as** what it breaks, **Confirmed**,
+**Downgraded to** its new severity or **Rejected**. Escape closes the card.
+Press a finding to open its claim, that word and reason, a bug's numbered
+steps and its full path. Then a line per thing that failed the round, each one row that opens on
+press to the rest: its
+checkout when it wasn't the claimed commit on a clean tree (opening to what
+bb read), each criterion
+that failed or couldn't be checked (its number and what the run showed,
+pressed open to the criterion and its evidence), each blocking defect the
+verifier found, and CI when it failed (opening to the failed checks), couldn't be checked or
+is still to come; a review missed or a verdict that never came says why, and a check run
+on the agent's own model says so. The passes aren't listed: the Done when
+grid marks them. Last comes what became of it: "Sent back to a2 as fix round
+1", "Maybe sent back to a2 as fix round 1: the regional manager decides" when
+the plugin can't tell whether they reached it, "Not sent back: the regional
+manager decides", "Passed" and the like, with when; and the handoff's
+**Report**, folded, its items under Did, Evidence, Concerns, Deviations and
+Findings, with a research handoff's report as Markdown beside the memory file
+it was saved to (such as `reports/BBP-2.md`), in its own box that scrolls. A
+round's body is read only while it is open; one that fails to read says so,
+with Retry.
 
 Between the rounds sit the **decisions**, each a card under the manager's
 avatar and name and when: each question the manager put to you about the

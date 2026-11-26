@@ -175,7 +175,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   assert.deepStrictEqual(thread?.kind === "thread" && thread.event, { kind: "reported-back", lastAnswer: "Still on it." });
 });
 
-test("an opened round's body sends its handoff, its verdict and the findings with their origin and triage, never the reviewer's earlier answers; a key of a removed manager, or none of a round, reads null beside it", async () => {
+test("an opened round's body sends its handoff, its verdict and the findings with their title, origin and triage, and what each does to the work, never the reviewer's earlier answers; a key of a removed manager, or none of a round, reads null beside it", async () => {
   const { handlers, issueId, handoff, elsewhere } = seeded();
   const key = roundBodyKey(MANAGER, issueId, roundKeySchema.parse(`h-${handoff.id}`));
   const gone = roundBodyKey(OTHER_MANAGER, elsewhere.issueId, roundKeySchema.parse(`h-${elsewhere.id}`));
@@ -191,14 +191,19 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
   assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["blocking", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepStrictEqual(body.findings.map(keysOf), [
-    ["claim", "file", "line", "origin", "severity", "triage"],
-    ["claim", "file", "line", "origin", "severity", "triage"],
-    ["claim", "file", "line", "origin", "severity", "triage"],
+    ["claim", "file", "line", "origin", "severity", "title", "triage"],
+    ["claim", "file", "line", "origin", "severity", "title", "triage"],
+    ["claim", "file", "line", "origin", "severity", "title", "triage"],
   ]);
-  assert.deepStrictEqual(body.findings.map(({ triage }) => keysOf(triage ?? assert.fail("no triage"))), [["anchor", "reason", "result", "steps"], ["reason", "result", "to"], ["reason", "result"]], "an anchored finding names the anchor it meets and its steps, a downgraded one its new severity");
+  assert.deepStrictEqual(
+    body.findings.map(({ triage }) => keysOf(triage ?? assert.fail("no triage"))),
+    [["anchor", "effect", "reason", "result", "steps"], ["effect", "reason", "result", "to"], ["effect", "reason", "result"]],
+    "an anchored finding names the anchor it meets and its steps, a downgraded one its new severity",
+  );
+  const EFFECTS = ["blocks", "follow-up", "rejected"];
   assert.deepStrictEqual(
     body.findings,
-    FINDINGS.map(({ file, line, severity, claim, origin }, i) => ({ file, line, severity, claim, origin, triage: TRIAGE[i] })),
+    FINDINGS.map((finding, i) => ({ ...finding, triage: { ...TRIAGE[i], effect: EFFECTS[i] } })),
   );
 });
 

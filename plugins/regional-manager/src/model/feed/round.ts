@@ -8,8 +8,9 @@ import { decisionIdSchema, type DecisionId } from "../decision.ts";
 import { handoffBody, handoffBodySchema, handoffIdSchema, handoffStatusSchema, type Handoff, type HandoffId } from "../agent/handoff.ts";
 import { issueStatusSchema, type Handed } from "../issue/status.ts";
 import { checkIdSchema, type Check, type CheckId, type FinalCheck } from "../verdict/check.ts";
-import { holds, reviewFindingSchema, reviewPending, triageSchema, type Review } from "../verdict/review.ts";
-import { checkInFlight, criterionResultSchema, firstFailure, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
+import { holds, reviewFindingSchema, reviewPending, storedStepsSchema, triageVariants, type Review, type Severity, type Triaged } from "../verdict/review.ts";
+import { warrantsFollowUp } from "../verdict/rounds/follow-up.ts";
+import { checkInFlight, criterionResultSchema, failsVerdict, firstFailure, outcome, outcomeSchema, shownVerdict, shownVerdictSchema, type CriterionResult, type Verdict } from "../verdict/verdict.ts";
 
 /**
  * A round's address within its issue: `h-` and its handoff's id, or `f-` and its final check's. why
@@ -72,24 +73,32 @@ export const roundSchema = z.object({
       asked: decisionIdSchema.nullable(),
     })
     .nullable(),
-  /** When its returned verdict was sent back or made final, from the inbox event that said so (null: not yet, or no verdict returned, which its verifier's step tells). */
+  /** When its returned verdict was sent back or made final, from the inbox event that said so (null: not yet, or no verdict returned, which the open round's lines tell). */
   outcome: stepSchema.nullable(),
   /** Its check is in flight: its review, its verdict or CI is still to come. */
   inFlight: z.boolean(),
 });
 export type Round = z.infer<typeof roundSchema>;
 
+/**
+ * What a finding does to the work, as its verifier triaged it: it blocks the work (it fails the
+ * verdict and goes back to the agent), goes to the follow-up, stays a nit, or was rejected. The one
+ * colour of its mark in the feed.
+ */
+const effectSchema = z.enum(["blocks", "follow-up", "nit", "rejected"]);
+export type Effect = z.infer<typeof effectSchema>;
+
 export const roundBodySchema = z.object({
   /** The handoff's account (null: a final check's round, which has none). */
   handoff: handoffBodySchema.nullable(),
   verdict: shownVerdictSchema.nullable(),
   /**
-   * The findings its verifier triages, each with where it comes from (new, missed or unfixed) and
-   * the verifier's triage once its verdict returned (null triage before): rejected, confirmed,
-   * anchored with what it breaks, or downgraded with its new severity. why no earlier answers and
-   * no title: the tab shows neither.
+   * The findings its verifier triages, each with its title, where it comes from (new, missed or
+   * unfixed) and the verifier's triage once its verdict returned (null triage before): rejected,
+   * confirmed, anchored with what it breaks, or downgraded with its new severity, and what that does
+   * to the work (effectOf). why no earlier answers: the tab shows none.
    */
-  findings: z.array(reviewFindingSchema.omit({ title: true }).extend({ triage: triageSchema.nullable() })),
+  findings: z.array(reviewFindingSchema.extend({ triage: triageVariants({ reason: z.string().min(1), effect: effectSchema }, storedStepsSchema).nullable() })),
   /** Why no review was had (null: one was, or none was asked for). */
   reviewMissed: z.string().nullable(),
 });
@@ -256,7 +265,7 @@ function fixRoundOf({ settlement }: Extract<Verdict, { state: "returned" }>): No
   }
 }
 
-/** What became of a returned verdict, once announced at `at`. why only a returned one: a verdict that never came says so in its verifier's step, which is its last. */
+/** What became of a returned verdict, once announced at `at`. why only a returned one: a verdict that never came says so among the open round's lines. */
 const outcomeStep = (verdict: Verdict, at: number | null): Step | null => (verdict.state === "returned" && at !== null ? stepAt(at) : null);
 
 /** A step at `at`, before any status is attached to it (feed.ts). */
@@ -268,7 +277,26 @@ const stepAt = (at: number): Step => ({ at, moved: null });
  * included; before, the review's findings with no triage yet.
  */
 function findingsOf({ review, verdict }: Check): RoundBody["findings"] {
-  // why the title taken out: the tab shows none (roundBodySchema), so it isn't sent.
-  if (verdict.state === "returned") return verdict.triage.map(({ title, file, line, severity, claim, origin, ...triage }) => ({ file, line, severity, claim, origin, triage }));
-  return review.state === "reported" ? review.findings.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin, triage: null })) : [];
+  if (verdict.state === "returned") {
+    return verdict.triage.map((finding) => {
+      const { title, file, line, severity, claim, origin, ...triage } = finding;
+      return { title, file, line, severity, claim, origin, triage: { ...triage, effect: effectOf(finding, verdict.mustFixFails) } };
+    });
+  }
+  return review.state === "reported" ? review.findings.map((finding) => ({ ...finding, triage: null })) : [];
 }
+
+/**
+ * What a triaged finding does to the work: blocks it when it fails the verdict on its own
+ * (verdict.ts failsVerdict); else rejected; else goes to the follow-up when it warrants one, as the
+ * issue's pass files it (rounds/follow-up.ts warrantsFollowUp), a downgraded must-fix included
+ * whatever its new severity; else it is a nit.
+ */
+function effectOf(finding: Triaged, mustFixFails: boolean): Effect {
+  if (failsVerdict(finding, mustFixFails)) return "blocks";
+  if (!holds(finding)) return "rejected";
+  return warrantsFollowUp(finding) ? "follow-up" : "nit";
+}
+
+/** What a verifier's own finding does to the work: it never blocks, and goes to the follow-up above a nit, as the issue's pass files it (rounds/follow-up.ts). */
+export const ownEffect = (severity: Severity): Effect => (severity === "nit" ? "nit" : "follow-up");

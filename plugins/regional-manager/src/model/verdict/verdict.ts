@@ -348,7 +348,7 @@ export const acceptableAsIs = ({ verdict, subject }: Pick<Check, "verdict" | "su
  * on a verdict from before the anchor rule, confirmed it as a must-fix while that rule
  * (`mustFixFails`) held. Should-fix and nit findings never do. The one failing rule.
  */
-const failsVerdict = (finding: Triaged, mustFixFails: boolean): boolean =>
+export const failsVerdict = (finding: Triaged, mustFixFails: boolean): boolean =>
   finding.result === "anchored" || (mustFixFails && finding.result === "confirmed" && finding.severity === "must-fix");
 
 /** The findings that fail the verdict on their own (failsVerdict). */
