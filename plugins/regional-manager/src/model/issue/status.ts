@@ -46,6 +46,8 @@ export type IssueFacts = {
   holder: { agent: Agent; thread: HolderThread | null; current: Handed | null } | null;
   /** With no holder: how its latest agent ended, and the handoff it left then (null: none); null when no agent ever started on it. */
   ended: { how: EndedHow; left: Handed | null } | null;
+  /** Its latest done handoff with a check, when the manager accepted that check's failure as it is (acceptedOf); null otherwise. */
+  accepted: Handed | null;
   /** The pull request of its branch (agent.ts issueBranch) as last read (null: none seen). */
   pr: PrSnapshot | null;
   /** The unanswered decisions naming it, the plugin's questions at its cap of failed verdicts (rounds/cap.ts) among them. */
@@ -138,10 +140,15 @@ const ASKED = "Waiting on your answer to its decision";
 /** How the manager's two closing acts place an issue. */
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
 
-function issueView({ issue, holder, ended, pr, openDecisions, verifierAsks }: IssueFacts): Placed {
+function issueView({ issue, holder, ended, accepted, pr, openDecisions, verifierAsks }: IssueFacts): Placed {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null, finalCheckDue: null };
   const final = finalOf(issue, pr);
   if (final !== null) return { ...base, ...final, needsYou: null };
+  // why before its agents: the manager took the work as it is, whatever its agent's thread does next or whichever agent holds the issue, until a newer handoff replaces it.
+  if (accepted !== null) {
+    const placed = byHandoff(issue.kind, accepted, { pr, verifierAsks, fixRounds: 0 });
+    return { ...base, ...placed, placing: accepted.check, needsYou: waitingOn(issue, placed, openDecisions), closedBy: handedOffClose(placed, accepted) };
+  }
   if (holder !== null) {
     const placed = held(issue.kind, holder, { pr, verifierAsks });
     return { ...base, ...placed, needsYou: waitingOn(issue, placed, openDecisions), closedBy: handedOffClose(placed, holder.current) };
@@ -288,12 +295,27 @@ function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<IssueView, "status" 
 
 /**
  * Whether the issue keeps its place once its agent ends leaving `left` (its current handoff, or
- * null), rather than resting again: it was closed or merged, or what it left places it. Ending an
- * agent asks this to decide whether the manager is told the issue returned to Todo.
+ * null), rather than resting again: it was closed or merged, its failure was accepted (`accepted`,
+ * acceptedOf), or what it left places it. Ending an agent asks this to decide whether the manager
+ * is told the issue returned to Todo.
  */
-export const keepsPlaceAfterEnd = (issue: Issue, left: Handed | null, pr: PrSnapshot | null): boolean =>
+export const keepsPlaceAfterEnd = (issue: Issue, left: Handed | null, accepted: Handed | null, pr: PrSnapshot | null): boolean =>
   // why no verifier asking: it changes the headline, never the place.
-  finalOf(issue, pr) !== null || (left !== null && placedByLeft(issue.kind, left, { pr, verifierAsks: false }) !== null);
+  finalOf(issue, pr) !== null || accepted !== null || (left !== null && placedByLeft(issue.kind, left, { pr, verifierAsks: false }) !== null);
+
+/**
+ * Of the issue's record (every handoff with its check, oldest first), its latest done handoff with
+ * a check when the manager accepted that check's failure as it is (issues.ts); null otherwise. why
+ * the latest only: a newer handoff's check replaces an accepted one.
+ */
+export function acceptedOf(record: readonly Handed[]): Handed | null {
+  const latest = latestChecked(record);
+  return latest !== null && latest.check.acceptedAt !== null ? latest : null;
+}
+
+/** Of the issue's record (oldest first), its latest handoff with a check, the check an accept judges (issues.ts); null when none has one. */
+export const latestChecked = (record: readonly Handed[]): (Handed & { check: Check }) | null =>
+  record.flatMap(({ handoff, check }) => (check === null ? [] : [{ handoff, check }])).at(-1) ?? null;
 
 /**
  * Where the handoff an ended agent left places its issue, or null when it doesn't and the issue
@@ -373,9 +395,9 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
     const { verdict, review } = checked(check);
     return reviewPending({ review, verdict }) ? { status: "reviewing", headline: `Reviewing: ${summary}`, needsYou: null } : "left";
   },
-  // Left once the check passed, or nobody checks it. A failure stays In progress.
+  // Left once the check passed, nobody checks it, or the manager accepted its failure as it is (issues.ts statusEdit). Any other failure stays In progress.
   verifying({ summary, check, fixRounds, pr, verifierAsks }) {
-    const { verdict } = checked(check);
+    const { verdict, acceptedAt } = checked(check);
     const result = outcome(verdict);
     switch (result) {
       case "pending":
@@ -386,6 +408,7 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
       case "unverified":
         return "left";
       case "fail":
+        if (acceptedAt !== null) return "left";
         // why: findings that reached the agent mean it is fixing them; nothing waits on the user.
         if (verdict.state === "returned" && verdict.settlement.kind === "sent-back") return { status: "in-progress", headline: `Fixing its verifier's findings: ${summary}`, needsYou: null };
         return flagged(`${failureHeadline(verdict)}${failureNote(verdict, fixRounds)}: ${summary}`);
@@ -397,12 +420,18 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
         return result satisfies never;
     }
   },
-  // Never left inside the walk: In review ends with a merge or the manager's accept, which issueView reads first.
+  // Never left inside the walk: In review ends with a merge or the manager's close as Done, which issueView reads first.
   "in-review"({ summary, check }) {
-    const { verdict } = checked(check);
-    return { status: "in-review", headline: outcome(verdict) === "pass" ? `✓ Verified${passNote(ciOfReturned(verdict))}: ${summary}` : `Unverified: ${summary}`, needsYou: null };
+    return { status: "in-review", headline: `${inReviewWords(checked(check))}: ${summary}`, needsYou: null };
   },
 };
+
+/** Why a done handoff waits In review, leading its headline: it passed, it was made with verification off, or the manager accepted its failure as it is. */
+function inReviewWords({ verdict, acceptedAt }: Check): string {
+  const result = outcome(verdict);
+  if (result === "pass") return `✓ Verified${passNote(ciOfReturned(verdict))}`;
+  return result === "fail" && acceptedAt !== null ? "Accepted with follow-ups" : "Unverified";
+}
 
 /** why throw: issueViews places one view per facts, in order. */
 function at<Item>(items: readonly Item[], i: number): Item {

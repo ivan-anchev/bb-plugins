@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import { knownCloses, rememberCloses, type IssueEdit } from "./issues-store.ts";
-import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
+import { EXECUTION, failOnMustFix, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../test-store.ts";
 
 test("issues are numbered WEB-1, WEB-2… within their regional manager, and read back as filed", () => {
   const { store } = freshStore();
@@ -140,4 +140,27 @@ test("an edit whose log fails to be written takes the edit back with it, and the
     { at: 3_100, event: { kind: "edited", fields: ["title"] } },
     { at: 3_100, event: { kind: "dependency-added", on: dependency } },
   ]);
+});
+
+test("an accept whose follow-up fails to be filed takes its stamp, its decision and its log back with it, and the same accept then files one follow-up", () => {
+  const { db, store } = freshStore();
+  const filed = filedIssue(store, MANAGER, newIssue(), 2_000);
+  const failed = failOnMustFix(store, filed.id, startAgent(store, filed.id, "agent-1"), 1, 2_500);
+  const accept: IssueEdit = { decision: { text: "Criteria all pass; the cap is polish.", at: 3_000 }, accept: failed.id };
+  const restore = failWrites(db, "INSERT", "issues");
+  assert.throws(() => store.updateIssue(MANAGER, filed.id, accept, { requireUnheld: false, closes: new Map(), at: 3_000 }), /forced failure/);
+  assert.equal(store.check(failed.id)?.acceptedAt, null, "its stamp undone");
+  assert.deepEqual(store.recordedDecisions(MANAGER, filed.id), [], "its decision undone");
+  assert.deepEqual(store.logOf(MANAGER, filed.id), [], "its log undone");
+  assert.deepEqual(store.issues(MANAGER).map(({ id }) => id), [filed.id]);
+
+  restore();
+  assert.deepEqual(store.updateIssue(MANAGER, filed.id, { ...accept, decision: { text: "Criteria all pass; the cap is polish.", at: 3_100 } }, { requireUnheld: false, closes: new Map(), at: 3_100 }), { issue: filed });
+  const followUp = issueIdSchema.parse("WEB-2");
+  const stamped = store.check(failed.id);
+  assert.deepEqual([stamped?.acceptedAt, stamped?.followUpId], [3_100, followUp]);
+  assert.deepEqual(store.recordedDecisions(MANAGER, filed.id), [{ kind: "recorded", text: "Criteria all pass; the cap is polish.", at: 3_100 }]);
+  assert.deepEqual(store.logOf(MANAGER, filed.id), [{ at: 3_100, event: { kind: "accepted" } }]);
+  assert.deepEqual(store.issues(MANAGER).map(({ id, dependsOn }) => [id, dependsOn]), [[filed.id, []], [followUp, [filed.id]]], "one follow-up, depending on its origin");
+  assert.match(store.issue(MANAGER, followUp)?.brief ?? "", /`src\/retry\.ts:10` \(must-fix\): The backoff never caps\./);
 });

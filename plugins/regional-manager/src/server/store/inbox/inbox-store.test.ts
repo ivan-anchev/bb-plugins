@@ -135,7 +135,7 @@ test("the manager's own working tree is recorded once per state", () => {
 /** WEB-1 merged as #41 when `merged`, WEB-2 canceled by the manager, WEB-3 depending on them as stored: every issue of the manager as viewed with no agent. */
 function mergedOrNot(store: ReturnType<typeof freshStore>["store"]) {
   const pr: PrSnapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: "0123456789abcdef0123456789abcdef01234567", failedChecks: [] };
-  return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, openDecisions: [], finalCheck: null, verifierAsks: false, pr: merged && issue.id === "WEB-1" ? pr : null })));
+  return (merged: boolean): IssueView[] => issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, accepted: null, openDecisions: [], finalCheck: null, verifierAsks: false, pr: merged && issue.id === "WEB-1" ? pr : null })));
 }
 
 /** The issues `views` says are unblocked since what is known, recorded, as "WEB-3 by WEB-1 done". */

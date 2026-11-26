@@ -273,6 +273,12 @@ export const MIGRATIONS: readonly string[] = [
   // once, and its issue's feed and catch-up read it from the check it describes, written in the
   // settling transaction that files the follow-up (checks-store.ts settleReturned).
   `ALTER TABLE checks ADD COLUMN follow_up_id TEXT`,
+
+  // When the regional manager accepted the check's failed verdict as it is, into In review
+  // (issues.ts statusEdit); null: never. why on the check: the issue reads In review from the check
+  // that places it, and the time is written in the accept's one transaction with its reason, a
+  // recorded decision, and the follow-up that collects its unfixed findings (issues-store.ts updateIssue).
+  `ALTER TABLE checks ADD COLUMN accepted_at INTEGER`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

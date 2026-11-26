@@ -19,12 +19,12 @@ const downgraded: Triaged = { ...PLACE, severity: "must-fix", claim: "The backof
 const downgradedShouldFix: Triaged = { ...PLACE, severity: "should-fix", claim: "Split the module.", result: "downgraded", to: "nit", reason: "Taste." };
 
 test("leftovers that are all nits plan no follow-up, a should-fix downgraded to a nit included", () => {
-  assert.equal(followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [nit, downgradedShouldFix] }]), null);
-  assert.equal(followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, []), null);
+  assert.equal(followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [nit, downgradedShouldFix] }], "passed"), null);
+  assert.equal(followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [], "passed"), null);
 });
 
 test("a confirmed should-fix plans one top-level Backlog build issue depending on its origin, with no done-criteria, that lists the nits too", () => {
-  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 2, leftovers: [nit, shouldFix] }]);
+  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 2, leftovers: [nit, shouldFix] }], "passed");
   assert.ok(plan !== null);
   assert.deepEqual({ ...plan, brief: null, description: null }, {
     kind: "build",
@@ -47,7 +47,7 @@ test("a confirmed should-fix plans one top-level Backlog build issue depending o
 });
 
 test("a downgraded must-fix plans one, naming the severity it was downgraded to and the verifier's reason", () => {
-  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [downgraded] }]);
+  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [downgraded] }], "passed");
   assert.match(plan?.brief ?? "", /- Round 1: `src\/retry.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Downgraded to should-fix\. No criterion names a cap\./);
 });
 
@@ -55,7 +55,7 @@ test("a finding two rounds held is listed once, with the latest round that held 
   const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [
     { round: 1, leftovers: [shouldFix, nit] },
     { round: 3, leftovers: [{ ...shouldFix, reason: "Still no log." }] },
-  ]);
+  ], "passed");
   const brief = plan?.brief ?? "";
   assert.equal(brief.split("Log the retry.").length - 1, 1);
   assert.match(brief, /- Round 3: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Confirmed\. Still no log\./);
@@ -64,7 +64,7 @@ test("a finding two rounds held is listed once, with the latest round that held 
 
 test("a follow-up of a follow-up is titled after the first origin, and depends on its own", () => {
   const second = issueIdSchema.parse("WEB-9");
-  const plan = followUpPlan(second, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [shouldFix] }]);
+  const plan = followUpPlan(second, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [shouldFix] }], "passed");
   assert.equal(plan?.title, "Follow-ups from WEB-4: Add retries");
   assert.deepEqual(plan?.dependsOn, [second]);
   assert.match(plan?.brief ?? "", /The reviews of WEB-9 held/);
@@ -75,14 +75,14 @@ test("a should-fix an earlier round held still files when a later round holds th
   const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [
     { round: 1, leftovers: [shouldFix] },
     { round: 2, leftovers: [asNit] },
-  ]);
+  ], "passed");
   assert.ok(plan !== null, "round 1's should-fix qualifies");
   assert.equal((plan.brief ?? "").split("Log the retry.").length - 1, 1);
   assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Downgraded to nit\. A later look: only taste\./);
 });
 
 test("a title past the 80 characters an issue's title holds is cut with an ellipsis", () => {
-  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Retry failed webhook deliveries with exponential backoff and a cap on attempts" }, [{ round: 1, leftovers: [shouldFix] }]);
+  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Retry failed webhook deliveries with exponential backoff and a cap on attempts" }, [{ round: 1, leftovers: [shouldFix] }], "passed");
   assert.equal(plan?.title, "Follow-ups from WEB-4: Retry failed webhook deliveries with exponential backoff…");
   assert.equal(plan?.title.length, 80);
 });
@@ -105,8 +105,8 @@ test("a check's leftovers are what it held without failing it: an anchored must-
     sameModel: false,
     settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
   };
-  assert.deepEqual(leftoversOf({ verdict }), [shouldFix, downgraded, nit]);
-  assert.deepEqual(leftoversOf({ verdict: { state: "queued", checkout: null } }), []);
+  assert.deepEqual(leftoversOf({ verdict, acceptedAt: null }), [shouldFix, downgraded, nit]);
+  assert.deepEqual(leftoversOf({ verdict: { state: "queued", checkout: null }, acceptedAt: null }), []);
 });
 
 /** A returned verdict on one criterion, `result`, triaging `triage`, settled as checked. */
@@ -126,7 +126,7 @@ const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Extract<Verdict,
   settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
 });
 const HANDOFF: Check["subject"] = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: SHA, prUrl: null };
-const round = (verdict: Verdict, followUpId: Check["followUpId"] = null) => ({ subject: HANDOFF, verdict, followUpId });
+const round = (verdict: Verdict, followUpId: Check["followUpId"] = null) => ({ subject: HANDOFF, verdict, followUpId, acceptedAt: null });
 const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
 
 test("a merge leaves unfiled every uncollected round's leftovers, and the findings that failed the latest verdict when nothing fixed them", () => {

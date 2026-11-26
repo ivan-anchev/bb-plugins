@@ -41,6 +41,7 @@ function checkedWith(verdict: Verdict, asked: CapQuestion | null = null): Parame
     review: { state: "none" },
     verdict,
     followUpId: null,
+    acceptedAt: null,
   };
   return { titles, check: (id) => (id === k1 ? check : null), decision: (id) => (id === asked?.id ? asked : null) };
 }

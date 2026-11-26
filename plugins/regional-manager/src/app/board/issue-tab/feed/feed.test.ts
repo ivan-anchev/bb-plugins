@@ -335,7 +335,7 @@ test("the submission is kept with the text until the server takes it: a retry of
 });
 
 test("a pass that filed a follow-up draws as a quiet line naming it, by no one, with the status it moved the issue to", async () => {
-  const followUp: Entry = { kind: "follow-up", at: Date.UTC(2026, 10, 26, 9, 34), issueId: id("WEB-9"), moved: "in-review" };
+  const followUp: Entry = { kind: "follow-up", at: Date.UTC(2026, 10, 26, 9, 34), issueId: id("WEB-9"), when: "passed", moved: "in-review" };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [followUp] }) });
   const { texts } = activity(tab());
   assert.equal(texts().length, 1);
@@ -343,7 +343,7 @@ test("a pass that filed a follow-up draws as a quiet line naming it, by no one, 
 });
 
 test("a follow-up's feed begins with a line by no one saying the plugin filed it as the follow-up of its origin", async () => {
-  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: id("WEB-1"), moved: "backlog" };
+  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: { issueId: id("WEB-1"), when: "passed" }, moved: "backlog" };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [created] }) });
   assert.match(activity(tab()).texts()[0] ?? "", /^Filed as the follow-up of WEB-1, when it passed · Backlog/);
 });
@@ -361,4 +361,22 @@ test("the brief folds under the description, closed until the reader opens it, s
 test("an issue with no brief yet draws no Brief fold", async () => {
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, brief: null }) });
   assert.equal(tab().queryAllByText("Brief").length, 0);
+});
+
+test("an accept draws as the manager's line, and its follow-up as a line naming the findings it was accepted with", async () => {
+  const at = Date.UTC(2026, 10, 26, 9, 34);
+  const entries: Entry[] = [
+    { kind: "logged", at, event: { kind: "accepted" }, moved: "in-review" },
+    { kind: "follow-up", at, issueId: id("WEB-9"), when: "accepted", moved: null },
+  ];
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries }) });
+  const [accept, followUp] = activity(tab()).texts();
+  assert.match(accept ?? "", /accepted it as it is, into In review · In review/);
+  assert.match(followUp ?? "", /^Follow-up WEB-9 filed in Backlog, with the review findings it was accepted with, its unfixed must-fixes among them/);
+});
+
+test("a follow-up filed on its origin's accept begins its feed saying so", async () => {
+  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: { issueId: id("WEB-1"), when: "accepted" }, moved: "backlog" };
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [created] }) });
+  assert.match(activity(tab()).texts()[0] ?? "", /^Filed as the follow-up of WEB-1, when it was accepted as it was · Backlog/);
 });

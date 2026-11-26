@@ -277,7 +277,7 @@ test("a failure that asks at the cap while crew_catch_up's host read is held wai
   const first = textOf(await caughtUp);
   assert.doesNotMatch(first, /\bd1\b/, "neither the failure that asked nor its question: both are newer than this catch-up's read");
   const next = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(next, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start and agent_message on WEB-1 are refused\./);
+  assert.match(next, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start, agent_message and an accept of WEB-1 are refused\./);
   assert.match(/## Decisions\n\n[^#]*/.exec(next)?.[0] ?? assert.fail("no decisions section"), /- d1, asked /);
 });
 

@@ -45,8 +45,12 @@ export type Rest = z.infer<typeof restSchema>;
 /** The manager's two closing acts. why not "done": Done by a merge is a fact, derived. */
 export const closedAsSchema = z.enum(["canceled", "accepted"]);
 
-/** What the manager may set as a status. why only these four: the others are evidence, derived (status.ts). */
-export const managerStatusSchema = z.enum(["backlog", "todo", "canceled", "done"]);
+/**
+ * What the manager may set as a status. why only these five: the others are evidence, derived
+ * (status.ts). in-review is no rest: it accepts a failure on review findings alone as it is, and
+ * the issue then reads In review from its accepted check.
+ */
+export const managerStatusSchema = z.enum(["backlog", "todo", "canceled", "done", "in-review"]);
 
 export type Issue = {
   id: IssueId;

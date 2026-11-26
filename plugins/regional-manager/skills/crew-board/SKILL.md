@@ -155,7 +155,7 @@ An issue's status is derived from what its agents did, never stored:
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
 | Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI. |
-| In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
+| In review | A build issue: its done handoff passed ("✓ Verified"), was made with verification off ("Unverified"), or failed on review findings alone and the manager accepted it as it is ("Accepted with follow-ups"), its unfixed findings filed as a follow-up. Its pull request merging makes it Done. |
 | Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
 
@@ -171,12 +171,18 @@ its agent's thread ("No thread: bb never confirmed starting one": the manager
 ends that agent with `agent_stop`, which ends it at once, and starts another
 with `agent_start`), or one of the manager's open decisions names it.
 
-The manager sets a status in only four ways, with `issue_update`: `backlog`
+The manager sets a status in only five ways, with `issue_update`: `backlog`
 or `todo` rests an issue no agent holds (and reopens a canceled one),
 `canceled` closes one no agent holds (a parent once its sub-issues are
-closed), and `done` accepts one In review, even
+closed), `done` accepts one In review, even
 while its agent still holds it (a research issue is never In review, so never
-accepted: its done handoff makes it Done). Any other change, or `backlog`, `todo` or
+accepted: its done handoff makes it Done), and `in-review`, with a decision
+saying why, accepts as it is a build issue whose latest verdict failed on
+review findings alone, every criterion passing and CI not failed. The
+accept records that decision, shows on its Activity as the manager's
+"accepted it as it is, into In review", and files the findings it was
+accepted with as a follow-up in Backlog. While the plugin's question at the
+issue's cap is open, the accept is refused: it is your call there. Any other change, or `backlog`, `todo` or
 `canceled` while an agent holds the issue, is refused naming why.
 
 ### Sub-issues

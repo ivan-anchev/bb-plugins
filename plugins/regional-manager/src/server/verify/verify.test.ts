@@ -1020,7 +1020,7 @@ test("an issue's third failed verdict, by a fresh agent with its fix round unspe
   assert.match(doorbells().at(-1) ?? "", /- WEB-1 "Add retries" \(a2\) handed off: done, failed verification; WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)$/);
   assert.match(
     textOf(await kit.call("crew_catch_up", {}, threadId)),
-    /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start and agent_message on WEB-1 are refused\./,
+    /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Until the user answers d1, agent_start, agent_message and an accept of WEB-1 are refused\./,
   );
 });
 

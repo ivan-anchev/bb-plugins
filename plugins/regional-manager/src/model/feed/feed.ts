@@ -5,7 +5,8 @@
 import type { Agent } from "../agent/agent.ts";
 import type { DecisionId, IssueDecision } from "../decision.ts";
 import type { InboxEvent, StoredEvent } from "../inbox/inbox-event.ts";
-import type { Issue, IssueId } from "../issue/issue.ts";
+import type { Issue } from "../issue/issue.ts";
+import type { FiledWhen, FollowUpOrigin } from "../verdict/rounds/follow-up.ts";
 import type { Handed, IssueStatus } from "../issue/status.ts";
 import type { FinalCheck } from "../verdict/check.ts";
 import { timeOf, type Entry } from "./entry.ts";
@@ -26,10 +27,10 @@ type FeedFacts = {
   log: readonly Logged[];
   /** The issue's comments, in the order posted. */
   comments: readonly Comment[];
-  /** The follow-ups its passes filed, each named by the passing check (checks-store.ts fileFollowUp), as filed. */
-  followUps: readonly Pick<Issue, "id" | "createdAt">[];
-  /** The issue it is the follow-up of, filed by the plugin when that one passed; null: the manager filed it. */
-  followUpOf: IssueId | null;
+  /** The follow-ups its passes or its accept filed, each named by the check that filed it (checks-store.ts fileFollowUp), as filed, with how. */
+  followUps: readonly (Pick<Issue, "id" | "createdAt"> & { when: FiledWhen })[];
+  /** The issue it is the follow-up of, filed by the plugin when that one passed or was accepted, and which; null: the manager filed it. */
+  followUpOf: FollowUpOrigin | null;
 };
 
 /** The issue's feed, oldest first; two moments at one millisecond keep the order listed here, the log's rows in the order written. */
@@ -41,7 +42,7 @@ export function feedOf(facts: FeedFacts): Entry[] {
     ...roundsOf(facts).map((round): Entry => ({ kind: "round", round })),
     ...facts.decisions.map((decision): Entry => ({ kind: "decision", decision, moved: null })),
     ...facts.comments.map((comment): Entry => ({ kind: "comment", comment })),
-    ...facts.followUps.map(({ id, createdAt }): Entry => ({ kind: "follow-up", at: createdAt, issueId: id, moved: null })),
+    ...facts.followUps.map(({ id, createdAt, when }): Entry => ({ kind: "follow-up", at: createdAt, issueId: id, when, moved: null })),
     ...facts.events.flatMap(({ at, event }) => eventEntries(at, event)),
   ];
   const placed = inOrder([...others.map((entry) => ({ at: timeOf(entry), seq: NOT_LOGGED, entry })), ...lines]);

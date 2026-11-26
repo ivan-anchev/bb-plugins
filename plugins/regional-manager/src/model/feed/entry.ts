@@ -6,6 +6,7 @@ import { issueDecisionSchema } from "../decision.ts";
 import { issueIdSchema } from "../issue/issue.ts";
 import { issueStatusSchema } from "../issue/status.ts";
 import { prChangeSchema } from "../verdict/pr.ts";
+import { filedWhenSchema } from "../verdict/rounds/follow-up.ts";
 import { commentSchema, type CommentAuthor } from "./comment.ts";
 import { lineEventSchema } from "./log-event.ts";
 import { roundSchema } from "./round.ts";
@@ -15,8 +16,8 @@ const at = z.number();
 const moved = issueStatusSchema.nullable();
 
 export const entrySchema = z.discriminatedUnion("kind", [
-  /** The issue was filed: by the manager, or by the plugin as the follow-up of `followUpOf` when that issue passed (rounds/follow-up.ts). */
-  z.object({ kind: z.literal("created"), at, followUpOf: issueIdSchema.nullable(), moved }),
+  /** The issue was filed: by the manager, or by the plugin as the follow-up of `followUpOf` when that issue passed or was accepted as it was (rounds/follow-up.ts). */
+  z.object({ kind: z.literal("created"), at, followUpOf: z.object({ issueId: issueIdSchema, when: filedWhenSchema }).nullable(), moved }),
   /** A change to the issue's plan, or where its log began. */
   z.object({ kind: z.literal("logged"), at, event: lineEventSchema, moved }),
   z.object({ kind: z.literal("agent-started"), at, agentId: agentIdSchema, moved }),
@@ -41,8 +42,8 @@ export const entrySchema = z.discriminatedUnion("kind", [
     ]),
     moved,
   }),
-  /** Its pass filed the findings its rounds held without blocking it as the follow-up `issueId` (rounds/follow-up.ts), at when it was filed. */
-  z.object({ kind: z.literal("follow-up"), at, issueId: issueIdSchema, moved }),
+  /** Its pass filed the findings its rounds held without blocking it, or its accept the findings it left, as the follow-up `issueId` (rounds/follow-up.ts), at when it was filed. */
+  z.object({ kind: z.literal("follow-up"), at, issueId: issueIdSchema, when: filedWhenSchema, moved }),
   /** The last of its dependencies still open, `by`, closed. */
   z.object({ kind: z.literal("unblocked"), at, by: issueIdSchema, moved }),
   /** A status the plugin observed the issue move to that no moment since the one before explains, as a parent rolling up or a turn ending. */

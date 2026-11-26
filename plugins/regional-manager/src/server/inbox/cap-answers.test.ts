@@ -79,7 +79,7 @@ test("a third failed verification asks the user with three options, in order: me
   assert.match(asked.question, /^✗ Failed verification, 0 of 1 criteria passed\. WEB-1 has failed verification 3 times, its cap, and nothing goes back to an agent until you answer: merge it as is and file its open findings as a follow-up, give it one more round, or cancel it and close its pull request\.$/);
 });
 
-test("answering merge as is tells the regional manager to have the PR merged with no further round and to file the last verdict's open must-fix findings as one follow-up, listing them; agent_start is then allowed", async () => {
+test("answering merge as is after a failure on review findings alone tells the regional manager to accept it as it is, which files the follow-up, then have the PR merged with no further round; agent_start is then allowed", async () => {
   const { kit, threadId, coordinatorId, catchUp } = await capped();
   await catchUp();
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
@@ -88,9 +88,8 @@ test("answering merge as is tells the regional manager to have the PR merged wit
   assert.match(kit.doorbellsSent(threadId).at(-1) ?? "", /- The user answered d1, the plugin's question at WEB-1's cap: merge it as is, with no further round, and file its open must-fix findings as a follow-up$/);
   const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
   assert.match(answered, /^### The user answered d1, the plugin's question at WEB-1's cap\n\nAt \S+ It asked: ✗ A must-fix review finding upheld, 1 of 1 criteria passed\. [^\n]+ It offered: "Merge as is, file follow-ups", "One more round", "Cancel the issue"\. They chose "Merge as is, file follow-ups"\.\n\n/);
-  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Have its pull request #41 merged without another review or verifier: ask its agent to merge it with agent_message, or, when no agent holds WEB-1, start one with agent_start, with no from or placement, so it continues in its last agent's environment on that pull request's branch\. agent_start on a new branch is refused while this answer stands, as that pull request would be left behind\. Never merge it yourself; its merge makes WEB-1 Done\./);
-  assert.match(answered, /File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n*$/);
-  assert.doesNotMatch(answered, /jitter/, "a should-fix that held is no must-fix, so it isn't listed");
+  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Its last failure was on review findings alone, so first accept it as it is: issue_update \{ id: "WEB-1", status: "in-review", decision: "<their answer, and why>" \} puts it In review until its pull request merges, and files the findings it leaves, its open must-fix findings among them, as one follow-up\. File no other follow-up\. Have its pull request #41 merged without another review or verifier: ask its agent to merge it with agent_message, or, when no agent holds WEB-1, start one with agent_start, with no from or placement, so it continues in its last agent's environment on that pull request's branch\. agent_start on a new branch is refused while this answer stands, as that pull request would be left behind\. Never merge it yourself; its merge makes WEB-1 Done\./);
+  assert.doesNotMatch(answered, /issue_create/, "the accept files the follow-up");
   assert.match(textOf(await kit.call("agent_start", { issue: "WEB-1" }, threadId)), /^Stopped a2 and started a3 on WEB-1 as @thread:\w+ in a2's worktree, on its branch `bb\/thr_\d+`, with PR #41/, "agent_start is allowed, continuing on the pull request's branch, for an agent to merge it");
 });
 
@@ -121,6 +120,53 @@ test("after the merge answer, agent_message on the issue is allowed, a later fai
   assert.equal(status, "done");
 });
 
+test("the merge answer's accept, followed as its update says, puts the issue In review with one follow-up holding the open must-fix and the should-fix, and the merge makes it Done", async () => {
+  const { kit, threadId, coordinatorId, fresh, catchUp } = await capped();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
+  await settled();
+  await catchUp();
+  const accepted = await kit.call("issue_update", { id: "WEB-1", status: "in-review", decision: "The user chose to merge it as is (d1)." }, threadId);
+  assert.ok(!isRefusal(accepted), textOf(accepted));
+  assert.match(textOf(accepted), /are filed as \[WEB-2\]/);
+  const board = async () => coordinatorContract.board.output.parse(await kit.rpc.board({ coordinatorId }));
+  const row = async () => (await board()).issues.find(({ id }) => id === "WEB-1");
+  assert.equal((await row())?.status, "in-review");
+  assert.match((await row())?.headline ?? "", /^Accepted with follow-ups: /);
+  const brief = kit.store.issues(coordinatorId).find(({ id }) => id === "WEB-2")?.brief ?? assert.fail("no follow-up");
+  assert.match(brief, /`src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  assert.match(brief, /`src\/retry\.ts:7` \(should-fix\): The jitter is computed twice\./);
+
+  await openPr(kit, fresh, "MERGED");
+  assert.equal((await row())?.status, "done");
+});
+
+test("a merge answer after a review-only failure whose commit's CI has since failed keeps the manual follow-up, as the accept would be refused", async () => {
+  const { kit, threadId, coordinatorId, fresh, catchUp } = await capped();
+  const branch = kit.thread(fresh).environmentBranchName ?? assert.fail("no branch");
+  kit.github.prs.set(branch, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "FAILURE", failed: ["test"] });
+  kit.clock.now += 5 * 60_000;
+  await kit.tick();
+  await settled();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
+  await settled();
+  const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
+  assert.doesNotMatch(answered, /status: "in-review"/, "no accept is offered");
+  assert.match(answered, /File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  const accept = await kit.call("issue_update", { id: "WEB-1", status: "in-review", decision: "The user chose to merge it as is (d1)." }, threadId);
+  assert.ok(isRefusal(accept), "the accept the update didn't offer is refused");
+  assert.match(textOf(accept), /^CI failed on #41 at 0123456/);
+});
+
+test("a merge answer read after its pull request merged offers no accept and no merge: it files the failed round's must-fix findings with issue_create", async () => {
+  const { kit, coordinatorId, fresh, catchUp } = await capped();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
+  await settled();
+  await openPr(kit, fresh, "MERGED");
+  const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
+  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Its pull request #41 has merged since, which made WEB-1 Done, so nothing is left to merge\. File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  assert.doesNotMatch(answered, /status: "in-review"|Have its pull request/);
+});
+
 test("answering one more round or cancel the issue gives each its own guidance: a round to direct, or stop, close the PR and cancel", async () => {
   const round = await capped();
   await round.catchUp();
@@ -139,14 +185,14 @@ test("answering one more round or cancel the issue gives each its own guidance: 
   assert.doesNotMatch(text, /no further round|one more round for/);
 });
 
-test("answered before the manager read the failure that asked, the merge answer still orders one follow-up: that failure's update points at the answer and files none", async () => {
+test("answered before the manager read the failure that asked, the merge answer still orders one accept: that failure's update points at the answer and files none", async () => {
   const { kit, coordinatorId, catchUp } = await capped();
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
   await settled();
   const text = await catchUp();
   assert.match(text, /This was WEB-1's 3rd failed verification, its cap: nothing went back to an agent, and the plugin asked the user \(d1\)\. Nothing went back to an agent: the user chose to merge WEB-1 as it is \(d1\), which allows no further round, so this failure files no follow-up of its own\./);
-  assert.equal(text.match(/issue_create/g)?.length, 1, "one order to file the follow-up, in the answer's update");
-  assert.match(text, /listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  assert.equal(text.match(/status: "in-review"/g)?.length, 1, "one order to accept it, which files the follow-up, in the answer's update");
+  assert.doesNotMatch(text, /issue_create/);
 });
 
 test("a merge answer on a failure with no must-fix finding files no follow-up", async () => {

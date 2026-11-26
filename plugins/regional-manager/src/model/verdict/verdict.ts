@@ -7,7 +7,7 @@ import { modelRefSchema } from "../agent/execution.ts";
 import type { Check, CheckSubject } from "./check.ts";
 import { blockingDefectSchema, holds, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
-import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
+import { ciVerdictSchema, type Ci, type CiVerdict, type PrSnapshot } from "./pr.ts";
 
 /** One done-criterion as the verifier judged it. why three: a criterion it couldn't check is not a pass. */
 export const criterionResultSchema = z.enum(["pass", "fail", "unverifiable"]);
@@ -270,6 +270,29 @@ export function failureReasons(verdict: Returned, ci: CiVerdict | null = ciVerdi
 
 /** What failed a verdict first (failureReasons): the one order the issue's headline and its round name it by; null when nothing failed it, or it hasn't returned. */
 export const firstFailure = (verdict: Verdict): FailureReason | null => (verdict.state === "returned" ? (failureReasons(verdict)[0] ?? null) : null);
+
+/**
+ * Whether a verdict failed on review findings alone: it failed, and every reason is the reviewer's
+ * must-fix findings that fail it (failsVerdict), so every criterion passed, the claimed commit was
+ * on a clean tree, the verifier found no blocking defect of its own, and CI didn't fail. The one
+ * rule the manager's accept (issues.ts) and catch-up read.
+ */
+export function failedOnReviewOnly(verdict: Verdict): boolean {
+  if (verdict.state !== "returned" || outcome(verdict) !== "fail") return false;
+  return failureReasons(verdict).every(({ kind }) => kind === "must-fix");
+}
+
+/** Whether CI failed on the commit a check of a done handoff judged, as its pull request was last read (`pr`, null: none read). */
+export const ciFailedAt = (subject: CheckSubject, pr: Pick<PrSnapshot, "headSha" | "ci"> | null): boolean =>
+  subject.kind === "handoff" && pr !== null && pr.headSha === subject.headSha && pr.ci === "fail";
+
+/**
+ * Whether the manager may accept a check as it is (issues.ts acceptEdit): its verdict failed on
+ * review findings alone, and CI didn't fail on its commit as the pull request was last read (`pr`).
+ * The one eligibility rule the accept, catch-up and the cap question's merge answer read.
+ */
+export const acceptableAsIs = ({ verdict, subject }: Pick<Check, "verdict" | "subject">, pr: Pick<PrSnapshot, "headSha" | "ci"> | null): boolean =>
+  failedOnReviewOnly(verdict) && !ciFailedAt(subject, pr);
 
 /**
  * Whether a finding fails its verdict on its own: the verifier anchored it to what it breaks, or,

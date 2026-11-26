@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { agentIdSchema } from "../agent/agent.ts";
 import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
 import type { Review, ReviewFinding } from "./review.ts";
-import { failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type StoredVerdict, type Verdict } from "./verdict.ts";
+import { acceptableAsIs, failedOnReviewOnly, failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type StoredVerdict, type Verdict } from "./verdict.ts";
 
 /** The claimed commit, on a clean tree, as bb's git plugin read it. */
 const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 };
@@ -165,4 +166,26 @@ test("judge: CI on the handoff's commit decides a verdict that passed every crit
 test("a settled verdict keeps the CI it settled with: a pass that CI failed reads fail", () => {
   assert.equal(outcome(returned(["pass"], { kind: "checked", refused: null, ci: { kind: "fail", number: 12, failedChecks: ["test"] } })), "fail");
   assert.equal(outcome(returned(["pass"], { kind: "checked", refused: null, ci: { kind: "not-checked", reason: "PR status unavailable: gh isn't signed in" } })), "pass");
+});
+
+test("a verdict failed on review findings alone only when every reason it failed is an anchored must-fix: never with a failed criterion, a dirty tree, a blocking defect or failed CI, nor when it passed or is still to settle", () => {
+  const reviewOnly = readWith([["must-fix", ANCHORED]]);
+  assert.equal(failedOnReviewOnly(reviewOnly), true);
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, criteria: [...reviewOnly.criteria, { criterion: "lint", result: "fail", evidence: "1 problem" }] }), false, "a criterion failed too");
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, checkout: { ...CLEAN, changedFiles: ["x.ts"], changedFileCount: 1 } }), false, "not on a clean tree");
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, blocking: [{ claim: "Retries leak a socket.", anchor: "brief", steps: null }] }), false, "a blocking defect of the verifier's");
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "checked", refused: null, ci: { kind: "fail", number: 41, failedChecks: ["test"] } } }), false, "CI failed");
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "pending" } }), false, "still to settle");
+  assert.equal(failedOnReviewOnly(readWith([["must-fix", DOWNGRADED]])), false, "it passed");
+  assert.equal(failedOnReviewOnly(returned(["fail"])), false, "a criterion alone");
+});
+
+test("a check is acceptable as it is only when it failed on review findings alone and CI didn't fail on its commit as its pull request was last read", () => {
+  const verdict = readWith([["must-fix", ANCHORED]]);
+  const subject = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: HANDOFF, headSha: HEAD, prUrl: PR_URL } as const;
+  assert.equal(acceptableAsIs({ verdict, subject }, null), true, "no pull request read");
+  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "pass" })), true);
+  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "fail" })), false, "CI failed on the checked commit");
+  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "fail", headSha: "b".repeat(40) })), true, "CI failed on another commit");
+  assert.equal(acceptableAsIs({ verdict: returned(["fail"]), subject }, null), false, "a criterion failed");
 });

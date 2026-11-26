@@ -32,11 +32,12 @@ import { catalogRouting, sameModel, type Execution, type RequestedExecution } fr
 import { handoffIsCurrent, type HandoffId } from "../../model/agent/handoff.ts";
 import { briefToStart, type Issue, type IssueId } from "../../model/issue/issue.ts";
 import type { Related } from "../../model/issue/relations.ts";
-import { headlineText, keepsPlaceAfterEnd, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
+import { acceptedOf, headlineText, keepsPlaceAfterEnd, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { PrRead } from "../../model/verdict/pr.ts";
 import { capMovesText, capQuestionsOf, mergeAnswer, unansweredCapQuestion } from "../../model/verdict/rounds/cap.ts";
+import type { FollowUpOrigin } from "../../model/verdict/rounds/follow-up.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
@@ -339,7 +340,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const asked: Asked = { kind: filed.kind, from, placement: named };
     const spot = await spotOf(coordinatorId, filed.id, asked, prove);
     if ("refused" in spot) return { refused: `Nothing changed. ${spot.refused}` };
-    const merging = mergeRefusal(filed.id, mergeAnswer(capQuestionsOf(store.decisions(coordinatorId), filed.id)), asked, spot);
+    const merging = branchRefusal(filed.id, keptBranch(coordinatorId, filed.id), asked, spot);
     if (merging !== null) return { refused: `Nothing changed. ${merging}` };
     const runsOn = await executionFor(coordinatorOf(coordinatorId), execution, spot.environment, whereText(spot));
     if ("refused" in runsOn) return runsOn;
@@ -467,7 +468,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const leftId = leftBy(agent, turnSeq);
     const left = leftId === null ? null : store.handoff(leftId);
     const issue = issueOf(coordinatorId, agent.issueId);
-    inbox.endAgent(agent, how, leftId, keepsPlaceAfterEnd(issue, left, view.pr));
+    inbox.endAgent(agent, how, leftId, keepsPlaceAfterEnd(issue, left, acceptedOf(store.record(coordinatorId, agent.issueId)), view.pr));
     onChange(coordinatorId);
   }
 
@@ -478,6 +479,13 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
    */
   async function endIfFree(agent: Agent, how: "archived" | "deleted"): Promise<void> {
     await turns.runIfFree(agent.coordinatorId, agent.issueId, () => end(agent, how));
+  }
+
+  /** What keeps the issue on its pull request's branch now (see KeptBranch); null: nothing. */
+  function keptBranch(coordinatorId: CoordinatorId, issueId: IssueId): KeptBranch | null {
+    const merge = mergeAnswer(capQuestionsOf(store.decisions(coordinatorId), issueId));
+    if (merge !== null) return { kind: "merge", questionId: merge.id };
+    return acceptedOf(store.record(coordinatorId, issueId)) === null ? null : { kind: "accepted" };
   }
 
   /**
@@ -622,27 +630,35 @@ function capRefusal(view: IssueView): string | null {
 }
 
 /**
- * Why no agent may start on the issue `id` where `spot` places it: the user's answer to merge it as
- * is (`merge`, rounds/cap.ts mergeAnswer) stands, and the start would leave the branch its pull
- * request is on, which the issue's branch (agent.ts issueBranch) would no longer name, so its merge
- * would never make it Done. Only a join, in its last agent's environment on that branch, goes. null:
- * nothing stands, or it joins.
+ * What keeps an issue on its pull request's branch: the user's answer to merge it as is (`merge`,
+ * rounds/cap.ts mergeAnswer, by its question's id), or the manager's accept of its latest failure
+ * (`accepted`, status.ts acceptedOf), which waits In review for that pull request's merge.
  */
-function mergeRefusal(id: IssueId, merge: { id: string } | null, { from, placement }: Asked, spot: Spot): string | null {
-  if (merge === null || spot.base.kind === "joined") return null;
-  const why = `The user chose to merge ${id} as it is (${merge.id}), so an agent starts on it only in its last agent's environment, on its pull request's branch: on a new branch, that pull request would be left behind and its merge wouldn't make ${id} Done.`;
+type KeptBranch = { kind: "merge"; questionId: string } | { kind: "accepted" };
+
+/**
+ * Why no agent may start on the issue `id` where `spot` places it: something keeps it on its pull
+ * request's branch (`kept`, null: nothing), and the start would leave that branch, which the issue's
+ * branch (agent.ts issueBranch) would no longer name, so its merge would never make it Done. Only a
+ * join, in its last agent's environment on that branch, goes. null: nothing keeps it, or it joins.
+ */
+function branchRefusal(id: IssueId, kept: KeptBranch | null, { from, placement }: Asked, spot: Spot): string | null {
+  if (kept === null || spot.base.kind === "joined") return null;
+  const because = kept.kind === "merge" ? `The user chose to merge ${id} as it is (${kept.questionId})` : `${id} was accepted as it is and waits In review for its pull request to merge`;
+  const why = `${because}, so an agent starts on it only in its last agent's environment, on its pull request's branch: on a new branch, that pull request would be left behind and its merge wouldn't make ${id} Done.`;
   if (from === "default" || placement !== null) return `${why} Start one with no from or placement.`;
   return `${why} bb has removed that environment, so no agent can continue there: ask the user to merge the pull request themselves, which makes ${id} Done.`;
 }
 
 /**
- * Why no agent may start on a follow-up yet: the issue whose pass filed it (`origin`, checks-store.ts
+ * Why no agent may start on a follow-up yet: the issue whose pass or accept filed it (`origin`, checks-store.ts
  * originOf; null: it is no follow-up) is still open among what blocks it (`view`, read just now), so
  * its default branch lacks the work the follow-up's findings are about. why only a follow-up's
  * origin: every other dependency informs and never refuses (relations.ts). null when one may start.
  */
-function followUpRefusal(view: IssueView, origin: IssueId | null): string | null {
-  const open = view.blockedBy.find(({ id }) => id === origin);
+function followUpRefusal(view: IssueView, origin: FollowUpOrigin | null): string | null {
+  if (origin === null) return null;
+  const open = view.blockedBy.find(({ id }) => id === origin.issueId);
   if (open === undefined) return null;
   const { id } = view.issue;
   return `${id} is the follow-up of ${open.id}, which is ${STATUS_LABELS[open.status]}: its agent starts only once ${open.id} is Done, from a default branch that has ${open.id}'s work. Wait for ${open.id} to close, which crew_catch_up announces as unblocking ${id}; or cancel ${id} with issue_update if it isn't wanted.`;

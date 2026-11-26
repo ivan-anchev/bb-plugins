@@ -16,6 +16,8 @@ const LINE_EVENTS = [
   z.object({ kind: z.literal("rested"), rest: restSchema }),
   z.object({ kind: z.literal("closed"), as: closedAsSchema }),
   z.object({ kind: z.literal("reopened") }),
+  /** The manager accepted its failed verdict as it is, into In review (issues.ts statusEdit); its reason is a decision recorded with it. */
+  z.object({ kind: z.literal("accepted") }),
   /** Made a sub-issue of `parentId`, or top-level (null). */
   z.object({ kind: z.literal("parent-set"), parentId: issueIdSchema.nullable() }),
   z.object({ kind: z.literal("dependency-added"), on: issueIdSchema }),

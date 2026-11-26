@@ -11,7 +11,7 @@ import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, failedVerification, issueName, titled } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { isClosed } from "../../model/issue/relations.ts";
-import { STATUS_LABELS, type Handed, type IssueStatus, type IssueView } from "../../model/issue/status.ts";
+import { latestChecked, STATUS_LABELS, type Handed, type IssueStatus, type IssueView } from "../../model/issue/status.ts";
 import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
@@ -20,7 +20,7 @@ import { capChoice, choiceText, mergeStandsText, type AnsweredAt } from "../../m
 import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion, mergeAnswer, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { defectText, findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
-import { checkInFlight, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { acceptableAsIs, checkInFlight, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { onlyNits, unfiledAtMerge } from "../../model/verdict/rounds/follow-up.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
@@ -102,7 +102,9 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
       const { subject } = check;
       // why throw: only a handoff's verdict goes back to an agent.
       if (subject.kind !== "handoff") throw new Error(`The check ${event.checkId} sent back judges no handoff.`);
-      return `### ${on} handed off: done, ${failedVerification(check)}, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you. Its report, in its own words:\n\n${handoffText(handedOf(subject.handoffId, lookups), lookups)}`;
+      const offer = acceptOffer(check, lookups);
+      const instead = offer === null ? "" : offer.kind === "offer" ? ` Or, to take it as it is instead: ${acceptMove(event.issueId)} Then stop ${event.agentId} with agent_stop, as a done handoff of its would replace the accepted work.` : ` ${offer.why}`;
+      return `### ${on} handed off: done, ${failedVerification(check)}, findings sent back to it\n\n${when} The plugin sent the verifier's findings to ${event.agentId} as its automatic fix round ${event.round}. Nothing to do yet: it fixes them and hands off again, and a new verifier checks that. If that fails too, it comes to you.${instead} Its report, in its own words:\n\n${handoffText(handedOf(subject.handoffId, lookups), lookups)}`;
     }
     case "idle-without-handoff":
       return `### ${on} ended its turn without a handoff\n\n${when} ${event.lastAnswer === null ? "It gave no answer." : `Its last answer, in its own words:\n\n${event.lastAnswer.trim()}`}`;
@@ -227,13 +229,18 @@ function answeredText(decision: Decision, when: string, lookups: Pick<Lookups, "
  * Where the issue stood for an answer at its cap given at `answeredAt`: its pull request as its view
  * places it; its branch as its agents' handoffs recorded it (agent.ts issueBranch, with no thread
  * read, as catch-up reads none); and the must-fix findings of its last counted failure returned
- * before the answer (rounds/cap.ts countedFailures). why before: the follow-up files what the user
+ * before the answer (rounds/cap.ts countedFailures), with whether the manager may accept it as it
+ * is (verdict.ts acceptableAsIs: on review findings alone, CI not failed on its commit), never once
+ * its pull request merged. why before: the follow-up files what the user
  * chose to merge past, never a later round's findings.
  */
 function answeredAt(issueId: IssueId, answeredAt: number, { record, view, agents }: Pick<Lookups, "record" | "view" | "agents">): AnsweredAt {
-  const last = countedFailures(record(issueId)).filter(({ verdict }) => verdict.state === "returned" && verdict.at <= answeredAt).at(-1)?.verdict;
+  const lastFailure = countedFailures(record(issueId)).filter(({ verdict }) => verdict.state === "returned" && verdict.at <= answeredAt).at(-1);
+  const last = lastFailure?.verdict;
+  const pr = view(issueId)?.pr ?? null;
+  const merged = pr?.state === "merged";
   const branch = issueBranch(agents().filter((agent) => agent.issueId === issueId), () => null)?.branch ?? null;
-  return { pr: view(issueId)?.pr?.number ?? null, branch, mustFix: last?.state === "returned" ? heldFindings(last).failing : [] };
+  return { pr: pr?.number ?? null, branch, mustFix: last?.state === "returned" ? heldFindings(last).failing : [], merged, acceptable: !merged && lastFailure !== undefined && acceptableAsIs(lastFailure, pr) };
 }
 
 /** The decisions section of a catch-up: every decision still waiting for the user, oldest first. */
@@ -301,7 +308,7 @@ const MOVE_TO_AN_AGENT =
  * the merge, while the user's answer to merge it as is stands; else decide, or, while the issue's
  * cap question is open, only what works then (rounds/cap.ts).
  */
-function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view">): string {
+function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view" | "record">): string {
   const asked = askedId === null ? null : askedQuestion(lookups.decision(askedId));
   const led = asked === null ? "" : `This was ${askedText(check.issueId, asked, mayHaveReachedAgent(check.verdict))}. `;
   const closed = closedNow(check.issueId, lookups);
@@ -310,10 +317,38 @@ function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<
   const merge = mergeAnswer(lookups.capQuestions(check.issueId));
   if (merge !== null) return `${led}${mergeStandsText(check.issueId, merge.id, lookups.view(check.issueId)?.pr?.number ?? null)}`;
   const open = lockOf(check.issueId, lookups);
-  if (open === null) return `${led}${FAILED_IS_YOURS}`;
+  if (open === null) {
+    const offer = acceptOffer(check, lookups);
+    return `${led}${FAILED_IS_YOURS}${offer === null ? "" : ` ${offer.kind === "offer" ? acceptMove(check.issueId) : offer.why}`}`;
+  }
   const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;
-  return `${led}${held}Until the user answers ${open.id}, agent_start and agent_message on ${check.issueId} are refused. ${capMovesText(check.issueId, open.id, lookups.view(check.issueId))}`;
+  const afterAnswer = isLatest(check, lookups) && acceptableAsIs(check, lookups.view(check.issueId)?.pr ?? null) ? ` If they choose to merge it as is: ${acceptMove(check.issueId)}` : "";
+  return `${led}${held}Until the user answers ${open.id}, agent_start, agent_message and an accept of ${check.issueId} are refused. ${capMovesText(check.issueId, open.id, lookups.view(check.issueId))}${afterAnswer}`;
 }
+
+/**
+ * Whether a failure's update offers the accept (issues.ts acceptEdit) as catch-up reads it now:
+ * `offer` while it still goes through, the check still the issue's latest, the issue open and no
+ * cap question locking it; `superseded`, with what superseded it, when it would have but no longer
+ * does; null when it never would, as on a failure on more than review findings.
+ */
+function acceptOffer(check: Check, lookups: Pick<Lookups, "view" | "record" | "capQuestions">): { kind: "offer" } | { kind: "superseded"; why: string } | null {
+  const { issueId } = check;
+  if (!acceptableAsIs(check, lookups.view(issueId)?.pr ?? null)) return null;
+  const closed = closedNow(issueId, lookups);
+  if (closed !== null) return { kind: "superseded", why: `It can't be accepted as it is now: ${issueId} is ${STATUS_LABELS[closed]}.` };
+  if (!isLatest(check, lookups)) return { kind: "superseded", why: `It can't be accepted as it is now: a newer handoff of ${issueId} replaced it, so decide on that one's verdict, which crew_catch_up brings you.` };
+  const lock = lockOf(issueId, lookups);
+  if (lock !== null) return { kind: "superseded", why: `It can't be accepted as it is now: the plugin asked the user at ${issueId}'s cap (${lock.id}), and until they answer, accepting it is theirs to decide there.` };
+  return { kind: "offer" };
+}
+
+/** Whether the check is still its issue's latest check of a done handoff, the one an accept judges (status.ts latestChecked). */
+const isLatest = (check: Check, { record }: Pick<Lookups, "record">): boolean => latestChecked(record(check.issueId))?.check.id === check.id;
+
+/** The accept a failure on review findings alone allows (issues.ts acceptEdit), as catch-up offers it. */
+const acceptMove = (issueId: IssueId): string =>
+  `It failed on review findings alone, so you may accept it as it is: issue_update { id: "${issueId}", status: "in-review", decision: "<why>" } puts it In review until its pull request merges, and files the findings it leaves, its unfixed must-fixes among them, as a follow-up.`;
 
 /** What a failure on an issue closed since (`status`, Done or Canceled) leaves to do: nothing; its question, if it asked one (`asked`), left the board. */
 const closedText = (issueId: IssueId, status: IssueStatus, asked: CapQuestion | null): string =>
@@ -454,7 +489,7 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const blocking = verdict.blocking.length === 0 ? [] : [`Blocking defects it found, each failing the verdict:\n${verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n")}`];
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
-      return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict, check.followUpId)].join("\n\n");
+      return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict, check)].join("\n\n");
     }
     case "could-not-run":
       return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;
@@ -467,17 +502,20 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
   }
 }
 
+/** What a check filed its findings in: the follow-up that collected it, and when it was accepted as it is (null: never). */
+type Filed = Pick<Check, "followUpId" | "acceptedAt">;
+
 /**
  * Its review, as the regional manager reads it: that none was had and why, with the earlier
  * blocking findings the verifier triaged as unfixed then, or what the reviewer found, on what model, the verifier's totals of each triage, whether the findings that held went
  * to the agent, then each finding in the review's order with the verifier's word on it (review.ts
  * triageText) and its reason. Nothing for a check with no review stage.
  */
-function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string[] {
+function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>, filed: Filed): string[] {
   const all = verdict.triage;
   const held = all.filter(holds).length;
   const each = all.map((finding) => `- ${findingText(finding, "  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n");
-  const triaged = (lead: string): string[] => [[`${lead}; ${triageTotals(all)}.`, ...(held === 0 ? [] : [heldSent(verdict, followUpId)])].join(" "), each];
+  const triaged = (lead: string): string[] => [[`${lead}; ${triageTotals(all)}.`, ...(held === 0 ? [] : [heldSent(verdict, filed)])].join(" "), each];
   if (review.state === "missed") {
     const missed = `Review: no review was had, as ${review.reason}`;
     return all.length === 0 ? [`${missed}.`] : triaged(`${missed}, so the verifier triaged the ${all.length} earlier blocking finding${all.length === 1 ? "" : "s"} as unfixed`);
@@ -504,12 +542,14 @@ function triageTotals(findings: readonly Triaged[]): string {
  * go back to the agent only with a failed verdict sent back as its fix round; the others never do
  * (review.ts FOLLOW_UP_RULE, othersWent).
  */
-function heldSent(verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string {
+function heldSent(verdict: Extract<Verdict, { state: "returned" }>, { followUpId, acceptedAt }: Filed): string {
   const { failing, others } = heldFindings(verdict);
   const they = failing.length === 0 ? "They" : "The others";
   const failed = failing.length === 0 ? [] : [failingSent(verdict.settlement)];
+  // why after where they went: an accepted verdict's failing findings went to the follow-up too, unfixed.
+  const accepted = failing.length === 0 || acceptedAt === null || followUpId === null ? [] : [`You accepted it as it is, so they are filed in ${followUpId}, its follow-up, unfixed.`];
   const rest = others.length === 0 ? [] : [othersWent(they, verdict, followUpId)];
-  return [...failed, ...rest].join(" ");
+  return [...failed, ...accepted, ...rest].join(" ");
 }
 
 /**

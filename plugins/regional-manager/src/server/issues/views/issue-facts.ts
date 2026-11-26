@@ -5,7 +5,7 @@
 import { issueBranch, type Agent } from "../../../model/agent/agent.ts";
 import { isOpen, type Decision } from "../../../model/decision.ts";
 import type { Issue } from "../../../model/issue/issue.ts";
-import { issueViews, type Handed, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
+import { acceptedOf, issueViews, type Handed, type HolderThread, type IssueFacts, type IssueView } from "../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../model/role.ts";
 import type { Store } from "../../store/store.ts";
 import { ifCurrent, isLive, threadsById, type ListBb, type TurnsBb } from "../../agents/threads.ts";
@@ -55,6 +55,7 @@ export async function readBoard(bb: FactsBb, store: FactsStore, coordinatorId: C
         issue,
         holder: await holderOf(bb, own, threadOf, record),
         ended: endedBy(latest, record),
+        accepted: acceptedOf(record),
         pr: branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null),
         openDecisions: decisions.filter((decision) => decision.issueId === issue.id && isOpen(decision)),
         finalCheck: store.finalChecks(coordinatorId, issue.id).at(-1) ?? null,
