@@ -456,7 +456,7 @@ test("whatever a reviewer asks a person is declined, as nobody answers a reviewe
   await kit.ask(asking, RECONNECT);
   await settled();
   assert.deepEqual(kit.askAnswers.answered.map(({ threadId, how }) => [threadId, how]), [[asking, "decline"]]);
-  assert.deepEqual([review(), kit.thread(asking).hasPendingInteraction], [{ state: "running", reviewerThreadId: asking }, false], "it reviews on");
+  assert.deepEqual([review(), kit.thread(asking).hasPendingInteraction], [{ state: "running", reviewerThreadId: asking, scoped: true }, false], "it reviews on");
   await reported([]);
   verifier();
 
@@ -730,13 +730,13 @@ async function secondRound() {
   return agent;
 }
 
-test("a later round's reviewer is told to review git diff from the last reviewed commit to the new one, limited to the branch's files and leaving out only changes of commits merged in from the default branch, with that round's blocking findings numbered and the known ones listed; a first round's asks for the whole diff", async () => {
+test("a later round's reviewer is told to review git diff from the last reviewed commit to the new one, limited to the branch's files now and at that round and leaving out only the default branch's net change, with that round's blocking findings numbered and the known ones listed; a first round's asks for the whole diff", async () => {
   const { kit, reviewer } = await secondRound();
   const prompt = kit.thread(reviewer()).spawnedWith.prompt ?? assert.fail("no prompt");
   const part = (heading: string) => prompt.split("\n\n## ").find((one) => one.startsWith(heading)) ?? assert.fail(`no ${heading}`);
   assert.equal(
     part("The diff"),
-    `The diff\n\nRound 1 was the last round reviewed, at \`${HEAD}\`. Review only what changed since then, up to \`${ROUND_2}\`, checked out in this environment: \`git diff ${HEAD} ${ROUND_2}\`, limited to the files this branch changes (\`git diff origin/main...${ROUND_2} --stat\`), so commits merged in from the default branch are not reviewed.\n\nA file this branch changes can also hold a change merged in from the default branch since round 1. The commits merged in since then are the ones \`git log --oneline ${HEAD}..$(git merge-base ${ROUND_2} origin/main)\` lists (none when it lists none). Leave out of \`git diff ${HEAD} ${ROUND_2} -- <file>\` only a change one of those commits made, as \`git show <commit> -- <file>\` shows it. Review every other change in it: it is the branch's own, a removal of something the branch added before included, even when the branch's diff from the default branch no longer shows it.\n\nIf \`git cat-file -e ${HEAD}\` fails, that commit isn't in this environment: review the whole diff instead (\`git diff origin/main...${ROUND_2}\`), mark every finding new, and still answer each of round 1's blocking findings below.`,
+    `The diff\n\nRound 1 was the last round reviewed, at \`${HEAD}\`. Review only what changed since then, up to \`${ROUND_2}\`, checked out in this environment: \`git diff ${HEAD} ${ROUND_2}\`, limited to the files this branch changes: those \`git diff origin/main...${ROUND_2} --stat\` lists now, and those \`git diff origin/main...${HEAD} --stat\` lists for round 1, as a file the branch has since put back as the default branch has it is still the branch's change.\n\nA file this branch changes can also hold what the default branch changed since round 1, merged in. Its net change across the two rounds is \`git diff $(git merge-base ${HEAD} origin/main) $(git merge-base ${ROUND_2} origin/main) -- <file>\`. Leave out of \`git diff ${HEAD} ${ROUND_2} -- <file>\` only a change that net change also makes. Review every other change, as the branch's own, a removal of something the branch added before included.\n\nIf \`git cat-file -e ${HEAD}\` fails, that commit isn't in this environment: review the whole diff instead (\`git diff origin/main...${ROUND_2}\`), mark every finding new, and still answer each of round 1's blocking findings below.`,
   );
   assert.equal(
     part("Round 1's blocking findings"),
@@ -846,4 +846,34 @@ test("a path holding a newline reaches the later round's reviewer and verifier b
   const verifierBrief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
   assert.ok(verifierBrief.includes("1. `src/one\ntwo.ts:4` (must-fix, unfixed): First line.\n   Second line."), "the unfixed finding, its path whole");
   assert.ok(verifierBrief.includes("- `src/three\nfour.ts:8` (must-fix): Another.\n  The reviewer: Gone."), "the answered-fixed finding, its path whole");
+});
+
+test("a reviewer started before scopes, on a later round whose verdict failed only on a criterion, has its whole-diff report refused once with the round's scope, then taken", async () => {
+  const { db, storage } = memoryStorage();
+  const agent = await withAgent({ storage });
+  const { kit, check, review, reviewer, handOff, reported, returned, agentThreadId } = agent;
+  await handOff();
+  await reported([]);
+  await returned(FAILS);
+  await settled();
+  kit.git.heads.set(kit.thread(agentThreadId).environmentId ?? assert.fail("no environment"), ROUND_2);
+  await handOff({ ...DONE, headSha: ROUND_2 });
+  // As a release before scopes left it: its reviewer runs, given the whole diff, and the review records no scope.
+  db.prepare("UPDATE checks SET review = json_remove(review, '$.scoped') WHERE id = ?").run(check().id);
+  assert.deepEqual(review(), { state: "running", reviewerThreadId: reviewer(), scoped: false });
+
+  const threadId = reviewer();
+  const whole = { findings: [{ file: "src/retry.ts", line: 3, severity: "must-fix", claim: "Imports are out of order." }] };
+  const refused = await kit.call("issue_review", whole, threadId);
+  assert.ok(isRefusal(refused));
+  const text = textOf(refused);
+  assert.match(text, /^issue_review is refused and nothing was saved: your first message, written before later rounds were reviewed by their change alone, asked for the whole diff, and this is a later round\. Review this instead:\n\n## The diff\n\nRound 1 was the last round reviewed/);
+  assert.ok(text.includes(`\`git diff ${HEAD} ${ROUND_2}\``), "the round's delta");
+  assert.match(text, /## Round 1's blocking findings\n\nNone of round 1's findings failed its verdict: pass earlier as \[\]\./, "no blocker to answer, and still refused");
+  assert.match(text, /## Marking your findings\n\n/);
+  assert.equal(review().state, "running", "nothing was saved");
+
+  assert.match(textOf(await kit.call("issue_review", { findings: [{ ...whole.findings[0], origin: "missed" }] }, threadId)), /^Review recorded: 1 finding\./, "its corrected report is taken");
+  const stored = review();
+  assert.deepEqual(stored.state === "reported" && stored.findings.map(({ origin }) => origin), ["missed"]);
 });

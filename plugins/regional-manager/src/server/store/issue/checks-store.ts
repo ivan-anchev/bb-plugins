@@ -67,7 +67,7 @@ export function startCheck(db: Db, checkId: CheckId, verifierThreadId: string): 
 
 /** Starts a queued review running in its reviewer's thread, as the reviewer's ticket binds; one whose check was superseded meanwhile stays as it is. Call inside a transaction. */
 export function startReview(db: Db, checkId: CheckId, reviewerThreadId: string): void {
-  moveReview(db, checkId, { state: "queued" }, { state: "running", reviewerThreadId });
+  moveReview(db, checkId, { state: "queued" }, { state: "running", reviewerThreadId, scoped: true });
 }
 
 /** Replaces the review if its verdict is still queued and it is still where `from` says, and says whether it did. Call inside a transaction. */
@@ -292,7 +292,13 @@ export function checksStore(db: Db) {
 
     /** Every final check of the issue, oldest first: none but a build parent's. */
     finalChecks(coordinatorId: CoordinatorId, issueId: IssueId): FinalCheck[] {
-      return [...issueChecks(db, coordinatorId, issueId).values()].flatMap((check) => (check.subject.kind === "final" ? [{ ...check, subject: check.subject }] : []));
+      const ids = db()
+        .prepare("SELECT id FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(subject, '$.kind') = 'final' ORDER BY rowid")
+        .all(coordinatorId, issueId)
+        .map(toCheckId);
+      if (ids.length === 0) return [];
+      const read = issueChecks(db, coordinatorId, issueId);
+      return ids.map((id) => toFinalCheck(read.get(id) ?? null));
     },
 
     /** One handoff with its check, or null when there is none by that id. */
@@ -353,6 +359,11 @@ export function checksStore(db: Db) {
      */
     receiveReview(checkId: CheckId, reviewerThreadId: string, { findings, earlier }: ReviewReport, model: ModelRef, at: number): boolean {
       return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "reported", at, reviewerThreadId, findings, earlier, model }))();
+    },
+
+    /** Marks a running review's reviewer as given its scope, as when it was told it late, if it is still that review's running reviewer and the check still waits for it; says whether it was. */
+    rescopeReview(checkId: CheckId, reviewerThreadId: string): boolean {
+      return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "running", reviewerThreadId, scoped: true }))();
     },
 
     /** Records that no review will be had, and why, as of `at`, if the review is still where `from` says and the check still waits for it; says whether it was. Its verifier starts next. */
@@ -490,6 +501,14 @@ const checkRowSchema = z.object({
   review: json(reviewSchema),
   verdict: json(storedVerdictSchema),
 });
+/** why throw: the query picks only final checks, by an id it just listed. */
+function toFinalCheck(check: Check | null): FinalCheck {
+  if (check === null) throw new Error("A listed final check is missing.");
+  const { subject } = check;
+  if (subject.kind !== "final") throw new Error(`The check ${check.id} is not a final check.`);
+  return { ...check, subject };
+}
+
 /** why throw on null: the query just listed its id. */
 function toOpenCheck(check: Check | null): OpenCheck {
   if (check === null) throw new Error("A listed open check is missing.");

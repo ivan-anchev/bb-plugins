@@ -357,8 +357,11 @@ test("a review starts running as its reviewer's ticket binds, and takes its find
   const check = checkOf(store.insertHandoff(handoff(issue.id, agentId, "done"), CLEAN));
   store.insertCheckerTicket("reviewer-1", { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id }, 3_000);
   assert.deepEqual(store.bindTicket("reviewer-1", "thr_reviewer"), { kind: "reviewer", coordinatorId: MANAGER, issueId: issue.id, checkId: check.id });
-  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer" });
+  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer", scoped: true });
   assert.deepEqual(store.check(check.id)?.verdict, { state: "queued", checkout: CLEAN.checkout }, "its verifier is still to start");
+  assert.equal(store.rescopeReview(check.id, "thr_other"), false, "only its running reviewer is given its scope");
+  assert.equal(store.rescopeReview(check.id, "thr_reviewer"), true);
+  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer", scoped: true });
 
   assert.equal(store.missReview(check.id, { state: "queued" }, "never started", 4_100), false, "it isn't queued any more");
   const finding = { file: "src/retry.ts", line: 4, severity: "should-fix", claim: "No cap.", origin: "new" } as const;
@@ -375,7 +378,7 @@ test("a review starts running as its reviewer's ticket binds, and takes its find
   store.bindTicket("reviewer-2", "thr_reviewer_2");
   store.insertHandoff(handoff(issue.id, agentId, "done", 3_200), CLEAN);
   assert.equal(store.receiveReview(next.id, "thr_reviewer_2", { findings: [], earlier: [] }, model, 4_200), false, "its check was superseded");
-  assert.deepEqual(store.check(next.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_2" });
+  assert.deepEqual(store.check(next.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_2", scoped: true });
 });
 
 test("a reviewer's ticket whose review fails to start stays unbound, and binds once a retry's write succeeds", () => {
@@ -387,7 +390,7 @@ test("a reviewer's ticket whose review fails to start stays unbound, and binds o
   assert.deepEqual([store.roleOfThread("thr_reviewer_1"), store.check(check.id)?.review], [null, { state: "queued" }]);
   allow();
   assert.equal(store.bindTicket("reviewer-1", "thr_reviewer_1")?.kind, "reviewer");
-  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_1" });
+  assert.deepEqual(store.check(check.id)?.review, { state: "running", reviewerThreadId: "thr_reviewer_1", scoped: true });
 });
 
 test("a verifier's ticket that binds after its check was superseded leaves the check superseded", () => {

@@ -14,7 +14,7 @@ import { decisionsPart, type Scope } from "./checker-brief.ts";
 import { REVIEW } from "./review-tool.ts";
 
 /** The diff to review: the claimed commit, the pull request the agent named (null: none), and the branch it is reviewed against (null: bb records no default branch). */
-type Diff = Pick<HandoffCheck["subject"], "headSha" | "prUrl"> & { defaultBranch: string | null };
+export type Diff = Pick<HandoffCheck["subject"], "headSha" | "prUrl"> & { defaultBranch: string | null };
 
 /** A later round's scope. */
 type After = Extract<Scope, { kind: "after" }>;
@@ -29,14 +29,21 @@ export function reviewerBrief(
   return [
     `# Review ${issue.id}: ${issue.title}`,
     `Review this diff as CREW.md instructs reviewers, and report through ${REVIEW}. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} Report each finding at the severity CREW.md gives it, a must-fix that breaks none of the five included: the verifier anchors or downgrades it, never you. For a must-fix, say in its claim which of the five it breaks, or that it breaks none.`,
-    `## The diff\n\n${scope.kind === "first" ? wholeDiffText(diff) : deltaText(diff, scope)}`,
-    ...(scope.kind === "first" ? [] : laterRoundParts(scope)),
+    ...scopeParts(diff, scope),
     `## The issue's brief\n\n${issue.brief.trim()}`,
     `## Done-criteria\n\n${issue.doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`,
     ...decisionsPart(issue.id, issue.decisions),
     crewSection(crewRules),
   ].join("\n\n");
 }
+
+/**
+ * What the reviewer reviews, as its first message gives it: the whole diff on a first round; after
+ * a reviewed round, only the change since, with that round's blocking findings, the known ones and
+ * how to mark its own. issue_review gives the same to a reviewer whose first message predates it.
+ */
+export const scopeParts = (diff: Diff, scope: Scope): string[] =>
+  scope.kind === "first" ? [`## The diff\n\n${wholeDiffText(diff)}`] : [`## The diff\n\n${deltaText(diff, scope)}`, ...laterRoundParts(scope)];
 
 /** Where the diff is: the claimed commit against the default branch, in this environment, and its pull request when the agent named one. */
 function wholeDiffText({ headSha, prUrl, defaultBranch }: Diff): string {
@@ -46,33 +53,42 @@ function wholeDiffText({ headSha, prUrl, defaultBranch }: Diff): string {
 
 /**
  * A later round's diff: only the change since round `round`'s commit, in the files this branch
- * changes, leaving out only the changes of commits merged in from the default branch since then;
- * every other change is the branch's own, a removal of its own earlier addition included. And what
- * to do when that commit isn't in this environment, as after a handover to a new branch.
+ * changes now or changed at that round, leaving out only the default branch's net change between
+ * the two rounds' merge bases; every other change is the branch's own, a removal of its own
+ * earlier addition included. And what to do when that commit isn't in this environment, as after a
+ * handover to a new branch. Each ref and revision is shell-quoted where it needs it (shellArg).
  */
 function deltaText({ headSha, prUrl, defaultBranch }: Diff, { round, base }: After): string {
   const baseSha = base.subject.headSha;
-  const files =
-    defaultBranch === null
-      ? "the files this branch changes against the default branch"
-      : `the files this branch changes (\`git diff origin/${defaultBranch}...${headSha} --stat\`)`;
+  const [b, h] = [shellArg(baseSha), shellArg(headSha)];
   return [
-    `Round ${round} was the last round reviewed, at \`${baseSha}\`. Review only what changed since then, up to \`${headSha}\`, checked out in this environment: \`git diff ${baseSha} ${headSha}\`, limited to ${files}, so commits merged in from the default branch are not reviewed.${pullText(prUrl)}`,
-    mergedText(baseSha, headSha, defaultBranch, round),
-    `If \`git cat-file -e ${baseSha}\` fails, that commit isn't in this environment: review the whole diff instead${wholeCommand(headSha, defaultBranch)}, mark every finding new, and still answer each of round ${round}'s blocking findings below.`,
+    `Round ${round} was the last round reviewed, at \`${baseSha}\`. Review only what changed since then, up to \`${headSha}\`, checked out in this environment: \`git diff ${b} ${h}\`, limited to ${filesText(b, h, defaultBranch, round)}.${pullText(prUrl)}`,
+    upstreamText(b, h, defaultBranch, round),
+    `If \`git cat-file -e ${b}\` fails, that commit isn't in this environment: review the whole diff instead${wholeCommand(headSha, defaultBranch)}, mark every finding new, and still answer each of round ${round}'s blocking findings below.`,
   ].join("\n\n");
 }
 
 /**
- * How a later round's reviewer leaves out what the default branch changed: a file this branch
- * changes can also hold a change merged in from it. Only a change shown to come from one of those
- * merged commits is left out; every other is the branch's own, even one its own diff from the
- * default branch no longer shows, as a removal of something it added before.
+ * The files a later round reviews: those the branch changes now and those it changed at the
+ * reviewed round. why both: a file the branch has since put back as the default branch has it
+ * leaves the first list, and putting it back is the branch's change.
  */
-function mergedText(baseSha: string, headSha: string, defaultBranch: string | null, round: number): string {
-  const own = "Review every other change in it: it is the branch's own, a removal of something the branch added before included, even when the branch's diff from the default branch no longer shows it.";
-  if (defaultBranch === null) return `A file this branch changes can also hold a change merged in from the default branch since round ${round}. Leave out only a change you can show came from a commit merged in from the default branch. ${own}`;
-  return `A file this branch changes can also hold a change merged in from the default branch since round ${round}. The commits merged in since then are the ones \`git log --oneline ${baseSha}..$(git merge-base ${headSha} origin/${defaultBranch})\` lists (none when it lists none). Leave out of \`git diff ${baseSha} ${headSha} -- <file>\` only a change one of those commits made, as \`git show <commit> -- <file>\` shows it. ${own}`;
+function filesText(b: string, h: string, defaultBranch: string | null, round: number): string {
+  if (defaultBranch === null) return `the files this branch changes against the default branch, now or at round ${round}`;
+  const d = shellArg(`origin/${defaultBranch}`);
+  return `the files this branch changes: those \`git diff ${d}...${h} --stat\` lists now, and those \`git diff ${d}...${b} --stat\` lists for round ${round}, as a file the branch has since put back as the default branch has it is still the branch's change`;
+}
+
+/**
+ * How a later round's reviewer leaves out what the default branch changed: by its net change
+ * between the points the branch was based on at the two rounds (their merge bases), never by its
+ * commits one by one, so a line the default branch added and took back again leaves out nothing.
+ */
+function upstreamText(b: string, h: string, defaultBranch: string | null, round: number): string {
+  const own = "Review every other change, as the branch's own, a removal of something the branch added before included.";
+  if (defaultBranch === null) return `A file this branch changes can also hold what the default branch changed since round ${round}, merged in. Leave out only a change the default branch's net change since then also makes. ${own}`;
+  const d = shellArg(`origin/${defaultBranch}`);
+  return `A file this branch changes can also hold what the default branch changed since round ${round}, merged in. Its net change across the two rounds is \`git diff $(git merge-base ${b} ${d}) $(git merge-base ${h} ${d}) -- <file>\`. Leave out of \`git diff ${b} ${h} -- <file>\` only a change that net change also makes. ${own}`;
 }
 
 /** What a later round's reviewer answers and marks: the earlier round's blocking findings, numbered, the findings already known, and how to mark its own. */
@@ -88,9 +104,10 @@ function laterRoundParts({ round, blocking, known }: After): string[] {
   ];
 }
 
-
-
 /** The command for the whole diff, as a parenthesis; nothing when bb records no default branch. */
-const wholeCommand = (headSha: string, defaultBranch: string | null): string => (defaultBranch === null ? "" : ` (\`git diff origin/${defaultBranch}...${headSha}\`)`);
+const wholeCommand = (headSha: string, defaultBranch: string | null): string => (defaultBranch === null ? "" : ` (\`git diff ${shellArg(`origin/${defaultBranch}`)}...${shellArg(headSha)}\`)`);
+
+/** A ref or revision as one shell word: as it is when it holds only characters a shell leaves alone, else single-quoted. */
+const shellArg = (arg: string): string => (/^[\w./@^~:-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`);
 
 const pullText = (prUrl: string | null): string => (prUrl === null ? "" : ` Its pull request: ${prUrl}.`);

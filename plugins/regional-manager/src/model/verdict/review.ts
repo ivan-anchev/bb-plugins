@@ -57,7 +57,9 @@ const reviewerThreadIdSchema = z.string().min(1);
  * Where a check's review stands. `none`: the check has no review stage, as a final check, one made
  * while verification was off or of a checkout bb's git plugin couldn't read, and one made before
  * reviews existed. `queued`: its reviewer starts once the agent's thread is idle. `running`: a
- * reviewer thread reviews.
+ * reviewer thread reviews; `scoped` once its first message gave it the review's scope, the whole diff
+ * or, after a reviewed round, only the change since (rounds/delta.ts). why false by default: a
+ * reviewer started before scopes existed was given the whole diff, whatever the round.
  * `reported`: it returned its findings ([] for none), on the model bb ran it on, and its answers on
  * the earlier round's blocking findings (`earlier`, [] on a first round, and on one stored before
  * answers existed). `missed`: no
@@ -67,7 +69,7 @@ const reviewerThreadIdSchema = z.string().min(1);
 export const reviewSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("none") }),
   z.object({ state: z.literal("queued") }),
-  z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema }),
+  z.object({ state: z.literal("running"), reviewerThreadId: reviewerThreadIdSchema, scoped: z.boolean().default(false) }),
   z.object({ state: z.literal("reported"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema, findings: z.array(reviewFindingSchema), earlier: z.array(earlierAnswerSchema).default([]), model: modelRefSchema }),
   z.object({ state: z.literal("missed"), at: z.number(), reviewerThreadId: reviewerThreadIdSchema.nullable(), reason: z.string() }),
 ]);

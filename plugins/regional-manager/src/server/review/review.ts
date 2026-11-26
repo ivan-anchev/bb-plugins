@@ -27,7 +27,7 @@ import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { numbersRefusal } from "../tools/tool-kit.ts";
 import { checkedIssue, scopeOf, type Scope } from "./checker-brief.ts";
 import type { ReviewInput } from "./review-tool.ts";
-import { reviewerBrief } from "./reviewer-brief.ts";
+import { reviewerBrief, scopeParts } from "./reviewer-brief.ts";
 
 type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[number];
 
@@ -49,7 +49,7 @@ type ReviewBb = CatalogBb &
 
 type Deps = {
   bb: ReviewBb;
-  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "issueDecisions" | "record" | "finalChecks" | "missReview" | "receiveReview">;
+  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "issueDecisions" | "record" | "finalChecks" | "missReview" | "receiveReview" | "rescopeReview">;
   spawner: Pick<Spawner, "checker">;
   memory: MemoryRoot;
   turns: IssueTurns;
@@ -95,6 +95,28 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
     };
   }
 
+  /** Whether the check's running reviewer `reviewerThreadId` was given its review's scope, read now; true for any other review, which reported will refuse as not running. */
+  function givenScope(checkId: CheckId, reviewerThreadId: string): boolean {
+    const review = store.check(checkId)?.review;
+    return review?.state !== "running" || review.reviewerThreadId !== reviewerThreadId || review.scoped;
+  }
+
+  /**
+   * A later round's report from a reviewer whose first message predates scopes, so asked for the
+   * whole diff: refused once, with the scope it reviews in its place (reviewer-brief.ts
+   * scopeParts), and the reviewer marked as given it, so its next report is taken. why refused
+   * whatever it holds, no blocking findings to answer included: a whole-diff report stored as a
+   * later round's would mark findings on code an earlier round passed as new.
+   */
+  async function rescoped(check: HandoffCheck, reviewerThreadId: string, scope: Extract<Scope, { kind: "after" }>): Promise<Received> {
+    const agent = handingAgent(store, check);
+    const environmentId = (await listedThreads(bb, [agent.threadId])).get(agent.threadId)?.environmentId ?? null;
+    const defaultBranch = environmentId === null ? null : (await bb.sdk.environments.get({ environmentId })).defaultBranch;
+    if (!store.rescopeReview(check.id, reviewerThreadId)) return "not-running";
+    const parts = scopeParts({ ...check.subject, defaultBranch }, scope).join("\n\n");
+    return { refused: `your first message, written before later rounds were reviewed by their change alone, asked for the whole diff, and this is a later round. Review this instead:\n\n${parts}` };
+  }
+
   return {
     /**
      * In its issue's turn, once bb reports its agent idle and the issue is quiet for a reviewer:
@@ -136,7 +158,8 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
      * In its issue's turn: stores a reviewer's report on its check, if it is still that check's
      * running reviewer and the check still waits for its verifier, with the model bb ran it on: its
      * findings, each earlier blocking finding it answered not fixed among them as unfixed, and its
-     * answers, read against the check's scope (reportOf). Its verifier starts once bb reports the
+     * answers, read against the check's scope (reportOf); on a later round, from a reviewer told
+     * only the whole diff, refused once with that scope (rescoped). Its verifier starts once bb reports the
      * reviewer idle (verify.ts lookAgain), or at the next tick.
      */
     reported(checkId: CheckId, reviewerThreadId: string, input: ReviewInput): Promise<Received | Busy> {
@@ -145,7 +168,9 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       if (check?.subject.kind !== "handoff") throw new Error(`The check ${checkId} of a done handoff is missing.`);
       const { subject } = check;
       return turns.run(check.coordinatorId, check.issueId, async () => {
-        const report = reportOf(input, scopeOf(store, { ...check, subject }));
+        const scope = scopeOf(store, { ...check, subject });
+        if (scope.kind === "after" && !givenScope(checkId, reviewerThreadId)) return rescoped({ ...check, subject }, reviewerThreadId, scope);
+        const report = reportOf(input, scope);
         if (typeof report === "string") return { refused: report };
         const ran = await threadExecution(bb, reviewerThreadId);
         // why throw: the reviewer calls issue_review from inside a turn, so bb has its model on record.
