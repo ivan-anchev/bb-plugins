@@ -40,9 +40,9 @@ export function DecisionCard({ coordinatorId, decision, moved, status }: { coord
 /**
  * A question put to the user: open, a button per option that answers it; answered, its options with
  * the one chosen marked, or an answer in the user's own words under them; lapsed, its options and
- * why none takes an answer. One component for all three, so the card stays as the options go, and focus on an option, which
- * unmounts then, moves to the card, whatever took them: an answer from this card, the Board or
- * another window, or the issue's close.
+ * why none takes an answer. One component for all three, so the card stays as the options go, and
+ * focus on an option, which unmounts then, moves to the card, whatever took them: an answer from
+ * this card, the Board or another window, or the issue's close.
  */
 function Question({ coordinatorId, decision, moved, status }: { coordinatorId: CoordinatorId; decision: Asked; moved: IssueStatus | null; status: IssueStatus }) {
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
