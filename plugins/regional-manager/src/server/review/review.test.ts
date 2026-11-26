@@ -279,7 +279,7 @@ test("with only the agent's own model to run, no reviewer starts: the review is 
   assert.match(kit.thread(verifier()).spawnedWith.prompt ?? "", new RegExp(`No review was had: ${reason}\\.`));
 });
 
-test("the verifier's brief lists the review's findings; its verdict triages each, and a failed one sends the agent only those that held, with the verifier's word and why", async () => {
+test("the verifier's brief lists the review's findings; its verdict triages each, and a failed one sends the agent only those that fail it, with the verifier's word and why", async () => {
   const { kit, agentThreadId, check, verifier, handOff, reported, catchUp } = await withAgent();
   await handOff();
   assert.equal(await reported(FINDINGS), "Review recorded: 2 findings. A verifier triages them next. Stop here; don't change anything in this environment.");
@@ -305,7 +305,7 @@ test("the verifier's brief lists the review's findings; its verdict triages each
     /### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: Anchored, as it breaks a done-criterion\. retry\.ts:42 doubles the delay with no ceiling; a test with 20 failures waits 17 minutes\.$/,
   );
   assert.doesNotMatch(sent, /helper's name|naming taste/, "a rejected finding never reaches the agent");
-  assert.match(await catchUp(), /the verifier anchored 1, downgraded 0, confirmed 0 and rejected 1\. The ones that held went back to the agent with the failed verdict\./);
+  assert.match(await catchUp(), /the verifier anchored 1, downgraded 0, confirmed 0 and rejected 1\. The ones that fail it went back to the agent with the failed verdict\./);
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.triage, [
     { ...FINDINGS[0], origin: "new", result: "anchored", anchor: "criterion", steps: null, reason: triage[0]?.reason },
@@ -313,7 +313,7 @@ test("the verifier's brief lists the review's findings; its verdict triages each
   ]);
 });
 
-test("a verdict that passes every criterion but anchors a must-fix finding fails: the finding goes back to the agent with the verifier's reason as its fix round, a downgraded one beside it at its lower severity, and the manager's update names the anchored one as the cause", async () => {
+test("a verdict that passes every criterion but anchors a must-fix finding fails: the finding goes back to the agent with the verifier's reason as its fix round, a downgraded one only as a count, and the manager's update names the anchored one as the cause", async () => {
   const { kit, threadId, coordinatorId, agentThreadId, row, check, handOff, reported, returned, catchUp, opened } = await withAgent();
   await handOff();
   await reported([...FINDINGS, { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports break REVIEW.md's order." }]);
@@ -337,11 +337,8 @@ test("a verdict that passes every criterion but anchors a must-fix finding fails
     sent,
     /### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\. It never caps: 20 failures wait 17 minutes\.$/m,
   );
-  assert.match(
-    sent,
-    /### Other review findings that held\n\n- `src\/retry\.ts:3` \(must-fix\): The imports break REVIEW\.md's order\.\n {2}The verifier: Downgraded to nit\. Neither the brief nor a criterion names REVIEW\.md's import order\.$/m,
-    "the downgraded finding goes back too, with its lower severity and the verifier's reason, outside the findings that fail the verdict",
-  );
+  assert.match(sent, /### Other review findings\n\n1 more review finding held without failing the verdict, so this round doesn't carry it\./, "the downgraded finding is only counted");
+  assert.doesNotMatch(sent, /REVIEW\.md's order|import order/, "and never quoted");
   assert.doesNotMatch(sent, /helper's name|Taste/, "a rejected finding never reaches the agent");
   assert.doesNotMatch(sent, /nothing to fix/, "the must-fix finding is what there is to fix");
 
@@ -351,7 +348,7 @@ test("a verdict that passes every criterion but anchors a must-fix finding fails
   const update = await catchUp();
   assert.match(update, /handed off: done, failed verification, a must-fix review finding upheld, findings sent back to it\n/);
   assert.match(update, /Failed verification: a must-fix review finding upheld\. 2 of 2 criteria passed/);
-  assert.match(update, /the verifier anchored 1, downgraded 1, confirmed 0 and rejected 1\. The ones that held went back to the agent with the failed verdict\./);
+  assert.match(update, /the verifier anchored 1, downgraded 1, confirmed 0 and rejected 1\. The ones that fail it went back to the agent with the failed verdict\. The others don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit\./);
   assert.match(update, /\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps[^\n]*\n {2}Anchored, as it breaks a requirement the issue's brief states explicitly: It never caps: 20 failures wait 17 minutes\.\n- `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\.\n {2}Rejected: Taste\./);
 
   const { round, body } = await opened();
@@ -376,7 +373,7 @@ test("a verdict that fails on a must-fix finding while CI is still to come says 
   );
 });
 
-test("confirmed should-fix and nit findings, a downgraded must-fix and a rejected one leave a verdict that passes every criterion passed, and nothing goes back to the agent", async () => {
+test("confirmed should-fix and nit findings, a downgraded must-fix and a rejected one leave a verdict that passes every criterion passed: nothing goes back to the agent, and its pass files the ones that held as a follow-up", async () => {
   const { kit, coordinatorId, agentThreadId, row, check, handOff, reported, returned, catchUp, opened } = await withAgent();
   await handOff();
   await reported([...FINDINGS, { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." }, { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The import order breaks REVIEW.md." }]);
@@ -398,7 +395,8 @@ test("confirmed should-fix and nit findings, a downgraded must-fix and a rejecte
   assert.equal(kit.delivered(agentThreadId).length, sentBefore, "nothing went back to the agent");
   const update = await catchUp();
   assert.match(update, /Verified: 2 of 2 criteria passed/);
-  assert.match(update, /the verifier anchored 0, downgraded 1, confirmed 2 and rejected 1\. None of them went to the agent\./);
+  assert.match(update, /the verifier anchored 0, downgraded 1, confirmed 2 and rejected 1\. They are filed in WEB-2, its follow-up\./);
+  assert.match(update, /It passed, so the plugin filed every review finding its rounds held without blocking it as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and depending on WEB-1: agent_start on it is refused while WEB-1 is open\./);
   assert.match(update, /\n- `src\/retry\.ts` \(nit\)[^\n]*\n {2}Confirmed: The name says retry, not backoff\.\n- `src\/retry\.ts:7` \(should-fix\)[^\n]*\n {2}Confirmed: Both calls sit on line 7\.\n- `src\/retry\.ts:3` \(must-fix\)[^\n]*\n {2}Downgraded to nit: Neither the brief/);
   assert.doesNotMatch(update, /must-fix review finding upheld/);
 
@@ -554,6 +552,7 @@ test("issues stored before reviews, in every status, load with the same status, 
   db.exec("DROP INDEX events_of_issue");
   db.exec("ALTER TABLE decisions DROP COLUMN cap");
   db.exec("ALTER TABLE events DROP COLUMN doorbell");
+  db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
   db.exec("ALTER TABLE checks DROP COLUMN review");
   db.exec("UPDATE checks SET verdict = json_remove(verdict, '$.triage', '$.at')");
   migrated.applied = MIGRATIONS.findIndex((statement) => statement.includes("ADD COLUMN review"));
@@ -587,11 +586,12 @@ test("a check stores each finding's severity once, on its review; a verdict sett
 
   // As the release before this rule left a verdict that passed with the must-fix finding confirmed: settled, and its last migration still to run.
   db.exec(`UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0].result', 'confirmed'), '$.mustFixFails')`);
-  // why the issue log, comments, the decisions' cap and the events' doorbell dropped too: they came after this rule, and their migrations run again.
+  // why the issue log, comments, the decisions' cap, the events' doorbell and the checks' follow-up dropped too: they came after this rule, and their migrations run again.
   db.exec("DROP TABLE issue_log");
   db.exec("DROP TABLE comments");
   db.exec("ALTER TABLE decisions DROP COLUMN cap");
   db.exec("ALTER TABLE events DROP COLUMN doorbell");
+  db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
   migrated.applied = BEFORE_MUST_FIX;
   settledBefore.kit.reload();
   const kept = settledBefore.check().verdict;
@@ -686,11 +686,12 @@ async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confir
   assert.equal(stored.state === "returned" && stored.settlement.kind, left, "as the release before this rule left it");
   // The release before this rule let a confirmed must-fix finding pass, and stored no mustFixFails.
   before.db.prepare("UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0]', json(?)), '$.mustFixFails')").run(JSON.stringify({ result: triaged, reason: "It never caps." }));
-  // why the issue log, comments, the decisions' cap and the events' doorbell dropped too: they came after this rule, and their migrations run again.
+  // why the issue log, comments, the decisions' cap, the events' doorbell and the checks' follow-up dropped too: they came after this rule, and their migrations run again.
   before.db.exec("DROP TABLE issue_log");
   before.db.exec("DROP TABLE comments");
   before.db.exec("ALTER TABLE decisions DROP COLUMN cap");
   before.db.exec("ALTER TABLE events DROP COLUMN doorbell");
+  before.db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
   before.migrated.applied = BEFORE_MUST_FIX;
   agent.kit.reload();
   return agent;
@@ -742,7 +743,7 @@ test("a later round's reviewer is told to review git diff from the last reviewed
     part("Round 1's blocking findings"),
     "Round 1's blocking findings\n\nEach of these failed round 1's verdict. Answer every one in issue_review's earlier, by its number: fixed or not, with a note on what you saw. One not fixed goes to the verifier again, as unfixed; don't report it again as a finding.\n\n1. `src/retry.ts:42` (must-fix): The backoff never caps, so a dead endpoint is retried every 2^n ms forever.",
   );
-  assert.equal(part("Findings already known"), "Findings already known\n\nEarlier rounds' findings that held. Don't report them again.\n\n- `src/retry.ts:7` (should-fix): The jitter is computed twice.");
+  assert.equal(part("Findings already known"), "Findings already known\n\nEarlier rounds' findings that held without blocking. Don't report them again: they don't go back to the agent, and when the issue passes they are filed as a follow-up, unless every one is a nit.\n\n- `src/retry.ts:7` (should-fix): The jitter is computed twice.");
   assert.match(part("Marking your findings"), /^Marking your findings\n\nMark each finding you report with its origin: new, on code changed since round 1's commit, or missed, on code round 1 reviewed unchanged\. A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included/);
 
   const first = await withAgent();
@@ -876,4 +877,28 @@ test("a reviewer started before scopes, on a later round whose verdict failed on
   assert.match(textOf(await kit.call("issue_review", { findings: [{ ...whole.findings[0], origin: "missed" }] }, threadId)), /^Review recorded: 1 finding\./, "its corrected report is taken");
   const stored = review();
   assert.deepEqual(stored.state === "reported" && stored.findings.map(({ origin }) => origin), ["missed"]);
+});
+
+test("agent_start on a follow-up is refused while its origin is open, naming the way forward, and starts once the origin's merge makes it Done, which catch-up announces", async () => {
+  const { kit, threadId, agentThreadId, handOff, reported, returned, catchUp } = await withAgent();
+  await handOff();
+  await reported([{ file: "src/retry.ts", line: 7, severity: "should-fix", claim: "Log each retry." }]);
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "confirmed", reason: "Nobody sees a retry." }] });
+  await settled();
+  await catchUp();
+  await kit.call("issue_update", { id: "WEB-2", doneCriteria: ["npm test passes"], status: "todo" }, threadId);
+
+  const refused = await kit.call("agent_start", { issue: "WEB-2" }, threadId);
+  assert.ok(isRefusal(refused));
+  assert.equal(
+    textOf(refused),
+    "agent_start is refused: WEB-2 is the follow-up of WEB-1, which is In review: its agent starts only once WEB-1 is Done, from a default branch that has WEB-1's work. Wait for WEB-1 to close, which crew_catch_up announces as unblocking WEB-2; or cancel WEB-2 with issue_update if it isn't wanted.",
+  );
+
+  kit.github.prs.set(kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch"), { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 10 * 60_000;
+  await kit.tick();
+  await settled();
+  assert.match(await catchUp(), /### WEB-2 "Follow-ups from WEB-1: Add retries" is unblocked: WEB-1 done/, "the origin's merge unblocks it, announced once");
+  assert.match(textOf(await kit.call("agent_start", { issue: "WEB-2" }, threadId)), /^Started a2 on WEB-2/, "the way forward works");
 });

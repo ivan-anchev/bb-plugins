@@ -15,7 +15,8 @@ const at = z.number();
 const moved = issueStatusSchema.nullable();
 
 export const entrySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("created"), at, moved }),
+  /** The issue was filed: by the manager, or by the plugin as the follow-up of `followUpOf` when that issue passed (rounds/follow-up.ts). */
+  z.object({ kind: z.literal("created"), at, followUpOf: issueIdSchema.nullable(), moved }),
   /** A change to the issue's plan, or where its log began. */
   z.object({ kind: z.literal("logged"), at, event: lineEventSchema, moved }),
   z.object({ kind: z.literal("agent-started"), at, agentId: agentIdSchema, moved }),
@@ -40,6 +41,8 @@ export const entrySchema = z.discriminatedUnion("kind", [
     ]),
     moved,
   }),
+  /** Its pass filed the findings its rounds held without blocking it as the follow-up `issueId` (rounds/follow-up.ts), at when it was filed. */
+  z.object({ kind: z.literal("follow-up"), at, issueId: issueIdSchema, moved }),
   /** The last of its dependencies still open, `by`, closed. */
   z.object({ kind: z.literal("unblocked"), at, by: issueIdSchema, moved }),
   /** A status the plugin observed the issue move to that no moment since the one before explains, as a parent rolling up or a turn ending. */
@@ -63,6 +66,7 @@ export function timeOf(entry: Entry): number {
     case "agent-ended":
     case "pr":
     case "thread":
+    case "follow-up":
     case "unblocked":
       return entry.at;
     default:
@@ -81,6 +85,7 @@ export type Actor = CommentAuthor | { kind: "verifier" } | { kind: "github" } | 
 export function actorOf(entry: Entry): Actor {
   switch (entry.kind) {
     case "created":
+      return entry.followUpOf === null ? { kind: "manager" } : { kind: "plugin" };
     case "agent-started":
     case "decision":
       return { kind: "manager" };
@@ -98,6 +103,7 @@ export function actorOf(entry: Entry): Actor {
       return { kind: "github" };
     case "thread":
       return { kind: "agent", agentId: entry.agentId };
+    case "follow-up":
     case "unblocked":
       return { kind: "plugin" };
     default:

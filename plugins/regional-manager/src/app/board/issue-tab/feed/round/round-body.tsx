@@ -173,33 +173,31 @@ function Outcome({ round, agents }: { round: Round; agents: FeedAgents }) {
   return (
     <p className="rmi-outcome" data-result={verdict.outcome.kind}>
       {/* why one span: a sentence long enough to wrap wraps within itself, not as whole flex items. */}
-      <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} held={heldOf(round.review)} asked={verdict.asked} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
+      <span>{by.kind === "agent" && verdict.fixRound !== null ? <SentBack agent={<AgentName agentId={by.agentId} agents={agents} />} asked={verdict.asked} {...verdict.fixRound} /> : outcomeText(verdict)}</span>
       {round.outcome !== null && <StepTime step={round.outcome} />}
     </p>
   );
 }
 
 /**
- * Where a failed verdict's findings went: to its agent as a fix round, with the review's findings
- * that held (only those reach the agent: src/server/verify/findings.ts), or maybe, when the plugin can't
- * tell whether they reached it; then who decides: the user, when its failure asked at the issue's cap (`asked`).
+ * Where a failed verdict's findings went: to its agent as a fix round, or maybe, when the plugin
+ * can't tell whether they reached it; then who decides: the user, when its failure asked at the
+ * issue's cap (`asked`). why no count of the review's findings: only those that fail it go back
+ * (src/server/verify/findings.ts), and the round's score and fold already name them.
  */
-function SentBack({ agent, round, delivery, held, asked }: { agent: ReactNode; held: number; asked: DecisionId | null } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
-  const withHeld = held === 0 ? "" : `, with the ${held === 1 ? "1 finding that held" : `${held} findings that held`}`;
+function SentBack({ agent, round, delivery, asked }: { agent: ReactNode; asked: DecisionId | null } & NonNullable<NonNullable<Round["verdict"]>["fixRound"]>) {
   switch (delivery) {
     case "sent":
       return (
         <>
           Sent back to {agent} as fix round {round}
-          {withHeld}
         </>
       );
     // why the manager's: the plugin stopped mid-send, or bb's answer didn't say, so nothing shows whether the agent has them.
     case "maybe":
       return (
         <>
-          Maybe sent back to {agent} as fix round {round}
-          {withHeld}: {asked === null ? "the regional manager decides" : `at its cap, the plugin asked you (${asked})`}
+          Maybe sent back to {agent} as fix round {round}: {asked === null ? "the regional manager decides" : `at its cap, the plugin asked you (${asked})`}
         </>
       );
     default:
@@ -208,9 +206,6 @@ function SentBack({ agent, round, delivery, held, asked }: { agent: ReactNode; h
       return null;
   }
 }
-
-/** How many of the review's findings held; 0 when it had no review, or none held. */
-const heldOf = (review: Round["review"]): number => (review.state === "reported" ? (review.held ?? 0) : 0);
 
 /**
  * What became of a verdict nothing went back to an agent from. why the results: one superseded after

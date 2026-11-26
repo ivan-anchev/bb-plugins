@@ -96,6 +96,7 @@ function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onTo
     case "agent-ended":
     case "pr":
     case "thread":
+    case "follow-up":
     case "unblocked":
       return <EntryLine entry={entry} agents={agents} />;
     default:

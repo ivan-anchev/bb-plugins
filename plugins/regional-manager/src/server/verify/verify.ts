@@ -342,7 +342,9 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
   }
 
   /**
-   * The next step for an unsettled verdict (`current`: its handoff is still current in its agent's
+   * The next step for an unsettled verdict, with `merged`, its pull request's number when it had merged as
+   * it was judged, which closes the issue as a pass settles (checks-store.ts settleReturned).
+   * (`current`: its handoff is still current in its agent's
    * thread, which bb still has; `thread`: that thread, as bb lists it), judged with CI on its commit
    * as the PR status of the agent's branch says, the branch the PR watch reads. One that passed all
    * but CI waits while CI is still to come. A failed one is sent back when its handoff is current,
@@ -354,18 +356,18 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
    * a turn in the agent's thread may be anyone's. So it goes to the regional manager, with the round
    * kept, and is never sent again.
    */
-  function stepOf({ check, agent, verdict }: NonNullable<ReturnType<typeof unsettledOf>>, current: boolean, thread: ListedThread | null): Step {
-    if (verdict.settlement.kind === "sending-back") return { kind: "maybe-sent-back" };
+  function stepOf({ check, agent, verdict }: NonNullable<ReturnType<typeof unsettledOf>>, current: boolean, thread: ListedThread | null): { step: Step; merged: number | null } {
     const { subject } = check;
     const branch = branchOf(agent, thread);
     const status = branch === null ? null : store.prOfBranch(check.coordinatorId, branch);
+    const merged = status?.snapshot?.state === "merged" ? status.snapshot.number : null;
+    if (verdict.settlement.kind === "sending-back") return { step: { kind: "maybe-sent-back" }, merged };
     const ci = ciOf({ id: subject.handoffId, headSha: subject.headSha, prUrl: subject.prUrl }, status);
     const judged = judge(verdict, ci);
-    if (judged === "waiting-for-ci") return { kind: "waiting-for-ci" };
+    if (judged === "waiting-for-ci") return { step: { kind: "waiting-for-ci" }, merged };
     const settledCi = ci.kind === "waiting" ? CI_UNFINISHED : ci;
-    const merged = status?.snapshot?.state === "merged";
-    const send = judged === "fail" && !merged && current && agent.ended === null && agent.fixRounds < MAX_AUTO_FIX_ROUNDS && capAllowsSending(check);
-    return send ? { kind: "send", ci: settledCi } : { kind: "checked", refused: null, ci: settledCi };
+    const send = judged === "fail" && merged === null && current && agent.ended === null && agent.fixRounds < MAX_AUTO_FIX_ROUNDS && capAllowsSending(check);
+    return { step: send ? { kind: "send", ci: settledCi } : { kind: "checked", refused: null, ci: settledCi }, merged };
   }
 
   /**
@@ -395,7 +397,8 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       case "handoff":
         return settleHandoffInTurn({ ...check, subject }, by);
       case "final":
-        return void inbox.settleCheck(checkId, FINAL_SETTLED);
+        // why no merge: a final check judges the default branch, with no pull request of its own.
+        return void inbox.settleCheck(checkId, FINAL_SETTLED, null);
       default:
         return subject satisfies never;
     }
@@ -412,20 +415,20 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
   async function settleHandoffInTurn(check: HandoffCheck, by: Settler): Promise<void> {
     const first = await stepNow(check);
     if (first === null) return;
-    if (first.step.kind !== "send") return inbox.settleCheck(check.id, first.step);
+    if (first.step.kind !== "send") return inbox.settleCheck(check.id, first.step, first.merged);
     if (by === "verdict-tool") return;
     if (!(await quietFor(check, { kind: "thread", threadId: first.unsettled.agent.threadId }, "its findings wait"))) return;
     // why decide again: bb was asked meanwhile, and the agent may have moved on.
     const now = await stepNow(check);
     if (now === null) return;
-    if (now.step.kind !== "send") return inbox.settleCheck(check.id, now.step);
+    if (now.step.kind !== "send") return inbox.settleCheck(check.id, now.step, now.merged);
     store.claimFixRound(check.id, now.step.ci);
     // why settle whatever happened meanwhile: the claim, not the verdict's old state, says the findings are owed.
-    inbox.settleCheck(check.id, await sendBack(now.unsettled.agent, now.unsettled.check, now.unsettled.verdict, now.step.ci));
+    inbox.settleCheck(check.id, await sendBack(now.unsettled.agent, now.unsettled.check, now.unsettled.verdict, now.step.ci), now.merged);
   }
 
   /** The next step for a handoff's verdict while it is unsettled (see stepOf), on bb's and the store's facts read now; null once it is settled. */
-  async function stepNow(check: HandoffCheck): Promise<{ unsettled: NonNullable<ReturnType<typeof unsettledOf>>; step: Step } | null> {
+  async function stepNow(check: HandoffCheck): Promise<{ unsettled: NonNullable<ReturnType<typeof unsettledOf>>; step: Step; merged: number | null } | null> {
     const agent = unsettledOf(check)?.agent;
     if (agent === undefined) return null;
     const thread = (await threadsById(bb, [agent.threadId])).get(agent.threadId) ?? null;
@@ -436,7 +439,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
     const latest = sendable ? await latestTurnSeq(bb, agent.threadId) : null;
     const unsettled = unsettledOf(check);
     if (unsettled === null) return null;
-    return { unsettled, step: stepOf(unsettled, sendable && handoffIsCurrent(unsettled.handoff, latest), thread) };
+    return { unsettled, ...stepOf(unsettled, sendable && handoffIsCurrent(unsettled.handoff, latest), thread) };
   }
 
   /**

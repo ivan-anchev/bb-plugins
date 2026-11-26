@@ -679,8 +679,24 @@ before its verifier starts. The plugin starts a **reviewer**:
   as the cause. The manager's update counts how many it anchored,
   downgraded, confirmed and rejected, then gives each finding with its
   triage and reason; a failed verdict that goes back to the agent carries
-  every finding that held, the anchored ones first. A handed-over agent's
-  first message words each earlier finding with its triage too.
+  only the anchored ones, each with what it breaks, and a count of the
+  others that held. A handed-over agent's first message words each earlier
+  finding with its triage too.
+- **Follow-ups**: when an issue passes with a confirmed should-fix or a
+  downgraded must-fix left from any of its rounds, the plugin files every
+  finding its rounds held without blocking it, nits included, as one
+  follow-up: a top-level build issue in Backlog, titled "Follow-ups from
+  BBP-2: …" after the first issue of a chain of follow-ups, depending on
+  the issue, so it is blocked until the issue is Done, and `agent_start` on
+  it is refused until then. Its brief, which its tab shows under
+  **Brief**, lists each finding once, with its round, its severity as
+  triaged and the verifier's reason, and tells its agent to check each
+  still holds first; it has no done-criteria, so the
+  manager plans it before an agent starts. A pass whose leftovers are all
+  nits files nothing, and the nits stay in the issue's feed. The issue's
+  Activity shows a line naming the follow-up, the manager's update for the
+  pass names it, and a merge with held findings no follow-up collected
+  tells the manager how many, filing nothing.
 - A check made before reviews existed has no review: its verifier starts as
   before. A verdict from before the anchor rule keeps its confirmed and
   rejected findings as they were: one returned under the must-fix rule
@@ -1091,7 +1107,8 @@ Close a tab with its close button. bb keeps the tabs across a reload. The tab
 heads with the issue's status, id and kind, its pull request with CI and its
 agent's thread, then its title and headline whole, which its row fades out at
 its edge, and changes as the board does. Under them come what it is about;
-its **Parent** and its **Sub-issues**; **Depends on** (a sub-issue's lists its
+its agent's **Brief**, folded until pressed (none until it has one); its
+**Parent** and its **Sub-issues**; **Depends on** (a sub-issue's lists its
 parent's open dependencies too, "through BBP-1") and **Blocks**, each issue there
 with its status's glyph, id and title, and none when there are none; pressing
 one opens that issue's tab the same way. The rest is the issue's own read,

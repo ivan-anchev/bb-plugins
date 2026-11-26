@@ -77,12 +77,13 @@ const roundEntry = (made: Round): Entry => ({ kind: "round", round: made });
 /** BBP-19 in short: a1 failed twice and was replaced, a2 passed; a question answered, one open; #219 merged. */
 export const FEED: IssueFeed = {
   description: "Failed webhook deliveries are lost.",
+  brief: "Retry failed deliveries with backoff.",
   doneCriteria: CRITERIA,
   dependsOn: [],
   blocks: [],
   agents: [agent("a1"), agent("a2")],
   entries: [
-    { kind: "created", at: 1_000, moved: null },
+    { kind: "created", at: 1_000, followUpOf: null, moved: null },
     { kind: "agent-started", at: 2_000, agentId: A1, moved: null },
     roundEntry(round(1, A1, 3_000, ["pass", "fail", "fail"], 1)),
     { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 }, cap: null }, moved: null },

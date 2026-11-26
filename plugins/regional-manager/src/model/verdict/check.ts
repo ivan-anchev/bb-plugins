@@ -42,6 +42,8 @@ export type Check = {
   /** Its review (review.ts): a handoff's diff, read before its verifier starts. */
   review: Review;
   verdict: Verdict;
+  /** The follow-up issue its findings that held without blocking were filed in when its issue passed, or, on the passing check, the one its pass filed (rounds/follow-up.ts); null: none. */
+  followUpId: IssueId | null;
 };
 
 /** A check as its row stores it: its verdict not yet joined with the findings its verifier triaged (rounds/delta.ts readInOrder). */

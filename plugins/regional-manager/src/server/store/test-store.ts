@@ -3,14 +3,16 @@
 import type Database from "better-sqlite3";
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { memoryStorage } from "../memory-storage.ts";
+import { randomUUID } from "node:crypto";
 import type { AgentId } from "../../model/agent/agent.ts";
-import type { Issue, IssueId } from "../../model/issue/issue.ts";
+import { handoffIdSchema } from "../../model/agent/handoff.ts";
+import type { Check } from "../../model/verdict/check.ts";
+import type { Issue, IssueId, NewIssue } from "../../model/issue/issue.ts";
 import { issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import type { Avatar } from "../../model/profile/avatar.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../model/role.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { openStore, type Store } from "./store.ts";
-import type { NewIssue } from "./issue/issues-store.ts";
 
 export const MANAGER = coordinatorIdSchema.parse("6f1c2a52-6b8e-4c43-9a51-1d6a3c0b7e10");
 export const OTHER_MANAGER = coordinatorIdSchema.parse("9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d");
@@ -85,4 +87,45 @@ export function takeUnread(store: Pick<Store, "unread" | "markRead">, coordinato
   const events = store.unread(coordinatorId);
   store.markRead(coordinatorId, events.map(({ id }) => id), at);
   return events;
+}
+
+/**
+ * A done handoff of the agent on the issue, at commit `a…a`, whose reviewer reported one should-fix
+ * that the verifier confirmed as every criterion passed, settled at `at`: a pass that files the
+ * issue's follow-up. Its reviewer's and verifier's tickets are `reviewer-<n>` and `verifier-<n>` of
+ * MANAGER, suffixed with the manager's id for any other, bound as `thr_` and the ticket.
+ */
+export function passWithShouldFix(store: Store, issueId: IssueId, agentId: AgentId, n: number, at: number, coordinatorId = MANAGER): Check {
+  const headSha = "a".repeat(40);
+  const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId, agentId, at, turnSeq: n, summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+  const check = store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha, prUrl: null } }, { kind: "read", branch: null, checkout: { headSha, changedFiles: [], changedFileCount: 0 } });
+  if (check === null) throw new Error(`${issueId}'s done handoff made no check`);
+  const on = { coordinatorId, issueId, checkId: check.id };
+  const of = coordinatorId === MANAGER ? `${n}` : `${n}-${coordinatorId}`;
+  store.insertCheckerTicket(`reviewer-${of}`, { kind: "reviewer", ...on }, at);
+  store.bindTicket(`reviewer-${of}`, `thr_reviewer-${of}`);
+  const model = { providerId: "codex", model: "gpt-default" };
+  store.receiveReview(check.id, `thr_reviewer-${of}`, { findings: [{ file: "src/retry.ts", line: 10, severity: "should-fix", claim: "Log each retry.", origin: "new" }], earlier: [] }, model, at);
+  store.insertCheckerTicket(`verifier-${of}`, { kind: "verifier", ...on }, at);
+  store.bindTicket(`verifier-${of}`, `thr_verifier-${of}`);
+  const criteria = [{ criterion: "npm test passes", result: "pass" as const, evidence: "ok" }];
+  store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier-${of}`, headSha, checkout: { headSha, changedFiles: [], changedFileCount: 0 }, criteria, blocking: [], findings: [], triage: [{ result: "confirmed", reason: "Nobody sees a retry." }], model, sameModel: false }, at);
+  if (store.settleReturned(check.id, { kind: "checked", refused: null, ci: { kind: "none" } }, at, null) === null) throw new Error(`${issueId}'s pass didn't settle`);
+  return check;
+}
+
+/** MANAGER's rows as a release before issue keys wrote them: every WEB-N it stores, as data or in text, is iN, and it has no key. */
+export function asBeforeKeys(db: Database.Database): void {
+  db.transaction(() => {
+    db.pragma("defer_foreign_keys = ON");
+    for (const { name: table } of db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name != '_bb_migrations'").all() as { name: string }[]) {
+      const columns = (db.pragma(`table_info(${table})`) as { name: string }[]).map(({ name }) => name);
+      const mine = columns.includes("coordinator_id") ? "coordinator_id = @id" : table === "roles" ? "json_extract(role, '$.coordinatorId') = @id" : null;
+      // why skipped: issue_writes came after issue keys, and the renames count their writes under the i-style ids already.
+      if (mine === null || table === "issue_writes") continue;
+      for (const column of columns) db.prepare(`UPDATE ${table} SET ${column} = replace(${column}, 'WEB-', 'i') WHERE ${mine} AND typeof(${column}) = 'text'`).run({ id: MANAGER });
+    }
+    db.prepare("DELETE FROM issue_writes WHERE coordinator_id = ? AND issue_id GLOB 'WEB-*'").run(MANAGER);
+    db.prepare("UPDATE coordinators SET issue_key = NULL WHERE id = ?").run(MANAGER);
+  })();
 }

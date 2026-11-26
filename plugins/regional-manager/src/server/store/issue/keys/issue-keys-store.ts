@@ -49,6 +49,7 @@ const RENAMES: readonly string[] = [
     ["agents", "issue_id"],
     ["handoffs", "issue_id"],
     ["checks", "issue_id"],
+    ["checks", "follow_up_id"],
     ["decisions", "issue_id"],
     ["issue_decisions", "issue_id"],
     ["issue_log", "issue_id"],

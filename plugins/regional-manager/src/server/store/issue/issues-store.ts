@@ -6,7 +6,7 @@ import { agentIdSchema } from "../../../model/agent/agent.ts";
 import type { RecordedDecision } from "../../../model/decision.ts";
 import { executionSchema } from "../../../model/agent/execution.ts";
 import { issueKeySchema } from "../../../model/issue/key/issue-key.ts";
-import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type Rest } from "../../../model/issue/issue.ts";
+import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type NewIssue, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";
 import { planProblem } from "../../../model/issue/plan.ts";
 import { knownClose, type CloseKey, type Closes, type KnownCloses } from "../../../model/issue/relations.ts";
@@ -14,9 +14,6 @@ import { planChanges } from "../../../model/feed/log-event.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
 import { appendLog } from "../feed/log-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
-
-/** An issue as the manager files it. */
-export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "parentId" | "dependsOn">;
 
 /**
  * A change to an issue's plan; a field left out stays as it is. Dependencies change by what is added
@@ -35,10 +32,30 @@ export function restIssue(db: Db, coordinatorId: CoordinatorId, id: IssueId, res
   db().prepare("UPDATE issues SET rest = ? WHERE coordinator_id = ? AND id = ?").run(rest, coordinatorId, id);
 }
 
+/**
+ * Files an issue, numbered after the regional manager's highest, or says why the plan with it can't
+ * stand (plan.ts) or its parent can't be split now, filing nothing. `closes`: every issue's close as
+ * the read the filer is answered from says (see writeDependencies). Call inside a transaction: the
+ * manager's issue_create, or a pass's settling, which files its follow-up (checks-store.ts).
+ */
+export function fileIssue(db: Db, coordinatorId: CoordinatorId, issue: NewIssue, closes: Closes, at: number): { issue: Issue } | { refused: string } {
+  const filed: Issue = { id: nextIssueId(db, coordinatorId), coordinatorId, ...issue, dependsOn: unique(issue.dependsOn), closed: null, createdAt: at };
+  const problem = planProblem(issuesOf(db, coordinatorId, null), filed, closes) ?? splitProblem(db, filed, null);
+  if (problem !== null) return { refused: `${problem}.` };
+  db()
+    .prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, brief, done_criteria, verifier, rest, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(coordinatorId, filed.id, filed.kind, filed.title, filed.description, filed.brief, JSON.stringify(filed.doneCriteria), jsonOrNull(filed.verifier), filed.rest, filed.parentId, at);
+  writeDependencies(db, filed, closes);
+  return { issue: filed };
+}
+
+/** The regional manager's issues, or only the one `id` names (null: every one), in the order filed. */
+export function issuesOf(db: Db, coordinatorId: CoordinatorId, id: IssueId | null): Issue[] {
+  return db().prepare(`SELECT ${ISSUE_COLUMNS} FROM issues WHERE coordinator_id = ? AND (? IS NULL OR id = ?) ORDER BY rowid`).all(coordinatorId, id, id).map(toIssue);
+}
+
 export function issuesStore(db: Db) {
-  function issues(coordinatorId: CoordinatorId, id: IssueId | null): Issue[] {
-    return db().prepare(`SELECT ${ISSUE_COLUMNS} FROM issues WHERE coordinator_id = ? AND (? IS NULL OR id = ?) ORDER BY rowid`).all(coordinatorId, id, id).map(toIssue);
-  }
+  const issues = (coordinatorId: CoordinatorId, id: IssueId | null): Issue[] => issuesOf(db, coordinatorId, id);
 
   return {
     /** Every issue of the regional manager, in the order filed. */
@@ -47,23 +64,8 @@ export function issuesStore(db: Db) {
     /** One issue of the regional manager, or null when it has none by that id. */
     issue: (coordinatorId: CoordinatorId, id: IssueId): Issue | null => issues(coordinatorId, id)[0] ?? null,
 
-    /**
-     * Files an issue, numbered after the regional manager's highest, or says why the plan with it
-     * can't stand (plan.ts) or its parent can't be split now, filing nothing. `closes`: every
-     * issue's close as the read the manager is answered from says (see writeDependencies).
-     */
-    insertIssue(coordinatorId: CoordinatorId, issue: NewIssue, closes: Closes, at: number): { issue: Issue } | { refused: string } {
-      return db().transaction(() => {
-        const filed: Issue = { id: nextIssueId(db, coordinatorId), coordinatorId, ...issue, dependsOn: unique(issue.dependsOn), closed: null, createdAt: at };
-        const problem = planProblem(issues(coordinatorId, null), filed, closes) ?? splitProblem(db, filed, null);
-        if (problem !== null) return { refused: `${problem}.` };
-        db()
-          .prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, brief, done_criteria, verifier, rest, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .run(coordinatorId, filed.id, filed.kind, filed.title, filed.description, filed.brief, JSON.stringify(filed.doneCriteria), jsonOrNull(filed.verifier), filed.rest, filed.parentId, at);
-        writeDependencies(db, filed, closes);
-        return { issue: filed };
-      })();
-    },
+    /** The manager's issue_create: files an issue (fileIssue) in its own transaction. */
+    insertIssue: (coordinatorId: CoordinatorId, issue: NewIssue, closes: Closes, at: number): { issue: Issue } | { refused: string } => db().transaction(() => fileIssue(db, coordinatorId, issue, closes, at))(),
 
     /**
      * Applies the edit, or says why it can't. `requireUnheld`: refused while an agent holds the

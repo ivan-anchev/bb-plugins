@@ -33,6 +33,7 @@ function stored(n: number, review: Review, verdict: StoredVerdict): StoredCheck 
     subject: { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse(randomUUID()), headSha: sha(n), prUrl: null },
     review,
     verdict,
+    followUpId: null,
   };
 }
 
