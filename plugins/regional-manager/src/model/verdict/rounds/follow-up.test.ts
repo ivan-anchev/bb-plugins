@@ -109,7 +109,7 @@ test("a check's leftovers are what it held without failing it: an anchored must-
 });
 
 /** A returned verdict on one criterion, `result`, triaging `triage`, settled as checked. */
-const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Verdict => ({
+const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Extract<Verdict, { state: "returned" }> => ({
   state: "returned",
   at: 5_000,
   verifierThreadId: "thr_v",
@@ -131,6 +131,8 @@ test("a merge leaves unfiled every uncollected round's leftovers, and the findin
   assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored]))]), [anchored], "a held blocker of the latest, failed verdict");
   assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored, nit])), round(verdictOf("pass", [shouldFix]))]), [nit, shouldFix], "a later pass fixed the blocker; the leftovers of both rounds stay");
   assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored, nit]), issueIdSchema.parse("WEB-9")), round(verdictOf("pass", []), issueIdSchema.parse("WEB-9"))]), [], "a follow-up collected them");
+  const unsettled: Verdict = { ...verdictOf("pass", [anchored, nit]), settlement: { kind: "pending" } };
+  assert.deepEqual(unfiledAtMerge([round(unsettled)]), [nit, anchored], "a verdict returned and still to settle counts as its settling will");
 });
 
 test("only nits is every leftover a nit as triaged: a should-fix downgraded to a nit counts as one, a downgraded must-fix never does", () => {

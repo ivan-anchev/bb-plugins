@@ -215,6 +215,8 @@ test("catch-up's merge line counts a held finding that failed the latest verdict
   const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [blocker], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
   const failed = checkedWith({ ...returned(["pass"]), triage: [{ ...blocker, result: "anchored", anchor: "criterion", reason: "It never caps." }] }, null, review);
   assert.match(updatesText([merged], lookupsOf([failed])), /It merged with 1 review finding its rounds held that no follow-up collected\./);
+  const stillToSettle = checkedWith({ ...returned(["pass"]), settlement: { kind: "pending" }, triage: [{ ...blocker, result: "anchored", anchor: "criterion", reason: "It never caps." }] }, null, review);
+  assert.match(updatesText([merged], lookupsOf([stillToSettle])), /It merged with 1 review finding its rounds held that no follow-up collected\./, "a merge read after the triage is recorded, before its settlement, counts it too");
 });
 
 test("a pass settled before follow-ups, with a should-fix left and no follow-up, is told without a reason the plugin can't give", () => {

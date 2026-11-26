@@ -180,11 +180,11 @@ export function checksStore(db: Db) {
    * check, files the issue's follow-up, as the one plan says (rounds/follow-up.ts followUpPlan),
    * from every handoff round of the issue no follow-up collected yet, and stamps with it each
    * round's check it collected, and the passing check, which names the follow-up its pass filed. A
-   * round is so collected once. `merged`: whether the issue's pull request had merged as the pass
+   * round is so collected once. `merged`: the number of the issue's pull request when it had merged as the pass
    * was judged (closeOfPass). Call inside the settling transaction, after its settlement is
    * written, so the check reads as passed.
    */
-  function fileFollowUp(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, merged: boolean, at: number): void {
+  function fileFollowUp(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, merged: number | null, at: number): void {
     const passed = check(checkId);
     if (passed === null || outcome(passed.verdict) !== "pass") return;
     const record = handed("WHERE h.coordinator_id = ? AND h.issue_id = ? ORDER BY h.rowid", coordinatorId, issueId);
@@ -467,12 +467,12 @@ export function checksStore(db: Db) {
      * and `maybe-sent-back` need a claimed round, and keep it and its CI; `checked` gives back a
      * round claimed for findings that never left. A failure at the issue's cap also puts the cap
      * question to the user, and a pass files its issue's follow-up, in the same transaction (askAtCap,
-     * fileFollowUp); `merged` says whether the issue's pull request had merged as the settler judged
+     * fileFollowUp); `merged` is the number of the issue's pull request when it had merged as the settler judged
      * it (verify.ts stepOf), which closes the issue as it passes. `waiting-for-ci` moves a pending
      * verdict to wait, and records nothing: nobody is told until it settles. Returns whose it was,
      * or null when it was already settled or waiting, or there is no claim to keep.
      */
-    settleReturned(checkId: CheckId, as: Settlement, at: number, merged: boolean): CoordinatorId | null {
+    settleReturned(checkId: CheckId, as: Settlement, at: number, merged: number | null): CoordinatorId | null {
       return db().transaction(() => {
         const verdict = unsettled(checkId);
         if (verdict === null) return null;
@@ -511,15 +511,16 @@ export function checksStore(db: Db) {
 
 /**
  * How a pass closes its issue as it settles, as the issue's view will say (status.ts): a build
- * parent's passed final check closes it; a done handoff's pass, only once its pull request merged
- * (`merged`), and by that handoff; else it is still open.
+ * parent's passed final check closes it; a done handoff's, only once its pull request merged
+ * (`merged`, its number: null while it hasn't), and by that merge, as the view's finalOf says; else
+ * it is still open.
  */
-function closeOfPass({ id, subject }: Check, merged: boolean): Closure | null {
+function closeOfPass({ id, subject }: Check, merged: number | null): Closure | null {
   switch (subject.kind) {
     case "final":
       return { by: "final-check", checkId: id };
     case "handoff":
-      return merged ? { by: "handoff", handoffId: subject.handoffId } : null;
+      return merged === null ? null : { by: "merge", number: merged };
     default:
       return subject satisfies never;
   }

@@ -6,7 +6,7 @@
 import { MAX_TITLE_CHARS, type Issue, type IssueId, type NewIssue } from "../../issue/issue.ts";
 import type { Check } from "../check.ts";
 import { findingText, triageText, type Triaged } from "../review.ts";
-import { heldFindings, outcome } from "../verdict.ts";
+import { heldFindings } from "../verdict.ts";
 import { findingKey } from "./delta.ts";
 
 /** A round's leftovers, numbered as the issue's feed numbers its rounds. */
@@ -45,15 +45,16 @@ export function followUpPlan(origin: IssueId, firstOrigin: Pick<Issue, "id" | "t
 
 /**
  * The findings a merge leaves that no follow-up collected, of the issue's handoff checks (`checks`,
- * oldest first): every uncollected round's leftovers, and, when the latest returned verdict failed
- * and nothing collected it, the findings that failed it, which nothing fixed before the merge. why
- * only the latest's: a later round reviews the earlier blocking findings again (delta.ts), so its
- * own carry the ones still unfixed.
+ * oldest first): every uncollected round's leftovers, and, when nothing collected the latest
+ * returned verdict, the findings that fail it, which nothing fixed before the merge. why only the
+ * latest's: a later round reviews the earlier blocking findings again (delta.ts), so its own carry
+ * the ones still unfixed. why from its triage, settled or not: a merge read while the verdict waits
+ * to be settled must count them as its settling will.
  */
 export function unfiledAtMerge(checks: readonly Pick<Check, "subject" | "verdict" | "followUpId">[]): Triaged[] {
   const uncollected = checks.filter(({ subject, followUpId }) => subject.kind === "handoff" && followUpId === null);
   const latest = checks.filter(({ subject, verdict }) => subject.kind === "handoff" && verdict.state === "returned").at(-1);
-  const blocking = latest?.followUpId === null && latest.verdict.state === "returned" && outcome(latest.verdict) === "fail" ? heldFindings(latest.verdict).failing : [];
+  const blocking = latest?.followUpId === null && latest.verdict.state === "returned" ? heldFindings(latest.verdict).failing : [];
   return [...uncollected.flatMap(leftoversOf), ...blocking];
 }
 
