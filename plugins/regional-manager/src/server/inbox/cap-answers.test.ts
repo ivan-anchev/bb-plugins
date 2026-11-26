@@ -157,6 +157,16 @@ test("a merge answer after a review-only failure whose commit's CI has since fai
   assert.match(textOf(accept), /^CI failed on #41 at 0123456/);
 });
 
+test("a merge answer read after its pull request merged offers no accept and no merge: it files the failed round's must-fix findings with issue_create", async () => {
+  const { kit, coordinatorId, fresh, catchUp } = await capped();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
+  await settled();
+  await openPr(kit, fresh, "MERGED");
+  const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
+  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Its pull request #41 has merged since, which made WEB-1 Done, so nothing is left to merge\. File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  assert.doesNotMatch(answered, /status: "in-review"|Have its pull request/);
+});
+
 test("answering one more round or cancel the issue gives each its own guidance: a round to direct, or stop, close the PR and cancel", async () => {
   const round = await capped();
   await round.catchUp();

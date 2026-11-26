@@ -34,10 +34,11 @@ export function capChoice({ options, answer }: Pick<Decision, "options" | "answe
 /**
  * Where the issue stood when the user answered: its pull request's number as last read (null: none
  * read), its branch as its agents' handoffs recorded it (null: none recorded), the must-fix
- * findings its last failed verdict before the answer upheld, and whether the manager may accept
- * that verdict as it is (verdict.ts acceptableAsIs: on review findings alone, CI not failed on its commit).
+ * findings its last failed verdict before the answer upheld, whether that pull request has merged
+ * since, and whether the manager may accept that verdict as it is (verdict.ts acceptableAsIs: on
+ * review findings alone, CI not failed on its commit; never once merged).
  */
-export type AnsweredAt = { pr: number | null; branch: string | null; mustFix: readonly Triaged[]; acceptable: boolean };
+export type AnsweredAt = { pr: number | null; branch: string | null; mustFix: readonly Triaged[]; merged: boolean; acceptable: boolean };
 
 /** The choice in a phrase, as a doorbell gives it after the question's id: "merge it as is, with no further round, and file its open must-fix findings as a follow-up". */
 export function choicePhrase(choice: CapChoice): string {
@@ -57,9 +58,7 @@ export function choicePhrase(choice: CapChoice): string {
 export function choiceText(issueId: IssueId, choice: CapChoice | null, at: AnsweredAt): string {
   switch (choice) {
     case "merge":
-      return at.acceptable
-        ? `They chose to merge ${issueId} as it is, so it gets no further round. ${acceptFirst(issueId)} ${mergeMoves(issueId, at.pr)}`
-        : `They chose to merge ${issueId} as it is, so it gets no further round. ${mergeMoves(issueId, at.pr)} ${followUpText(at.mustFix)}`;
+      return `They chose to merge ${issueId} as it is, so it gets no further round. ${mergeStepsText(issueId, at)}`;
     case "round":
       return `They chose one more round for ${issueId}: tell its agent what to fix with agent_message, or hand ${issueId} to a fresh agent with agent_start. If that round fails verification too, the plugin asks them again.`;
     case "cancel":
@@ -78,6 +77,16 @@ export function choiceText(issueId: IssueId, choice: CapChoice | null, at: Answe
  */
 export const mergeStandsText = (issueId: IssueId, questionId: string, pr: number | null): string =>
   `Nothing went back to an agent: the user chose to merge ${issueId} as it is (${questionId}), which allows no further round, so this failure files no follow-up of its own. ${mergeMoves(issueId, pr)}`;
+
+/**
+ * What the merge answer leaves to do: once its pull request merged, only the follow-up, as the
+ * merge made the issue Done; while the accept goes through, the accept first, which files the
+ * follow-up, then the merge; else the merge and the follow-up, filed by hand.
+ */
+function mergeStepsText(issueId: IssueId, at: AnsweredAt): string {
+  if (at.merged) return `Its pull request${at.pr === null ? "" : ` #${at.pr}`} has merged since, which made ${issueId} Done, so nothing is left to merge. ${followUpText(at.mustFix)}`;
+  return at.acceptable ? `${acceptFirst(issueId)} ${mergeMoves(issueId, at.pr)}` : `${mergeMoves(issueId, at.pr)} ${followUpText(at.mustFix)}`;
+}
 
 /** How the pull request gets merged while the merge answer stands, and that the merge makes the issue Done. */
 function mergeMoves(issueId: IssueId, pr: number | null): string {

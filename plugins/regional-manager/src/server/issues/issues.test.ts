@@ -407,6 +407,25 @@ test("a canceled issue is refused an accept, and once reopened as the refusal sa
   assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
 });
 
+test("a failure's update read after a newer handoff, or after the cap question opened, offers no accept: it says what superseded it", async () => {
+  const pending = await failedOnce();
+  await pending.kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD }, pending.agentThreadId);
+  await pending.kit.idle(pending.agentThreadId, "Handed off.");
+  await settled();
+  const afterNewer = textOf(await pending.call("crew_catch_up", {}));
+  assert.match(afterNewer, /as its automatic fix round 1\. Nothing to do yet: [^\n]* It can't be accepted as it is now: a newer handoff of WEB-1 replaced it, so decide on that one's verdict, which crew_catch_up brings you\./);
+  assert.doesNotMatch(afterNewer, /so you may accept it as it is/);
+
+  const { kit, threadId, coordinatorId, call } = await managing();
+  const { issue, agentThreadId } = await startedAgent(kit, threadId);
+  await toCap(kit, threadId, coordinatorId, issue, agentThreadId, "review");
+  const capped = textOf(await call("crew_catch_up", {}));
+  assert.equal(capped.match(/It can't be accepted as it is now: a newer handoff of WEB-1 replaced it/g)?.length, 1, "the first failure, sent back and replaced since");
+  assert.match(capped, /Nothing went back to an agent: the plugin's question at WEB-1's cap \(d1\) is still open\. Until the user answers d1, agent_start, agent_message and an accept of WEB-1 are refused\./, "the second failure, read under the lock, offers only the lock's moves");
+  assert.equal(capped.match(/so you may accept it as it is/g)?.length, 1, "only once the user answers the question the third failure asked");
+  assert.match(capped, /If they choose to merge it as is: It failed on review findings alone, so you may accept it as it is/);
+});
+
 test("catch-up offers the accept after a failure on review findings alone, sent back to its agent or reaching the manager, and not after a criterion's", async () => {
   const offer = /It failed on review findings alone, so you may accept it as it is: issue_update \{ id: "WEB-1", status: "in-review", decision: "<why>" \} puts it In review until its pull request merges, and files the findings it leaves, its unfixed must-fixes among them, as a follow-up\./;
   const review = await failedOnce();
