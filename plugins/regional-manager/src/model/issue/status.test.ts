@@ -54,7 +54,7 @@ const checkOf = (verdict: Verdict): Check => ({
   at: 5_000,
   criteria: issue.doneCriteria,
   verifier: null,
-  subject: { kind: "handoff", agentId: agent.id, handoffId: done.id, headSha: SHA, prUrl: null },
+  subject: { kind: "handoff", agentId: agent.id, handoffId: done.id, headSha: SHA, prUrl: null, branch: null },
   review: { state: "none" },
   verdict,
   followUpId: null,

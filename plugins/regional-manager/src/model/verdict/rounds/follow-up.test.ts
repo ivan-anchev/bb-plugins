@@ -125,7 +125,7 @@ const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Extract<Verdict,
   sameModel: false,
   settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
 });
-const HANDOFF: Check["subject"] = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: SHA, prUrl: null };
+const HANDOFF: Check["subject"] = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: SHA, prUrl: null, branch: null };
 const round = (verdict: Verdict, followUpId: Check["followUpId"] = null) => ({ subject: HANDOFF, verdict, followUpId, acceptedAt: null });
 const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
 

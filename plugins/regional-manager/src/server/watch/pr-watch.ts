@@ -39,7 +39,7 @@ type WatchBb = {
 
 type Deps = {
   bb: WatchBb;
-  store: Pick<Store, "coordinator" | "coordinators" | "issues" | "issue" | "agents" | "prOfBranch" | "waitingForCi" | "latestHandoff">;
+  store: Pick<Store, "coordinator" | "coordinators" | "issues" | "issue" | "agents" | "prOfBranch" | "waitingForCi" | "latestHandoff" | "record">;
   inbox: Pick<Inbox, "prRead" | "prUnavailable">;
   /** Runs gh with these arguments and resolves to its stdout; rejects as Node's execFile does. */
   gh(args: string[]): Promise<string>;
@@ -95,7 +95,7 @@ export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
       const threadOf = (agent: Agent) => (agent.threadId === null ? null : (threads.get(agent.threadId) ?? null));
       const seen = new Set<string>();
       for (const issue of open) {
-        const on = issueBranch(agents.filter((agent) => agent.issueId === issue.id), threadOf);
+        const on = issueBranch(agents.filter((agent) => agent.issueId === issue.id), threadOf, store.record(coordinator.id, issue.id));
         if (on === null) continue;
         const { agent, branch } = on;
         if (seen.has(branch) || finished(coordinator.id, branch, agent)) continue;

@@ -211,7 +211,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
 
   /**
    * The issue's previous agent: the latest with a branch, its own as its handoffs recorded or as bb
-   * lists its thread's environment, else the latest with a thread. why not the latest alone: one bb
+   * lists its thread's environment (agent.ts issueBranch: while an accept stands, the agent whose
+   * work was accepted), else the latest with a thread. why not the latest alone: one bb
    * never cut a branch for, as when it refused the base, would hide the work before it. With its
    * environment while bb hasn't destroyed it: the one its handoffs recorded or it inherited, else its
    * thread's, an archived thread's included. Reads bb, never the environment itself.
@@ -220,7 +221,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const own = store.agents(coordinatorId).filter((each): each is Agent & { threadId: string } => each.issueId === issueId && each.threadId !== null);
     const threads = await threadsById(bb, own.map(({ threadId }) => threadId));
     const threadOf = (agent: Agent & { threadId: string }) => threads.get(agent.threadId) ?? null;
-    const on = issueBranch(own, threadOf);
+    const on = issueBranch(own, threadOf, store.record(coordinatorId, issueId));
     const agent = on?.agent ?? own.at(-1);
     if (agent === undefined) return null;
     const known = agent.checkout.environmentId ?? threadOf(agent)?.environmentId ?? null;

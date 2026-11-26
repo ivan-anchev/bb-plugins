@@ -54,7 +54,7 @@ function returned(results: readonly CriterionResult[], at: number, settlement: E
 
 function handed(made: Handoff, verdict: Verdict | null, review: Review = { state: "none" }): Handed {
   if (verdict === null) return { handoff: made, check: null };
-  const check: Check = { id: checkIdSchema.parse(uuid(100 + Number(made.turnSeq))), coordinatorId: MANAGER, issueId: BBP_19, at: made.at, criteria: CRITERIA, verifier: null, subject: { kind: "handoff", agentId: made.agentId, handoffId: made.id, headSha: SHA, prUrl: null }, review, verdict, followUpId: null, acceptedAt: null };
+  const check: Check = { id: checkIdSchema.parse(uuid(100 + Number(made.turnSeq))), coordinatorId: MANAGER, issueId: BBP_19, at: made.at, criteria: CRITERIA, verifier: null, subject: { kind: "handoff", agentId: made.agentId, handoffId: made.id, headSha: SHA, prUrl: null, branch: null }, review, verdict, followUpId: null, acceptedAt: null };
   return { handoff: made, check };
 }
 

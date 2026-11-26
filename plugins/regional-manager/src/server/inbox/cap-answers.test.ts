@@ -167,6 +167,31 @@ test("a merge answer read after its pull request merged offers no accept and no 
   assert.doesNotMatch(answered, /status: "in-review"|Have its pull request/);
 });
 
+test("a merge answer read after the manager accepted the failure, which filed the follow-up, and the pull request merged names that follow-up and offers no second filing", async () => {
+  const { kit, threadId, coordinatorId, fresh, catchUp } = await capped();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
+  await settled();
+  const accepted = await kit.call("issue_update", { id: "WEB-1", status: "in-review", decision: "The user chose to merge it as is (d1)." }, threadId);
+  assert.match(textOf(accepted), /are filed as \[WEB-2\]/);
+  await openPr(kit, fresh, "MERGED");
+
+  const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
+  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Its pull request #41 has merged since, which made WEB-1 Done, so nothing is left to merge\. Your accept of WEB-1's last failure filed its open must-fix findings as WEB-2, the one follow-up this answer files, so file no other\./);
+  assert.doesNotMatch(answered, /issue_create|status: "in-review"/);
+  assert.deepEqual(kit.store.issues(coordinatorId).map(({ id }) => id), ["WEB-1", "WEB-2"], "one follow-up");
+});
+
+test("a merge answer read after the manager accepted the failure, its pull request still open, names the filed follow-up and asks only for the merge", async () => {
+  const { kit, threadId, coordinatorId, catchUp } = await capped();
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: MERGE });
+  await settled();
+  await kit.call("issue_update", { id: "WEB-1", status: "in-review", decision: "The user chose to merge it as is (d1)." }, threadId);
+
+  const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
+  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Have its pull request #41 merged without another review or verifier: [^\n]+ Never merge it yourself; its merge makes WEB-1 Done\. Your accept of WEB-1's last failure filed its open must-fix findings as WEB-2, the one follow-up this answer files, so file no other\./);
+  assert.doesNotMatch(answered, /issue_create|status: "in-review"/, "neither a second filing nor an accept, which would be refused");
+});
+
 test("answering one more round or cancel the issue gives each its own guidance: a round to direct, or stop, close the PR and cancel", async () => {
   const round = await capped();
   await round.catchUp();

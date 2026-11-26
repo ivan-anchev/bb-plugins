@@ -30,7 +30,7 @@ function stored(n: number, review: Review, verdict: StoredVerdict): StoredCheck 
     at: 3_000 + n,
     criteria: ["npm test passes"],
     verifier: null,
-    subject: { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse(randomUUID()), headSha: sha(n), prUrl: null },
+    subject: { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse(randomUUID()), headSha: sha(n), prUrl: null, branch: null },
     review,
     verdict,
     followUpId: null,

@@ -332,7 +332,8 @@ or the plugin's own question at its cap of failed verdicts, which leads its reas
   issue whose latest verdict failed on review findings alone, every criterion
   passing on a clean tree and CI not failed, even while its agent still holds
   it. It reads In review, "Accepted with follow-ups: <summary>": its pull
-  request stays watched, issues that depend on it stay blocked, and its merge
+  request, the accepted work's even when an agent started clean since works
+  on another branch, stays watched, issues that depend on it stay blocked, and its merge
   makes it Done. The findings it was accepted with, its unfixed must-fixes
   among them, are filed as one follow-up in Backlog, which the result names;
   plan it or cancel it as any follow-up. If an agent still holds the issue,
@@ -660,13 +661,17 @@ turn. So when you reply after a wake, name the issue your reply is about, as
       on a new branch (`from: "default"`, a placement, or an environment bb
       removed) is refused, as the pull request would be left behind. When
       the last failed verdict before the answer failed on review findings
-      alone, accept the issue as it is first, with `issue_update` (`status:
-      "in-review"` and a `decision` naming their answer): that files the
-      findings it leaves, its open must-fix findings among them, as the one
-      follow-up, and keeps it In review until the merge. Otherwise file the
-      open must-fix findings of that verdict, which the update lists, as one
-      follow-up issue with `issue_create`, once: a later failure's update
-      files none. While that
+      alone, and CI hasn't failed on its commit since, accept the issue as
+      it is first, with `issue_update` (`status: "in-review"` and a
+      `decision` naming their answer): that files the findings it leaves,
+      its open must-fix findings among them, as the one follow-up, and
+      keeps it In review until the merge. The update says which applies:
+      when CI has failed since, or the verdict failed on more than review
+      findings, the accept is refused, so file the open must-fix findings
+      of that verdict, which the update lists, as one follow-up issue with
+      `issue_create`, once: a later failure's update files none. When you
+      accepted it already, the update names the follow-up that accept
+      filed: file no other. While that
       answer stands, a failed done handoff on the issue goes back to no
       agent and asks the user nothing. The merge makes the issue Done.
     - **One more round**: tell the agent what to fix, or hand the issue to a

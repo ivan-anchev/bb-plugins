@@ -22,9 +22,15 @@ export type CheckId = z.infer<typeof checkIdSchema>;
  */
 const finalSubjectSchema = z.object({ kind: z.literal("final"), defaultBranch: z.string().min(1), merged: z.array(issueIdSchema) });
 
-/** What a check judges: an agent's done handoff, the commit it claims and the pull request it names; or a build parent's final check. */
+/**
+ * What a check judges: an agent's done handoff, the commit it claims, the pull request it names, and
+ * `branch`, the one its environment had checked out as it handed off (null: none, as on a detached
+ * HEAD), where that work's pull request is read; or a build parent's final check. why kept on the
+ * check: the agent's own branch (agent.ts branchOf) moves with its later handoffs, and an accepted
+ * check's pull request must not.
+ */
 export const checkSubjectSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("handoff"), agentId: agentIdSchema, handoffId: handoffIdSchema, headSha: commitSchema, prUrl: z.string().nullable() }),
+  z.object({ kind: z.literal("handoff"), agentId: agentIdSchema, handoffId: handoffIdSchema, headSha: commitSchema, prUrl: z.string().nullable(), branch: z.string().nullable() }),
   finalSubjectSchema,
 ]);
 export type CheckSubject = z.infer<typeof checkSubjectSchema>;

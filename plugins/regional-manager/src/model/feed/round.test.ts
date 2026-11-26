@@ -64,7 +64,7 @@ const RETURNED: Verdict = {
 const RUNNING: Verdict = { state: "running", verifierThreadId: "thr_verifier", nudged: false, declined: [], checkout: null };
 
 function handed(review: Review, verdict: Verdict): Handed & { check: Check } {
-  const check: Check = { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000101"), coordinatorId: MANAGER, issueId: BBP_19, at: HANDOFF.at, criteria: ["npm test passes"], verifier: null, subject: { kind: "handoff", agentId: A1, handoffId: HANDOFF.id, headSha: SHA, prUrl: null }, review, verdict, followUpId: null, acceptedAt: null };
+  const check: Check = { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000101"), coordinatorId: MANAGER, issueId: BBP_19, at: HANDOFF.at, criteria: ["npm test passes"], verifier: null, subject: { kind: "handoff", agentId: A1, handoffId: HANDOFF.id, headSha: SHA, prUrl: null, branch: null }, review, verdict, followUpId: null, acceptedAt: null };
   return { handoff: HANDOFF, check };
 }
 

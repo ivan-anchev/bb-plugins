@@ -48,7 +48,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review
     at: 1_000,
     criteria: ["npm test passes"],
     verifier,
-    subject: { kind: "handoff", agentId, handoffId: handoff.id, headSha: SHA, prUrl: null },
+    subject: { kind: "handoff", agentId, handoffId: handoff.id, headSha: SHA, prUrl: null, branch: null },
     review,
     verdict,
     followUpId: null,
@@ -169,6 +169,7 @@ const lookupsOf = (record: readonly Handed[]): Lookups => ({
   record: () => record,
   view: () => null,
   capQuestions: () => [],
+  prOf: () => null,
 });
 
 const FOLLOW_UP = issueIdSchema.parse("WEB-2");

@@ -6,6 +6,8 @@ import { z } from "zod";
 import type { Execution } from "./execution.ts";
 import type { HandoffId } from "./handoff.ts";
 import type { IssueId } from "../issue/issue.ts";
+import { acceptedOf, type Handed } from "../issue/status.ts";
+import type { Check } from "../verdict/check.ts";
 import { shipsCode, type Kind } from "../issue/kind.ts";
 import type { CoordinatorId } from "../role.ts";
 import type { CheckoutRead } from "../verdict/checkout.ts";
@@ -368,16 +370,38 @@ function uncommittedText({ changedFiles, changedFileCount }: { changedFiles: rea
 /** What made an environment, in words: `worktree`, `boat-sandbox environment`. */
 export const placementName = (placement: Placement): string => (placement.kind === "worktree" ? "worktree" : `${placement.environmentProviderId} environment`);
 
+/** An agent's thread as bb lists it, for the branch bb made its environment on. */
+type BranchThread = { environmentBranchName: string | null };
+
 /**
- * An issue's branch: that of its latest agent with one (`own`: its agents in the order started;
- * `threadOf`: each one's thread as bb lists it, null for none), with that agent; null when none has
- * one. Its pull request is the issue's, read on it. why not the latest agent alone: one whose spawn
- * failed has no branch, and the work before it still has its pull request.
+ * An issue's branch, with the agent on it: while the manager's accept of a check stands (`record`:
+ * the issue's handoffs with their checks, oldest first; status.ts acceptedOf), the accepted work's
+ * (acceptedBranch); else that of its latest agent with one (`own`: its agents in the order started;
+ * `threadOf`: each one's thread as bb lists it, null for none). null when none has one. Its pull
+ * request is the issue's, read on it. why not the latest agent alone: one whose spawn failed has no
+ * branch, and the work before it still has its pull request; and an agent started clean works on a
+ * branch an accepted work isn't on.
  */
-export function issueBranch<A extends Pick<Agent, "checkout">>(own: readonly A[], threadOf: (agent: A) => { environmentBranchName: string | null } | null): { agent: A; branch: string } | null {
+export function issueBranch<A extends Pick<Agent, "id" | "checkout">>(own: readonly A[], threadOf: (agent: A) => BranchThread | null, record: readonly Handed[]): { agent: A; branch: string } | null {
+  const accepted = acceptedOf(record);
+  if (accepted !== null) return acceptedBranch(own, threadOf, accepted.check);
   for (const agent of [...own].reverse()) {
     const branch = branchOf(agent, threadOf(agent));
     if (branch !== null) return { agent, branch };
   }
   return null;
+}
+
+/**
+ * The branch of the work an accepted check judged, as the check kept it when its agent handed off
+ * (check.ts), with that agent; when it kept none, as on a detached HEAD, the one bb made the agent's
+ * environment on. why never the agent's own (branchOf): its later handoffs move it, and the accepted
+ * work stays where it was. why throw: an issue's record holds only its own agents' handoffs' checks.
+ */
+function acceptedBranch<A extends Pick<Agent, "id">>(own: readonly A[], threadOf: (agent: A) => BranchThread | null, { id, subject }: Check): { agent: A; branch: string } | null {
+  if (subject.kind !== "handoff") throw new Error(`The accepted check ${id} judged no handoff.`);
+  const agent = own.find((each) => each.id === subject.agentId);
+  if (agent === undefined) throw new Error(`The accepted check ${id} judged ${subject.agentId}, which isn't among the issue's agents.`);
+  const branch = subject.branch ?? threadOf(agent)?.environmentBranchName ?? null;
+  return branch === null ? null : { agent, branch };
 }

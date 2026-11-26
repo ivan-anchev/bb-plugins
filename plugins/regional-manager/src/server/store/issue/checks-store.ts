@@ -344,7 +344,7 @@ export function checksStore(db: Db) {
           at,
           criteria,
           verifier,
-          subject: { kind: "handoff", agentId, handoffId: id, headSha, prUrl },
+          subject: { kind: "handoff", agentId, handoffId: id, headSha, prUrl, branch: checkout.kind === "read" ? checkout.branch : null },
           review: firstReview(verdict),
           verdict,
           followUpId: null,

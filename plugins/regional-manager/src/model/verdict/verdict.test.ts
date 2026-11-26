@@ -180,12 +180,14 @@ test("a verdict failed on review findings alone only when every reason it failed
   assert.equal(failedOnReviewOnly(returned(["fail"])), false, "a criterion alone");
 });
 
-test("a check is acceptable as it is only when it failed on review findings alone and CI didn't fail on its commit as its pull request was last read", () => {
+test("a check is acceptable as it is only when it failed on review findings alone and CI didn't fail on its commit as its own branch's pull request was last read", () => {
   const verdict = readWith([["must-fix", ANCHORED]]);
-  const subject = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: HANDOFF, headSha: HEAD, prUrl: PR_URL } as const;
-  assert.equal(acceptableAsIs({ verdict, subject }, null), true, "no pull request read");
-  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "pass" })), true);
-  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "fail" })), false, "CI failed on the checked commit");
-  assert.equal(acceptableAsIs({ verdict, subject }, snapshot({ ci: "fail", headSha: "b".repeat(40) })), true, "CI failed on another commit");
-  assert.equal(acceptableAsIs({ verdict: returned(["fail"]), subject }, null), false, "a criterion failed");
+  const subject = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: HANDOFF, headSha: HEAD, prUrl: PR_URL, branch: "bb/thr_1" } as const;
+  const on = (pr: PrSnapshot) => (branch: string) => (branch === "bb/thr_1" ? pr : null);
+  assert.equal(acceptableAsIs({ verdict, subject }, () => null), true, "no pull request read");
+  assert.equal(acceptableAsIs({ verdict, subject }, on(snapshot({ ci: "pass" }))), true);
+  assert.equal(acceptableAsIs({ verdict, subject }, on(snapshot({ ci: "fail" }))), false, "CI failed on the checked commit");
+  assert.equal(acceptableAsIs({ verdict, subject }, on(snapshot({ ci: "fail", headSha: "b".repeat(40) }))), true, "CI failed on another commit");
+  assert.equal(acceptableAsIs({ verdict, subject: { ...subject, branch: "bb/thr_2" } }, on(snapshot({ ci: "fail" }))), true, "CI failed on another branch's pull request");
+  assert.equal(acceptableAsIs({ verdict: returned(["fail"]), subject }, () => null), false, "a criterion failed");
 });

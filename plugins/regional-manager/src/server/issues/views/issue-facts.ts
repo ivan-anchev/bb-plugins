@@ -50,7 +50,7 @@ export async function readBoard(bb: FactsBb, store: FactsStore, coordinatorId: C
       const record = store.record(coordinatorId, issue.id);
       const own = agents.filter((agent) => agent.issueId === issue.id);
       const latest = own.at(-1) ?? null;
-      const branch = issueBranch(own, threadOf)?.branch ?? null;
+      const branch = issueBranch(own, threadOf, record)?.branch ?? null;
       const facts: IssueFacts = {
         issue,
         holder: await holderOf(bb, own, threadOf, record),
