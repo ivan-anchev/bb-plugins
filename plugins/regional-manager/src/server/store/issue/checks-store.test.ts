@@ -642,6 +642,22 @@ test("a pass files the verifier's own findings by the severity it gave each: a s
   assert.ok(filed.brief?.includes(`- Round 1: ${nitInWords.title} (nit): ${nitInWords.detail}`), "the earlier round's nit is listed beside it, as a review's nits are");
 });
 
+test("a build parent's final check that passes with a should-fix of its verifier's own files it as the parent's follow-up", () => {
+  const { store, parent, sub } = withParent();
+  const final = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 4_000);
+  store.insertCheckerTicket("final-1", { kind: "verifier", coordinatorId: MANAGER, issueId: parent.id, checkId: final.id }, 4_100);
+  store.bindTicket("final-1", "thr_final_1");
+  const leak = { severity: "should-fix", title: "The vault client logs card numbers at debug level", detail: "Ran the suite with DEBUG=vault: the log holds one." } as const;
+  const clean = { headSha: "b".repeat(40), changedFiles: [], changedFileCount: 0 };
+  assert.ok(store.receiveVerdict(final.id, { ...returned("thr_final_1", "pass"), headSha: clean.headSha, checkout: clean, findings: [leak] }, 4_500));
+  assert.equal(store.settleReturned(final.id, CHECKED, 4_600, null), MANAGER);
+
+  const filed = store.issues(MANAGER).find(({ id }) => id !== parent.id && id !== sub.id) ?? assert.fail("no follow-up filed");
+  assert.deepEqual([filed.title, filed.dependsOn], ["Follow-ups from WEB-1: Card vault", [parent.id]]);
+  assert.ok(filed.brief?.includes(`- Round 1: ${leak.title} (should-fix): ${leak.detail}`), filed.brief ?? "");
+  assert.equal(store.check(final.id)?.followUpId, filed.id, "the final check is stamped as collected");
+});
+
 test("a follow-up of a follow-up is titled after the first origin and depends on its own", () => {
   const { store, second } = passWithLeftovers();
   store.settleReturned(second.id, CHECKED, 4_600, null);

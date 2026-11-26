@@ -16,9 +16,9 @@ import type { Verify, VerifierReport } from "./verify.ts";
 
 export const VERDICT = "issue_verdict";
 
-/** Text the feed shows as one row: one line of at most `max` characters, as `what` says. */
+/** Text the feed shows as one row: one line of at most `max` characters, as `what` says. why the line check first: it reads the text as sent, so a break at either end is refused, not trimmed away. */
 const lineSchema = (max: number, what: string) =>
-  z.string().trim().min(1).max(max).regex(ONE_LINE, "must be one line, with no line break").describe(what);
+  z.string().regex(ONE_LINE, "must be one line, with no line break").trim().min(1).max(max).describe(what);
 
 /** A title like a reviewer's, the feed's row for a defect or finding. */
 const titleSchema = lineSchema(TITLE_CHARS, `What goes wrong, as a user or agent meets it, in one line of at most ${TITLE_CHARS} characters (aim for 60). No fix, no severity words.`);
