@@ -123,12 +123,17 @@ function Lapsed({ decision, status }: { decision: Asked; status: IssueStatus }) 
 
 type Answered = NonNullable<Asked["answer"]>;
 
+/** The option an answer chose, by its place among the options, and when it was chosen. */
+type Chosen = { index: number; at: number };
+
 /**
  * An answered question: an answer that is one of its options shows only as that option marked; one
  * in the user's own words, which no option matches, shows once, under the options.
  */
 function Answer({ decision, answer }: { decision: Asked; answer: Answered }) {
-  const chosen = decision.options.includes(answer.text) ? answer : null;
+  // why one match, by index: it marks the option and hides the words, so neither can disagree with the other.
+  const index = decision.options.findIndex((option) => option === answer.text);
+  const chosen = index === -1 ? null : { index, at: answer.at };
   return (
     <>
       <OptionList options={decision.options} chosen={chosen} />
@@ -145,12 +150,12 @@ function Answer({ decision, answer }: { decision: Asked; answer: Answered }) {
 }
 
 /** Options none can press, the one the user chose (null: none) marked, with when they chose it on hover and in its name. */
-function OptionList({ options, chosen }: { options: readonly string[]; chosen: Answered | null }) {
+function OptionList({ options, chosen }: { options: readonly string[]; chosen: Chosen | null }) {
   if (options.length === 0) return null;
   return (
     <ul aria-label="Options" className="rmi-options">
-      {options.map((option) =>
-        option === chosen?.text ? (
+      {options.map((option, index) =>
+        index === chosen?.index ? (
           <li key={option} className="rmi-option" data-chosen title={`Your answer, ${shortTime(chosen.at)}`}>
             <ResultGlyph result="pass" />
             {option}
