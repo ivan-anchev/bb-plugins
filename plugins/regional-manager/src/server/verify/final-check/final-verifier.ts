@@ -11,13 +11,11 @@ import { catalogRouting, type Execution } from "../../../model/agent/execution.t
 import type { Issue } from "../../../model/issue/issue.ts";
 import type { FinalCheck } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
-import type { BlockingDefect } from "../../../model/verdict/review.ts";
 import { listedThreads, type ListBb } from "../../agents/threads.ts";
 import type { CatalogBb } from "../../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../../execution/thread-execution.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../../git-status.ts";
 import type { CheckerRequest } from "../../spawn.ts";
-import { finalCheckBrief } from "../verifier-brief.ts";
 import { verifierExecution } from "../verifier-model.ts";
 
 type ListedThread = { id: string; environmentId: string | null; environmentHostId: string | null; archivedAt: number | null; deletedAt: number | null };
@@ -26,14 +24,14 @@ type ListedThread = { id: string; environmentId: string | null; environmentHostI
 export type FinalVerifierBb = ListBb<ListedThread> & CatalogBb & ThreadExecutionBb & GitStatusBb;
 
 /**
- * Everything the verifier of a final check needs, with the blocking defects an earlier final
- * check's verifier found (`earlier`) for it to answer. It runs on the parent's named verifier when
- * bb lists it on the manager's machine and no agent whose work it checks (`theirs`) ran on it,
- * else as verifierExecution picks.
+ * Everything the verifier of a final check needs, its first message written by `prompt` after
+ * every await, so the brief and decisions it gives are current (verifier-brief.ts
+ * finalCheckBrief). It runs on the parent's named verifier when bb lists it on the manager's
+ * machine and no agent whose work it checks (`theirs`) ran on it, else as verifierExecution picks.
  */
 export async function finalCheckerRequest(
   bb: FinalVerifierBb,
-  { check, coordinator, issue, theirs, earlier }: { check: FinalCheck; coordinator: Coordinator; issue: Issue; theirs: Execution[]; earlier: readonly BlockingDefect[] },
+  { check, coordinator, issue, theirs, prompt }: { check: FinalCheck; coordinator: Coordinator; issue: Issue; theirs: Execution[]; prompt: () => string },
 ): Promise<CheckerRequest> {
   const manager = (await listedThreads<ListedThread>(bb, [coordinator.threadId])).get(coordinator.threadId);
   if (manager === undefined) throw new Error("the regional manager's thread was archived or deleted");
@@ -46,7 +44,7 @@ export async function finalCheckerRequest(
     title: `Final check of ${issue.id}: ${issue.title}`,
     environment,
     execution,
-    prompt: finalCheckBrief(issue, check, earlier),
+    prompt: prompt(),
   };
 }
 

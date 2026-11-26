@@ -61,10 +61,15 @@ export const QA_RULE =
 /**
  * A final check's verifier's: the parent's own criteria, on the default branch as origin has it,
  * in a fresh worktree of its own, with the blocking defects an earlier final check's verifier
- * found (`earlier`). No commit is named: the plugin reads the worktree as the verifier returns,
- * and judges the commit it holds then.
+ * found (`earlier`), and the parent's brief, if it has one, and its decisions as they stand as it
+ * starts, against which a carried requirement is rechecked. No commit is named: the plugin reads
+ * the worktree as the verifier returns, and judges the commit it holds then.
  */
-export function finalCheckBrief(issue: Pick<Issue, "id" | "title" | "description">, check: Pick<FinalCheck, "criteria" | "subject">, earlier: readonly BlockingDefect[]): string {
+export function finalCheckBrief(
+  issue: Pick<Issue, "id" | "title" | "description" | "brief"> & { decisions: readonly IssueDecision[] },
+  check: Pick<FinalCheck, "criteria" | "subject">,
+  earlier: readonly BlockingDefect[],
+): string {
   const { defaultBranch, merged } = check.subject;
   return [
     `# Final check of ${issue.id}: ${issue.title}`,
@@ -73,6 +78,8 @@ export function finalCheckBrief(issue: Pick<Issue, "id" | "title" | "description
     criteriaPart(check.criteria),
     ...earlierPart(earlier),
     `## ${issue.id}, for context\n\n${issue.description.trim()}`,
+    ...(issue.brief === null ? [] : [`## ${issue.id}'s brief, for context\n\n${issue.brief.trim()}`]),
+    ...decisionsPart(issue.id, issue.decisions),
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: judge the worktree as it is.`,
   ].join("\n\n");
 }

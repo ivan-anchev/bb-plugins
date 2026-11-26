@@ -181,9 +181,9 @@ function blockingRefusal(blocking: VerdictInput["blocking"]): string | null {
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves nothing: correct what it names and call again. Stop once it records your verdict or says to stop. The plugin judges the commit and tree. Pass [] for an empty list.
+const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves nothing: fix what it names and call again. Stop once it records your verdict or says stop. The plugin judges the commit and tree. Pass [] for an empty list.
 - criteria: one per done-criterion, by number: pass, fail or unverifiable, with evidence quoting what you ran and its output (up to 4,000 characters). ${UNCHECKABLE_RULE}
-- blocking: up to 20 defects you found yourself outside the criteria, as with creed-qa, that meet an anchor: claim, anchor, and steps for a bug, safety or regression anchor. Each fails the verdict.
+- blocking: up to 20 defects outside the criteria you found yourself, as with creed-qa, that meet an anchor: claim, anchor, steps as it takes. Each fails the verdict.
 - earlierDefects: one answer per earlier blocking defect, by number. ${RECHECK_RULE} One not fixed fails it.
-- findings: up to 20 other problems no criterion covers, with their severity; they never fail it.
+- findings: up to 20 other problems no criterion covers, with severity; never failing it.
 - triage: one per reviewer's finding, by number. ${TRIAGE_RULE} ${ANCHOR_RULE}`;

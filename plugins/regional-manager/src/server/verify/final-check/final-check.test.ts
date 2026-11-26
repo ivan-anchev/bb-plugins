@@ -163,7 +163,7 @@ test("a parent whose final check failed on two blocking defects can't pass its n
   const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no brief");
   assert.ok(
     prompt.includes(
-      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed only when the work now meets it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a safety bug: one hit in normal use that loses data or does something irreversible, reached by: ${leak.steps}: ${leak.claim}\n2. Blocks, as it breaks a requirement the issue's brief states explicitly: ${advice.claim}`,
+      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a safety bug: one hit in normal use that loses data or does something irreversible, reached by: ${leak.steps}: ${leak.claim}\n2. Blocks, as it breaks a requirement the issue's brief states explicitly: ${advice.claim}`,
     ),
     "the second final check's verifier is given both defects to recheck, each by its anchor",
   );
@@ -181,6 +181,29 @@ test("a parent whose final check failed on two blocking defects can't pass its n
   const { verdict } = latest();
   assert.deepEqual(verdict.state === "returned" && verdict.blocking, [leak], "the leak stays blocking; the fixed advice is gone");
   assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"), "the parent does not pass");
+});
+
+test("a decision blocker the user's later decision lifts: the next final check gives the current brief and that decision, and says a requirement they no longer make is fixed", async () => {
+  const { kit, text, started, merge, mergeAll, tick, returns, row, verifier } = await withParent({ parent: { brief: "Split into sub-issues. Exports are JSON." } });
+  await text("issue_update", { id: "WEB-1", decision: "Exports are JSON: the user's call." });
+  const json = { claim: "Exports are CSV, though the user decided on JSON.", anchor: "decision", steps: null } as const;
+  await mergeAll();
+  await returns({ ...PASSES, blocking: [json] });
+  assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"));
+
+  // The user approves CSV; the manager records it and rewrites the brief, and a sub-issue merges.
+  await text("issue_update", { id: "WEB-1", brief: "Split into sub-issues. Exports are CSV.", decision: "Exports are CSV after all: the user approved it." });
+  await text("issue_create", { ...SUB, title: "Document the CSV export" });
+  merge(await started("WEB-4"), "c".repeat(40));
+  await tick();
+  const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no brief");
+  assert.ok(prompt.includes(`1. Blocks, as it breaks a recorded decision: ${json.claim}`), "the old blocker is carried");
+  assert.ok(prompt.includes("recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it."), "and may be cleared when they no longer require it");
+  assert.ok(prompt.includes("## WEB-1's brief, for context\n\nSplit into sub-issues. Exports are CSV."), "the current brief");
+  assert.match(prompt, /## Decisions on WEB-1\n[^]*: Exports are CSV after all: the user approved it\./, "the decision that lifts it");
+
+  assert.match(await returns({ ...PASSES, earlierDefects: [{ defect: 1, fixed: true }] }), /^Verdict recorded: 1 of 1 criteria passed\./);
+  assert.deepEqual(await row(), at("done", "✓ Final check passed"));
 });
 
 test("4: two ticks, or a tick racing a sub-issue filed under the parent, never leave two open final checks", async () => {

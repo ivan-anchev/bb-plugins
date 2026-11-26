@@ -111,10 +111,11 @@ export const MISSED_RULE =
 /**
  * How a verifier rechecks a blocking defect an earlier verifier found, in the one wording each
  * place a verifier reads gives it: by its anchor, as only a bug anchor carries steps
- * (anchorProblem).
+ * (anchorProblem). why a requirement can lapse: the brief and the decisions may change after the
+ * verifier that found it, as when the user approves what it called a broken decision.
  */
 export const RECHECK_RULE =
-  "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed only when the work now meets it.";
+  "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it.";
 
 /** What a blocking anchor carries besides its name: for a bug, the normal-use steps that reach it; null for any other anchor (anchorProblem). */
 const stepsSchema = z

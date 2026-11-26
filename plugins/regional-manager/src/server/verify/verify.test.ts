@@ -1224,11 +1224,11 @@ test("blocking defects an earlier verifier found carry into the next round's fir
   const prompt = kit.thread(second).spawnedWith.prompt ?? assert.fail("no prompt");
   assert.ok(
     prompt.includes(
-      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed only when the work now meets it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a bug hit in normal use, reached by: ${crash.steps}: ${crash.claim}\n2. Blocks, as a regression: existing behaviour that breaks in normal use, reached by: ${lost.steps}: ${lost.claim}\n3. Blocks, as it breaks a recorded decision: ${renamed.claim}`,
+      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a bug hit in normal use, reached by: ${crash.steps}: ${crash.claim}\n2. Blocks, as a regression: existing behaviour that breaks in normal use, reached by: ${lost.steps}: ${lost.claim}\n3. Blocks, as it breaks a recorded decision: ${renamed.claim}`,
     ),
     "the second verifier's first message lists every defect, numbered, with their anchors and a bug's steps, and says how to recheck each kind",
   );
-  const recheck = "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed only when the work now meets it.";
+  const recheck = "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it.";
   assert.ok(kit.tools().find(({ name }) => name === "issue_verdict")?.instructions?.includes(recheck), "issue_verdict's instructions say the same");
   const skipped = await kit.call("issue_verdict", PASSES, second);
   assert.ok(isRefusal(skipped));
@@ -1293,7 +1293,7 @@ test("a verifier's first message holds the issue's decisions under a Decisions h
   assert.doesNotMatch(decisions, /d1|One more round|failed verification/, "the question at the cap is no decision about the work");
 });
 
-test("a final check's first message is unchanged by its parent's decisions: the same message whole, with a decision recorded on the parent or without one", async () => {
+test("a final check's first message gives its parent's brief and decisions, under a Decisions heading only when it has one", async () => {
   /** The first message of WEB-1's final check, its decision `decision` recorded on it first (null: none). */
   async function finalCheckPrompt(decision: string | null): Promise<string> {
     const { kit, threadId, coordinatorId } = await coordinating();
@@ -1311,8 +1311,10 @@ test("a final check's first message is unchanged by its parent's decisions: the 
   }
 
   const decided = await finalCheckPrompt("Use the hosted vault: the user's call.");
-  assert.equal(decided, await finalCheckPrompt(null), "the decision changes nothing in it");
-  assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## Rules"]);
+  assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Decisions on WEB-1", "## Rules"]);
+  assert.match(decided, /## WEB-1's brief, for context\n\nSplit into sub-issues\.\n\n/);
+  assert.match(decided, /\n- [^\n]+: Use the hosted vault: the user's call\.\n/);
+  assert.deepEqual(headingsOf(await finalCheckPrompt(null)), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Rules"], "no decisions, no heading");
 });
 
 const CAP_FINDING = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
