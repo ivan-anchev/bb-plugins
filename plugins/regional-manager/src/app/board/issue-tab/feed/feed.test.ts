@@ -4,6 +4,7 @@ import { afterEach, test } from "node:test";
 import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { coordinatorContract } from "../../../../contract.ts";
 import { agentIdSchema } from "../../../../model/agent/agent.ts";
+import { decisionIdSchema } from "../../../../model/decision.ts";
 import { commentIdSchema, type Comment } from "../../../../model/feed/comment.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
 import { HUES } from "../../../../model/profile/avatar.ts";
@@ -27,6 +28,13 @@ function activity(tab: ReturnType<typeof within>) {
   return { section, items, texts: () => items().map((item) => item.textContent?.replace(/\s+/g, " ").trim()) };
 }
 
+/** The options a question's card marks as the user's answer, each by its words. */
+function marked(card: HTMLElement): string[] {
+  return within(card)
+    .queryAllByRole("listitem")
+    .flatMap((option) => /^(.+), your answer, \S/.exec(option.textContent ?? "")?.slice(1, 2) ?? []);
+}
+
 test("every entry kind draws as its own: rounds and decisions as cards, the rest as quiet lines naming who did it, in the order they happened", async () => {
   const { view, tab } = await opened("WEB-1", WEB_1);
   const { section, items } = activity(tab());
@@ -44,7 +52,7 @@ test("every entry kind draws as its own: rounds and decisions as cards, the rest
   assert.ok(section.getByText("a1 loops: hand the issue to a fresh agent."));
   const answered = within(section.getByRole("article", { name: "Question d1" }));
   assert.ok(answered.getByText("Keep the row's facts?"));
-  assert.deepEqual(answered.getAllByRole("listitem").map((option) => option.textContent), ["Keep, your answer", "Hide"], "the option the user chose, marked");
+  assert.deepEqual(marked(section.getByRole("article", { name: "Question d1" })), ["Keep"], "the option the user chose, marked");
   assert.equal(answered.queryByRole("button"), null, "an answered question offers nothing to press");
   fireEvent.click(within(section.getByRole("article", { name: "Round 1" })).getByRole("button", { name: /^Round 1/ }));
   fireEvent.click(section.getAllByRole("button", { name: "Open a1's thread" })[0] ?? assert.fail("no link to a1"));
@@ -93,8 +101,43 @@ test("once the answer lands the question shows it answered, and focus on the opt
     entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.id === "d2" ? { ...entry, decision: { ...entry.decision, answer: { text: "Ship now", at: 7_000 } } } : entry,
   );
   await refeed("WEB-1", () => ({ ...FEED, entries: answered }));
-  await waitFor(() => assert.match(card().textContent ?? "", /You answered/));
+  await waitFor(() => assert.deepEqual(marked(card()), ["Ship now"]));
   assert.equal(document.activeElement, card());
+});
+
+/** FEED with a question d9 asking "How many retries?" with these options, answered with `answer`. */
+function answeredWith(options: string[], answer: string) {
+  const asked: Entry = { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d9"), question: "How many retries?", options, at: 6_400, answer: { text: answer, at: 6_500 }, cap: null }, moved: null };
+  return { feedOf: () => ({ ...FEED, entries: [...FEED.entries, asked] }) };
+}
+
+/** How many times `text` appears in a card, its words for assistive tech included. */
+const timesIn = (card: HTMLElement, text: string): number => (card.textContent ?? "").split(text).length - 1;
+
+test("a question answered with one of its options shows that option marked, with when on hover, and the answer nowhere else", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, answeredWith(["Three", "Five"], "Five"));
+  const card = activity(tab()).section.getByRole("article", { name: "Question d9" });
+  assert.deepEqual(marked(card), ["Five"]);
+  assert.match(within(card).getByTitle(/^Your answer, \S/).textContent ?? "", /^Five, your answer/, "when they answered, on the chosen option's hover");
+  assert.equal(timesIn(card, "Five"), 1, "the answer shows once, as its option");
+  assert.doesNotMatch(card.textContent ?? "", /You answered/);
+});
+
+test("a question answered in the user's own words shows its options unmarked, then the answer once, under You answered", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, answeredWith(["Three", "Five"], "Seven, with backoff"));
+  const card = activity(tab()).section.getByRole("article", { name: "Question d9" });
+  assert.deepEqual(marked(card), []);
+  assert.deepEqual(within(card).getAllByRole("listitem").map((option) => option.textContent), ["Three", "Five"]);
+  assert.equal(timesIn(card, "Seven, with backoff"), 1);
+  assert.match(card.textContent ?? "", /You answered .+Seven, with backoff$/);
+});
+
+test("a question with no options, answered, shows the answer once, under You answered", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, answeredWith([], "Seven, with backoff"));
+  const card = activity(tab()).section.getByRole("article", { name: "Question d9" });
+  assert.equal(within(card).queryByRole("list"), null);
+  assert.equal(timesIn(card, "Seven, with backoff"), 1);
+  assert.match(card.textContent ?? "", /You answered .+Seven, with backoff$/);
 });
 
 test("an agent's thread that failed reads as its line, with bb's error", async () => {
@@ -119,7 +162,7 @@ test("a question answered elsewhere, on the Board or in another window, while fo
     entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.id === "d2" ? { ...entry, decision: { ...entry.decision, answer: { text: "Ship now", at: 7_000 } } } : entry,
   );
   await refeed("WEB-1", () => ({ ...FEED, entries: elsewhere }));
-  await waitFor(() => assert.match(card().textContent ?? "", /You answered/));
+  await waitFor(() => assert.deepEqual(marked(card()), ["Ship now"]));
   assert.deepEqual(answers, [], "this card sent nothing");
   assert.equal(document.activeElement, card());
 });
