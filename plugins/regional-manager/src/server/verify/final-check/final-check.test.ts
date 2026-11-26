@@ -148,6 +148,41 @@ test("3: a failed final check flags the parent, wakes the manager with a line th
   assert.deepEqual(await row(), at("verifying", "Final check running"));
 });
 
+test("a parent whose final check failed on two blocking defects can't pass its next one while either is unanswered or still blocking, though a sub-issue fixed the other and every criterion passes", async () => {
+  const { kit, text, started, merge, mergeAll, tick, returns, row, latest, verifier } = await withParent();
+  const leak = { claim: "The vault client logs card numbers at debug level.", anchor: "safety", steps: "1. Run npm run vault-suite with DEBUG=vault. 2. The log holds a full card number." } as const;
+  const advice = { claim: "The README still tells you to store cards in Postgres.", anchor: "brief", steps: null } as const;
+  await mergeAll();
+  assert.match(await returns({ ...PASSES, blocking: [leak, advice] }), /^Verdict recorded: 1 of 1 criteria passed\./);
+  assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"));
+
+  // A sub-issue fixes only the README, and merges: the next final check starts.
+  await text("issue_create", { ...SUB, title: "Drop the Postgres advice" });
+  merge(await started("WEB-4"), "c".repeat(40));
+  await tick();
+  const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no brief");
+  assert.ok(
+    prompt.includes(
+      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed only when the work now meets it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a safety bug: one hit in normal use that loses data or does something irreversible, reached by: ${leak.steps}: ${leak.claim}\n2. Blocks, as it breaks a requirement the issue's brief states explicitly: ${advice.claim}`,
+    ),
+    "the second final check's verifier is given both defects to recheck, each by its anchor",
+  );
+
+  const refusal = async (verdict: object) => {
+    const answer = await kit.call("issue_verdict", verdict, verifier());
+    assert.ok(isRefusal(answer), textOf(answer));
+    return textOf(answer);
+  };
+  assert.equal(await refusal(PASSES), "issue_verdict is refused and nothing was saved: answer every earlier blocking defect; missing 1, 2 of 1 to 2.");
+  assert.equal(await refusal({ ...PASSES, earlierDefects: [{ defect: 2, fixed: true }] }), "issue_verdict is refused and nothing was saved: answer every earlier blocking defect; missing 1 of 1 to 2.");
+  assert.equal(latest().verdict.state, "running", "nothing was saved");
+
+  assert.match(await returns({ ...PASSES, earlierDefects: [{ defect: 1, fixed: false }, { defect: 2, fixed: true }] }), /^Verdict recorded: 1 of 1 criteria passed\./);
+  const { verdict } = latest();
+  assert.deepEqual(verdict.state === "returned" && verdict.blocking, [leak], "the leak stays blocking; the fixed advice is gone");
+  assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"), "the parent does not pass");
+});
+
 test("4: two ticks, or a tick racing a sub-issue filed under the parent, never leave two open final checks", async () => {
   const twice = await withParent();
   await twice.mergeAll();

@@ -106,7 +106,15 @@ export const ANCHOR_RULE = `A must-fix blocks the work only when it meets one of
 
 /** What a missed finding does, in the one wording each place a reviewer or a verifier reads gives it. */
 export const MISSED_RULE =
-  "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so the verifier never anchors it. A missed must-fix that holds is downgraded, its missed origin the reason even when it meets an anchor; a missed should-fix or nit that holds is confirmed or downgraded as any other.";
+  "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so it is never anchored. A missed must-fix that holds is downgraded, its origin the reason even when it meets an anchor; a missed should-fix or nit that holds is triaged as any other.";
+
+/**
+ * How a verifier rechecks a blocking defect an earlier verifier found, in the one wording each
+ * place a verifier reads gives it: by its anchor, as only a bug anchor carries steps
+ * (anchorProblem).
+ */
+export const RECHECK_RULE =
+  "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed only when the work now meets it.";
 
 /** What a blocking anchor carries besides its name: for a bug, the normal-use steps that reach it; null for any other anchor (anchorProblem). */
 const stepsSchema = z
@@ -185,7 +193,7 @@ type Triage = z.infer<typeof triageSchema>;
 export type Triaged = ReviewFinding & Triage;
 
 /** How a verifier triages the reviewer's findings, and what its triage does, in the one wording each place a verifier reads gives it. */
-export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and meets one of the four anchors the anchor rule names; name it as its anchor: bug, safety or regression for a bug hit in normal use, with steps, the normal-use steps that reach it; criterion, brief or decision for a broken done-criterion, explicit brief requirement or recorded decision. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that meets no anchor is downgraded, never confirmed, to should-fix when it is a principle or REVIEW.md violation, a missing test, unclear text or a bug that needs a contrived setup, and to nit only when it is a matter of taste. Give each its reason in a line. Only an anchored must-fix goes back to the agent; the others that hold are filed as a follow-up when the issue passes, unless all are nits. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and meets the anchor you name. ${MISSED_RULE}`;
+export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and meets an anchor; name it as its anchor: bug, safety or regression for a bug hit in normal use, with steps, the normal-use steps that reach it; criterion, brief or decision for a broken done-criterion, explicit brief requirement or recorded decision. Downgraded: it holds at a lower severity than the reviewer's, named as to: a must-fix that meets no anchor is downgraded, never confirmed, to should-fix, or to nit only when it is a matter of taste. Give each its reason in a line. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes, and goes back to the agent: anchor one only when what you ran or read shows it holds and meets that anchor. The others that hold are filed as a follow-up when the issue passes, unless all are nits. ${MISSED_RULE}`;
 
 /**
  * Why a verifier's triage of a finding can't be taken, in a phrase; null when it can: a must-fix

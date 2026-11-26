@@ -28,14 +28,33 @@ export function scopeOf(store: Pick<Store, "record" | "finalChecks">, check: Han
 }
 
 /**
- * The blocking defects the latest earlier verifier of the issue found itself (verdict.ts
- * `blocking`), for this check's verifier to answer fixed or still blocking, so a known defect
- * stays until a verifier sees it fixed. why the latest returned verdict only: each verdict carries
- * the earlier defects its verifier answered still blocking, so it holds every one still open.
+ * The blocking defects the latest earlier verifier of the same kind of check found itself
+ * (verdict.ts `blocking`), for this check's verifier to answer fixed or still blocking, so a known
+ * defect stays until a verifier sees it fixed: a handoff's, from the issue's earlier handoffs'
+ * checks; a final check's, from the parent's earlier final checks. why the latest returned verdict
+ * only: each verdict carries the earlier defects its verifier answered still blocking, so it holds
+ * every one still open.
  */
-export function earlierDefectsOf(store: Pick<Store, "record">, check: HandoffCheck): BlockingDefect[] {
-  const returned = earlierChecks(store.record(check.coordinatorId, check.issueId), check).flatMap(({ verdict }) => (verdict.state === "returned" ? [verdict] : []));
+export function earlierDefectsOf(store: Pick<Store, "record" | "finalChecks">, check: Check): BlockingDefect[] {
+  const returned = earlierOfKind(store, check).flatMap(({ verdict }) => (verdict.state === "returned" ? [verdict] : []));
   return returned.at(-1)?.blocking ?? [];
+}
+
+/** The issue's checks of the same kind as `check` made before it, oldest first. why throw: a final check is read from its issue's final checks. */
+function earlierOfKind(store: Pick<Store, "record" | "finalChecks">, check: Check): Check[] {
+  const { subject } = check;
+  switch (subject.kind) {
+    case "handoff":
+      return earlierChecks(store.record(check.coordinatorId, check.issueId), { ...check, subject });
+    case "final": {
+      const finals = store.finalChecks(check.coordinatorId, check.issueId);
+      const at = finals.findIndex(({ id }) => id === check.id);
+      if (at === -1) throw new Error(`The final check ${check.id} is not one of ${check.issueId}'s.`);
+      return finals.slice(0, at);
+    }
+    default:
+      return subject satisfies never;
+  }
 }
 
 /** The checks of the issue's handoffs before the one `check` judges, oldest first. why throw: a check is inserted with its handoff. */

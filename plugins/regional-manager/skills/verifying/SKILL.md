@@ -131,10 +131,13 @@ For a final check:
    or a contrived-setup bug meets no anchor: it never fails a criterion and
    never goes in `blocking`.
 6. **Blocking defects an earlier verifier found.** When your first message
-   lists them, run each one's steps again on this commit and answer every
-   one in `earlierDefects`: fixed only when its steps no longer reach it.
-   One not fixed stays blocking and fails your verdict too, so a known
-   defect is never dropped because nobody looked for it again.
+   lists them, as a handoff's or a final check's can, answer every one in
+   `earlierDefects`, rechecking each by its anchor. For a bug, safety or
+   regression anchor, rerun its steps here: fixed only when they no longer
+   reach it. For a criterion, brief or decision anchor, which has no
+   steps, recheck the requirement it names: fixed only when the work now
+   meets it. One not fixed stays blocking and fails your verdict too, so a
+   known defect is never dropped because nobody looked for it again.
 
 ## Never
 

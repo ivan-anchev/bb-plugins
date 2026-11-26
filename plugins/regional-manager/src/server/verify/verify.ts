@@ -185,7 +185,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
         return handoffRequest({ ...check, subject }, coordinator, check.verdict.checkout);
       case "final": {
         const theirs = checkedAgents(check, store.agents(check.coordinatorId)).map(({ execution }) => execution);
-        return finalCheckerRequest(bb, { check: { ...check, subject }, coordinator, issue, theirs });
+        return finalCheckerRequest(bb, { check: { ...check, subject }, coordinator, issue, theirs, earlier: earlierDefectsOf(store, check) });
       }
       default:
         return subject satisfies never;
