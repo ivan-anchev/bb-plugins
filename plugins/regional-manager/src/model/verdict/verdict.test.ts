@@ -46,14 +46,13 @@ test("a criterion the verifier couldn't check is not a pass", () => {
 });
 
 /** A finding of the given severity, as the reviewer reported it. */
-const finding = (severity: Severity) => ({ file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps." });
+const finding = (severity: Severity): ReviewFinding => ({ file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps.", origin: "new" });
 type Severity = ReviewFinding["severity"];
 
-/** A verdict that passed both its criteria, as the store reads it with its review: each finding of `severity` triaged as `triage`. */
+/** A verdict that passed both its criteria, as the store reads it with the findings its verifier triaged: each finding of `severity` triaged as `triage`. */
 function readWith(triaged: [Severity, Triage][], mustFixFails = true): Extract<Verdict, { state: "returned" }> {
   const { triage: _none, ...stored } = returned(["pass", "pass"]);
-  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: triaged.map(([severity]) => finding(severity)), model: { providerId: "codex", model: "gpt-default" } };
-  const verdict = withReview({ ...stored, mustFixFails, triage: triaged.map(([, triage]) => triage) }, review);
+  const verdict = withReview({ ...stored, mustFixFails, triage: triaged.map(([, triage]) => triage) }, triaged.map(([severity]) => finding(severity)));
   return verdict.state === "returned" ? verdict : assert.fail("not returned");
 }
 type Triage = Extract<StoredVerdict, { state: "returned" }>["triage"][number];
@@ -77,8 +76,7 @@ test("a stored verdict from before the anchor rule, with a confirmed must-fix, k
   const { triage: _none, ...rest } = returned(["pass", "pass"]);
   const stored = storedVerdictSchema.parse({ ...rest, triage: [{ result: "confirmed", reason: "Seen." }] });
   assert.deepEqual(stored.state === "returned" && stored.triage, [{ result: "confirmed", reason: "Seen." }], "it parses as it is");
-  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [finding("must-fix")], model: { providerId: "codex", model: "gpt-default" } };
-  assert.equal(outcome(withReview(stored, review)), "fail", "returned under the must-fix rule: it failed, and still does");
+  assert.equal(outcome(withReview(stored, [finding("must-fix")])), "fail", "returned under the must-fix rule: it failed, and still does");
   assert.deepEqual(failureReasons(readWith([["must-fix", CONFIRMED]])), [{ kind: "must-fix", count: 1 }]);
   assert.equal(outcome(readWith([["must-fix", CONFIRMED]], false)), "pass", "settled before the must-fix rule: it passed, and still does");
 });
@@ -104,7 +102,7 @@ test("a returned verdict is pending until it is settled: its findings reached th
 test("a verdict stored before settlements existed reads as settled", () => {
   // As migrations.ts left it: no settlement and no triage, and mustFixFails false, as it settled before that rule.
   const stored = storedVerdictSchema.parse({ state: "returned", at: 5_000, verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], mustFixFails: false, model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
-  assert.equal(outcome(withReview(stored, { state: "none" })), "pass");
+  assert.equal(outcome(withReview(stored, [])), "pass");
 });
 
 const HEAD = "a".repeat(40);

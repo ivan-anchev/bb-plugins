@@ -162,15 +162,28 @@ function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus 
   }
 }
 
-/** Rounds numbered in the order they began: every handoff, and a build parent's final checks. */
+/** The issue's rounds, each with its number. */
 function roundsOf({ handed, finalChecks, events }: FeedFacts): Round[] {
   const outcomeAt = outcomeTimes(events);
   const asked = askedByCheck(events);
+  return numberedRounds(handed, finalChecks).map((begun) => {
+    if (begun.kind === "final") return finalRoundOf(begun.check, begun.number, outcomeAt.get(begun.check.id) ?? null);
+    const { check } = begun.handed;
+    return roundOf(begun.handed, begun.number, check === null ? null : (outcomeAt.get(check.id) ?? null), check === null ? null : (asked.get(check.id) ?? null));
+  });
+}
+
+/**
+ * The one numbering of an issue's rounds, which the feed shows and a reviewer's and a verifier's
+ * first messages name: in the order they began, every handoff (`handed`, the issue's record) and a
+ * build parent's final checks, from 1.
+ */
+export function numberedRounds(handed: readonly Handed[], finalChecks: readonly FinalCheck[]): ({ kind: "handoff"; handed: Handed; number: number } | { kind: "final"; check: FinalCheck; number: number })[] {
   const begun = sortByTime([
-    ...handed.map((one) => ({ at: one.handoff.at, make: (n: number) => roundOf(one, n, one.check === null ? null : (outcomeAt.get(one.check.id) ?? null), one.check === null ? null : (asked.get(one.check.id) ?? null)) })),
-    ...finalChecks.map((check) => ({ at: check.at, make: (n: number) => finalRoundOf(check, n, outcomeAt.get(check.id) ?? null) })),
+    ...handed.map((one) => ({ at: one.handoff.at, round: { kind: "handoff", handed: one } as const })),
+    ...finalChecks.map((check) => ({ at: check.at, round: { kind: "final", check } as const })),
   ]);
-  return begun.map(({ make }, i) => make(i + 1));
+  return begun.map(({ round }, i) => ({ ...round, number: i + 1 }));
 }
 
 /** The question each check's settling put to the user at the issue's cap, as its `checked` event recorded it; a check that asked none is absent. */

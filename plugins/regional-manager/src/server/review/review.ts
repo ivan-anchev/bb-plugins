@@ -10,7 +10,8 @@
 import type { BbPluginApi, PluginLogger } from "@get-bb/plugin-sdk";
 import { sameModel, type Execution } from "../../model/agent/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
-import type { ReviewFinding } from "../../model/verdict/review.ts";
+import { numberedText } from "../../model/verdict/review.ts";
+import { unfixed } from "../../model/verdict/rounds/delta.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
 import { isRunning, listedThreads, stopThreads, type StopBb } from "../agents/threads.ts";
 import type { CatalogBb } from "../execution/catalog.ts";
@@ -18,13 +19,15 @@ import { threadExecution, type ThreadExecutionBb } from "../execution/thread-exe
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
 import type { CheckerRequest, Spawner } from "../spawn.ts";
-import type { ReviewFrom } from "../store/issue/checks-store.ts";
+import type { ReviewFrom, ReviewReport } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
 import type { AsksBb } from "../hidden/asks.ts";
 import { verifierExecution, type VerifierChoice } from "../verify/verifier-model.ts";
 import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
-import { checkedIssue } from "./checker-brief.ts";
-import { reviewerBrief } from "./reviewer-brief.ts";
+import { numbersRefusal } from "../tools/tool-kit.ts";
+import { checkedIssue, scopeOf, type Scope } from "./checker-brief.ts";
+import type { ReviewInput } from "./review-tool.ts";
+import { reviewerBrief, scopeParts } from "./reviewer-brief.ts";
 
 type ThreadRow = Awaited<ReturnType<BbPluginApi["sdk"]["threads"]["list"]>>[number];
 
@@ -46,15 +49,15 @@ type ReviewBb = CatalogBb &
 
 type Deps = {
   bb: ReviewBb;
-  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "issueDecisions" | "missReview" | "receiveReview">;
+  store: Pick<Store, "check" | "agent" | "issue" | "coordinator" | "issueDecisions" | "record" | "finalChecks" | "missReview" | "receiveReview" | "rescopeReview">;
   spawner: Pick<Spawner, "checker">;
   memory: MemoryRoot;
   turns: IssueTurns;
   now(): number;
 };
 
-/** What became of a reviewer's findings: stored, or refused, as its review no longer waits for them. */
-type Received = "recorded" | "not-running";
+/** What became of a reviewer's findings: stored; refused, as its review no longer waits for them; or refused for why they can't be taken (`refused`). */
+type Received = "recorded" | "not-running" | { refused: string };
 
 export type Review = ReturnType<typeof createReview>;
 
@@ -88,8 +91,30 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
       title: `Review ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId } as const,
       execution,
-      prompt: reviewerBrief({ ...issue, doneCriteria: check.criteria }, { ...check.subject, defaultBranch }, memory.of(check.coordinatorId).read(CREW_FILE).text),
+      prompt: reviewerBrief({ ...issue, doneCriteria: check.criteria }, { ...check.subject, defaultBranch }, scopeOf(store, check), memory.of(check.coordinatorId).read(CREW_FILE).text),
     };
+  }
+
+  /** Whether the check's running reviewer `reviewerThreadId` was given its review's scope, read now; true for any other review, which reported will refuse as not running. */
+  function givenScope(checkId: CheckId, reviewerThreadId: string): boolean {
+    const review = store.check(checkId)?.review;
+    return review?.state !== "running" || review.reviewerThreadId !== reviewerThreadId || review.scoped;
+  }
+
+  /**
+   * A later round's report from a reviewer whose first message predates scopes, so asked for the
+   * whole diff: refused once, with the scope it reviews in its place (reviewer-brief.ts
+   * scopeParts), and the reviewer marked as given it, so its next report is taken. why refused
+   * whatever it holds, no blocking findings to answer included: a whole-diff report stored as a
+   * later round's would mark findings on code an earlier round passed as new.
+   */
+  async function rescoped(check: HandoffCheck, reviewerThreadId: string, scope: Extract<Scope, { kind: "after" }>): Promise<Received> {
+    const agent = handingAgent(store, check);
+    const environmentId = (await listedThreads(bb, [agent.threadId])).get(agent.threadId)?.environmentId ?? null;
+    const defaultBranch = environmentId === null ? null : (await bb.sdk.environments.get({ environmentId })).defaultBranch;
+    if (!store.rescopeReview(check.id, reviewerThreadId)) return "not-running";
+    const parts = scopeParts({ ...check.subject, defaultBranch }, scope).join("\n\n");
+    return { refused: `your first message, written before later rounds were reviewed by their change alone, asked for the whole diff, and this is a later round. Review this instead:\n\n${parts}` };
   }
 
   return {
@@ -130,19 +155,27 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
     },
 
     /**
-     * In its issue's turn: stores a reviewer's findings on its check, if it is still that check's
-     * running reviewer and the check still waits for its verifier, with the model bb ran it on. Its
-     * verifier starts once bb reports the reviewer idle (verify.ts lookAgain), or at the next tick.
+     * In its issue's turn: stores a reviewer's report on its check, if it is still that check's
+     * running reviewer and the check still waits for its verifier, with the model bb ran it on: its
+     * findings, each earlier blocking finding it answered not fixed among them as unfixed, and its
+     * answers, read against the check's scope (reportOf); on a later round, from a reviewer told
+     * only the whole diff, refused once with that scope (rescoped). Its verifier starts once bb reports the
+     * reviewer idle (verify.ts lookAgain), or at the next tick.
      */
-    reported(checkId: CheckId, reviewerThreadId: string, findings: readonly ReviewFinding[]): Promise<Received | Busy> {
+    reported(checkId: CheckId, reviewerThreadId: string, input: ReviewInput): Promise<Received | Busy> {
       const check = store.check(checkId);
       // why throw: a reviewer is started for a check, and checks are kept while their regional manager is.
-      if (check === null) throw new Error(`The check ${checkId} is missing.`);
+      if (check?.subject.kind !== "handoff") throw new Error(`The check ${checkId} of a done handoff is missing.`);
+      const { subject } = check;
       return turns.run(check.coordinatorId, check.issueId, async () => {
+        const scope = scopeOf(store, { ...check, subject });
+        if (scope.kind === "after" && !givenScope(checkId, reviewerThreadId)) return rescoped({ ...check, subject }, reviewerThreadId, scope);
+        const report = reportOf(input, scope);
+        if (typeof report === "string") return { refused: report };
         const ran = await threadExecution(bb, reviewerThreadId);
         // why throw: the reviewer calls issue_review from inside a turn, so bb has its model on record.
         if (ran === null) throw new Error(`bb has no model on record for ${reviewerThreadId}.`);
-        return store.receiveReview(checkId, reviewerThreadId, findings, { providerId: ran.providerId, model: ran.model }, now()) ? "recorded" : "not-running";
+        return store.receiveReview(checkId, reviewerThreadId, report, { providerId: ran.providerId, model: ran.model }, now()) ? "recorded" : "not-running";
       });
     },
   };
@@ -159,6 +192,42 @@ async function reviewerExecution(bb: CatalogBb, choice: VerifierChoice): Promise
   const verifier = await verifierExecution(bb, choice);
   const reviewer = await verifierExecution(bb, { ...choice, named: null, theirs: [verifier, ...choice.theirs] });
   return choice.theirs.some((their) => sameModel(their, reviewer)) ? null : reviewer;
+}
+
+/**
+ * A reviewer's report as its check stores it, or why it can't be taken: on a first round, every
+ * finding new and no earlier answers; after a reviewed round, each of its blocking findings
+ * answered once, by its number. Each answered not fixed joins the findings as unfixed, first, in
+ * the blocking findings' order. A refusal of the answers says what this review covers and lists
+ * the blocking findings, so a reviewer whose first message said otherwise, as one started before
+ * this release, can correct its report.
+ */
+function reportOf({ findings, earlier }: ReviewInput, scope: Scope): ReviewReport | string {
+  const blocking = scope.kind === "after" ? scope.blocking : [];
+  if (scope.kind === "first" && findings.some(({ origin }) => origin === "missed")) return `no earlier round qualifies as the review base, so none reviewed any of this code: mark every finding new.`;
+  const refused = numbersRefusal(
+    earlier.map(({ finding }) => finding),
+    blocking.length,
+    { verb: "answer", each: "earlier blocking finding", all: "earlier blocking findings" },
+  );
+  if (refused !== null) return `${refused} ${scopeText(scope)}`;
+  const answered = blocking.map((finding, i) => ({ finding, answer: answerTo(earlier, i + 1) }));
+  const carried = answered.filter(({ answer }) => !answer.fixed).map(({ finding }) => unfixed(finding));
+  return { findings: [...carried, ...findings], earlier: answered.map(({ answer }) => answer) };
+}
+
+/** What this review covers, and on a later round the blocking findings it answers, by number. */
+function scopeText(scope: Scope): string {
+  if (scope.kind === "first") return "No earlier round qualifies as the review base: this review covers the whole diff, with nothing earlier to answer.";
+  const blocking = scope.blocking.length === 0 ? "None of its findings failed its verdict." : `Its blocking findings, by number:\n\n${numberedText(scope.blocking)}`;
+  return `This review covers only the change since round ${scope.round}, the last round reviewed, at \`${scope.base.subject.headSha}\`. ${blocking}`;
+}
+
+/** The answer to the earlier blocking finding `number`. why throw: numbersRefusal refused a report that skips one. */
+function answerTo(earlier: ReviewInput["earlier"], number: number): ReviewReport["earlier"][number] {
+  const answer = earlier.find(({ finding }) => finding === number);
+  if (answer === undefined) throw new Error(`Earlier blocking finding ${number} has no answer.`);
+  return { fixed: answer.fixed, note: answer.note };
 }
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

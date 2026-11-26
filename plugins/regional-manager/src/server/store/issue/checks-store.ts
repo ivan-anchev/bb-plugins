@@ -12,19 +12,23 @@ import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
 import type { Handed } from "../../../model/issue/status.ts";
 import type { DecisionId } from "../../../model/decision.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "../../../model/role.ts";
-import { checkIdSchema, checkSubjectSchema, type Check, type CheckId, type FinalCheck } from "../../../model/verdict/check.ts";
+import { checkIdSchema, checkSubjectSchema, type Check, type CheckId, type FinalCheck, type StoredCheck } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../../model/verdict/pr.ts";
-import { firstReview, reviewSchema, type Review, type ReviewFinding } from "../../../model/verdict/review.ts";
-import { failureReasons, firstVerdict, isSettled, storedVerdictSchema, withReview, type FirstVerdict, type StoredVerdict, type Verdict } from "../../../model/verdict/verdict.ts";
+import { firstReview, reviewSchema, type Review } from "../../../model/verdict/review.ts";
+import { failureReasons, firstVerdict, isSettled, storedVerdictSchema, type FirstVerdict, type StoredVerdict, type Verdict } from "../../../model/verdict/verdict.ts";
 import type { ModelRef } from "../../../model/agent/execution.ts";
 import { capAsks, capQuestionsOf, capQuestionText, CAP_OPTIONS, countedFailures } from "../../../model/verdict/rounds/cap.ts";
+import { readInOrder } from "../../../model/verdict/rounds/delta.ts";
 import { decisionsOf, insertDecision, insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 import { countFixRound } from "./agents-store.ts";
 
 /** Where a verdict must still be for a change to apply: queued, or running in this verifier thread. */
 export type VerdictFrom = { state: "queued" } | { state: "running"; verifierThreadId: string };
+
+/** A reviewer's report as the store takes it: its findings and its answers on the earlier blocking findings, stored as they are. */
+export type ReviewReport = Pick<Extract<Review, { state: "reported" }>, "findings" | "earlier">;
 
 /** Where a review must still be for a change to apply, its verdict still queued: queued, or running in this reviewer thread. */
 export type ReviewFrom = { state: "queued" } | { state: "running"; reviewerThreadId: string };
@@ -63,7 +67,7 @@ export function startCheck(db: Db, checkId: CheckId, verifierThreadId: string): 
 
 /** Starts a queued review running in its reviewer's thread, as the reviewer's ticket binds; one whose check was superseded meanwhile stays as it is. Call inside a transaction. */
 export function startReview(db: Db, checkId: CheckId, reviewerThreadId: string): void {
-  moveReview(db, checkId, { state: "queued" }, { state: "running", reviewerThreadId });
+  moveReview(db, checkId, { state: "queued" }, { state: "running", reviewerThreadId, scoped: true });
 }
 
 /** Replaces the review if its verdict is still queued and it is still where `from` says, and says whether it did. Call inside a transaction. */
@@ -175,19 +179,24 @@ export function checksStore(db: Db) {
       .run(id, coordinatorId, issueId, handoffId, JSON.stringify(subject), JSON.stringify(criteria), jsonOrNull(verifier), JSON.stringify(review), JSON.stringify(verdict), at);
   }
 
-  function check(checkId: CheckId): Check | null {
-    const row = db().prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE id = ?`).get(checkId);
-    return row === undefined ? null : toCheck(row);
-  }
+  const check = (checkId: CheckId): Check | null => readCheck(db, checkId);
 
-  /** The handoffs the clause picks, each with its check. */
+  /** The handoffs the clause picks, each with its check, every issue's checks read once (issueChecks). */
   function handed(clause: string, ...params: string[]): Handed[] {
+    const issues = new Map<string, Map<CheckId, Check>>();
+    const checksOf = (coordinatorId: CoordinatorId, issueId: IssueId): Map<CheckId, Check> => {
+      const key = JSON.stringify([coordinatorId, issueId]);
+      const read = issues.get(key) ?? issueChecks(db, coordinatorId, issueId);
+      issues.set(key, read);
+      return read;
+    };
     return db()
       .prepare(`SELECT ${HANDOFF_COLUMNS}, c.id AS checkId FROM handoffs h LEFT JOIN checks c ON c.handoff_id = h.id ${clause}`)
       .all(...params)
       .map((row) => {
         const { checkId } = z.object({ checkId: checkIdSchema.nullable() }).parse(row);
-        return { handoff: toHandoff(row), check: checkId === null ? null : check(checkId) };
+        const handoff = toHandoff(row);
+        return { handoff, check: checkId === null ? null : (checksOf(handoff.coordinatorId, handoff.issueId).get(checkId) ?? null) };
       });
   }
 
@@ -283,10 +292,13 @@ export function checksStore(db: Db) {
 
     /** Every final check of the issue, oldest first: none but a build parent's. */
     finalChecks(coordinatorId: CoordinatorId, issueId: IssueId): FinalCheck[] {
-      return db()
-        .prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(subject, '$.kind') = 'final' ORDER BY rowid`)
+      const ids = db()
+        .prepare("SELECT id FROM checks WHERE coordinator_id = ? AND issue_id = ? AND json_extract(subject, '$.kind') = 'final' ORDER BY rowid")
         .all(coordinatorId, issueId)
-        .map(toFinalCheck);
+        .map(toCheckId);
+      if (ids.length === 0) return [];
+      const read = issueChecks(db, coordinatorId, issueId);
+      return ids.map((id) => toFinalCheck(read.get(id) ?? null));
     },
 
     /** One handoff with its check, or null when there is none by that id. */
@@ -304,7 +316,10 @@ export function checksStore(db: Db) {
 
     /** Every check waiting for its verifier to start or to return, oldest first. */
     openChecks(): OpenCheck[] {
-      return db().prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE json_extract(verdict, '$.state') IN ('queued', 'running') ORDER BY rowid`).all().map(toOpenCheck);
+      return db()
+        .prepare("SELECT id FROM checks WHERE json_extract(verdict, '$.state') IN ('queued', 'running') ORDER BY rowid")
+        .all()
+        .map((row) => toOpenCheck(readCheck(db, toCheckId(row))));
     },
 
     /**
@@ -336,9 +351,19 @@ export function checksStore(db: Db) {
       })();
     },
 
-    /** Stores a running reviewer's findings, on the model bb ran it on, reported at `at`, if it is still the review's running reviewer and the check still waits for it; says whether it was. */
-    receiveReview(checkId: CheckId, reviewerThreadId: string, findings: readonly ReviewFinding[], model: ModelRef, at: number): boolean {
-      return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "reported", at, reviewerThreadId, findings: [...findings], model }))();
+    /**
+     * Stores a running reviewer's findings, its earlier blocking findings answered not fixed among
+     * them, and its answers on those (`earlier`), on the model bb ran it on, reported at `at`, in one
+     * write, if it is still the review's running reviewer and the check still waits for it; says
+     * whether it was.
+     */
+    receiveReview(checkId: CheckId, reviewerThreadId: string, { findings, earlier }: ReviewReport, model: ModelRef, at: number): boolean {
+      return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "reported", at, reviewerThreadId, findings, earlier, model }))();
+    },
+
+    /** Marks a running review's reviewer as given its scope, as when it was told it late, if it is still that review's running reviewer and the check still waits for it; says whether it was. */
+    rescopeReview(checkId: CheckId, reviewerThreadId: string): boolean {
+      return db().transaction(() => moveReview(db, checkId, { state: "running", reviewerThreadId }, { state: "running", reviewerThreadId, scoped: true }))();
     },
 
     /** Records that no review will be had, and why, as of `at`, if the review is still where `from` says and the check still waits for it; says whether it was. Its verifier starts next. */
@@ -426,11 +451,28 @@ export function checksStore(db: Db) {
   };
 }
 
-function verdictOf(db: Db, checkId: CheckId): Verdict | null {
-  const row = db().prepare("SELECT review, verdict FROM checks WHERE id = ?").get(checkId);
+const verdictOf = (db: Db, checkId: CheckId): Verdict | null => readCheck(db, checkId)?.verdict ?? null;
+
+/**
+ * One check as its readers get it, or null when there is none by that id: read with every check of
+ * its issue before it, oldest first, since a missed review's verdict triaged the findings of the
+ * round before it that was reviewed (rounds/delta.ts readInOrder).
+ */
+function readCheck(db: Db, checkId: CheckId): Check | null {
+  const row = db().prepare("SELECT coordinator_id AS coordinatorId, issue_id AS issueId, rowid AS seq FROM checks WHERE id = ?").get(checkId);
   if (row === undefined) return null;
-  const { review, verdict } = z.object({ review: json(reviewSchema), verdict: json(storedVerdictSchema) }).parse(row);
-  return withReview(verdict, review);
+  const { coordinatorId, issueId, seq } = z.object({ coordinatorId: coordinatorIdSchema, issueId: issueIdSchema, seq: z.number() }).parse(row);
+  return storedChecks(db, coordinatorId, issueId, seq).at(-1) ?? null;
+}
+
+/** Every check of the issue, by its id, each read whole in one pass (rounds/delta.ts readInOrder). */
+const issueChecks = (db: Db, coordinatorId: CoordinatorId, issueId: IssueId): Map<CheckId, Check> =>
+  new Map(storedChecks(db, coordinatorId, issueId, Number.MAX_SAFE_INTEGER).map((check) => [check.id, check]));
+
+/** The issue's checks up to the row `upTo`, oldest first, each read whole. */
+function storedChecks(db: Db, coordinatorId: CoordinatorId, issueId: IssueId, upTo: number): Check[] {
+  const rows = db().prepare(`SELECT ${CHECK_COLUMNS} FROM checks WHERE coordinator_id = ? AND issue_id = ? AND rowid <= ? ORDER BY rowid`).all(coordinatorId, issueId, upTo);
+  return readInOrder(rows.map((row): StoredCheck => checkRowSchema.parse(row)));
 }
 
 function writeVerdict(db: Db, checkId: CheckId, verdict: StoredVerdict): void {
@@ -459,21 +501,17 @@ const checkRowSchema = z.object({
   review: json(reviewSchema),
   verdict: json(storedVerdictSchema),
 });
-function toCheck(row: unknown): Check {
-  const check = checkRowSchema.parse(row);
-  return { ...check, verdict: withReview(check.verdict, check.review) };
-}
-
-function toFinalCheck(row: unknown): FinalCheck {
-  const check = toCheck(row);
+/** why throw: the query picks only final checks, by an id it just listed. */
+function toFinalCheck(check: Check | null): FinalCheck {
+  if (check === null) throw new Error("A listed final check is missing.");
   const { subject } = check;
-  // why throw: the query picks only final checks.
   if (subject.kind !== "final") throw new Error(`The check ${check.id} is not a final check.`);
   return { ...check, subject };
 }
 
-function toOpenCheck(row: unknown): OpenCheck {
-  const check = toCheck(row);
+/** why throw on null: the query just listed its id. */
+function toOpenCheck(check: Check | null): OpenCheck {
+  if (check === null) throw new Error("A listed open check is missing.");
   const { verdict } = check;
   // why throw: every query here picks only queued and running checks.
   if (verdict.state !== "queued" && verdict.state !== "running") throw new Error(`The check ${check.id} is ${verdict.state}, not waiting`);

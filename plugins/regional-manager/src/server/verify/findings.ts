@@ -23,15 +23,17 @@ export function findingsMessage(review: Review, verdict: Returned, ci: CiVerdict
 }
 
 /**
- * The reviewer's findings that held, each with the verifier's word on it and its reason, for the
- * agent to fix: those that failed the verdict on their own, then the others; or that no review was
- * had. Nothing when none held, or the check had no review stage.
+ * The findings that held, each with the verifier's word on it and its reason, for the agent to
+ * fix: those that failed the verdict on their own, then the others; after a missed review, that
+ * none was had first, and then the earlier blocking findings that held as unfixed. Nothing when
+ * none held and a review was had, or the check had no review stage.
  */
 function heldPart(review: Review, verdict: Returned): string[] {
-  if (review.state === "missed") return [`### Review\n\nNo review was had: ${review.reason}.`];
+  const missed = review.state === "missed" ? [`### Review\n\nNo review was had: ${review.reason}.`] : [];
   const { failing, others } = heldFindings(verdict);
-  const list = (findings: Returned["triage"]) => findings.map((finding) => `- ${findingText(finding).replaceAll("\n", "\n  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason}`).join("\n");
+  const list = (findings: Returned["triage"]) => findings.map((finding) => `- ${findingText(finding, "  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason}`).join("\n");
   return [
+    ...missed,
     ...(failing.length === 0 ? [] : [`### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${list(failing)}`]),
     ...(others.length === 0 ? [] : [`### ${failing.length === 0 ? "Review findings" : "Other review findings"} that held\n\n${list(others)}`]),
   ];
@@ -78,13 +80,17 @@ function returnedText(review: Review, verdict: Returned): string {
   return [result, ...criteria, findings, ...reviewedPart(review, verdict)].join("\n\n");
 }
 
-/** Its review, as it stood: each of the reviewer's findings with the verifier's triage, quoted, or that no review was had. Nothing for a check with no review stage. */
+/**
+ * Its review, as it stood: each finding its verifier triaged, with the triage, quoted; or that no
+ * review was had, then the earlier blocking findings it triaged as unfixed. Nothing for a check
+ * with no review stage.
+ */
 function reviewedPart(review: Review, verdict: Returned): string[] {
-  if (review.state === "missed") return [`No review was had: ${review.reason}.`];
+  const each = fenced(verdict.triage.map((finding) => `- ${findingText(finding)}\n  ${triageText(finding)}: ${finding.reason}`).join("\n"));
+  if (review.state === "missed") return [`No review was had: ${review.reason}.`, ...(verdict.triage.length === 0 ? [] : [`The earlier blocking findings, as the verifier triaged them, in their words:\n\n${each}`])];
   if (review.state !== "reported") return [];
   if (review.findings.length === 0) return ["Its reviewer found nothing."];
-  const each = verdict.triage.map((finding) => `- ${findingText(finding)}\n  ${triageText(finding)}: ${finding.reason}`);
-  return [`Its reviewer's findings, as the verifier triaged them, in their words:\n\n${fenced(each.join("\n"))}`];
+  return [`Its reviewer's findings, as the verifier triaged them, in their words:\n\n${each}`];
 }
 
 const PAST: Record<CriterionResult, string> = { pass: "passed", fail: "failed", unverifiable: "couldn't be checked" };

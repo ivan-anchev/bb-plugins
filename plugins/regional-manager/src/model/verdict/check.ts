@@ -9,7 +9,7 @@ import { commitSchema, handoffIdSchema } from "../agent/handoff.ts";
 import { issueIdSchema, type DoneCriteria, type IssueId } from "../issue/issue.ts";
 import type { CoordinatorId } from "../role.ts";
 import type { Review } from "./review.ts";
-import type { Verdict } from "./verdict.ts";
+import type { StoredVerdict, Verdict } from "./verdict.ts";
 
 export const checkIdSchema = z.uuid().brand<"checkId">();
 export type CheckId = z.infer<typeof checkIdSchema>;
@@ -43,6 +43,9 @@ export type Check = {
   review: Review;
   verdict: Verdict;
 };
+
+/** A check as its row stores it: its verdict not yet joined with the findings its verifier triaged (rounds/delta.ts readInOrder). */
+export type StoredCheck = Omit<Check, "verdict"> & { verdict: StoredVerdict };
 
 /** A build parent's final check. */
 export type FinalCheck = Check & { subject: z.infer<typeof finalSubjectSchema> };

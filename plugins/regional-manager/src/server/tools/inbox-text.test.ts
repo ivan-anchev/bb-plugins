@@ -103,8 +103,8 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
 });
 
 test("a verdict's review says whether the findings that held reached the agent only as far as its settlement shows", () => {
-  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." }], model: { providerId: "claude-code", model: "sonnet" } };
-  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", result: "anchored", anchor: "criterion", reason: "It never caps." }] };
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" }], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
+  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new", result: "anchored", anchor: "criterion", reason: "It never caps." }] };
   const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
     [{ kind: "pending" }, "None has gone to the agent yet."],
     [{ kind: "waiting-for-ci" }, "None has gone to the agent yet."],
@@ -122,10 +122,10 @@ test("a verdict's review says whether the findings that held reached the agent o
 
 test("catch-up words a round's review as the verifier's totals, anchored, downgraded, confirmed and rejected, then each finding in the review's order with its triage: what an anchored one breaks, a downgraded one's new severity", () => {
   const findings = [
-    { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap." },
-    { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing." },
-    { file: "src/retry.ts", line: 12, severity: "should-fix", claim: "Jitter computed twice." },
-    { file: "src/retry.css", line: null, severity: "nit", claim: "Padding." },
+    { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" },
+    { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing.", origin: "new" },
+    { file: "src/retry.ts", line: 12, severity: "should-fix", claim: "Jitter computed twice.", origin: "new" },
+    { file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
   ] as const;
   const triage = [
     { result: "anchored", anchor: "brief", reason: "The brief says capped." },
@@ -133,7 +133,7 @@ test("catch-up words a round's review as the verifier's totals, anchored, downgr
     { result: "confirmed", reason: "Both calls on line 12." },
     { result: "rejected", reason: "Matches the row." },
   ] as const;
-  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [...findings], model: { providerId: "claude-code", model: "sonnet" } };
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [...findings], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
   const verdict: Extract<Verdict, { state: "returned" }> = {
     ...returned(["pass"]),
     settlement: { kind: "sent-back", round: 1, ci: { kind: "none" } },
