@@ -1,13 +1,14 @@
 // What a verdict found, written for an agent: a checkout that wasn't the claimed commit on a clean
 // tree, as bb's git plugin read it, each done-criterion it didn't pass, with the verifier's
-// evidence, CI's failure on its pull request, its findings, and the reviewer's findings that fail
-// it, with only a count of the others that held, or that no review was had. It reaches the agent as
-// the verifier's message when a failed verdict goes back for its fix round. And what an earlier agent's
+// evidence, CI's failure on its pull request, its blocking defects and other findings, and the
+// reviewer's findings that fail it, with only a count of the others that held, or that no review
+// was had. It reaches the agent as the verifier's message when a failed verdict goes back for its
+// fix round. And what an earlier agent's
 // verdict found, whole and in the past tense, for the agent that takes its issue over.
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { findingText, FOLLOW_UP_RULE, triageText, type Review } from "../../model/verdict/review.ts";
+import { defectText, findingText, FOLLOW_UP_RULE, triageText, type Review } from "../../model/verdict/review.ts";
 import { ciVerdictOf, heldFindings, failedCheckout, failureReasons, failureText, type CriterionResult, type FailureReason, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
@@ -83,8 +84,9 @@ function returnedText(review: Review, verdict: Returned): string {
     ...(verdict.settlement.kind === "superseded" ? ["CI was still to finish on this commit when a newer handoff or the handover replaced it, so it was never judged."] : []),
   ].join(" ");
   const criteria = verdict.criteria.map(({ criterion, result, evidence }, i) => `${i + 1}. ${criterion}: ${PAST[result]}. The verifier's evidence:\n\n${fenced(evidence)}`);
+  const blocking = verdict.blocking.length === 0 ? [] : [`The defects it found itself that blocked, in its words:\n\n${fenced(verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n"))}`];
   const findings = verdict.findings.length === 0 ? "It found nothing else." : `Its other findings, in its words:\n\n${fenced(verdict.findings.map((finding) => `- ${finding}`).join("\n"))}`;
-  return [result, ...criteria, findings, ...reviewedPart(review, verdict)].join("\n\n");
+  return [result, ...criteria, ...blocking, findings, ...reviewedPart(review, verdict)].join("\n\n");
 }
 
 /**
@@ -109,7 +111,7 @@ function notPassed(reasons: readonly FailureReason[]): string {
   return reasons.some(({ kind }) => kind === "criteria") ? listed : `${listed}, though every done-criterion passed`;
 }
 
-/** The checkout, when it wasn't the claimed commit on a clean tree; then each criterion that didn't pass, numbered as in the brief, with its evidence; then CI's failure; then the findings. */
+/** The checkout, when it wasn't the claimed commit on a clean tree; then each criterion that didn't pass, numbered as in the brief, with its evidence; then CI's failure; then the verifier's blocking defects, then its other findings. */
 function whatFailed(verdict: Returned, ci: CiVerdict | null): string[] {
   const failed = failedCheckout(verdict);
   const checkout =
@@ -118,8 +120,12 @@ function whatFailed(verdict: Returned, ci: CiVerdict | null): string[] {
       : [`### The commit and the tree\n\n${checkoutText(verdict.headSha, failed)} Commit what belongs to the work and remove what doesn't, so the commit you hand off is checked out on a clean tree.`];
   const checks = verdict.criteria.flatMap((check, i) => (check.result === "pass" ? [] : [`### ${i + 1}. ${check.criterion}\n\n**${RESULT[check.result]}.** The verifier's evidence:\n\n${fenced(check.evidence)}`]));
   const failedCi = ci?.kind === "fail" ? [`### CI failed on #${ci.number}\n\n${ciFailure(ci.failedChecks)} Read the runs on the pull request, fix the cause, and push.`] : [];
+  const blocking =
+    verdict.blocking.length === 0
+      ? []
+      : [`### Blocking defects the verifier found\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n")}`];
   const findings = verdict.findings.length === 0 ? [] : [`### Other findings\n\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`];
-  return [...checkout, ...checks, ...failedCi, ...findings];
+  return [...checkout, ...checks, ...failedCi, ...blocking, ...findings];
 }
 
 /** The failed checks, by the names GitHub gives them. */

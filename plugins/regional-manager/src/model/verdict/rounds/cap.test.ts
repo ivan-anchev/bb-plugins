@@ -30,6 +30,7 @@ const returned = (passed: boolean, settlement: Settlement = CHECKED): Verdict =>
     { criterion: "npm run lint passes", result: passed ? "pass" : "fail", evidence: passed ? "ok" : "2 errors" },
   ],
   findings: [],
+  blocking: [],
   triage: [],
   mustFixFails: true,
   model: { providerId: "codex", model: "gpt-default" },

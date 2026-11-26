@@ -79,6 +79,7 @@ function roundOne(sha: string): StoredCheck {
       checkout: { headSha: sha, changedFiles: [], changedFileCount: 0 },
       criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }],
       findings: [],
+      blocking: [],
       triage: [],
       mustFixFails: true,
       model: { providerId: "codex", model: "gpt-default" },

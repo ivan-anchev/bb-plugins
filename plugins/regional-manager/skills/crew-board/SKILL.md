@@ -154,7 +154,7 @@ An issue's status is derived from what its agents did, never stored:
 | Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
-| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or it passed every criterion with no must-fix finding anchored and waits for CI. |
+| Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), or was made with verification off ("Unverified"). |
 | Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
@@ -644,21 +644,36 @@ before its verifier starts. The plugin starts a **reviewer**:
   that follows a decision is never a finding. A final check's first message
   has none.
 - **The anchor rule**: CREW.md says what a reviewer looks for; this rule
-  alone says what blocks. A must-fix blocks only when it breaks a
-  done-criterion, the issue's brief text, a recorded decision, safety (data
-  loss, a crash or a security hole), or existing behaviour, as a regression.
-  A CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion
-  names it. The reviewer's first message, its rules and `issue_review`'s
-  instructions say so. A reviewer reports each finding at the severity
-  CREW.md gives it, a must-fix that breaks none of the five included: the
-  verifier, not the reviewer, anchors or downgrades it.
+  alone says what blocks (the user's decision d68). A must-fix blocks only
+  when it meets one of four anchors: a bug a user or agent hits in normal
+  use, with the steps that reach it (as safety when it loses data or does
+  something irreversible, as a regression when existing behaviour breaks);
+  a broken done-criterion; a broken requirement the issue's brief states
+  explicitly; or a broken recorded decision. A REVIEW.md or schrute-code
+  principle violation, a missing test, unclear text and a bug that needs a
+  contrived setup to reach never block: should-fix at most. A CREW.md or
+  REVIEW.md rule blocks only when the brief states it or a done-criterion
+  names it. The reviewer's and the verifier's first messages, their rules
+  and `issue_review`'s and `issue_verdict`'s instructions say so; the
+  verifier's also says a defect its creed-qa run finds outside the criteria
+  fails the verdict only when it meets a blocking anchor: it reports one in
+  `issue_verdict`'s `blocking`, with its anchor and, for a bug, its steps,
+  and each fails the verdict, as "a blocking defect the verifier found";
+  the next round's verifier gets every one still open, numbered, and
+  `issue_verdict` refuses a verdict that doesn't answer each in
+  `earlierDefects`, fixed or still blocking, one still blocking failing it too,
+  which the agent's fix round, the manager's update and the board's round
+  name; every other defect goes in `findings`, which never fail it. A reviewer reports
+  each finding at the severity CREW.md gives it: the verifier, not the
+  reviewer, anchors or downgrades a must-fix.
 - **Triage**: the verifier's first message lists the findings, numbered, as
   claims to check; its verdict triages each, with a reason in a line:
   rejected; confirmed, a should-fix or nit that holds; anchored, a must-fix
-  that holds, naming which of the five it breaks; or downgraded, to a lower
-  severity it names. `issue_verdict` refuses a must-fix triaged confirmed, an
-  anchored should-fix or nit, and a downgrade that isn't lower, naming the
-  finding. Only an anchored finding fails the verdict, as a failed
+  that holds, naming the anchor it meets, with the normal-use steps that
+  reach it for a bug, safety or regression anchor; or downgraded, to a
+  lower severity it names. `issue_verdict` refuses a must-fix triaged
+  confirmed, an anchored should-fix or nit, a bug anchored without its
+  steps, and a downgrade that isn't lower, naming the finding. Only an anchored finding fails the verdict, as a failed
   criterion does, even when every criterion passed: it goes back to the
   agent while it has its fix round left, and the manager's update names it
   as the cause. The manager's update counts how many it anchored,
@@ -686,7 +701,8 @@ before its verifier starts. The plugin starts a **reviewer**:
   before. A verdict from before the anchor rule keeps its confirmed and
   rejected findings as they were: one returned under the must-fix rule
   still fails on a confirmed must-fix, and one that settled before that rule
-  keeps the outcome it settled with.
+  keeps the outcome it settled with. A safety or regression anchor from
+  before d68 keeps its place with no steps.
 
 ## Verification
 
@@ -860,8 +876,9 @@ with `gh` on the machine running bb, on the same once-a-minute tick:
   github.com are read.
 - **A merge makes the issue Done**, whatever its agent is doing; a check still
   pending or failed then is never sent back.
-- **A verdict waits for CI**: a done handoff that passed every criterion, with
-  no must-fix finding anchored, when
+- **A verdict waits for CI**: a done handoff whose verdict passed every other
+  check (every criterion, no anchored must-fix finding, no blocking defect,
+  the claimed commit on a clean tree), when
   it names a pull request or one is known for the issue, waits under Verifying
   as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the pull
   request is seen) until CI finishes on the very commit the handoff claims;

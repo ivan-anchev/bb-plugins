@@ -82,14 +82,22 @@ For a final check:
    triage it:
    - **rejected**: it doesn't hold, or isn't worth fixing.
    - **confirmed**: a should-fix or nit that holds.
-   - **anchored**: a must-fix that holds and breaks one of five things,
-     named as its `anchor`: a done-criterion (`criterion`), the issue's brief
-     text (`brief`), a recorded decision (`decision`), safety, as data loss,
-     a crash or a security hole (`safety`), or existing behaviour, as a
-     regression (`regression`).
+   - **anchored**: a must-fix that holds and meets one of four anchors,
+     named as its `anchor`: a bug a user or agent hits in normal use (`bug`;
+     `safety` when it loses data or does something irreversible;
+     `regression` when existing behaviour breaks), with `steps`, the
+     normal-use steps that reach it; a broken done-criterion (`criterion`); a
+     broken requirement the issue's brief states explicitly, not one
+     inferred from its intent (`brief`); or a broken recorded decision
+     (`decision`).
    - **downgraded**: it holds, at a lower severity than the reviewer gave
-     it, named as `to`. A must-fix that breaks none of the five is
-     downgraded, never confirmed.
+     it, named as `to`. A must-fix that meets no anchor is downgraded, never
+     confirmed: to should-fix when it is a REVIEW.md or schrute-code
+     principle violation, a missing test, unclear text, or a bug that needs
+     a contrived setup to reach, such as a read held mid-await, a plugin
+     disposed mid-call, calls interleaved by hand, a ref with shell or
+     Markdown metacharacters, a reply lost in transit, or a state reachable
+     only across an upgrade; to nit only when it is a matter of taste.
 
    Give each its reason in a line: what you ran or read that decides it. A
    finding never decides a criterion for you: when it breaks a criterion,
@@ -97,22 +105,36 @@ For a final check:
 
    **Only an anchored must-fix fails the verdict**, as a failed criterion
    does, even when every criterion passes. Anchor one only when what you ran
-   or read shows it holds and breaks what you name. CREW.md says what a
-   reviewer looks for; the anchor rule alone says what blocks. The brief is
-   the issue's brief text: a CREW.md or REVIEW.md rule anchors only when the
-   brief or a done-criterion names it. Work that follows a recorded decision
-   is never a finding.
+   or read shows it holds and meets the anchor you name. CREW.md says what a
+   reviewer looks for; the anchor rule alone says what blocks. A CREW.md or
+   REVIEW.md rule anchors only when the brief states it or a done-criterion
+   names it. Work that follows a recorded decision is never a finding.
 
    **A missed finding never fails the verdict**, whatever it breaks, safety
    included: never anchor it. A missed must-fix that holds is downgraded,
-   with its missed origin as the reason even when it breaks one of the five;
+   with its missed origin as the reason even when it meets an anchor;
    a missed should-fix or nit that holds is confirmed or downgraded as any
    other, and one that doesn't hold is rejected. An unfixed one is triaged as
    any other: anchor it when it still holds and breaks what you name.
 
    `issue_verdict` refuses a must-fix triaged confirmed, an anchored
-   should-fix or nit, an anchored missed finding, and a downgrade that isn't
-   lower, naming the finding.
+   should-fix or nit, an anchored missed finding, a bug, safety or
+   regression anchor without its steps, any other anchor with steps, and a
+   downgrade that isn't lower, naming the finding.
+5. **Defects outside the criteria.** When you run creed-qa, a defect its
+   checks of the surrounding code turn up outside the done-criteria fails
+   the verdict only if it meets a blocking anchor. Report one that does in
+   `blocking`, with its anchor and, for a bug, the normal-use steps that
+   reach it: each one fails the verdict, as a failed criterion does. Report
+   every other one in `findings`, with the severity CREW.md's Reviewers
+   section gives it: findings never fail the verdict. A principle violation
+   or a contrived-setup bug meets no anchor: it never fails a criterion and
+   never goes in `blocking`.
+6. **Blocking defects an earlier verifier found.** When your first message
+   lists them, run each one's steps again on this commit and answer every
+   one in `earlierDefects`: fixed only when its steps no longer reach it.
+   One not fixed stays blocking and fails your verdict too, so a known
+   defect is never dropped because nobody looked for it again.
 
 ## Never
 
@@ -129,14 +151,23 @@ Call `issue_verdict` as your last action, and stop once it records your verdict:
 - **criteria**: one entry per done-criterion, by its number: `result` and
   `evidence`, the command you ran and the lines it printed that decide it
   (for a fail, the failing lines), up to 4,000 characters.
-- **findings**: problems no criterion covers, up to 20; `[]` for none.
+- **blocking**: defects you found yourself that no criterion covers and
+  that meet a blocking anchor, up to 20: each its `claim`, its `anchor` and,
+  for a bug, safety or regression anchor, its `steps`. Each fails the
+  verdict. `[]` for none.
+- **earlierDefects**: one answer per blocking defect an earlier verifier
+  found that your first message numbers: `defect`, its number, and
+  `fixed`. `[]` when it lists none.
+- **findings**: every other problem no criterion covers, up to 20, with its
+  severity; they never fail the verdict. `[]` for none.
 - **triage**: one entry per finding of the reviewer's, by its number:
-  `result` rejected, confirmed, anchored with its `anchor`, or downgraded
+  `result` rejected, confirmed, anchored with its `anchor` (and `steps` for
+  a bug, safety or regression anchor), or downgraded
   with `to`, and `reason`, in a line. `[]` when your first message lists
   none.
 
 A failed verdict on a done handoff, whatever failed it (a criterion, a
-must-fix finding you anchored, the plugin's read of the commit and the tree,
+must-fix finding you anchored, a blocking defect you found, the plugin's read of the commit and the tree,
 or CI on its pull request), goes back to the agent as its one automatic fix
 round, with the must-fixes you anchored and only a count of the other
 findings that held, when:
@@ -164,8 +195,10 @@ and reason, rejected ones included.
 
 It is refused, and nothing is saved, when you skip, repeat or invent a
 criterion, or a finding of the reviewer's, or triage one as the rule refuses
-(a must-fix confirmed, a should-fix or nit anchored, a downgrade that isn't
-lower): correct what the refusal names and call it again. Stop once it
+(a must-fix confirmed, a should-fix or nit anchored, a bug anchored
+without its steps, another anchor with steps, a downgrade that isn't
+lower), a blocking defect whose anchor and steps don't match, or an
+earlier blocking defect skipped, repeated or invented: correct what the refusal names and call it again. Stop once it
 records your verdict. If it is refused because an
 earlier operation on the issue hasn't finished, call it again in a minute. If
 it says the check no longer waits for your verdict, a newer handoff or final

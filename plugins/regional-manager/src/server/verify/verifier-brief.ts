@@ -9,7 +9,7 @@ import type { IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
-import { findingText, MISSED_RULE, numberedText, TRIAGE_RULE, type Review } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, defectText, findingText, MISSED_RULE, numberedText, TRIAGE_RULE, type BlockingDefect, type Review } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import { decisionsPart, type Scope } from "../review/checker-brief.ts";
@@ -22,12 +22,17 @@ import { decisionsPart, type Scope } from "../review/checker-brief.ts";
 export const ALONE_RULE =
   "Nobody answers you: anything you ask a person, or ask them to approve, is declined at once. For GitHub use the `gh` CLI in the shell, never a connector or app.";
 
-/** A handoff's verifier's: the commit the agent claims, in the agent's own environment, with what its review covered (`scope`) and the issue's decisions as they stand as it starts. */
+/**
+ * A handoff's verifier's: the commit the agent claims, in the agent's own environment, with what its
+ * review covered (`scope`), the blocking defects an earlier verifier found (`earlier`), and the
+ * issue's decisions as they stand as it starts.
+ */
 export function verifierBrief(
   issue: Pick<Issue, "id" | "title"> & { brief: string; decisions: readonly IssueDecision[] },
   check: Pick<HandoffCheck, "criteria" | "subject" | "review">,
   checkout: Checkout,
   scope: Scope,
+  earlier: readonly BlockingDefect[],
 ): string {
   const { agentId, headSha } = check.subject;
   return [
@@ -36,11 +41,22 @@ export function verifierBrief(
     `## The commit and the tree, as the plugin read them\n\n${checkoutText(headSha, checkout)} ${checkoutNote(agentId, headSha, checkout)}`,
     criteriaPart(check.criteria),
     ...reviewPart(check.review, scope),
+    ...earlierPart(earlier),
     `## The issue's brief, for context\n\n${issue.brief.trim()}`,
     ...decisionsPart(issue.id, issue.decisions),
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: you share ${agentId}'s working tree.`,
+    `## What blocks\n\nThe anchor rule: ${ANCHOR_RULE}\n\n${QA_RULE}`,
   ].join("\n\n");
 }
+
+/**
+ * What a defect a verifier finds itself outside the done-criteria does, as when creed-qa's checks of
+ * the surrounding code turn one up (CREW.md's Verifiers section): one that meets a blocking anchor
+ * goes in issue_verdict's blocking, and fails the verdict (verdict.ts failureReasons); any other
+ * goes in its findings, which never do.
+ */
+export const QA_RULE =
+  "When you run creed-qa, a defect its checks of the surrounding code turn up outside the done-criteria fails the verdict only if it meets a blocking anchor. Report one that does in issue_verdict's blocking, with its anchor and, for a bug, the normal-use steps that reach it: each one fails the verdict, as a failed criterion does. Report every other one in findings, with the severity CREW.md's Reviewers section gives it: findings never fail the verdict. A defect that meets no anchor, as a REVIEW.md or principle violation or a bug that needs a contrived setup, never fails a criterion and never makes your verdict NOT_VERIFIED.";
 
 /**
  * A final check's verifier's: the parent's own criteria, on the default branch as origin has it,
@@ -116,6 +132,15 @@ function fixedPart(review: Extract<Review, { state: "reported" }>, scope: Scope)
     return fixed ? [`- ${findingText(finding, "  ")}\n  The reviewer: ${note}`] : [];
   });
   return fixed.length === 0 ? "" : `\n\nRound ${scope.round}'s blocking findings the reviewer answered fixed, for context; they are not yours to triage:\n\n${fixed.join("\n")}`;
+}
+
+/** The blocking defects an earlier verifier found, numbered as issue_verdict's earlierDefects takes them; nothing when there are none. */
+function earlierPart(earlier: readonly BlockingDefect[]): string[] {
+  if (earlier.length === 0) return [];
+  const list = earlier.map((defect, i) => `${i + 1}. ${defectText(defect, "   ")}`).join("\n");
+  return [
+    `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Run each one's steps again on this commit, and answer every one in issue_verdict's earlierDefects by its number: fixed only when its steps no longer reach it. One you answer not fixed stays blocking, and fails this verdict too.\n\n${list}`,
+  ];
 }
 
 const criteriaPart = (criteria: readonly string[]): string => `## Done-criteria\n\n${criteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`;

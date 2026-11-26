@@ -15,7 +15,7 @@ type Triage = Extract<StoredVerdict, { state: "returned" }>["triage"][number];
 const CAP: ReviewFinding = { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff never caps.", origin: "new" };
 const FOUR_XX: ReviewFinding = { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "A 4xx is retried.", origin: "new" };
 const JITTER: ReviewFinding = { file: "src/retry.ts", line: 12, severity: "should-fix", claim: "The jitter is computed twice.", origin: "new" };
-const ANCHORED: Triage = { result: "anchored", anchor: "brief", reason: "It grows without bound." };
+const ANCHORED: Triage = { result: "anchored", anchor: "brief", steps: null, reason: "It grows without bound." };
 const CONFIRMED: Triage = { result: "confirmed", reason: "Both calls on line 12." };
 const REJECTED: Triage = { result: "rejected", reason: "It caps at 5 minutes." };
 
@@ -46,6 +46,7 @@ const returned = (n: number, triage: Triage[]): StoredVerdict => ({
   checkout: { headSha: sha(n), changedFiles: [], changedFileCount: 0 },
   criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ok" }],
   findings: [],
+  blocking: [],
   triage,
   mustFixFails: true,
   model: { providerId: "codex", model: "gpt-default" },
@@ -89,12 +90,12 @@ test("deltaOf takes its base from the latest round with a reported review and a 
 });
 
 test("deltaOf skips a round whose review was missed: its base stays the reviewed round before it, and the missed round's verdict triaged that round's blocking findings as unfixed", () => {
-  const rounds = read(reviewed(1, [[CAP, ANCHORED], [JITTER, CONFIRMED]]), stored(2, MISSED, returned(2, [{ result: "anchored", anchor: "brief", reason: "Still uncapped." }])));
+  const rounds = read(reviewed(1, [[CAP, ANCHORED], [JITTER, CONFIRMED]]), stored(2, MISSED, returned(2, [{ result: "anchored", anchor: "brief", steps: null, reason: "Still uncapped." }])));
   const delta = deltaOf(rounds);
   assert.equal(delta.kind === "after" && delta.base.id, rounds[0]?.id, "round 1: round 2's change was never reviewed");
   assert.deepEqual(delta.kind === "after" && delta.blocking, [{ ...CAP, ...ANCHORED }]);
   const missed = rounds[1]?.verdict;
-  assert.deepEqual(missed?.state === "returned" && missed.triage, [{ ...CAP, origin: "unfixed", result: "anchored", anchor: "brief", reason: "Still uncapped." }], "round 1's blocker, unfixed, is what round 2's verifier triaged");
+  assert.deepEqual(missed?.state === "returned" && missed.triage, [{ ...CAP, origin: "unfixed", result: "anchored", anchor: "brief", steps: null, reason: "Still uncapped." }], "round 1's blocker, unfixed, is what round 2's verifier triaged");
   assert.deepEqual(
     triageList(MISSED, delta),
     [{ ...CAP, origin: "unfixed" }],
@@ -117,7 +118,7 @@ test("a missed review's verdict returned before the delta existed, which triaged
 test("an issue's long history reads whole: 60 reviewed rounds of 20 held findings each, every later one missed, read whole and give the last delta, every held finding once", () => {
   const findings = (round: number): [ReviewFinding, Triage][] =>
     Array.from({ length: 20 }, (_, i) => [{ ...(i === 0 ? CAP : JITTER), line: i + 1, claim: `Finding ${i} of round ${round}.` }, i === 0 ? ANCHORED : CONFIRMED]);
-  const history = Array.from({ length: 60 }, (_, n) => (n % 2 === 0 ? reviewed(n, findings(n)) : stored(n, MISSED, returned(n, [{ result: "anchored", anchor: "brief", reason: "Still." }]))));
+  const history = Array.from({ length: 60 }, (_, n) => (n % 2 === 0 ? reviewed(n, findings(n)) : stored(n, MISSED, returned(n, [{ result: "anchored", anchor: "brief", steps: null, reason: "Still." }]))));
   const delta = deltaOf(read(...history));
   assert.equal(delta.kind === "after" && delta.known.length, 30 * 20 - 1, "every held finding once, but round 58's blocker");
 });

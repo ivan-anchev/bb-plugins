@@ -88,7 +88,7 @@ test("a title past the 80 characters an issue's title holds is cut with an ellip
 });
 
 test("a check's leftovers are what it held without failing it: an anchored must-fix and a rejected finding are not, and an unreturned verdict has none", () => {
-  const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", reason: "Criterion 2 fails." };
+  const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
   const rejected: Triaged = { ...PLACE, severity: "should-fix", claim: "Use a queue.", result: "rejected", reason: "Out of scope." };
   const verdict: Verdict = {
     state: "returned",
@@ -97,6 +97,7 @@ test("a check's leftovers are what it held without failing it: an anchored must-
     headSha: SHA,
     checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
     criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ok" }],
+    blocking: [],
     findings: [],
     triage: [anchored, shouldFix, rejected, downgraded, nit],
     mustFixFails: true,
@@ -116,6 +117,7 @@ const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Extract<Verdict,
   headSha: SHA,
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
   criteria: [{ criterion: "npm test passes", result, evidence: "ok" }],
+  blocking: [],
   findings: [],
   triage,
   mustFixFails: true,
@@ -125,7 +127,7 @@ const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Extract<Verdict,
 });
 const HANDOFF: Check["subject"] = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: SHA, prUrl: null };
 const round = (verdict: Verdict, followUpId: Check["followUpId"] = null) => ({ subject: HANDOFF, verdict, followUpId });
-const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", reason: "Criterion 2 fails." };
+const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
 
 test("a merge leaves unfiled every uncollected round's leftovers, and the findings that failed the latest verdict when nothing fixed them", () => {
   assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored]))]), [anchored], "a held blocker of the latest, failed verdict");

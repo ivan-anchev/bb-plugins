@@ -341,6 +341,7 @@ test("an opened parent sends its final checks as rounds, each with only what its
       checkout: { headSha: MERGED, changedFiles: [], changedFileCount: 0 },
       criteria: FAILS.criteria.map(({ result, evidence }) => ({ criterion: "npm run vault-suite passes on the default branch", result, evidence })),
       findings: FAILS.findings,
+      blocking: [],
       sameModel: false,
       settlement: { kind: "checked", ci: { kind: "none" } },
     },

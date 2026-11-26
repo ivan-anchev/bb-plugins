@@ -28,7 +28,7 @@ export function reviewerBrief(
 ): string {
   return [
     `# Review ${issue.id}: ${issue.title}`,
-    `Review this diff as CREW.md instructs reviewers, and report through ${REVIEW}. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} Report each finding at the severity CREW.md gives it, a must-fix that breaks none of the five included: the verifier anchors or downgrades it, never you. For a must-fix, say in its claim which of the five it breaks, or that it breaks none.`,
+    `Review this diff as CREW.md instructs reviewers, and report through ${REVIEW}. CREW.md says what to look for; this rule alone says what blocks. ${ANCHOR_RULE} Report each finding at the severity CREW.md gives it: the verifier anchors or downgrades a must-fix, never you. For a must-fix, say in its claim which anchor it meets, with the normal-use steps that reach it when it is a bug, or that it meets none.`,
     ...scopeParts(diff, scope),
     `## The issue's brief\n\n${issue.brief.trim()}`,
     `## Done-criteria\n\n${issue.doneCriteria.map((criterion, i) => `${i + 1}. ${criterion}`).join("\n")}`,

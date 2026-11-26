@@ -76,32 +76,78 @@ export const reviewSchema = z.discriminatedUnion("state", [
 export type Review = z.infer<typeof reviewSchema>;
 
 /**
- * What a must-fix can break, which is what lets it block the work: a done-criterion, the issue's
- * brief text, a decision recorded on the issue, safety (data loss, a crash, a security hole), or
- * existing behaviour, as a regression.
+ * What a must-fix that blocks the work is (d68): a bug a user or agent hits in normal use, as safety
+ * when it loses data or does something irreversible, as a regression when it breaks existing
+ * behaviour, else as a bug; a broken done-criterion; a broken requirement the issue's brief states
+ * explicitly; or a broken recorded decision.
  */
-const anchorSchema = z.enum(["criterion", "brief", "decision", "safety", "regression"]);
+const anchorSchema = z.enum(["bug", "safety", "regression", "criterion", "brief", "decision"]);
 type Anchor = z.infer<typeof anchorSchema>;
 
-/** What each anchor names, in the words every place gives it: "it breaks <words>". */
+/** The anchors that are bugs reached in normal use, each anchored with the steps that reach it. */
+const BUG_ANCHORS: ReadonlySet<Anchor> = new Set(["bug", "safety", "regression"]);
+
+/** What each anchor names, in the words every place gives it: "Anchored, as <words>". */
 const ANCHOR_WORDS: Record<Anchor, string> = {
-  criterion: "a done-criterion",
-  brief: "the issue's brief",
-  decision: "a recorded decision",
-  safety: "safety (data loss, a crash or a security hole)",
-  regression: "existing behaviour, as a regression",
+  bug: "a bug hit in normal use",
+  safety: "a safety bug: one hit in normal use that loses data or does something irreversible",
+  regression: "a regression: existing behaviour that breaks in normal use",
+  criterion: "it breaks a done-criterion",
+  brief: "it breaks a requirement the issue's brief states explicitly",
+  decision: "it breaks a recorded decision",
 };
 
 /**
  * What blocks the work, in the one wording each place a reviewer or a verifier reads gives it.
- * why the brief defined: a reviewer reviews as CREW.md instructs, so without it a CREW.md or
- * REVIEW.md rule would read as part of the brief.
+ * why the brief narrowed to what it states: a reviewer reviews as CREW.md instructs, so without it
+ * a CREW.md or REVIEW.md rule, or an intent read into the brief, would block as the brief.
  */
-export const ANCHOR_RULE = `A must-fix blocks the work only when it breaks one of five things: ${anchorList()}. The brief is the issue's brief text: a CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion names it. Work that follows a recorded decision is never a finding.`;
+export const ANCHOR_RULE = `A must-fix blocks the work only when it meets one of four anchors: a bug a user or agent hits in normal use, with the steps that reach it; a broken done-criterion; a broken requirement the issue's brief states explicitly, not one inferred from its intent; or a broken recorded decision. A bug that loses data or does something irreversible is a safety bug, and existing behaviour that breaks in normal use a regression: both are bugs hit in normal use, with their steps. Never blocking, so should-fix at most: a REVIEW.md or schrute-code principle violation, a missing test, unclear text, and a bug that needs a contrived setup to reach, such as a read held mid-await, a plugin disposed mid-call, calls interleaved by hand, a ref with shell or Markdown metacharacters, a reply lost in transit, or a state reachable only across an upgrade. A CREW.md or REVIEW.md rule blocks only when the brief states it or a done-criterion names it. Work that follows a recorded decision is never a finding.`;
 
 /** What a missed finding does, in the one wording each place a reviewer or a verifier reads gives it. */
 export const MISSED_RULE =
-  "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so the verifier never anchors it. A missed must-fix that holds is downgraded, its missed origin the reason even when it breaks one of the five; a missed should-fix or nit that holds is confirmed or downgraded as any other.";
+  "A finding marked missed sits on code an earlier round reviewed unchanged: it never fails the verdict, whatever it breaks, safety included, so the verifier never anchors it. A missed must-fix that holds is downgraded, its missed origin the reason even when it meets an anchor; a missed should-fix or nit that holds is confirmed or downgraded as any other.";
+
+/** What a blocking anchor carries besides its name: for a bug, the normal-use steps that reach it; null for any other anchor (anchorProblem). */
+const stepsSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(1_000)
+  .nullable()
+  .default(null)
+  .describe('For a bug, safety or regression anchor: the normal-use steps that reach it, numbered on one line, as "1. … 2. …". null for any other anchor.');
+
+/**
+ * A defect the verifier found itself outside the done-criteria, as when creed-qa's checks of the
+ * surrounding code turn one up, that meets a blocking anchor: its claim, the anchor and, for a bug,
+ * the normal-use steps that reach it. Each one fails the verdict (verdict.ts failureReasons). A
+ * defect that meets no anchor is no such thing: it goes in the verdict's findings, which never fail it.
+ */
+export const blockingDefectSchema = z.object({
+  claim: z.string().trim().min(1).max(2_000).describe("What is wrong, where, and what you ran that shows it, in a few lines."),
+  anchor: anchorSchema,
+  steps: stepsSchema,
+});
+export type BlockingDefect = z.infer<typeof blockingDefectSchema>;
+
+/**
+ * Why an anchor can't be taken with its steps, in a phrase; null when it can: a bug, safety or
+ * regression anchor needs the normal-use steps that reach it, and any other anchor takes none.
+ * `otherwise`: what to do with a bug that has no such steps, as the refusal's way forward. The one
+ * rule issue_verdict checks every anchor with, a triage's and a blocking defect's.
+ */
+export function anchorProblem({ anchor, steps }: { anchor: Anchor; steps: string | null }, otherwise: string): string | null {
+  if (BUG_ANCHORS.has(anchor)) return steps === null ? `a ${anchor} anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: ${otherwise}` : null;
+  return steps === null ? null : `a ${anchor} anchor takes no steps, as it is no bug: pass steps as null`;
+}
+
+/** What an anchor names, with a bug's steps on the same line, as every place gives it after "Anchored" or "Blocks": "as a bug hit in normal use, reached by: 1. … 2. …". */
+const anchorText = ({ anchor, steps }: { anchor: Anchor; steps: string | null }): string =>
+  `as ${ANCHOR_WORDS[anchor]}${steps === null ? "" : `, reached by: ${steps.replaceAll("\n", " ")}`}`;
+
+/** A blocking defect in a line, as catch-up, the agent's fix round and the board give it: its anchor, then its claim, the claim's later lines indented by `indent`. */
+export const defectText = (defect: BlockingDefect, indent = ""): string => `Blocks, ${anchorText(defect)}: ${defect.claim.replaceAll("\n", `\n${indent}`)}`;
 
 /**
  * Where the findings that hold go, in the one wording every place a reviewer, a verifier, an agent
@@ -114,16 +160,18 @@ export const FOLLOW_UP_RULE =
 /**
  * The verifier's triage of one finding, as issue_verdict takes it and the check stores it, in the
  * review's order, each with why in a line: rejected, it doesn't hold or isn't worth fixing;
- * confirmed, a should-fix or nit that holds; anchored, a must-fix that holds and breaks `anchor`;
+ * confirmed, a should-fix or nit that holds; anchored, a must-fix that holds and meets `anchor`,
+ * with `steps`, the normal-use steps that reach it when the anchor is a bug (null otherwise);
  * downgraded, one that holds at the lower severity `to`. why `common`: issue_verdict takes the
- * same variants with the finding's number beside them (verdict-tool.ts). Stored rows from before
+ * same variants with the finding's number beside them (verdict-tool.ts). why steps default to
+ * null: rows stored before d68 anchored safety and regression with none. Stored rows from before
  * the anchor rule are confirmed or rejected, and parse as they are.
  */
 export const triageVariants = <Common extends z.ZodRawShape>(common: Common) =>
   z.discriminatedUnion("result", [
     z.object({ result: z.literal("rejected"), ...common }),
     z.object({ result: z.literal("confirmed"), ...common }),
-    z.object({ result: z.literal("anchored"), anchor: anchorSchema, ...common }),
+    z.object({ result: z.literal("anchored"), anchor: anchorSchema, steps: stepsSchema, ...common }),
     z.object({ result: z.literal("downgraded"), to: severitySchema, ...common }),
   ]);
 export const triageSchema = triageVariants({ reason: z.string().min(1) });
@@ -137,20 +185,28 @@ type Triage = z.infer<typeof triageSchema>;
 export type Triaged = ReviewFinding & Triage;
 
 /** How a verifier triages the reviewer's findings, and what its triage does, in the one wording each place a verifier reads gives it. */
-export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and breaks one of the five things below; name which as its anchor. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that breaks none of the five is downgraded, never confirmed. Give each its reason in a line. ${FOLLOW_UP_RULE} A rejected one goes nowhere. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and breaks what you name. ${ANCHOR_RULE} ${MISSED_RULE}`;
+export const TRIAGE_RULE = `Rejected: it doesn't hold, or isn't worth fixing. Confirmed: a should-fix or nit that holds. Anchored: a must-fix that holds and meets one of the four anchors the anchor rule names; name it as its anchor: bug, safety or regression for a bug hit in normal use, with steps, the normal-use steps that reach it; criterion, brief or decision for a broken done-criterion, explicit brief requirement or recorded decision. Downgraded: a finding that holds at a lower severity than the reviewer gave it, which you name as to: a must-fix that meets no anchor is downgraded, never confirmed, to should-fix when it is a principle or REVIEW.md violation, a missing test, unclear text or a bug that needs a contrived setup, and to nit only when it is a matter of taste. Give each its reason in a line. Only an anchored must-fix goes back to the agent; the others that hold are filed as a follow-up when the issue passes, unless all are nits. Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes: anchor one only when what you ran or read shows it holds and meets the anchor you name. ${MISSED_RULE}`;
 
 /**
  * Why a verifier's triage of a finding can't be taken, in a phrase; null when it can: a must-fix
- * that holds is anchored or downgraded, never just confirmed; only a must-fix is anchored, and
- * never a missed one, safety included; and a downgrade goes lower than the reviewer's severity.
+ * that holds is anchored or downgraded, never just confirmed; only a must-fix is anchored, never a
+ * missed one, safety included, and with the steps its anchor takes (anchorProblem); and a
+ * downgrade goes lower than the reviewer's severity.
  * The one rule issue_verdict checks each entry with.
  */
-export function triageProblem({ severity, origin }: ReviewFinding, triage: Triage): string | null {
+export function triageProblem(finding: ReviewFinding, triage: Triage): string | null {
+  const problem = severityProblem(finding, triage);
+  if (problem !== null || triage.result !== "anchored") return problem;
+  return anchorProblem(triage, "downgrade it to should-fix");
+}
+
+/** Why a triage can't be taken for its finding's severity and origin, in a phrase; null when it can (triageProblem, less the anchor's steps). */
+function severityProblem({ severity, origin }: ReviewFinding, triage: Triage): string | null {
   switch (triage.result) {
     case "rejected":
       return null;
     case "confirmed":
-      return severity === "must-fix" ? `a must-fix that holds is ${origin === "missed" ? "downgraded" : "anchored, naming what it breaks, or downgraded"}, never just confirmed` : null;
+      return severity === "must-fix" ? `a must-fix that holds is ${origin === "missed" ? "downgraded" : "anchored, naming the anchor it meets, or downgraded"}, never just confirmed` : null;
     case "anchored":
       if (severity !== "must-fix") return `only a must-fix is anchored, and this one is a ${severity}: ${holdsAs(severity, origin)}`;
       return origin === "missed" ? `a missed finding is never anchored, safety included, as it sits on code an earlier round reviewed unchanged: ${holdsAs(severity, origin)}` : null;
@@ -175,7 +231,7 @@ export function holds(triage: Triage): boolean {
   }
 }
 
-/** The verifier's word on a finding, in the one wording catch-up, a handed-over agent and the board give it: "Anchored, as it breaks the issue's brief", "Downgraded to should-fix". */
+/** The verifier's word on a finding, in the one wording catch-up, a handed-over agent and the board give it, on one line to sit in a list: "Anchored, as it breaks a recorded decision", "Anchored, as a bug hit in normal use, reached by: <steps>", "Downgraded to should-fix". */
 export function triageText(triage: Triage): string {
   switch (triage.result) {
     case "rejected":
@@ -183,7 +239,7 @@ export function triageText(triage: Triage): string {
     case "confirmed":
       return "Confirmed";
     case "anchored":
-      return `Anchored, as it breaks ${ANCHOR_WORDS[triage.anchor]}`;
+      return `Anchored, ${anchorText(triage)}`;
     case "downgraded":
       return `Downgraded to ${triage.to}`;
     default:
@@ -201,14 +257,8 @@ const lowerThan = (severity: Severity): Severity[] => severitySchema.options.sli
  */
 function holdsAs(severity: Severity, origin: Origin): string {
   const lower = `downgrade it to ${lowerThan(severity).join(" or ")}`;
-  if (severity === "must-fix") return origin === "missed" ? lower : `anchor it, naming what it breaks, or ${lower}`;
+  if (severity === "must-fix") return origin === "missed" ? lower : `anchor it, naming the anchor it meets, or ${lower}`;
   return lowerThan(severity).length === 0 ? "confirm it" : `confirm it, or ${lower}`;
-}
-
-/** The anchors as a list in a sentence: "a done-criterion, the issue's brief, …, or existing behaviour, as a regression". */
-function anchorList(): string {
-  const words = anchorSchema.options.map((anchor) => ANCHOR_WORDS[anchor]);
-  return `${words.slice(0, -1).join(", ")}, or ${words.at(-1)}`;
 }
 
 /** The review a check starts with: queued for a reviewer when its verdict is queued for a verifier, else none. A final check's is none: it reviews no diff. */
@@ -231,13 +281,14 @@ export const reviewPending = ({ review, verdict }: { review: Review; verdict: Pi
  * issue_verdict refuses both, and the two are stored together, so a stored check that breaks
  * either is refused as the store reads it, never read as failing a verdict it couldn't fail. A
  * confirmed must-fix passes: verdicts from before the anchor rule stored it so (verdict.ts
- * failsVerdict).
+ * failsVerdict). A safety or regression anchor with no steps, as verdicts from before d68 stored
+ * one, is checked by every rule but its steps.
  */
 export function triaged(findings: readonly ReviewFinding[], triage: readonly Triage[]): Triaged[] {
   if (findings.length !== triage.length) throw new Error(`The verdict triages ${triage.length} of the check's ${findings.length} findings.`);
   return findings.map((finding, i) => {
     const one = at(triage, i);
-    const problem = isLegacyConfirmed(finding, one) ? null : triageProblem(finding, one);
+    const problem = isLegacyConfirmed(finding, one) ? null : isStepless(one) ? severityProblem(finding, one) : triageProblem(finding, one);
     if (problem !== null) throw new Error(`The verdict's triage of finding ${i + 1} breaks the triage rule: ${problem}.`);
     return { ...finding, ...one };
   });
@@ -245,6 +296,9 @@ export function triaged(findings: readonly ReviewFinding[], triage: readonly Tri
 
 /** A must-fix the verifier confirmed, as verdicts from before the anchor rule stored one. */
 const isLegacyConfirmed = ({ severity }: ReviewFinding, { result }: Triage): boolean => severity === "must-fix" && result === "confirmed";
+
+/** A safety or regression anchor with no steps, as verdicts from before d68 stored one. */
+const isStepless = (triage: Triage): boolean => triage.result === "anchored" && triage.steps === null && (triage.anchor === "safety" || triage.anchor === "regression");
 
 /**
  * A finding in a line: its place, its severity and, when it isn't new, its origin, then its claim,

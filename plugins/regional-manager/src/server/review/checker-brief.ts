@@ -5,7 +5,8 @@ import { decisionsText, type IssueDecision } from "../../model/decision.ts";
 import { numberedRounds } from "../../model/feed/feed.ts";
 import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import type { HandoffCheck } from "../../model/verdict/check.ts";
+import type { Check, HandoffCheck } from "../../model/verdict/check.ts";
+import type { BlockingDefect } from "../../model/verdict/review.ts";
 import { deltaOf, type Delta } from "../../model/verdict/rounds/delta.ts";
 import type { Store } from "../store/store.ts";
 
@@ -19,13 +20,29 @@ export type Scope = Extract<Delta, { kind: "first" }> | (Extract<Delta, { kind: 
  */
 export function scopeOf(store: Pick<Store, "record" | "finalChecks">, check: HandoffCheck): Scope {
   const record = store.record(check.coordinatorId, check.issueId);
-  const at = record.findIndex(({ handoff }) => handoff.id === check.subject.handoffId);
-  if (at === -1) throw new Error(`The handoff of check ${check.id} is not on ${check.issueId}'s record.`);
-  const delta = deltaOf(record.slice(0, at).flatMap(({ check: earlier }) => (earlier === null ? [] : [earlier])));
+  const delta = deltaOf(earlierChecks(record, check));
   if (delta.kind === "first") return delta;
   const base = numberedRounds(record, store.finalChecks(check.coordinatorId, check.issueId)).find((round) => round.kind === "handoff" && round.handed.check?.id === delta.base.id);
   if (base === undefined) throw new Error(`The base of check ${check.id} is not one of ${check.issueId}'s rounds.`);
   return { ...delta, round: base.number };
+}
+
+/**
+ * The blocking defects the latest earlier verifier of the issue found itself (verdict.ts
+ * `blocking`), for this check's verifier to answer fixed or still blocking, so a known defect
+ * stays until a verifier sees it fixed. why the latest returned verdict only: each verdict carries
+ * the earlier defects its verifier answered still blocking, so it holds every one still open.
+ */
+export function earlierDefectsOf(store: Pick<Store, "record">, check: HandoffCheck): BlockingDefect[] {
+  const returned = earlierChecks(store.record(check.coordinatorId, check.issueId), check).flatMap(({ verdict }) => (verdict.state === "returned" ? [verdict] : []));
+  return returned.at(-1)?.blocking ?? [];
+}
+
+/** The checks of the issue's handoffs before the one `check` judges, oldest first. why throw: a check is inserted with its handoff. */
+function earlierChecks(record: ReturnType<Store["record"]>, check: HandoffCheck): Check[] {
+  const at = record.findIndex(({ handoff }) => handoff.id === check.subject.handoffId);
+  if (at === -1) throw new Error(`The handoff of check ${check.id} is not on ${check.issueId}'s record.`);
+  return record.slice(0, at).flatMap(({ check: earlier }) => (earlier === null ? [] : [earlier]));
 }
 
 /** An issue as a reviewer's or a verifier's first message gives it: its brief, and its decisions. */
