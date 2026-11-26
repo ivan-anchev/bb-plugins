@@ -74,7 +74,10 @@ export type PrUnavailable = z.infer<typeof prUnavailableSchema>;
 /** The label a failed read is shown under: "MR status unavailable" on GitLab, "PR status unavailable" otherwise. */
 export const statusLabel = (forge: Forge | null): string => `${FORGE[forge ?? "github"].short} status unavailable`;
 
-/** One read of a branch's pull request: what it found (null: none), or why GitHub couldn't be read. */
+/** One read of every watched branch of a project: each branch's change request (null: none), or why its forge couldn't be read. Both forges' readers return it. */
+export type BranchesRead = { kind: "read"; prs: Map<string, PrSnapshot | null> } | { kind: "unavailable"; unavailable: PrUnavailable };
+
+/** One read of a branch's pull request: what it found (null: none), or why its forge couldn't be read. */
 export type PrRead = { kind: "read"; pr: PrSnapshot | null } | { kind: "unread"; reason: string };
 
 /** What the plugin knows of a branch's pull request: the latest read that found it (snapshot null: none has), and why the latest read failed (null: it didn't). */

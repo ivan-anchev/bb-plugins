@@ -1,15 +1,32 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { parseGitHubRepo, parsePrHead, parsePrs, parsePrUrl, prHeadQueryArgs, prQueryArgs } from "./pr-query.ts";
+import type { Cli } from "../host-command.ts";
+import { parsePrHead, parsePrUrl, prHeadQueryArgs, readGitHub } from "./pr-query.ts";
 
 // gh's answer to this exact query, run read-only against ivan-anchev/bb-plugins for three branches
 // with merged pull requests and one with none (gh 2.97.0, 2026-11-16).
 const RECORDED = readFileSync(new URL("./fixtures/bb-plugins-prs.json", import.meta.url), "utf8");
 const RECORDED_BRANCHES = ["fix-pr-reviews-sticky-gap", "release-pr-reviews-0.2.6", "pr-reviews/tooltip-popover-roles", "no-such-branch-08"];
 
-test("a real answer parses into each branch's pull request, and null for a branch with none", () => {
-  const prs = parsePrs(RECORDED, RECORDED_BRANCHES);
+/** gh answering every run with `stdout`, and the arguments of each run it was given. */
+function ghAnswering(stdout: string) {
+  const runs: [Cli, string[]][] = [];
+  const run = async (cli: Cli, args: string[]) => {
+    runs.push([cli, args]);
+    return stdout;
+  };
+  return { run, runs };
+}
+
+/** Each branch's pull request as readGitHub read them from gh's `stdout`; null when it couldn't. */
+async function parsed(stdout: string, branches: readonly string[]) {
+  const read = await readGitHub(ghAnswering(stdout).run, "ivan-anchev/bb-plugins", branches);
+  return read.kind === "read" ? read.prs : null;
+}
+
+test("a real answer parses into each branch's pull request, and null for a branch with none", async () => {
+  const prs = await parsed(RECORDED, RECORDED_BRANCHES);
   assert.deepEqual(prs?.get("fix-pr-reviews-sticky-gap"), {
     forge: "github",
     number: 142,
@@ -25,19 +42,18 @@ test("a real answer parses into each branch's pull request, and null for a branc
   assert.equal(prs?.get("no-such-branch-08"), null);
 });
 
-test("the query takes the repository and every branch as variables, never in its text", () => {
+test("the read runs gh once with no --hostname, the repository and every branch as variables, never in its text", async () => {
   const branch = 'feat/a "quoted" } branch';
-  const args = prQueryArgs(parseGitHubRepo("git@github.com:octo-org/widgets.git") ?? assert.fail("a GitHub remote"), ["main", branch]);
+  const gh = ghAnswering(RECORDED);
+  await readGitHub(gh.run, "octo-org/widgets", ["main", branch]);
+  const [[cli, args] = assert.fail("gh never ran")] = gh.runs;
+  assert.equal(cli, "gh");
+  assert.equal(gh.runs.length, 1);
   const query = args.find((arg) => arg.startsWith("query=")) ?? assert.fail("no query");
   assert.ok(!query.includes(branch) && !query.includes("octo-org"));
   assert.deepEqual(args.slice(0, 2), ["api", "graphql"]);
+  assert.ok(!args.includes("--hostname"), "github.com, gh's default host, as before GitLab was read");
   for (const field of ["owner=octo-org", "name=widgets", "b0=main", `b1=${branch}`]) assert.ok(args.includes(field), field);
-});
-
-test("only a github.com remote names a repository", () => {
-  assert.equal(parseGitHubRepo("https://github.com/Octo-Org/widgets.git"), "Octo-Org/widgets");
-  assert.equal(parseGitHubRepo("ssh://git@github.com/octo-org/widgets"), "octo-org/widgets");
-  assert.equal(parseGitHubRepo("https://gitlab.com/octo-org/widgets.git"), null);
 });
 
 type Rollup = { state: string; contexts: { nodes: object[] } } | null;
@@ -60,10 +76,10 @@ const answer = (node: { state?: string; isDraft?: boolean; reviewDecision?: stri
       },
     },
   });
-const one = (node: Parameters<typeof answer>[0]) => parsePrs(answer(node), ["feat"])?.get("feat");
+const one = async (node: Parameters<typeof answer>[0]) => (await parsed(answer(node), ["feat"]))?.get("feat");
 
-test("failing CI names each failed check run and status, and nothing that passed or is still running", () => {
-  const pr = one({
+test("failing CI names each failed check run and status, and nothing that passed or is still running", async () => {
+  const pr = await one({
     rollup: {
       state: "FAILURE",
       contexts: {
@@ -83,26 +99,27 @@ test("failing CI names each failed check run and status, and nothing that passed
   assert.deepEqual(pr?.failedChecks, ["test", "e2e", "ci/legacy"]);
 });
 
-test("a rollup state GitHub adds later is pending, never a pass; no rollup means no checks", () => {
-  assert.equal(one({ rollup: { state: "QUEUED_SOMEHOW", contexts: { nodes: [] } } })?.ci, "pending");
-  assert.equal(one({ rollup: { state: "EXPECTED", contexts: { nodes: [] } } })?.ci, "pending");
-  assert.equal(one({ rollup: { state: "SUCCESS", contexts: { nodes: [] } } })?.ci, "pass");
-  assert.equal(one({})?.ci, "none");
+test("a rollup state GitHub adds later is pending, never a pass; no rollup means no checks", async () => {
+  assert.equal((await one({ rollup: { state: "QUEUED_SOMEHOW", contexts: { nodes: [] } } }))?.ci, "pending");
+  assert.equal((await one({ rollup: { state: "EXPECTED", contexts: { nodes: [] } } }))?.ci, "pending");
+  assert.equal((await one({ rollup: { state: "SUCCESS", contexts: { nodes: [] } } }))?.ci, "pass");
+  assert.equal((await one({}))?.ci, "none");
 });
 
-test("review decisions and draft state", () => {
-  assert.equal(one({ reviewDecision: "APPROVED" })?.review, "approved");
-  assert.equal(one({ reviewDecision: "CHANGES_REQUESTED" })?.review, "changes-requested");
-  assert.equal(one({ reviewDecision: "REVIEW_REQUIRED" })?.review, "none");
-  assert.equal(one({ isDraft: true })?.draft, true);
-  assert.equal(one({ state: "CLOSED" })?.state, "closed");
+test("review decisions and draft state", async () => {
+  assert.equal((await one({ reviewDecision: "APPROVED" }))?.review, "approved");
+  assert.equal((await one({ reviewDecision: "CHANGES_REQUESTED" }))?.review, "changes-requested");
+  assert.equal((await one({ reviewDecision: "REVIEW_REQUIRED" }))?.review, "none");
+  assert.equal((await one({ isDraft: true }))?.draft, true);
+  assert.equal((await one({ state: "CLOSED" }))?.state, "closed");
 });
 
-test("an answer that isn't the pull requests asked for is not read as data", () => {
-  assert.equal(parsePrs("not json", ["feat"]), null);
-  assert.equal(parsePrs(JSON.stringify({ data: { repository: {} } }), ["feat"]), null, "a branch's field is missing");
-  assert.equal(parsePrs(JSON.stringify({ errors: [{ message: "Something went wrong" }] }), ["feat"]), null);
-  assert.equal(parsePrs(answer({ state: "SOMETHING_ELSE" }), ["feat"]), null);
+test("an answer that isn't the pull requests asked for is not read as data, and says so as GitHub's, for now", async () => {
+  const unreadable = { kind: "unavailable", unavailable: { kind: "transient", reason: "GitHub's answer wasn't the pull requests the plugin asked for", forge: "github" } };
+  assert.deepEqual(await readGitHub(ghAnswering("not json").run, "o/r", ["feat"]), unreadable);
+  assert.deepEqual(await readGitHub(ghAnswering(JSON.stringify({ data: { repository: {} } })).run, "o/r", ["feat"]), unreadable, "a branch's field is missing");
+  assert.deepEqual(await readGitHub(ghAnswering(JSON.stringify({ errors: [{ message: "Something went wrong" }] })).run, "o/r", ["feat"]), unreadable);
+  assert.deepEqual(await readGitHub(ghAnswering(answer({ state: "SOMETHING_ELSE" })).run, "o/r", ["feat"]), unreadable);
 });
 
 // gh's answer to prHeadQueryArgs for ivan-anchev/bb-plugins#142, run read-only (gh 2.97.0, 2026-11-26).

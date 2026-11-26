@@ -7,11 +7,14 @@ import { cliFailure, type CliWords, type HostCommandFailure } from "../host-comm
 const GH_WORDS: CliWords = {
   cli: "gh",
   forge: "github",
+  // gh api ends an HTTP failure's stderr with "(HTTP 401)".
+  httpStatus: /\(HTTP (\d{3})\)/,
   notInstalled: "gh, the GitHub CLI, isn't installed on the machine running bb",
   signedOut: "gh isn't signed in on the machine running bb: run gh auth login there",
   rejected: "GitHub rejected gh's credentials on the machine running bb (HTTP 401): check gh auth status there",
   unreachable: "couldn't reach GitHub",
   rateLimited: "GitHub is limiting requests right now",
+  unexplained: (said) => said,
 };
 
 export const ghFailure = (failure: HostCommandFailure): PrUnavailable => cliFailure(GH_WORDS, failure);

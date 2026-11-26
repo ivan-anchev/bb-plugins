@@ -251,15 +251,19 @@ test("a repository is read every tick while CI runs or a verdict waits for it, e
   assert.equal(runs(), 6, "a closed issue is never read");
 });
 
-test("an agent whose project isn't on GitHub is not read; a verdict that waits on its pull request passes with CI not checked", async () => {
-  const { kit, row, minute, verified } = await agentOnGitHub();
-  kit.github.remote = "https://gitlab.com/acme/webhooks.git";
+test("on a github.com remote the watch runs gh with exactly the arguments it ran before GitLab was read, with no --hostname, and never runs glab", async () => {
+  const { kit, branch, pr, minute } = await agentOnGitHub();
+  pr();
   await minute();
-  await verified();
-  assert.equal((await row()).lane, "verifying");
   await minute();
-  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
-  assert.equal(kit.github.runs.length, 0);
+  // The fields and query as 0.22.0 sent them, copied here so a change to either fails this test.
+  const fields = `number url state isDraft reviewDecision
+  commits(last: 1) { nodes { commit { oid statusCheckRollup { state contexts(first: 100) { nodes {
+    __typename ... on CheckRun { name conclusion } ... on StatusContext { context state } } } } } } }`;
+  const query = `query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) {\nb0: pullRequests(headRefName: $b0, first: 1, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ${fields} } }\n} }`;
+  const asOn022 = ["api", "graphql", "-f", `query=${query}`, "-f", "owner=acme", "-f", "name=webhooks", "-f", `b0=${branch}`];
+  assert.deepEqual(kit.github.runs, [asOn022, asOn022]);
+  assert.deepEqual(kit.gitlab.runs, [], "glab never runs for github.com");
 });
 
 test("a newer done handoff replaces a verdict still waiting for CI, so only the newer one is ever announced", async () => {

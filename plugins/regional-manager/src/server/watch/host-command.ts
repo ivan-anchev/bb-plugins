@@ -45,10 +45,16 @@ export type HostCommandFailure = z.infer<typeof failureSchema>;
 /** The exit code, output and timeout flag of a runHostCli rejection. */
 export const parseHostCommandFailure = (error: unknown): HostCommandFailure => failureSchema.parse(error);
 
-const firstLine = (text: string) => text.split("\n").find((line) => line.trim() !== "");
+/** A CLI's stdout as JSON; null when it isn't JSON, which each reader's schema then refuses. */
+export function jsonOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
 
-// gh and glab end an HTTP failure's stderr with "(HTTP 401)".
-const HTTP_STATUS = /\(HTTP (\d{3})\)/;
+const firstLine = (text: string) => text.split("\n").find((line) => line.trim() !== "");
 
 // Every way a Go CLI, gh or glab, through Go's net, net/http and crypto/tls, reports a connection that failed before its forge answered.
 const TRANSPORT = [
@@ -67,10 +73,24 @@ const TRANSPORT = [
 ];
 
 /** Whether a CLI's message says the connection failed before its forge answered. */
-const connectionFailed = (text: string): boolean => TRANSPORT.some((pattern) => pattern.test(text));
+export const connectionFailed = (text: string): boolean => TRANSPORT.some((pattern) => pattern.test(text));
 
-/** A CLI's words for each failure it can prove, as the board shows them after its forge's label. */
-export type CliWords = { cli: Cli; forge: Forge; notInstalled: string; signedOut: string; rejected: string; unreachable: string; rateLimited: string };
+/**
+ * How a CLI reports a failure, and its words for each one it can prove, as the board shows them
+ * after its forge's label: `httpStatus`, the pattern that finds the HTTP status in its stderr;
+ * `unexplained`, how it words its own first line (or its silence) for a failure nothing explains.
+ */
+export type CliWords = {
+  cli: Cli;
+  forge: Forge;
+  httpStatus: RegExp;
+  notInstalled: string;
+  signedOut: string;
+  rejected: string;
+  unreachable: string;
+  rateLimited: string;
+  unexplained(said: string): string;
+};
 
 /**
  * Why a run of a CLI failed, in its words, and whether it lasts. It says only what the failure
@@ -85,9 +105,9 @@ export function cliFailure(words: CliWords, { code, stderr, killed }: HostComman
   // why a timeout is a connection failure: the CLI waits on nothing else.
   if (killed || connectionFailed(stderr)) return transient(words.unreachable);
   if (stderr.includes(`${words.cli} auth login`)) return persistent(words.signedOut);
-  const status = Number(HTTP_STATUS.exec(stderr)?.[1] ?? 0);
+  const status = Number(words.httpStatus.exec(stderr)?.[1] ?? 0);
   if (status === 401) return persistent(words.rejected);
   if (status === 429 || (status === 403 && /rate limit/i.test(stderr))) return transient(words.rateLimited);
   // why transient: nothing shows it lasts, and a verdict settled on it never waits for CI again.
-  return transient(firstLine(stderr)?.replace(new RegExp(`^${words.cli}: `), "").trim() ?? `${words.cli} failed with no message (exit ${String(code)})`);
+  return transient(words.unexplained(firstLine(stderr)?.replace(new RegExp(`^${words.cli}: `), "").trim() ?? `${words.cli} failed with no message (exit ${String(code)})`));
 }
