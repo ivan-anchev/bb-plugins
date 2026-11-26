@@ -63,11 +63,13 @@ test("sign-in: a check glab ran that failed is GitLab's: rejected credentials an
   for (const [name, answer, kind, reason] of cases) assert.deepEqual(await refusal(answer), { kind, forge: "gitlab", reason }, name);
 });
 
-test("sign-in: the HTTP status is read from GitLab's response, never from the host in the request", async () => {
+test("sign-in: the HTTP status is read from GitLab's response, never from a host name, in the request or in glab's own words", async () => {
   const cases: [string, string, "persistent" | "transient", string][] = [
     ["gitlab-429.corp.test", "GET https://gitlab-429.corp.test/api/v4/user: 401 {message: 401 Unauthorized}", "persistent", rejected("gitlab-429.corp.test")],
     ["gitlab-401.corp.test", "GET https://gitlab-401.corp.test/api/v4/user: 429 {message: Too Many Requests}", "transient", "GitLab at gitlab-401.corp.test is limiting requests right now"],
     ["gitlab-401.corp.test", `Get "https://gitlab-401.corp.test/api/v4/user": oauth2: cannot fetch token: 429 Too Many Requests`, "transient", "GitLab at gitlab-401.corp.test is limiting requests right now"],
+    // glab's own words for a token gone from the keyring name the host, and no response.
+    ...["gitlab-429.corp.test", "gitlab-401.corp.test"].map((host): [string, string, "persistent", string] => [host, `the token for "${host}" is missing from the operating system keyring; run \`glab auth login --hostname ${host}\` to re-authenticate`, "persistent", `glab's sign-in to ${host} failed on the machine running bb: run glab auth login --hostname ${host} there`]),
   ];
   for (const [host, error, kind, reason] of cases) assert.deepEqual(await refusal(exited(status("error", error, host)), host), { kind, forge: "gitlab", reason }, error);
 });

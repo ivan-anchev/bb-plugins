@@ -50,9 +50,10 @@ const GRANT_REFUSED = /\binvalid_grant\b/;
 // or Go's own `Get "https://H/api/v4/user": ` when the request failed before it, as an OAuth refresh does.
 const REQUEST = /^\s*[A-Za-z]+ \S+: /;
 
-// An HTTP status in GitLab's response, wherever glab puts it: `401 {message: …}`, `… (HTTP 429)`, or
-// an OAuth refresh's `oauth2: cannot fetch token: 401 Unauthorized`.
-const HTTP_STATUS = /\b([1-5]\d\d)\b/;
+// An HTTP status in GitLab's response, a word of its own wherever glab puts it: `401 {message: …}`,
+// `… (HTTP 429)`, or an OAuth refresh's `oauth2: cannot fetch token: 401 Unauthorized`. why a word
+// of its own: a host glab names in its own words, as "gitlab-429.corp.test", is never a status.
+const HTTP_STATUS = /(?:^|[\s(])([1-5]\d\d)(?=[\s)]|$)/;
 
 /**
  * Why glab's check of a host it has failed, from the entry's error, which reads like
@@ -67,12 +68,13 @@ function checkFailed(host: string, error: string): PrUnavailable {
   if (NOT_SIGNED_IN.test(error)) return notSignedIn(host);
   if (GRANT_REFUSED.test(error)) return signInFailed(host);
   if (connectionFailed(error)) return { kind: "transient", forge: "gitlab", reason: gitlab.unreachable };
+  // why before any status: glab says to sign in again only for a sign-in it found broken before asking GitLab.
+  if (error.includes("glab auth login")) return signInFailed(host);
   // why the response alone: the request names the host, which may hold any number, as gitlab-429.corp.test.
   const response = error.replace(REQUEST, "");
   const status = Number(HTTP_STATUS.exec(response)?.[1] ?? 0);
   if (status === 429 || /rate limit/i.test(response)) return { kind: "transient", forge: "gitlab", reason: gitlab.rateLimited };
   if (status === 401) return { kind: "persistent", forge: "gitlab", reason: gitlab.rejected };
-  if (error.includes("glab auth login")) return signInFailed(host);
   return { kind: "transient", forge: "gitlab", reason: gitlab.unexplained(firstLine(error) ?? "its check of the sign-in failed with no message") };
 }
 
