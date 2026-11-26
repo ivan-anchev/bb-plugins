@@ -10,7 +10,7 @@ import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import { prRef, type CiVerdict, type PrSnapshot } from "../verdict/pr.ts";
 import { reviewPending } from "../verdict/review.ts";
 import type { Decision } from "../decision.ts";
-import { capLock, capQuestionsOf, capText, stillWaits, type CapQuestion } from "../verdict/rounds/cap.ts";
+import { capLock, capQuestionsOf, capText, questionWaitedOn, type CapQuestion } from "../verdict/rounds/cap.ts";
 import { ciVerdictOf, failureHeadline, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
@@ -141,7 +141,7 @@ const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepte
 function issueView({ issue, holder, ended, accepted, pr, openDecisions, verifierAsks }: IssueFacts): Placed {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null, finalCheckDue: null };
   const final = finalOf(issue, pr);
-  if (final !== null) return { ...base, ...final, needsYou: null };
+  if (final !== null) return { ...base, ...final, needsYou: waitingOn({ status: final.status, needsYou: null }, openDecisions) };
   // why before its agents: the manager took the work as it is, whatever its agent's thread does next or whichever agent holds the issue, until a newer handoff replaces it.
   if (accepted !== null) {
     const placed = byHandoff(issue.kind, accepted, { pr, verifierAsks, fixRounds: 0 });
@@ -158,20 +158,24 @@ function issueView({ issue, holder, ended, accepted, pr, openDecisions, verifier
 }
 
 /**
- * Why the issue, placed at `status`, waits on the user: its own reason (`needsYou`, null: none),
- * else the question of `open` that has waited longest (askedNow). null: it doesn't wait. The cap
- * leads it after placement (ledByCap); why the headline never carries the cap: only the Needs you
- * reason leads with it.
+ * Why the issue, placed at `status`, waits on the user: the regional manager's question it waits on
+ * (askedNow), in its own words, which say what the user decides; else its own reason (`needsYou`,
+ * null: none), such as its agent blocked, which its headline still says; else the plugin's question
+ * at its cap. null: it doesn't wait. A closed issue waits only on the manager's questions
+ * (rounds/cap.ts stillWaits). The cap leads it after placement (ledByCap); why the headline never
+ * carries the cap: only the Needs you reason leads with it.
  */
-const waitingOn = ({ status, needsYou }: Pick<Placing, "status" | "needsYou">, open: readonly Decision[]): string | null => needsYou ?? askedNow(status, open);
+const waitingOn = ({ status, needsYou }: Pick<Placing, "status" | "needsYou">, open: readonly Decision[]): string | null => {
+  const asked = askedNow(status, open);
+  return asked === null || (asked.cap !== null && needsYou !== null) ? needsYou : asked.question;
+};
 
-/**
- * The question of `open` that has waited longest for the user on the issue placed at `status`
- * (rounds/cap.ts stillWaits, so never a cap question once the issue is closed); null: none waits.
- * why its own words: they say both that the issue waits on the user and what for.
- */
-const askedNow = (status: IssueStatus, open: readonly Decision[]): string | null =>
-  open.filter((decision) => stillWaits(decision, isClosed(status))).reduce<Decision | null>((oldest, decision) => (oldest === null || decision.askedAt < oldest.askedAt ? decision : oldest), null)?.question ?? null;
+/** The question of `open` the issue placed at `status` waits on the user for (rounds/cap.ts questionWaitedOn); null: none. */
+const askedNow = (status: IssueStatus, open: readonly Decision[]): Decision | null =>
+  questionWaitedOn(
+    [...open].sort((a, b) => a.askedAt - b.askedAt),
+    isClosed(status),
+  );
 
 /** The cap question of `open` that locks the issue placed at `status` (rounds/cap.ts capLock). */
 const lockAt = (open: readonly Decision[], { issue, status }: Pick<Placed, "issue" | "status">): CapQuestion | null => capLock(capQuestionsOf(open, issue.id), isClosed(status));
@@ -196,7 +200,7 @@ function parentView({ issue, openDecisions, finalCheck, verifierAsks }: IssueFac
   const counted = subIssues.filter(({ status }) => status !== "canceled");
   const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: counted.length }, finalCheckDue: null };
   const final = finalOf(issue, null);
-  if (final !== null) return { ...base, ...final, needsYou: null };
+  if (final !== null) return { ...base, ...final, needsYou: waitingOn({ status: final.status, needsYou: null }, openDecisions) };
   if (done.length > 0 && subIssues.every(({ status }) => isClosed(status))) {
     if (!isVerified(issue.kind)) return { ...base, status: "done", headline: null, needsYou: null, closedBy: closedBySubIssues(subIssues) };
     const builds = done.filter(({ issue: sub }) => shipsCode(sub.kind));
@@ -207,7 +211,7 @@ function parentView({ issue, openDecisions, finalCheck, verifierAsks }: IssueFac
   }
   const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
   const status = started ? "in-progress" : subIssues.some(({ status }) => status === "todo") ? "todo" : issue.rest;
-  return { ...base, status, headline: askedNow(status, openDecisions), needsYou: waitingOn({ status, needsYou: null }, openDecisions), closedBy: null };
+  return { ...base, status, headline: askedNow(status, openDecisions)?.question ?? null, needsYou: waitingOn({ status, needsYou: null }, openDecisions), closedBy: null };
 }
 
 /**

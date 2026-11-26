@@ -791,6 +791,12 @@ once: carry on with other work, or end your turn. Their answer wakes you, and
 the answered question stays in the issue's feed.
 `crew_catch_up` lists the questions still waiting, so don't ask one twice.
 
+A question listed "on no issue" was asked before every question had to name
+an issue. Its row under Needs you opens your thread, and the user answers it
+there: record their answer, in their own words, with `crew_record_answer`
+(`decision` and `answer`), which takes it off their board. It refuses a
+question about an issue: only the user answers that, in the issue's feed.
+
 Never ask in your reply and wait for an answer, and never use a question tool
 or form of your own: while one waits for the user, bb holds every message to
 you, so no agent's handoff can wake you. An agent's own question or approval

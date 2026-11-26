@@ -173,11 +173,20 @@ test("an issue resting in Todo after its agent ended says how it ended; only one
   assert.deepEqual(view({ issue: { ...issue, rest: "backlog" }, ended: { how: "stopped", left: null } }), at("backlog", "Not planned"));
 });
 
-test("an issue named by an unanswered decision Needs you, its question the reason, unless something more pressing does", () => {
+test("an issue named by an unanswered decision Needs you, its question the reason, before its own reason, which its headline keeps", () => {
   const asked = "Another round?";
   assert.deepEqual(view(asking(null)), at("todo", "Not started", asked));
   assert.deepEqual(view({ ...asking(null), ...held(thread("active")) }), at("in-progress", "Working", asked));
-  assert.deepEqual(view({ ...asking(null), ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
+  assert.deepEqual(view({ ...asking(null), ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", asked));
+  assert.deepEqual(view(held(thread("idle"), { handoff: blocked, check: null })), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"), "with no question, its own reason");
+});
+
+test("a closed issue a question of the manager's still waits on stays under Needs you until the user answers: merged, accepted or canceled", () => {
+  assert.deepEqual(view({ ...asking(null), pr: pr("merged") }), at("done", "Merged #12", "Another round?"));
+  assert.deepEqual(view({ ...asking(null), issue: { ...issue, closed: { as: "canceled", at: 9_000 } } }).needsYou, "Another round?");
+  assert.deepEqual(view({ ...asking(null), issue: { ...issue, closed: { as: "accepted", at: 9_000 } } }).needsYou, "Another round?");
+  assert.equal(view({ ...asking(3), pr: pr("merged") }).needsYou, null, "the plugin's question at its cap lapses as the issue closes");
+  assert.equal(view({ openDecisions: [{ ...question(null), answer: { text: "No", at: 1_500 } }], pr: pr("merged") }).needsYou, null, "answered, it waits on nothing");
 });
 
 test("an issue that two questions wait on gives the one asked first as its reason, whatever order they come in", () => {
@@ -191,6 +200,8 @@ test("an issue whose cap question is open Needs you with a reason that leads wit
   const blocking = { ...held(thread("idle"), { handoff: blocked, check: null }) };
   assert.deepEqual(view({ ...asking(3), ...blocking }), at("in-progress", "Blocked: Needs a staging key", "At its cap of 3 failed verifications: Blocked: Needs a staging key"));
   assert.deepEqual(view(asking(4)).needsYou, "At 4 failed verifications, past its cap of 3: Another round?");
+  const manager: Decision = { ...question(null), id: decisionIdSchema.parse("d4"), question: "Split the retry budget out?", askedAt: 2_000 };
+  assert.deepEqual(view({ ...blocking, openDecisions: [question(3), manager] }).needsYou, "At its cap of 3 failed verifications: Split the retry budget out?", "a question of the manager's is the reason the cap leads");
 });
 
 /** A parent WEB-1 of `kind` and its sub-issues WEB-2, WEB-3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */

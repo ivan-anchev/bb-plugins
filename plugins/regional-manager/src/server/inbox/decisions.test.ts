@@ -400,3 +400,71 @@ test("an answer to the plugin's question at the cap, sent as its issue is cancel
   assert.equal(kit.store.decision(d1)?.answer, null);
   assert.ok(!kit.store.unread(coordinatorId).slice(before).some(({ event }) => event.kind === "decision-answered"), "nobody is told of an answer");
 });
+
+test("a question on an issue whose pull request merges before the user answers keeps it under Needs you, on the board, the badge and openIssues, until they answer", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const { agentThreadId } = await startedAgent(kit, threadId, { title: "Add retries" });
+  assert.match(textOf(await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], issue: "WEB-1" }, threadId)), /^Asked the user d1/);
+  const branch = kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch");
+  kit.github.prs.set(branch, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 60_000;
+  await kit.tick();
+  await settled();
+
+  const board = await boardOf(kit, coordinatorId);
+  assert.deepEqual(board.issues.map(({ id, status, needsYou }) => [id, status, needsYou]), [["WEB-1", "done", QUESTION]]);
+  assert.deepEqual(boardGroups(board.decisions, board.issues).map(({ lane, rows }) => [lane, rows.length]), [["needs-you", 1]], "Done, and still under Needs you");
+  assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: 1 });
+  assert.deepEqual((await kit.rpc.openIssues({ keys: [coordinatorId] }))[coordinatorId]?.needsYou.map(({ id, reason }) => [id, reason]), [["WEB-1", QUESTION]]);
+
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "main" });
+  assert.deepEqual(boardGroups((await boardOf(kit, coordinatorId)).decisions, (await boardOf(kit, coordinatorId)).issues).map(({ lane }) => lane), ["done"], "answered, it rests in Done");
+  assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: 0 });
+});
+
+test("an issue whose agent is blocked and that a question waits on gives the question as its Needs you line and published reason, the block as its headline", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const { agentThreadId } = await startedAgent(kit, threadId, { title: "Add retries" });
+  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, agentThreadId);
+  kit.thread(agentThreadId).status = "idle";
+  await settled();
+  assert.match(textOf(await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], issue: "WEB-1" }, threadId)), /^Asked the user d1/);
+
+  const board = await boardOf(kit, coordinatorId);
+  assert.deepEqual(board.issues.map(({ needsYou, headline }) => [needsYou, headline]), [[QUESTION, "Blocked: Needs a staging key"]]);
+  assert.deepEqual((await kit.rpc.openIssues({ keys: [coordinatorId] }))[coordinatorId]?.needsYou.map(({ reason }) => reason), [QUESTION]);
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /- WEB-1 "Add retries" \([^)]+\): Blocked: Needs a staging key; needs you: Target main or release\/2\?;/);
+});
+
+test("a question on no issue is answered in the manager's thread: catch-up says so, crew_record_answer records the user's words, and it leaves Needs you", async () => {
+  const { kit, threadId, coordinatorId } = await asked();
+  const decisions = /## Decisions\n\n[^#]*/.exec(textOf(await kit.call("crew_catch_up", {}, threadId)))?.[0] ?? assert.fail("no decisions section");
+  assert.match(decisions, /- d1 on no issue, asked \S+: Target main or release\/2\? Options: "main", "release\/2"\. It names no issue, so the user answers it in your thread, where its row under Needs you takes them: record their answer with crew_record_answer\./);
+
+  assert.equal(textOf(await kit.call("crew_record_answer", { decision: "d1", answer: "release/2, and tag it" }, threadId)), "Recorded the user's answer to d1; it has left Needs you on their board, and stays among the decisions crew_catch_up returns.");
+  const board = await boardOf(kit, coordinatorId);
+  assert.deepEqual(boardGroups(board.decisions, board.issues), [], "the row is gone");
+  assert.equal(board.decisions[0]?.answer?.text, "release/2, and tag it");
+  const caughtUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(caughtUp, /### The user answered your question d1\n\nAt \S+ You asked: Target main or release\/2\? You offered: "main", "release\/2"\. Their answer, in their own words:\n\nrelease\/2, and tag it\n/);
+  assert.match(caughtUp, /## Decisions\n\nNone waiting for the user\./);
+
+  const again = await kit.call("crew_record_answer", { decision: "d1", answer: "main" }, threadId);
+  assert.ok(isRefusal(again));
+  assert.equal(textOf(again), "crew_record_answer is refused: d1 was already answered, and an answer can't be changed. crew_catch_up returns it.");
+  assert.equal(kit.store.decision(d1)?.answer?.text, "release/2, and tag it", "the first answer stands");
+});
+
+test("crew_record_answer refuses a question about an issue, which the user answers in its feed, and one the manager doesn't have, storing nothing", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
+  await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], issue: "WEB-1" }, threadId);
+
+  const filed = await kit.call("crew_record_answer", { decision: "d1", answer: "main" }, threadId);
+  assert.ok(isRefusal(filed));
+  assert.equal(textOf(filed), "crew_record_answer is refused: d1 is about WEB-1, so the user answers it in WEB-1's feed, where its row under Needs you opens it. If they told you their answer, point them there.");
+  const unknown = await kit.call("crew_record_answer", { decision: "d9", answer: "main" }, threadId);
+  assert.ok(isRefusal(unknown));
+  assert.equal(textOf(unknown), "You have no question d9. crew_catch_up lists those still waiting.");
+  assert.equal(kit.store.decisions(coordinatorId)[0]?.answer, null);
+});

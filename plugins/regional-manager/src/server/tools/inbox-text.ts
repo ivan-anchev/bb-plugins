@@ -263,9 +263,12 @@ function followUpOf(failure: Check | null): FollowUp {
 /** The decisions still waiting for the user (`open`, board-groups.ts waitingDecisions), as catch-up lists them. */
 export function openDecisionsText(open: readonly Decision[]): string {
   if (open.length === 0) return "## Decisions\n\nNone waiting for the user. Ask one with crew_ask_user when only the user can decide.";
-  const lines = open.map(({ id, issueId, question, options, askedAt }) => `- ${id} on ${issueId ?? "no issue"}, asked ${new Date(askedAt).toISOString()}: ${question}${options.length === 0 ? "" : ` Options: ${options.map((option) => `"${option}"`).join(", ")}.`}`);
+  const lines = open.map(({ id, issueId, question, options, askedAt }) => `- ${id} on ${issueId ?? "no issue"}, asked ${new Date(askedAt).toISOString()}: ${question}${options.length === 0 ? "" : ` Options: ${options.map((option) => `"${option}"`).join(", ")}.`}${issueId === null ? UNFILED_ANSWER : ""}`);
   return ["## Decisions\n\nWaiting for the user under Needs you on the board: a question on an issue as that issue's line there, answered in its feed. Their answer wakes you; don't ask again meanwhile.", ...lines].join("\n\n");
 }
+
+/** How a question on no issue is answered, as catch-up lists it. why: no card holds it, so the user can only answer it in the manager's thread. */
+const UNFILED_ANSWER = " It names no issue, so the user answers it in your thread, where its row under Needs you takes them: record their answer with crew_record_answer.";
 
 /** The reminders section of a catch-up: every reminder the thread has set, soonest due first. */
 export function remindersText(reminders: readonly Reminder[]): string {

@@ -2,7 +2,7 @@
 // happened, each drawn by its kind, under a filter: All, Rounds or Discussion. The entries are the
 // issueFeed read's; the filter and which rounds are open are the reader's own choices, kept in state
 // across reads and never seeded from one. Asked from the issue's row under Needs you, it shows the
-// question that has waited longest, focused on its first row (question-reveal.ts).
+// question that row names, focused on its first row (question-reveal.ts).
 import "./feed.css";
 import { useEffect, useId, useState } from "react";
 import type { IssueFeed, IssueRow } from "../../../../contract.ts";
@@ -15,7 +15,7 @@ import type { CoordinatorId } from "../../../../model/role.ts";
 import type { FeedAgents } from "./byline.tsx";
 import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
 import type { DecisionId } from "../../../../model/decision.ts";
-import { stillWaits } from "../../../../model/verdict/rounds/cap.ts";
+import { questionWaitedOn } from "../../../../model/verdict/rounds/cap.ts";
 import { useQuestionReveal } from "../question-reveal.ts";
 import { CommentCard } from "./comment-card.tsx";
 import { CommentComposer } from "./comment-composer.tsx";
@@ -46,7 +46,7 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
   const toggle = (round: Round) => setChosen((now) => new Map(now).set(round.key, !isOpen(round)));
   const engage = (round: Round) => setChosen((now) => (now.has(round.key) ? now : new Map(now).set(round.key, true)));
   const { asked, taken } = useQuestionReveal(coordinatorId, issue.id);
-  const revealing = asked ? oldestWaiting(feed.entries, issue.status) : null;
+  const revealing = asked ? waitedOn(feed.entries, issue.status) : null;
   // why during render: a reveal asked while Rounds hides the questions shows them all.
   if (revealing !== null && filter === "rounds") setFilter("all");
   useEffect(
@@ -141,11 +141,12 @@ const commentsIn = (entries: readonly Entry[]): Map<CommentId, Comment> => new M
 const capCountsIn = (entries: readonly Entry[]): ReadonlyMap<DecisionId, number> =>
   new Map(entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.cap !== null ? [[entry.decision.id, entry.decision.cap] as const] : [])));
 
-/** The question among the entries that has waited longest for the user's answer (rounds/cap.ts stillWaits); null: none waits. why the first: the entries are in the order they happened. */
-function oldestWaiting(entries: readonly Entry[], status: IssueStatus): DecisionId | null {
-  const waiting = entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" && stillWaits(entry.decision, isClosed(status)) ? [entry.decision.id] : []));
-  return waiting[0] ?? null;
-}
+/** The question among the entries the issue waits on the user for, as its row under Needs you names it (rounds/cap.ts questionWaitedOn); null: none. why in their order: the entries are in the order they happened. */
+const waitedOn = (entries: readonly Entry[], status: IssueStatus): DecisionId | null =>
+  questionWaitedOn(
+    entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" ? [entry.decision] : [])),
+    isClosed(status),
+  )?.id ?? null;
 
 const roundsIn = (entries: readonly Entry[]): Round[] => entries.flatMap((entry) => (entry.kind === "round" ? [entry.round] : []));
 

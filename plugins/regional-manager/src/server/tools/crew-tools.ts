@@ -1,10 +1,11 @@
 // The regional manager's tools that are about the whole crew rather than one issue or agent:
-// catching up, its memory, its reminders, its questions to the user and ending a quiet turn. Every call resolves the
+// catching up, its memory, its reminders, its questions to the user and their answers given in its
+// thread, and ending a quiet turn. Every call resolves the
 // caller's role from the plugin's database by its thread id, never from the thread's metadata, which
 // any client, plugin or the thread's own agent can write.
 import { z } from "zod";
 import { waitingDecisions } from "../../model/board/board-groups.ts";
-import { isOpen, optionsSchema, questionSchema } from "../../model/decision.ts";
+import { answerSchema, decisionIdSchema, isOpen, optionsSchema, questionSchema } from "../../model/decision.ts";
 import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import { memoryContentSchema, memoryFileSchema, memoryVersionSchema } from "../../model/memory-file.ts";
 import { AT_FORMS, parseAt, parseEvery, reminderIdSchema, reminderNoteSchema } from "../../model/reminder.ts";
@@ -25,17 +26,18 @@ export const MEMORY_READ = "crew_memory_read";
 const MEMORY_WRITE = "crew_memory_write";
 const REMIND = "crew_remind";
 const ASK_USER = "crew_ask_user";
+const RECORD_ANSWER = "crew_record_answer";
 const END_TURN = "crew_end_turn";
 
 /** What configure offers a regional manager of these tools. */
-export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER, END_TURN];
+export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER, RECORD_ANSWER, END_TURN];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment" | "record" | "prOfBranch">;
+  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "answerDecision" | "comment" | "record" | "prOfBranch">;
   inbox: Pick<Inbox, "unread" | "markRead">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
-  /** Runs after a decision is asked, to show it on the regional manager's board. */
+  /** Runs after a decision is asked or answered, to show it on the regional manager's board. */
   onChange(id: CoordinatorId): void;
 };
 
@@ -151,6 +153,25 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
       const decision = store.insertDecision(id, { question, options, recommended: recommended ?? null, issueId: issue }, Date.now());
       onChange(id);
       return `Asked the user ${decision.id} in ${issue}'s feed; ${issue} waits under Needs you on their board until they answer. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.`;
+    }),
+  });
+
+  bb.agents.registerTool({
+    name: RECORD_ANSWER,
+    description:
+      "Record the user's answer to one of your questions that names no issue, asked before every question had to name one, when they give it to you in your thread. Such a question waits under Needs you on their board, its row opening your thread, until it is answered: recording their answer takes it off. Give their answer in their own words, never one they didn't give. A question about an issue is answered by the user alone, in that issue's feed: this refuses it.",
+    presentation: { label: { pending: "Recording the user's answer", completed: "Recorded the user's answer" }, icon: { glyph: "MessageSquare" } },
+    parameters: z.object({
+      decision: decisionIdSchema.describe("The question, such as d7, as crew_catch_up's Decisions lists it."),
+      answer: answerSchema.describe("The user's answer, as they gave it in your thread."),
+    }),
+    execute: forManager(store, RECORD_ANSWER, (id, { decision, answer }) => {
+      const asked = store.decisions(id).find((each) => each.id === decision);
+      if (asked === undefined) return failed(`You have no question ${decision}. crew_catch_up lists those still waiting.`);
+      if (asked.issueId !== null) return failed(`${RECORD_ANSWER} is refused: ${decision} is about ${asked.issueId}, so the user answers it in ${asked.issueId}'s feed, where its row under Needs you opens it. If they told you their answer, point them there.`);
+      if (store.answerDecision(id, decision, answer, Date.now()) !== "answered") return failed(`${RECORD_ANSWER} is refused: ${decision} was already answered, and an answer can't be changed. crew_catch_up returns it.`);
+      onChange(id);
+      return `Recorded the user's answer to ${decision}; it has left Needs you on their board, and stays among the decisions crew_catch_up returns.`;
     }),
   });
 

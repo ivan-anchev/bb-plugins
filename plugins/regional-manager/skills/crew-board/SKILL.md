@@ -110,6 +110,7 @@ and no tool can turn verification on or off.
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
 | `crew_ask_user` | regional manager | Puts a one-line question about one of its issues, with up to five options and optionally the one it recommends, into that issue's feed and on its board: the question and its answer are then among that issue's decisions. |
+| `crew_record_answer` | regional manager | Records the answer you gave in its thread to one of its questions that names no issue, asked before every question had to name one, taking it off Needs you. It refuses a question about an issue, which you answer in that issue's feed. |
 | `crew_end_turn` | regional manager | Ends a turn that changes nothing for you, with a one-line `reason` and no reply; its result repeats the reason. It doesn't stop the thread. |
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
 | `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`; with `decision`, alone or with the rest, records what was decided about it and why. |
@@ -170,8 +171,11 @@ may or may not have reached it, it couldn't be verified, bb never confirmed star
 its agent's thread ("No thread: bb never confirmed starting one": the manager
 ends that agent with `agent_stop`, which ends it at once, and starts another
 with `agent_start`), or one of the manager's open questions names it: its
-Needs you line is then that question, the one that has waited longest, unless
-one of the reasons above says why first.
+Needs you line is then that question, the one that has waited longest, and a
+reason above stays in its headline. A question of the manager's keeps its issue
+under Needs you until you answer, even once the issue is Done or Canceled; the
+plugin's own question at an issue's cap leads with the cap and lapses as the
+issue closes.
 
 The manager sets a status in only five ways, with `issue_update`: `backlog`
 or `todo` rests an issue no agent holds (and reopens a canceled one),
@@ -1052,7 +1056,8 @@ holds it there, and wakes the thread; the question stays, with your answer and
 when you gave it, in that issue's Activity. A question asked before every
 question had to name an issue has its own row under Needs you, the manager's
 avatar beside it; pressing it opens the manager's thread, where you can tell
-it your answer. No surface answers such a question any more, so its row stays. The thread's
+it your answer; it records your words with `crew_record_answer`, which takes
+the row off. The thread's
 `crew_catch_up` returns your answer, as the option you chose or in your own
 words, with its question. A decision is answered once: a second answer, as
 from another window, is refused.
