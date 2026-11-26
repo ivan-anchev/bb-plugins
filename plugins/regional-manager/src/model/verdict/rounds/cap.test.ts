@@ -40,7 +40,7 @@ const returned = (passed: boolean, settlement: Settlement = CHECKED): Verdict =>
 });
 const FAILED = returned(false);
 
-const handoffBy = (agentId: typeof A1): CheckSubject => ({ kind: "handoff", agentId, handoffId: handoffIdSchema.parse(randomUUID()), headSha: SHA, prUrl: null });
+const handoffBy = (agentId: typeof A1): CheckSubject => ({ kind: "handoff", agentId, handoffId: handoffIdSchema.parse(randomUUID()), headSha: SHA, prUrl: null, branch: null });
 
 /** One entry of an issue's record: a check of `subject` with this verdict, as the store reads it. */
 function handed(verdict: Verdict, subject: CheckSubject = handoffBy(A1)): { check: Check } {

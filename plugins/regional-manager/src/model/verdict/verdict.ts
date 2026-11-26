@@ -286,13 +286,24 @@ export function failedOnReviewOnly(verdict: Verdict): boolean {
 export const ciFailedAt = (subject: CheckSubject, pr: Pick<PrSnapshot, "headSha" | "ci"> | null): boolean =>
   subject.kind === "handoff" && pr !== null && pr.headSha === subject.headSha && pr.ci === "fail";
 
+/** A branch's pull request as the PR watch last read it (null: none read). */
+export type PrOfBranch = (branch: string) => PrSnapshot | null;
+
+/**
+ * The pull request of the work a check judged: the one on the branch its agent handed off on
+ * (check.ts), as last read (`prOf`). why never the issue's: an agent started clean since may work
+ * on another branch, whose pull request isn't this work's. null: a final check, a handoff on no
+ * branch, or none read.
+ */
+export const checkedPr = (subject: CheckSubject, prOf: PrOfBranch): PrSnapshot | null => (subject.kind === "handoff" && subject.branch !== null ? prOf(subject.branch) : null);
+
 /**
  * Whether the manager may accept a check as it is (issues.ts acceptEdit): its verdict failed on
- * review findings alone, and CI didn't fail on its commit as the pull request was last read (`pr`).
- * The one eligibility rule the accept, catch-up and the cap question's merge answer read.
+ * review findings alone, and CI didn't fail on its commit as its work's pull request was last read
+ * (checkedPr). The one eligibility rule the accept, catch-up and the cap question's merge answer read.
  */
-export const acceptableAsIs = ({ verdict, subject }: Pick<Check, "verdict" | "subject">, pr: Pick<PrSnapshot, "headSha" | "ci"> | null): boolean =>
-  failedOnReviewOnly(verdict) && !ciFailedAt(subject, pr);
+export const acceptableAsIs = ({ verdict, subject }: Pick<Check, "verdict" | "subject">, prOf: PrOfBranch): boolean =>
+  failedOnReviewOnly(verdict) && !ciFailedAt(subject, checkedPr(subject, prOf));
 
 /**
  * Whether a finding fails its verdict on its own: the verifier anchored it to what it breaks, or,

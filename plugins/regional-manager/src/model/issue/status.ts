@@ -308,7 +308,7 @@ export const keepsPlaceAfterEnd = (issue: Issue, left: Handed | null, accepted: 
  * a check when the manager accepted that check's failure as it is (issues.ts); null otherwise. why
  * the latest only: a newer handoff's check replaces an accepted one.
  */
-export function acceptedOf(record: readonly Handed[]): Handed | null {
+export function acceptedOf(record: readonly Handed[]): (Handed & { check: Check }) | null {
   const latest = latestChecked(record);
   return latest !== null && latest.check.acceptedAt !== null ? latest : null;
 }

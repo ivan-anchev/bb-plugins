@@ -279,6 +279,13 @@ export const MIGRATIONS: readonly string[] = [
   // that places it, and the time is written in the accept's one transaction with its reason, a
   // recorded decision, and the follow-up that collects its unfixed findings (issues-store.ts updateIssue).
   `ALTER TABLE checks ADD COLUMN accepted_at INTEGER`,
+
+  // The branch a done handoff's work is on, kept on its check's subject (check.ts). A check made
+  // before gets its agent's branch as last recorded, the one its issue's pull request was read on
+  // until then.
+  `UPDATE checks SET subject = json_set(subject, '$.branch',
+       (SELECT a.branch FROM agents a WHERE a.coordinator_id = checks.coordinator_id AND a.id = json_extract(checks.subject, '$.agentId')))
+     WHERE json_extract(subject, '$.kind') = 'handoff'`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

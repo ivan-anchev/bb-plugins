@@ -12,7 +12,7 @@ import { headlineText, latestChecked, STATUS_LABELS, type IssueView } from "../.
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Check, CheckId } from "../../model/verdict/check.ts";
 import { capMovesText } from "../../model/verdict/rounds/cap.ts";
-import { ciFailedAt, failedOnReviewOnly, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
+import { checkedPr, ciFailedAt, failedOnReviewOnly, type PrOfBranch, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
 import { executionText } from "../agents/agents.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { DependencyChange, IssueEdit } from "../store/issue/issues-store.ts";
@@ -117,7 +117,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
     }
     const latest = latestChecked(store.record(view.issue.coordinatorId, id));
     if (latest === null) return { refused: `${id} has no done handoff with a verdict, so there is no failure to accept.` };
-    const problem = acceptProblem(latest.check, view);
+    const problem = acceptProblem(latest.check, id, (branch) => store.prOfBranch(view.issue.coordinatorId, branch)?.snapshot ?? null);
     return problem === null ? { accept: latest.check.id } : { refused: problem };
   }
 
@@ -209,9 +209,9 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
 /**
  * Why the issue's latest check can't be accepted as it is, leading with the reason, then the moves
  * that work; null when it can: its verdict failed on review findings alone, it isn't accepted yet,
- * and CI didn't fail on its commit as the issue's pull request was last read (`view.pr`).
+ * and CI didn't fail on its commit as its work's pull request was last read (verdict.ts checkedPr).
  */
-function acceptProblem(latest: Check, { issue: { id }, pr }: Pick<IssueView, "issue" | "pr">): string | null {
+function acceptProblem(latest: Check, id: IssueId, prOf: PrOfBranch): string | null {
   const { verdict, subject, acceptedAt } = latest;
   if (acceptedAt !== null) return `${id}'s latest verdict was accepted already, so nothing changed.`;
   const result = outcome(verdict);
@@ -220,6 +220,7 @@ function acceptProblem(latest: Check, { issue: { id }, pr }: Pick<IssueView, "is
   // why throw: only a returned verdict fails (verdict.ts outcome).
   if (verdict.state !== "returned") throw new Error(`${id}'s failed verdict hasn't returned.`);
   if (!failedOnReviewOnly(verdict)) return `${id}'s latest verdict failed on more than review findings (${notReviewOnly(verdict)}), so it can't be accepted as it is: only a failure on review findings alone can. ${FIX_IT}`;
+  const pr = checkedPr(subject, prOf);
   return pr !== null && ciFailedAt(subject, pr) ? `CI failed on #${pr.number} at ${verdict.headSha.slice(0, 7)}, the commit ${id}'s latest verdict checked, so it can't be accepted as it is. ${FIX_IT}` : null;
 }
 

@@ -31,7 +31,7 @@ const END_TURN = "crew_end_turn";
 export const CREW_TOOLS = [CATCH_UP, MEMORY_READ, MEMORY_WRITE, REMIND, ASK_USER, END_TURN];
 
 type Deps = {
-  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment" | "record">;
+  store: Pick<Store, "roleOfThread" | "issue" | "issues" | "agent" | "agents" | "handoff" | "check" | "reminders" | "insertReminder" | "cancelReminder" | "decision" | "decisions" | "insertDecision" | "comment" | "record" | "prOfBranch">;
   inbox: Pick<Inbox, "unread" | "markRead">;
   memory: MemoryRoot;
   board: Pick<BoardReader, "issues">;
@@ -69,6 +69,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
         record: (issueId) => readOf(issueId)?.record ?? store.record(id, issueId),
         view: (issueId) => readOf(issueId)?.view ?? null,
         capQuestions: (issueId) => capQuestionsOf(decisions, issueId),
+        prOf: (branch) => store.prOfBranch(id, branch)?.snapshot ?? null,
       });
       const text = `${updates}\n\n${boardText(issues, bb.pluginId)}\n\n${openDecisionsText(waiting)}\n\n${remindersText(store.reminders(id))}\n\n${catchUpText(memory.of(id))}`;
       // why marked read only now, and not once the call was aborted: an answer nobody receives must leave its updates for the next catch-up.

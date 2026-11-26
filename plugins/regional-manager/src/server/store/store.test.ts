@@ -571,7 +571,8 @@ test("a reported review stored before findings had an origin and reviews had ear
     sameModel: false,
     settlement: { kind: "checked", refused: null, ci: { kind: "none" } },
   };
-  const subject = { kind: "handoff", agentId: "a1", handoffId: randomUUID(), headSha: "a".repeat(40), prUrl: null };
+  // why a branch: every check's subject has one once the plugin's migrations ran (migrations.ts).
+  const subject = { kind: "handoff", agentId: "a1", handoffId: randomUUID(), headSha: "a".repeat(40), prUrl: null, branch: null };
   const id = randomUUID();
   db.prepare("INSERT INTO checks (id, coordinator_id, issue_id, subject, criteria, verdict, review, at) VALUES (?, ?, 'WEB-1', ?, '[\"npm test passes\"]', ?, ?, 2000)").run(
     id,
@@ -587,4 +588,29 @@ test("a reported review stored before findings had an origin and reviews had ear
     ["new", "anchored"],
     ["new", "rejected"],
   ]);
+});
+
+test("a check stored before checks kept their work's branch gets its agent's branch as last recorded when the store opens", () => {
+  const { db, storage } = memoryStorage();
+  storage.migrate(db, MIGRATIONS.slice(0, -1));
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
+  db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at, issue_key) VALUES (?, 'ticket-1', 'prj_1', 1, 1000, 'WEB')").run(MANAGER);
+  db.prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, done_criteria, rest, created_at) VALUES (?, 'WEB-1', 'build', 'Retries', 'Lost deliveries.', '[\"npm test passes\"]', 'todo', 1000)").run(MANAGER);
+  db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('agent-1', 'thr_b', '{}', 1100)").run();
+  db.prepare("INSERT INTO agents (coordinator_id, id, issue_id, ticket, placement, base, execution, branch, started_at) VALUES (?, 'a1', 'WEB-1', 'agent-1', '{}', '{}', '{}', 'bb/thr_b', 1100)").run(MANAGER);
+  const handoffId = randomUUID();
+  db.prepare("INSERT INTO handoffs (id, coordinator_id, issue_id, agent_id, report, turn_seq, at) VALUES (?, ?, 'WEB-1', 'a1', '{}', 1, 2000)").run(handoffId, MANAGER);
+  // As a release before branches were kept: no branch on the subject.
+  const subject = { kind: "handoff", agentId: "a1", handoffId, headSha: "a".repeat(40), prUrl: null };
+  const id = randomUUID();
+  db.prepare("INSERT INTO checks (id, coordinator_id, issue_id, handoff_id, subject, criteria, verdict, review, at) VALUES (?, ?, 'WEB-1', ?, ?, '[\"npm test passes\"]', ?, '{\"state\":\"queued\"}', 2000)").run(
+    id,
+    MANAGER,
+    handoffId,
+    JSON.stringify(subject),
+    JSON.stringify({ state: "queued", checkout: null }),
+  );
+
+  const check = openStore(storage).check(checkIdSchema.parse(id)) ?? assert.fail("no check");
+  assert.deepEqual(check.subject, { ...subject, branch: "bb/thr_b" });
 });

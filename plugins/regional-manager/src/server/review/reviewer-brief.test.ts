@@ -69,7 +69,7 @@ function roundOne(sha: string): StoredCheck {
     at: 3_000,
     criteria: ["npm test passes"],
     verifier: null,
-    subject: { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse(randomUUID()), headSha: sha, prUrl: null },
+    subject: { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse(randomUUID()), headSha: sha, prUrl: null, branch: null },
     review: { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [], earlier: [], model: { providerId: "claude-code", model: "sonnet" } },
     verdict: {
       state: "returned",

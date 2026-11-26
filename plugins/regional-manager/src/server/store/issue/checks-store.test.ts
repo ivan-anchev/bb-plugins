@@ -14,7 +14,7 @@ import { openStore, type Store } from "../store.ts";
 import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, startAgent } from "../test-store.ts";
 
 const SHA = "a".repeat(40);
-const CLEAN: CheckoutRead = { kind: "read", branch: null, checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 } };
+const CLEAN: CheckoutRead = { kind: "read", branch: "bb/thr_1", checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 } };
 const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
 
 function handoff(issueId: IssueId, agentId: AgentId, status: "done" | "blocked", at = 3_000): Handoff {
@@ -94,7 +94,7 @@ test("a done handoff makes a queued check that copies its issue's criteria and v
     at: 3_000,
     criteria: ["npm test passes", "npm run lint passes"],
     verifier: EXECUTION,
-    subject: { kind: "handoff", agentId, handoffId: done.id, headSha: SHA, prUrl: null },
+    subject: { kind: "handoff", agentId, handoffId: done.id, headSha: SHA, prUrl: null, branch: "bb/thr_1" },
     review: { state: "queued" },
     verdict: { state: "queued", checkout: CLEAN.checkout },
     followUpId: null,

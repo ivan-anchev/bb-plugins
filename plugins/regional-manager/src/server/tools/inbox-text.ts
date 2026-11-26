@@ -20,7 +20,7 @@ import { capChoice, choiceText, mergeStandsText, type AnsweredAt, type FollowUp 
 import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion, mergeAnswer, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { defectText, findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
-import { acceptableAsIs, checkInFlight, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { acceptableAsIs, checkInFlight, type PrOfBranch, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { onlyNits, unfiledAtMerge } from "../../model/verdict/rounds/follow-up.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
@@ -40,6 +40,8 @@ export type Lookups = {
   view(id: IssueId): IssueView | null;
   /** The questions the plugin put to the user at the issue's cap, in the order asked, as they stand now. */
   capQuestions(id: IssueId): readonly CapQuestion[];
+  /** A branch's pull request as the PR watch last read it (null: none read), which a check's eligibility to be accepted reads (verdict.ts checkedPr). */
+  prOf: PrOfBranch;
 };
 
 /** The updates section of a catch-up: every event it returned, oldest first. */
@@ -215,7 +217,7 @@ function lockOf(issueId: IssueId, { capQuestions, view }: Pick<Lookups, "capQues
  * A decision the user answered: what was asked and offered, then the answer, marked as theirs. A
  * question the plugin asked at an issue's cap says so, and ends with what their choice leaves to do.
  */
-function answeredText(decision: Decision, when: string, lookups: Pick<Lookups, "record" | "view" | "agents">): string {
+function answeredText(decision: Decision, when: string, lookups: Pick<Lookups, "record" | "view" | "agents" | "prOf">): string {
   const { id, question, options, answer } = decision;
   if (answer === null) throw new Error(`The decision ${id} is announced as answered, but has no answer.`);
   const offered = options.map((option) => `"${option}"`).join(", ");
@@ -232,13 +234,13 @@ function answeredText(decision: Decision, when: string, lookups: Pick<Lookups, "
  * before the answer (rounds/cap.ts countedFailures). why before: the follow-up files what the user
  * chose to merge past, never a later round's findings.
  */
-function answeredAt(issueId: IssueId, answeredAt: number, { record, view, agents }: Pick<Lookups, "record" | "view" | "agents">): AnsweredAt {
+function answeredAt(issueId: IssueId, answeredAt: number, { record, view, agents, prOf }: Pick<Lookups, "record" | "view" | "agents" | "prOf">): AnsweredAt {
   const lastFailure = countedFailures(record(issueId)).filter(({ verdict }) => verdict.state === "returned" && verdict.at <= answeredAt).at(-1) ?? null;
   const pr = view(issueId)?.pr ?? null;
   const branch = issueBranch(agents().filter((agent) => agent.issueId === issueId), () => null, record(issueId))?.branch ?? null;
   const followUp = followUpOf(lastFailure);
   if (pr?.state === "merged") return { branch, merge: { kind: "merged", pr: pr.number, followUp } };
-  const acceptable = followUp.kind === "by-hand" && lastFailure !== null && acceptableAsIs(lastFailure, pr);
+  const acceptable = followUp.kind === "by-hand" && lastFailure !== null && acceptableAsIs(lastFailure, prOf);
   return { branch, merge: { kind: "unmerged", pr: pr?.number ?? null, followUp: acceptable ? { kind: "accept" } : followUp } };
 }
 
@@ -323,7 +325,7 @@ const MOVE_TO_AN_AGENT =
  * the merge, while the user's answer to merge it as is stands; else decide, or, while the issue's
  * cap question is open, only what works then (rounds/cap.ts).
  */
-function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view" | "record">): string {
+function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view" | "record" | "prOf">): string {
   const asked = askedId === null ? null : askedQuestion(lookups.decision(askedId));
   const led = asked === null ? "" : `This was ${askedText(check.issueId, asked, mayHaveReachedAgent(check.verdict))}. `;
   const closed = closedNow(check.issueId, lookups);
@@ -337,7 +339,7 @@ function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<
     return `${led}${FAILED_IS_YOURS}${offer === null ? "" : ` ${offer.kind === "offer" ? acceptMove(check.issueId) : offer.why}`}`;
   }
   const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;
-  const afterAnswer = isLatest(check, lookups) && acceptableAsIs(check, lookups.view(check.issueId)?.pr ?? null) ? ` If they choose to merge it as is: ${acceptMove(check.issueId)}` : "";
+  const afterAnswer = isLatest(check, lookups) && acceptableAsIs(check, lookups.prOf) ? ` If they choose to merge it as is: ${acceptMove(check.issueId)}` : "";
   return `${led}${held}Until the user answers ${open.id}, agent_start, agent_message and an accept of ${check.issueId} are refused. ${capMovesText(check.issueId, open.id, lookups.view(check.issueId))}${afterAnswer}`;
 }
 
@@ -347,9 +349,9 @@ function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<
  * cap question locking it; `superseded`, with what superseded it, when it would have but no longer
  * does; null when it never would, as on a failure on more than review findings.
  */
-function acceptOffer(check: Check, lookups: Pick<Lookups, "view" | "record" | "capQuestions">): { kind: "offer" } | { kind: "superseded"; why: string } | null {
+function acceptOffer(check: Check, lookups: Pick<Lookups, "view" | "record" | "capQuestions" | "prOf">): { kind: "offer" } | { kind: "superseded"; why: string } | null {
   const { issueId } = check;
-  if (!acceptableAsIs(check, lookups.view(issueId)?.pr ?? null)) return null;
+  if (!acceptableAsIs(check, lookups.prOf)) return null;
   const closed = closedNow(issueId, lookups);
   if (closed !== null) return { kind: "superseded", why: `It can't be accepted as it is now: ${issueId} is ${STATUS_LABELS[closed]}.` };
   if (!isLatest(check, lookups)) return { kind: "superseded", why: `It can't be accepted as it is now: a newer handoff of ${issueId} replaced it, so decide on that one's verdict, which crew_catch_up brings you.` };
