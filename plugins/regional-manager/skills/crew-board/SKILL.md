@@ -1272,7 +1272,7 @@ id of the manager is in it because two managers can both have a BBP-24.
 - **Pressing it** opens the issue's tab beside the Board: in the manager's own
   thread, in that thread's side panel; from any other thread, the manager's
   thread opens in a split (or comes forward where it already shows) with the
-  tab open. ⌘ or Ctrl asks for the split from the manager's thread too.
+  tab open.
 - **Elsewhere**: a link followed where the plugin's overlay doesn't run lands
   on the plugin's panel, which opens the manager's thread with the issue's
   tab, or says this bb server has no such manager (deleted, or the link is

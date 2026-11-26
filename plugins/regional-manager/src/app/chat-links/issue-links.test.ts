@@ -694,15 +694,15 @@ test("a split closed before bb let it open the tab takes the press's ask with it
   assert.deepEqual(opened, [], "no tab from the press the closed split never answered");
 });
 
-test("a press with ⌘ or Ctrl, even in the manager's own pane, asks bb for the manager's thread in a split, and the pane showing it opens the tab", async () => {
-  const { view, link, glyphOf } = mount({ panes: [MANAGER_THREAD] });
+test("a press with ⌘ or Ctrl in the manager's own pane opens the issue's tab there, as a plain press does: bb has no second pane for a thread it shows", async () => {
+  const { view, link, glyphOf, opened } = mount({ panes: [MANAGER_THREAD] }, { focused: MANAGER_THREAD });
   await waitFor(() => assert.equal(glyphOf(link(MANAGER_THREAD)), "In progress"));
-  for (const modifier of [{ metaKey: true }, { ctrlKey: true }]) assert.equal(fireEvent.click(link(MANAGER_THREAD), modifier), false, "bb's own handling of the link is skipped");
-  assert.deepEqual(view.inspection.navigateCalls, [
-    { method: "toThread", threadId: MANAGER_THREAD, options: { split: true } },
-    { method: "toThread", threadId: MANAGER_THREAD, options: { split: true } },
-  ]);
-  await waitFor(() => assert.deepEqual(view.inspection.experimental_panelCalls.map((call) => call.method === "openTab" && call.options.title), ["BBP-24 Inline issue links", "BBP-24 Inline issue links"], "once a press"));
+
+  assert.equal(fireEvent.click(link(MANAGER_THREAD), { metaKey: true }), false, "bb's own handling of the link is skipped");
+  await waitFor(() => assert.deepEqual(opened, ["BBP-24 Inline issue links"]));
+  assert.equal(fireEvent.click(link(MANAGER_THREAD, "BBP-27"), { ctrlKey: true }), false);
+  await waitFor(() => assert.deepEqual(opened, ["BBP-24 Inline issue links", "BBP-27 Avatars"]));
+  assert.deepEqual(view.inspection.navigateCalls, [], "it stays in this pane");
 });
 
 test("a link to an issue its manager's board has none of still opens the issue's tab, by its id, where the tab says so", async () => {
