@@ -168,7 +168,7 @@ export const checkOnRecordInFlight = (record: readonly Handed[]): boolean => rec
 function commentNextStep({ id, issueId }: Comment, view: IssueView | null, inFlight: boolean, lock: CapQuestion | null): string {
   const answer = `Reply on the issue with issue_comment (issue "${issueId}", replyTo "${id}"), record what it decides with issue_update (id "${issueId}", decision)`;
   // why first: while the cap question locks the issue, relaying to an agent or starting one is refused.
-  if (lock !== null) return `${answer}. Don't relay it to an agent or start one: ${issueId} failed verification ${lock.cap} times and the plugin asked the user (${lock.id}), so until they answer, agent_start and agent_message on ${issueId} are refused. If their comment bears on that question, point them at ${lock.id} on the board in your reply.`;
+  if (lock !== null) return `${answer}. Don't relay it to an agent or start one: ${issueId} failed verification ${lock.cap} times and the plugin asked the user (${lock.id}), so until they answer, agent_start and agent_message on ${issueId} are refused. If their comment bears on that question, point them at ${lock.id} in ${issueId}'s feed in your reply.`;
   // why issue_read, not another catch-up: this update comes only once, and the plugin's own record of the issue doesn't need bb's thread list.
   if (view === null) return `${answer}. Where ${issueId} stands, and whether an agent holds it, couldn't be read with the board${inFlight ? `, but a check on its record is in flight, so don't relay it to an agent now` : ""}. ${RELAY_WAIT}`;
   const now = `${issueId} is ${STATUS_LABELS[view.status]} now`;
@@ -260,12 +260,11 @@ function followUpOf(failure: Check | null): FollowUp {
   return { kind: "by-hand", mustFix: failure.verdict.state === "returned" ? heldFindings(failure.verdict).failing : [] };
 }
 
-/** The decisions section of a catch-up: every decision still waiting for the user, oldest first. */
 /** The decisions still waiting for the user (`open`, board-groups.ts waitingDecisions), as catch-up lists them. */
 export function openDecisionsText(open: readonly Decision[]): string {
   if (open.length === 0) return "## Decisions\n\nNone waiting for the user. Ask one with crew_ask_user when only the user can decide.";
-  const lines = open.map(({ id, question, options, askedAt }) => `- ${id}, asked ${new Date(askedAt).toISOString()}: ${question}${options.length === 0 ? "" : ` Options: ${options.map((option) => `"${option}"`).join(", ")}.`}`);
-  return ["## Decisions\n\nWaiting for the user on the board, under Needs you. Their answer wakes you; don't ask again meanwhile.", ...lines].join("\n\n");
+  const lines = open.map(({ id, issueId, question, options, askedAt }) => `- ${id} on ${issueId ?? "no issue"}, asked ${new Date(askedAt).toISOString()}: ${question}${options.length === 0 ? "" : ` Options: ${options.map((option) => `"${option}"`).join(", ")}.`}`);
+  return ["## Decisions\n\nWaiting for the user under Needs you on the board: a question on an issue as that issue's line there, answered in its feed. Their answer wakes you; don't ask again meanwhile.", ...lines].join("\n\n");
 }
 
 /** The reminders section of a catch-up: every reminder the thread has set, soonest due first. */
@@ -367,9 +366,9 @@ const isLatest = (check: Check, { record }: Pick<Lookups, "record">): boolean =>
 const acceptMove = (issueId: IssueId): string =>
   `It failed on review findings alone, so you may accept it as it is: issue_update { id: "${issueId}", status: "in-review", decision: "<why>" } puts it In review until its pull request merges, and files the findings it leaves, its unfixed must-fixes among them, as a follow-up.`;
 
-/** What a failure on an issue closed since (`status`, Done or Canceled) leaves to do: nothing; its question, if it asked one (`asked`), left the board. */
+/** What a failure on an issue closed since (`status`, Done or Canceled) leaves to do: nothing; its question, if it asked one (`asked`), no longer waits. */
 const closedText = (issueId: IssueId, status: IssueStatus, asked: CapQuestion | null): string =>
-  `${issueId} is ${STATUS_LABELS[status]} now, so no agent can start on it and this failure needs nothing from you${asked === null ? "" : `; ${asked.id} left the board, as no round is left for an answer to allow`}.`;
+  `${issueId} is ${STATUS_LABELS[status]} now, so no agent can start on it and this failure needs nothing from you${asked === null ? "" : `; ${asked.id} no longer waits for the user, as no round is left for an answer to allow`}.`;
 
 const FAILED_IS_YOURS =
   "It failed verification and is yours to decide: message the agent with agent_message, stop it with agent_stop and start a fresh agent on the issue with agent_start, or ask the user.";

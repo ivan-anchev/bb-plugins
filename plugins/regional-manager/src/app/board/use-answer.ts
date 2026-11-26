@@ -1,5 +1,5 @@
-// Answering a decision the regional manager put to the user, from wherever it shows: the board's
-// row (decision-row.tsx) and its issue's feed (issue-tab/feed/decision/decision-card.tsx).
+// Answering a decision the regional manager put to the user, from its card in its issue's feed
+// (issue-tab/feed/decision/decision-card.tsx).
 import { experimental_useRpcMutation } from "@get-bb/plugin-sdk/app";
 import { useState } from "react";
 import { coordinatorContract as contract } from "../../contract.ts";

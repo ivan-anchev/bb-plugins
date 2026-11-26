@@ -95,7 +95,7 @@ const pastCap = (cap: number): string => (cap === MAX_FAILED_VERDICTS ? "its cap
  * that holds it, if one does.
  */
 export function capMovesText(issueId: IssueId, questionId: DecisionId, view: Pick<IssueView, "holder" | "subIssues"> | null): string {
-  const wait = `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} on the board`;
+  const wait = `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} in ${issueId}'s feed`;
   const openSubIssues = view?.subIssues != null && view.subIssues.done < view.subIssues.total;
   if (openSubIssues) return `${wait}. ${issueId} can't be canceled while sub-issues of it are open.`;
   return `${wait}; or ${view?.holder === null ? "" : "stop its agent with agent_stop and "}cancel ${issueId} with issue_update.`;

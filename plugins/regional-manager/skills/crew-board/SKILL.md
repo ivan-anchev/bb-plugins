@@ -169,7 +169,9 @@ failed it), its findings
 may or may not have reached it, it couldn't be verified, bb never confirmed starting
 its agent's thread ("No thread: bb never confirmed starting one": the manager
 ends that agent with `agent_stop`, which ends it at once, and starts another
-with `agent_start`), or one of the manager's open decisions names it.
+with `agent_start`), or one of the manager's open questions names it: its
+Needs you line is then that question, the one that has waited longest, unless
+one of the reasons above says why first.
 
 The manager sets a status in only five ways, with `issue_update`: `backlog`
 or `todo` rests an issue no agent holds (and reopens a canceled one),
@@ -1037,25 +1039,28 @@ working: the question never waits as a form in its thread, where it would
 hold every update meant to wake it. It gets an id: `d1`, `d2`… An id is never
 reused.
 
-The decision shows on the board under **Needs you**, above the issues there,
-with a button for each option and a field to answer in your own words: Enter
-sends it and Shift+Enter breaks the line, and Esc doesn't leave the page while
-it has text. A send that fails keeps your text, with the error under it. Text
-you haven't sent stays in the browser, through a resize or a reload, until you
-send it or the decision is answered elsewhere. An issue the decision names
-also waits under Needs you until you answer. Your answer takes the decision
-off the board and wakes the thread; a decision that names an issue stays,
-with your answer and when you gave it, in that issue's **Activity**, where an
-open one is answered too, by an option or in your own words (see [The board](#the-board)). The thread's
+The question goes into that issue's **Activity** as a card, where you answer
+it, by an option or in your own words (see [The board](#the-board)), and the
+issue waits under **Needs you** on the board, the question as its row's second
+line, until you answer. Pressing that row opens the issue's tab at the
+question: scrolled into the middle, ringed for a moment, focus on its first
+option, so its number answers at once. The board shows no option or field of
+its own. Text you type in the card and haven't sent stays in the browser,
+through a resize or a reload, until you send it or the question is answered
+elsewhere. Your answer takes the issue off Needs you, unless something else
+holds it there, and wakes the thread; the question stays, with your answer and
+when you gave it, in that issue's Activity. A question asked before every
+question had to name an issue waits under Needs you on its own row, the
+manager's avatar beside it, until you answer; pressing it opens the manager's
+thread. The thread's
 `crew_catch_up` returns your answer, as the option you chose or in your own
 words, with its question. A decision is answered once: a second answer, as
 from another window, is refused.
 
-The panel's entry in the navigation rail counts everything under **Needs
-you** on every board the panel lists: open decisions and issues alike, the
-same rows each board shows there. Its name says which, as "3 need you: 1
-decision, 2 issues". It drops as you answer a decision or an issue leaves
-Needs you.
+The panel's entry in the navigation rail counts the issues under **Needs
+you** on every board the panel lists, the same issue rows each board shows
+there, as "3 issues need you". A question on an issue counts once, with its
+issue. It drops as an issue leaves Needs you.
 
 An agent's own question or approval stays in the agent's thread, for you to
 answer there.
@@ -1110,10 +1115,9 @@ and ends with its [memory](#read-and-edit-memory):
   Backlog, Done and Canceled, each under a bar with its name, how many it
   holds and a chevron, and no glyph: each row draws its own. Pressing the
   bar folds or unfolds the lane; Backlog, Done and Canceled start folded,
-  and an empty lane isn't shown. Needs you holds the open decisions put to
-  you, then the issues flagged Needs you. An answered decision is on no
-  lane: it leaves the board, and one that named an issue stays in that
-  issue's Activity.
+  and an empty lane isn't shown. Needs you holds the issues flagged Needs
+  you, after any question asked before every question named an issue. A
+  question on an issue has no row of its own: its issue's row says it.
 - **Issues**, each row one line: its status's glyph, its id in mono, in a
   column the ids share, its title, fading out at its end, then its pills
   and, once it has one, its pull request: its number in its state's colour,
@@ -1121,7 +1125,8 @@ and ends with its [memory](#read-and-edit-memory):
   Needs you's red glyph in place of its status's, wherever its row is; its
   status is in the row's spoken label, its card and its tab. Under Needs
   you a row adds a second line: what it waits on you for (such as
-  "Blocked: <summary>", the agent asking you for something). The row names
+  "Blocked: <summary>", the agent asking you for something, or the question
+  put to you about it). The row names
   no kind and no agent, and its headline is in its card and its tab. Done
   and Canceled rows read quieter.
 - **Pills**, after the title: a parent's sub-issues Done, of those not
@@ -1255,7 +1260,7 @@ rows, one per option, the one the manager recommended tagged Recommended,
 then a last row, "Something else…", for your own words: pressing a row, or
 its number while focus is in the card, answers with it; the number after the
 options goes to the field, ↑ and ↓ move between the rows, and the field
-sends with Enter, as on the Board, keeping what you typed there too. While
+sends with Enter and Shift+Enter breaks the line, Esc not leaving the page while it has text, and a send that fails keeps your text beside its error. While
 your answer sends, its row says "Sending…" and the others dim; answered, the
 chosen row keeps the selected look with a ✓ where its number was. And each
 decision the manager recorded on it with

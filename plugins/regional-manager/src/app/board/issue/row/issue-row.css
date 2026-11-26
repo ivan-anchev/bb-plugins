@@ -78,6 +78,23 @@
 .rmi-row[data-quiet] .rmi-row-id {
   color: var(--subtle-foreground);
 }
+/* A question on no issue (unfiled-question-row.tsx): the manager's avatar in the slot, the question
+   across the id and title columns, up to two lines, in a flagged title's weight. */
+.rmi-unfiled-question {
+  grid-column: 2 / -1;
+  grid-row: 1 / 3;
+  align-self: start;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  padding: 6px 8px 4px 0;
+  font-weight: 500;
+  color: var(--foreground);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
 /* What it waits on the user for, under its id and title, in Activity's readable second-line colour. */
 .rmi-ask {
   grid-column: 2 / -1;

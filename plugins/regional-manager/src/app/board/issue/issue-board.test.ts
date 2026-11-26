@@ -5,10 +5,12 @@ import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { createElement, type ComponentProps } from "react";
-import type { IssueRow } from "../../../contract.ts";
+import { coordinatorContract, type IssueRow } from "../../../contract.ts";
 import { agentIdSchema } from "../../../model/agent/agent.ts";
 import { decisionIdSchema, type Decision, type OpenDecision } from "../../../model/decision.ts";
 import { issueIdSchema } from "../../../model/issue/issue.ts";
+import { coordinatorIdSchema } from "../../../model/role.ts";
+import { PROJECT, sidebarThread } from "../../test-sidebar.ts";
 
 // The board's lanes and rows, driven as the user drives them: what a row shows, folding lanes,
 // opening an issue's tab from its row, sub-issues on their rails, and a focused row keeping its focus
@@ -33,6 +35,11 @@ function issue(id: string, fields: Partial<IssueRow>): IssueRow {
   return { id: issueIdSchema.parse(id), kind: "build", parentId: null, subIssues: null, blockedBy: [], blocks: [], title: `Issue ${id}`, status: "todo", needsYou: null, headline: "Planned", agent: null, pr: null, ...fields };
 }
 
+const COORDINATOR = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_manager", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } } as const;
+/** The name bb shows COORDINATOR's thread by, which names the regional manager. */
+const MANAGER_NAME = "Webhook retries";
+
+/** A question on no issue: one asked before every question had to name an issue. */
 const QUESTION: OpenDecision = { id: decisionIdSchema.parse("d1"), issueId: null, question: "Which license should the repo use?", options: ["MIT", "Apache-2.0"], recommended: null, askedAt: 1_000, answer: null, cap: null };
 
 const ISSUES: IssueRow[] = [
@@ -53,14 +60,15 @@ const ISSUES: IssueRow[] = [
 /** The board in the root it scrolls in, as the Board tab draws it: a tab stop. */
 const Page = (props: ComponentProps<typeof IssueBoard>) => createElement("div", { tabIndex: 0, "aria-label": "Board tab" }, createElement(IssueBoard, props));
 
-/** The board in a side panel that accepts every tab it is asked to open. */
+/** The board of COORDINATOR in a side panel that accepts every tab it is asked to open, in the regional manager's thread as bb lists it. */
 function mount(issues: readonly IssueRow[], decisions: readonly Decision[] = [QUESTION]) {
-  const props = (rows: readonly IssueRow[], shown: readonly Decision[]) => ({
-    decisions: shown,
-    issues: rows,
-    decisionRow: (decision: OpenDecision) => createElement("p", { tabIndex: -1 }, decision.question),
+  const props = (rows: readonly IssueRow[], shown: readonly Decision[]) => ({ coordinatorId: COORDINATOR.id, decisions: shown, issues: rows });
+  const view = renderSlot({ component: Page }, props(issues, decisions), {
+    experimental_panel: { openTab: () => true },
+    experimental_rpcContract: coordinatorContract,
+    rpc: { coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }) },
+    sidebarThreads: { status: "ready", threads: [sidebarThread(COORDINATOR.threadId, MANAGER_NAME)], projects: [PROJECT] },
   });
-  const view = renderSlot({ component: Page }, props(issues, decisions), { experimental_panel: { openTab: () => true } });
   return { view, reread: (rows: readonly IssueRow[], next: readonly Decision[] = decisions) => view.rerender(createElement(Page, props(rows, next))) };
 }
 
@@ -87,8 +95,9 @@ function shown(button: HTMLElement) {
   };
 }
 
-test("Needs you leads with the open decision, then the flagged issue with Needs you's glyph and its ask under its title; the lanes follow in order, the last three folded, and no lane header has a glyph", () => {
+test("Needs you leads with a question on no issue, then the flagged issue with Needs you's glyph and its ask under its title; the lanes follow in order, the last three folded, and no lane header has a glyph", async () => {
   const { view } = mount(ISSUES);
+  await view.findByRole("button", { name: `${MANAGER_NAME} asks you, on no issue: ${QUESTION.question}` });
 
   const headers = view.getAllByRole("heading", { level: 2 });
   assert.deepEqual(headers.map((heading) => heading.textContent), ["Needs you2", "In review1", "Verifying1", "In progress1", "Todo1", "Backlog1", "Done1"]);
@@ -96,7 +105,7 @@ test("Needs you leads with the open decision, then the flagged issue with Needs 
 
   const needsYou = lane(view, /^Needs you/);
   const [question, flagged] = needsYou.getAllByRole("listitem");
-  assert.equal(question?.textContent, QUESTION.question);
+  assert.equal(question?.textContent, QUESTION.question, "the question alone, no option or field");
   assert.deepEqual(shown(within(flagged ?? assert.fail("no flagged row")).getByRole("button", { name: /^WEB-1:/ })), {
     glyph: "Needs you",
     id: "WEB-1",
@@ -498,4 +507,16 @@ test("focus on a flagged sub-issue's row under Needs you moves to its row under 
   lane(view, /^Needs you/).getByRole("button", { name: /^WEB-3:/ }).focus();
   act(() => reread(SPLIT.map((each) => (each.id === "WEB-3" ? { ...each, needsYou: null, headline: "Working" } : each))));
   assert.ok(document.activeElement === lane(view, /^In progress/).getByRole("button", { name: /^WEB-3:/ }));
+});
+
+test("a question on no issue shows the manager's avatar beside it and opens the manager's thread when pressed, and leaves Needs you once answered", async () => {
+  const { view, reread } = mount([issue("WEB-5", {})]);
+  const question = await view.findByRole("button", { name: `${MANAGER_NAME} asks you, on no issue: ${QUESTION.question}` });
+  assert.ok(question.querySelector(".rmi-slot svg"), "the manager's avatar in the glyph's slot");
+  fireEvent.click(question);
+  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: COORDINATOR.threadId }]);
+  assert.deepEqual(view.experimental_panelCalls, [], "and opens no tab");
+
+  act(() => reread([issue("WEB-5", {})], [{ ...QUESTION, answer: { text: "MIT", at: 2_000 } }]));
+  assert.equal(view.queryByRole("region", { name: /^Needs you/ }), null);
 });

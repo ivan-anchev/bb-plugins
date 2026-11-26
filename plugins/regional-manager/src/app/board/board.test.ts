@@ -8,9 +8,10 @@ import { agentIdSchema } from "../../model/agent/agent.ts";
 import { decisionIdSchema, type Decision } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../model/role.ts";
+import { PROJECT, sidebarThread } from "../test-sidebar.ts";
 
-// The board as bb mounts it, reading the plugin: its lanes from the board's read, and its decisions'
-// answers. An issue's own tab, which its row opens, is issue-tab.test.ts's.
+// The board as bb mounts it, reading the plugin: its lanes from the board's read, and what the browser
+// keeps of answers to its decisions. An issue's own tab, which its row opens, is issue-tab.test.ts's.
 
 // why: jsdom has none; the rows measure their titles.
 Object.assign(globalThis, {
@@ -23,6 +24,7 @@ Object.assign(globalThis, {
 const { Board } = await import("./board.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
+const MANAGER = { id: COORDINATOR, threadId: "thr_manager", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } } as const;
 const issue = (id: string, fields: Partial<IssueRow>): IssueRow => ({
   id: issueIdSchema.parse(id),
   kind: "build",
@@ -60,11 +62,11 @@ afterEach(() => {
 type Read = Pick<BoardData, "decisions" | "issues"> & Partial<Pick<BoardData, "prUnavailable">>;
 
 /**
- * The board reading `data`; each lane's name and the text of each of its rows, once drawn; `reread`,
- * the board reading `next` as it does when the plugin changes it. `answer`: what the plugin does with
- * an answer sent; it stores it unless it throws.
+ * The board reading `data`, in its regional manager's thread as bb lists it; each lane's name and the
+ * text of each of its rows, once drawn; `reread`, the board reading `next` as it does when the plugin
+ * changes it.
  */
-async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
+async function mount(data: Read) {
   let current = data;
   let served: Read | null = null;
   const view = renderSlot({ component: Board }, { coordinatorId: COORDINATOR }, {
@@ -75,11 +77,9 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
         return { verify: true, ownEdits: null, prUnavailable: null, ...current };
       },
       setVerify: () => ({}),
-      answerDecision: (input: unknown) => {
-        answer(input);
-        return {};
-      },
+      coordinators: () => ({ coordinators: [MANAGER], notStarted: [] }),
     },
+    sidebarThreads: { status: "ready", threads: [sidebarThread(MANAGER.threadId, "Webhook retries")], projects: [PROJECT] },
   });
   await view.findByText("Verify done handoffs");
   const lanes = () =>
@@ -97,7 +97,7 @@ async function mount(data: Read, answer: (input: unknown) => void = () => {}) {
   return { view, lanes, reread };
 }
 
-test("Needs you leads with open decisions, then flagged issues showing Needs you's glyph and speaking their status, then a lane per status in order; the last three start folded; empty lanes are not shown, and an answered decision is on none", async () => {
+test("Needs you leads with a question on no issue, then flagged issues showing Needs you's glyph and speaking their status, then a lane per status in order; the last three start folded; empty lanes are not shown, and an answered question is on none", async () => {
   const { view, lanes } = await mount({
     decisions: [decision("d1", false), decision("d2", true)],
     issues: [
@@ -118,7 +118,7 @@ test("Needs you leads with open decisions, then flagged issues showing Needs you
   assert.equal(view.queryByText("Question d2?"), null, "the answered decision left the board");
   const needsYou = within(view.getByRole("region", { name: /^Needs you/ }));
   const [question, flagged] = needsYou.getAllByRole("listitem");
-  assert.match(question?.textContent ?? "", /^d1Question d1\?/, "the lane's decisions first");
+  assert.equal(question?.textContent, "Question d1?", "the lane's question on no issue first");
   assert.ok(flagged !== undefined && within(flagged).getByRole("img", { name: "Needs you" }), "the flagged issue shows Needs you's glyph");
   assert.match(within(flagged).getByRole("button", { name: /^WEB-1:/ }).getAttribute("aria-label") ?? "", /, In progress, needs you: /, "and says its status");
   assert.equal(within(view.getByRole("region", { name: /^In progress/ })).queryByRole("button", { name: /^WEB-1:/ }), null, "and is not also in its status's lane");
@@ -159,44 +159,35 @@ test("a board with no issues says so", async () => {
   assert.ok(view.getByText("No issues yet."));
 });
 
-const DRAFT_KEY = `coordinator-decision-answer:${COORDINATOR}:d1`;
-const type = (view: Awaited<ReturnType<typeof mount>>["view"], text: string) => fireEvent.change(view.getByRole("textbox", { name: "Your answer" }), { target: { value: text } });
-
-test("an answer sent and read back answered leaves the board, and nothing in the browser", async () => {
-  const sent: unknown[] = [];
-  const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [] }, (input) => sent.push(input));
-  type(view, "A typed answer");
-  assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("A typed answer"));
-
-  await act(async () => fireEvent.click(view.getByRole("button", { name: "Send" })));
-  assert.deepEqual(sent, [{ coordinatorId: COORDINATOR, decisionId: "d1", answer: "A typed answer" }]);
-  assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("A typed answer"), "kept until the board reads it answered");
-  await reread({ decisions: [{ ...decision("d1", false), answer: { text: "A typed answer", at: 2_000 } }], issues: [] });
-
-  assert.equal(view.queryByText("Question d1?"), null, "the answered decision left the board");
-  assert.equal(localStorage.length, 0);
+test("an issue a question waits on is one row under Needs you, its second line the question, with no option to press and no field", async () => {
+  const asking = "Ship #219 to everyone now?";
+  const { view, lanes } = await mount({
+    decisions: [{ ...decision("d2", false), issueId: issueIdSchema.parse("WEB-1"), question: asking, options: ["Ship now", "Wait a day"] }],
+    issues: [issue("WEB-1", { status: "in-progress", needsYou: asking, headline: "Round 3 running", agent: agent("a1") })],
+  });
+  assert.deepEqual(lanes(), [["Needs you1", 1]]);
+  const row = within(view.getByRole("region", { name: /^Needs you/ })).getByRole("listitem");
+  assert.equal(row.querySelector(".rmi-ask")?.textContent, asking, "the question is its second line");
+  assert.deepEqual(
+    within(row).getAllByRole("button").map((button) => button.getAttribute("aria-label")),
+    [`WEB-1: Title of WEB-1, In progress, needs you: ${asking}, Round 3 running`],
+    "its row is its one control",
+  );
+  assert.equal(view.queryByRole("textbox"), null, "no field to answer in");
+  assert.equal(view.queryByText("Ship now"), null, "no option to press");
 });
 
-test("a decision answered elsewhere drops the answer typed here, and one left from before is dropped on the next read", async () => {
-  const { view, reread } = await mount({ decisions: [decision("d1", false)], issues: [] });
-  type(view, "Not sent");
+const DRAFT_KEY = `coordinator-decision-answer:${COORDINATOR}:d1`;
+
+test("an answer typed and not sent is dropped once the board reads its decision answered, by its card or from elsewhere", async () => {
+  localStorage.setItem(DRAFT_KEY, JSON.stringify("Left from before"));
+  const { reread } = await mount({ decisions: [decision("d1", false)], issues: [] });
+  assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("Left from before"), "kept while it waits");
   await reread({ decisions: [decision("d1", true)], issues: [] });
-  assert.equal(localStorage.length, 0);
+  await waitFor(() => assert.equal(localStorage.length, 0));
   cleanup();
 
   localStorage.setItem(DRAFT_KEY, JSON.stringify("Left from before"));
   await mount({ decisions: [decision("d1", true)], issues: [] });
-  await waitFor(() => assert.equal(localStorage.length, 0));
-});
-
-test("a send the plugin refuses keeps the answer typed, in the field and in the browser", async () => {
-  const { view } = await mount({ decisions: [decision("d1", false)], issues: [] }, () => {
-    throw new Error("bb is restarting");
-  });
-  type(view, "Kept");
-  await act(async () => fireEvent.click(view.getByRole("button", { name: "Send" })));
-  await view.findByText(/Could not send your answer/);
-  assert.equal(localStorage.getItem(DRAFT_KEY), JSON.stringify("Kept"));
-  const field = view.getByRole("textbox", { name: "Your answer" });
-  assert.ok(field instanceof HTMLTextAreaElement && field.value === "Kept");
+  await waitFor(() => assert.equal(localStorage.length, 0, "one left from before is dropped on the first read"));
 });

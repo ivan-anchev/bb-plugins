@@ -39,12 +39,17 @@ registerHooks({
 });
 
 /**
- * Fails a stylesheet with a rule that names none of the plugin's `rmi-` classes. why: bb doesn't
- * scope a plugin's stylesheet, so a bare selector styles bb's whole page and every other plugin.
+ * Fails a stylesheet with a rule that names none of the plugin's `rmi-` classes, or an animation not
+ * named `rmi-`. why: bb doesn't scope a plugin's stylesheet, so a bare selector styles bb's whole page
+ * and every other plugin, and a bare animation name can take another's. A keyframe's stop (`from`,
+ * `to`, `40%`) styles only its own animation.
  */
 function assertScoped(fileName: string): void {
   const css = readFileSync(fileName, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const selectors = [...css.matchAll(/([^{}]+)\{/g)].flatMap(([, prelude = ""]) => (prelude.trim().startsWith("@") ? [] : prelude.split(",").map((selector) => selector.trim())));
-  const bare = selectors.filter((selector) => !selector.includes(".rmi-"));
+  const animations = [...css.matchAll(/@keyframes\s+([^\s{]+)/g)].map(([, name = ""]) => name);
+  const bare = [...selectors.filter((selector) => !selector.includes(".rmi-") && !KEYFRAME_STOP.test(selector)), ...animations.filter((name) => !name.startsWith("rmi-"))];
   if (selectors.length === 0 || bare.length > 0) throw new Error(`${fileName} must style only the plugin's own \`rmi-\` classes; it has ${selectors.length === 0 ? "no rules read" : bare.join(", ")}.`);
 }
+
+const KEYFRAME_STOP = /^(from|to|\d+(\.\d+)?%)$/;

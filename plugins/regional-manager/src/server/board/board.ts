@@ -1,7 +1,7 @@
 // The board: every issue of a regional manager, viewed now, with its latest agent's thread. Read
 // whole on every call; bb's thread events only say when to read again.
 import type { Board, IssueRow } from "../../contract.ts";
-import { needsYou, type NeedsYou } from "../../model/board/board-groups.ts";
+import { needsYou } from "../../model/board/board-groups.ts";
 import { openIssues, type OpenIssues } from "../../model/board/open-issues.ts";
 import { warnedFileCount } from "../../model/inbox/own-tree.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -60,10 +60,10 @@ export function createBoard(bb: FactsBb, store: BoardStore) {
       };
     },
 
-    /** What sits under Needs you on the board, from one read of its decisions and issues, as the board's own (readBoard). */
-    async needsYou(id: CoordinatorId): Promise<NeedsYou> {
-      const { reads, decisions } = await readBoard(bb, store, id);
-      return needsYou(decisions, reads.map(({ view }) => ({ id: view.issue.id, status: view.status, needsYou: view.needsYou })));
+    /** How many issues sit under Needs you on the board, as the board's own read places them (readBoard). */
+    async needsYou(id: CoordinatorId): Promise<number> {
+      const { reads } = await readBoard(bb, store, id);
+      return needsYou(reads.map(({ view }) => view));
     },
 
     /** Its open work, as another plugin reads it, from the board's own rows and decisions, of one read (readBoard). */

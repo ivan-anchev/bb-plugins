@@ -173,18 +173,24 @@ test("an issue resting in Todo after its agent ended says how it ended; only one
   assert.deepEqual(view({ issue: { ...issue, rest: "backlog" }, ended: { how: "stopped", left: null } }), at("backlog", "Not planned"));
 });
 
-test("an issue named by an unanswered decision Needs you, unless something more pressing does", () => {
-  const asked = "Waiting on your answer to its decision";
+test("an issue named by an unanswered decision Needs you, its question the reason, unless something more pressing does", () => {
+  const asked = "Another round?";
   assert.deepEqual(view(asking(null)), at("todo", "Not started", asked));
   assert.deepEqual(view({ ...asking(null), ...held(thread("active")) }), at("in-progress", "Working", asked));
   assert.deepEqual(view({ ...asking(null), ...held(thread("idle"), { handoff: blocked, check: null }) }), at("in-progress", "Blocked: Needs a staging key", "Blocked: Needs a staging key"));
 });
 
+test("an issue that two questions wait on gives the one asked first as its reason, whatever order they come in", () => {
+  const later: Decision = { ...question(null), id: decisionIdSchema.parse("d4"), question: "Ship it on Friday?", askedAt: 2_000 };
+  assert.deepEqual(view({ openDecisions: [later, question(null)] }).needsYou, "Another round?");
+  assert.deepEqual(view({ openDecisions: [later, { ...question(null), answer: { text: "No", at: 1_500 } }] }).needsYou, "Ship it on Friday?", "answered, the first no longer waits");
+});
+
 test("an issue whose cap question is open Needs you with a reason that leads with its cap, and its headline carries no count", () => {
-  assert.deepEqual(view(asking(3)), at("todo", "Not started", "At its cap of 3 failed verifications: Waiting on your answer to its decision"));
+  assert.deepEqual(view(asking(3)), at("todo", "Not started", "At its cap of 3 failed verifications: Another round?"));
   const blocking = { ...held(thread("idle"), { handoff: blocked, check: null }) };
   assert.deepEqual(view({ ...asking(3), ...blocking }), at("in-progress", "Blocked: Needs a staging key", "At its cap of 3 failed verifications: Blocked: Needs a staging key"));
-  assert.deepEqual(view(asking(4)).needsYou, "At 4 failed verifications, past its cap of 3: Waiting on your answer to its decision");
+  assert.deepEqual(view(asking(4)).needsYou, "At 4 failed verifications, past its cap of 3: Another round?");
 });
 
 /** A parent WEB-1 of `kind` and its sub-issues WEB-2, WEB-3…, each placed by the facts given, viewed together; `own`, the parent's facts beside its issue. */
@@ -203,7 +209,7 @@ const closedAs = (as: "canceled" | "accepted", kind: Issue["kind"] = "build"): P
 const reported = (at: number): Partial<IssueFacts> => ({ issue: { ...issue, kind: "research" }, ...held(thread("idle"), { handoff: { ...done, at, delivery: { kind: "report", report: "Use Stripe.", file: memoryFileSchema.parse("reports/WEB-2.md") } }, check: null }) });
 
 test("a parent's headline says only what its count of Done sub-issues doesn't: nothing, or why it Needs you", () => {
-  const asked = "Waiting on your answer to its decision";
+  const asked = "Another round?";
   assert.deepEqual(rolled("build", [resting("todo")]), at("todo", null));
   const [parent = assert.fail("no view")] = issueViews([facts(asking(null)), facts({ issue: { ...issue, id: issueIdSchema.parse("WEB-2"), parentId: issue.id } })]);
   assert.deepEqual({ status: parent.status, headline: parent.headline, needsYou: parent.needsYou }, at("todo", asked, asked));
@@ -295,7 +301,7 @@ test("the plugin's question at its cap locks an open issue, and leaves Needs you
   const failed = family("build", merged, {}, { ...asking(3), finalCheck: finalCheck(["WEB-2", "WEB-3"], returned(["fail"])) }).parent;
   assert.deepEqual([failed.status, failed.needsYou, failed.capLock?.id], ["in-progress", "At its cap of 3 failed verifications: ✗ Final check failed", "d1"]);
   const asked = family("build", merged, {}, { ...asking(null), finalCheck: passed }).parent;
-  assert.deepEqual([asked.status, asked.needsYou, asked.capLock], ["done", "Waiting on your answer to its decision", null]);
+  assert.deepEqual([asked.status, asked.needsYou, asked.capLock], ["done", "Another round?", null]);
 });
 
 test("a capped build issue that became a parent keeps its cap leading its Needs you reason while a Done sub-issue isn't merged", () => {

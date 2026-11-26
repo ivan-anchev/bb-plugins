@@ -13,7 +13,7 @@ export type DecisionId = z.infer<typeof decisionIdSchema>;
 
 export const questionSchema = z.string().trim().min(1).max(500).regex(ONE_LINE, "A question is one line");
 
-/** Each option is a button on the board, so one short line; two alike would be one choice. */
+/** Each option is a row in its question's card, so one short line; two alike would be one choice. */
 export const optionsSchema = z
   .array(z.string().trim().min(1).max(80).regex(ONE_LINE, "An option is one line"))
   .max(5)

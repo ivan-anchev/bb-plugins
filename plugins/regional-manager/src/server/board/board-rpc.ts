@@ -2,7 +2,6 @@
 // switch, and the user's answers to its decisions; and its open work, published to other plugins.
 import { experimental_PluginRpcRefusal as Refusal, type PluginRpcHandlers } from "@get-bb/plugin-sdk";
 import type { coordinatorContract, publishedContract } from "../../contract.ts";
-import { needsYou } from "../../model/board/board-groups.ts";
 import type { Decision } from "../../model/decision.ts";
 import { isClosed } from "../../model/issue/relations.ts";
 import { STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
@@ -35,8 +34,8 @@ export function boardHandlers({ store, board, inbox, views }: Deps): PluginRpcHa
   return {
     board: ({ coordinatorId }) => board.read(known(coordinatorId)),
 
-    // why nothing needs the user for an unknown id, or one not started, rather than a refusal: the keys come from the coordinators read, and one refusal would fail every key read with it.
-    needsYou: async ({ keys }) => Object.fromEntries(await Promise.all(keys.map(async (id) => [id, started(id) ? await board.needsYou(id) : needsYou([], [])] as const))),
+    // why no issue needs the user for an unknown id, or one not started, rather than a refusal: the keys come from the coordinators read, and one refusal would fail every key read with it.
+    needsYou: async ({ keys }) => Object.fromEntries(await Promise.all(keys.map(async (id) => [id, started(id) ? await board.needsYou(id) : 0] as const))),
 
     setVerify: ({ coordinatorId, verify }) => {
       inbox.setVerify(known(coordinatorId), verify);

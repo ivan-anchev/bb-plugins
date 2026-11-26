@@ -136,7 +136,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
   bb.agents.registerTool({
     name: ASK_USER,
     description:
-      "Ask the user to decide something only they can, about one of your issues: a one-line question, up to five short options, and the one you recommend if you have a view. The question goes into that issue's feed, and on their board under Needs you, with a button for each option and a field to answer in their own words; it flags the issue Needs you until they answer. It returns at once: carry on with other work, or end your turn. Their answer wakes you, and crew_catch_up returns it with your question. crew_catch_up lists the questions still waiting, so don't ask one twice. Answered, the question and its answer stay among the issue's decisions, which issue_read and the agents you start on it see. A question no issue holds yet, such as one about a crew rule, goes on the issue whose work raised it, or on one you file for it first. Not for an agent's own question or approval: that waits in the agent's thread, for the user.",
+      "Ask the user to decide something only they can, about one of your issues: a one-line question, up to five short options, and the one you recommend if you have a view. The question goes into that issue's feed, where the user answers it with an option or in their own words, and flags the issue Needs you on their board, with the question as its line there, until they answer. It returns at once: carry on with other work, or end your turn. Their answer wakes you, and crew_catch_up returns it with your question. crew_catch_up lists the questions still waiting, so don't ask one twice. Answered, the question and its answer stay among the issue's decisions, which issue_read and the agents you start on it see. A question no issue holds yet, such as one about a crew rule, goes on the issue whose work raised it, or on one you file for it first. Not for an agent's own question or approval: that waits in the agent's thread, for the user.",
     presentation: { label: { pending: "Asking the user", completed: "Asked the user" }, icon: { glyph: "MessageCircleQuestion" } },
     parameters: z.object({
       question: questionSchema.describe("What the user decides, in one line, such as \"Target main or release/2?\"."),
@@ -150,7 +150,7 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
       if (refusal !== null) return failed(refusal);
       const decision = store.insertDecision(id, { question, options, recommended: recommended ?? null, issueId: issue }, Date.now());
       onChange(id);
-      return `Asked the user ${decision.id} in ${issue}'s feed and on their board, under Needs you. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.`;
+      return `Asked the user ${decision.id} in ${issue}'s feed; ${issue} waits under Needs you on their board until they answer. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.`;
     }),
   });
 
