@@ -50,6 +50,10 @@ export const prSnapshotSchema = z.object({
 });
 export type PrSnapshot = z.infer<typeof prSnapshotSchema>;
 
+/** What a change request's badge shows of a snapshot (app pr-badge.tsx): its forge and number, link, state and CI. */
+export const prBadgeSchema = prSnapshotSchema.pick({ forge: true, number: true, url: true, state: true, draft: true, ci: true, failedChecks: true });
+export type PrBadgeFacts = z.infer<typeof prBadgeSchema>;
+
 /**
  * The latest read that found a branch's pull request, and what it vouches for: when a read first saw
  * the snapshot's head commit, when this one was read, and its agent's latest handoff as the read

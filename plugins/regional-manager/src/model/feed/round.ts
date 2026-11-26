@@ -177,7 +177,7 @@ export function scoreOf({ review, verdict }: Pick<Round, "review" | "verdict">):
 }
 
 /** One criterion's row of the grid: its wording now, and each judged round's result on it (null: that round's check had no criterion at its place). */
-type GridRow = { criterion: string; cells: { round: number; result: CriterionResult | null }[] };
+export type GridRow = { criterion: string; cells: { round: number; result: CriterionResult | null }[] };
 
 /**
  * The criteria × rounds grid: per criterion, by position, each round with a verdict's result. why

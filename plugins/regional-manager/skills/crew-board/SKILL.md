@@ -961,7 +961,8 @@ agent's turn still runs), since a message drops that check or cuts across it.
 
 Each comment shows as a card in the order posted, with its id (`m1`, `m2`…):
 yours with "Sent to" and the manager's name, the manager's and the agent's
-replies with a line of the comment they answer. A comment you just sent shows
+replies with a line of the comment they answer. A comment longer than three
+lines is cut there; pressing it opens it whole, and pressing again cuts it. A comment you just sent shows
 as a card saying "Sending…", then "Sent as" its id once the server takes it,
 until the tab reads it. The manager and the agent holding the issue comment
 with `issue_comment`; an agent's comment reaches the manager in its next
@@ -1129,9 +1130,11 @@ another issue's write.
 cell per round that has a verdict, a green check for passed, a red cross for
 failed, an amber warning sign for couldn't check, lined up by the criterion's
 place. Resting the pointer on a cell, or moving keyboard focus to it, shows a
-tooltip naming it ("Round 2: failed"); Escape closes it. The head counts the rounds
-and the latest's own score, as its round's line says it ("3 rounds · latest ✓ 6
-of 6", "latest ✗ CI failed", or "no verdict yet").
+tooltip naming it ("Round 2: failed"); Escape closes it. Beside the heading,
+the latest round's marks are counted the way a diff counts its lines: a green
+✓ and how many passed, a red ✗ and how many failed, and an amber ⚠ while any
+couldn't be checked ("✓5 ✗1"); nothing before a verdict. A round that failed
+on CI or its checkout says so on its own line, below.
 Pressing a cell, or Enter or Space on it, opens the row to that round's
 evidence for the criterion, with the words that round judged; pressing it
 again closes it. A research issue lists its **Questions** with no cells, and
@@ -1172,34 +1175,40 @@ decides" when the plugin can't tell whether they reached it, "Not sent back:
 the regional manager decides", "Passed" and the like, with when. A round's body is read only while it is open; one that
 fails to read says so beside its steps, with Retry.
 
-Between the rounds sit the **decisions**, full size: each question the
-manager put to you about the issue, with its options and your answer and
-when, the option you chose marked; one still open has a button per option
-that answers it, as on the Board (one with no options is answered on the
-Board, in your words); and each decision the manager recorded on it with
-`issue_update`, with when (a later one stands over an earlier one, and every
-agent started on the issue gets them in its first message). So do the
-**comments** (see [Comments](#comments)). Everything else
-is a quiet line: the manager filed the issue, started an agent or handed the
-issue on from one, an agent's thread was archived or deleted, its pull request
-opened, passed or failed CI or merged, an agent ended its turn with no
-handoff (with its last answer), failed, or waits on you, the issue was
-unblocked, and the manager changed its plan: "edited title, criteria", "moved
-it to Backlog", "canceled it", "accepted it as Done", "reopened it", "set its
-parent to BBP-3" or "made it top-level", "made it depend on BBP-7" or "removed
-its dependency on BBP-7". An agent named anywhere opens its thread while bb
-has it. The brief is the agent's, so the tab doesn't show it.
+Between the rounds sit the **decisions**, each a card under the manager's
+avatar and name and when: each question the manager put to you about the
+issue, with its options, the one you chose marked, and your answer once under
+them only when it was in your own words; one still open has a button per
+option that answers it, as on the Board (one with no options is answered on
+the Board, in your words); and each decision the manager recorded on it with
+`issue_update`, its first sentence whole and the rest cut to two lines, which
+a press opens (a later one stands over an earlier one, and every agent
+started on the issue gets them in its first message). So do the
+**comments** (see [Comments](#comments)). Everything else is a quiet row of
+words and its time, which never names who did it, since its verb says that:
+"Filed", "Started a2", "Stopped a2", "Handed the issue on from a1", an
+agent's thread archived or deleted, its pull request opened, passing or
+failing CI or merged (its badge first, in the state that moment found it in),
+"a2 ended its turn with no handoff:" and its last answer, failed, or asked a
+person, the issue unblocked, and the manager's changes to its plan: "Edited
+title, criteria", "Set to rest in Backlog", "Canceled", "Accepted as Done",
+"Reopened", "Parent set to BBP-3" or "Made top-level", "Now depends on BBP-7"
+or "No longer depends on BBP-7". Words longer than their row are cut, and a
+press opens them. An agent named anywhere opens its thread while bb has it.
+The brief is the agent's, so the tab doesn't show it.
 
-A moment that moved the issue to another status shows its new status as the
-Board draws it: "a19 handed off · ◑ Verifying", "#219 merged · ● Done", on a
-line, a decision or a round's step (handed off, reviewer, verifier, and what
-became of it). The plugin sees each status as it reads the issues, after
+A round's step that moved the issue to another status shows its new status
+as the Board draws it: "a19 handed off · ◑ Verifying", on handed off,
+reviewer, verifier, and what became of it. Any other moment shows no status:
+its words say the one it moved to ("Filed", "Started a2", "Set to rest in
+Backlog", "Canceled", "Accepted as Done", a merge), and the tab's header shows
+the status now. The plugin sees each status as it reads the issues, after
 every change and once a minute, and keeps it from then on; it never works one
-out again from what happened. A move no moment explains, as a parent rolling
-up, is a quiet line of its own: "◑ Verifying". An issue filed before this
-release starts its record with "Edits and status moves are kept from here;
-verdict times above are as announced or approximate": nothing above it shows a
-status.
+out again from what happened. A move no moment explains or names, as a parent
+rolling up, or moving after an edit, is a row of its own: "Moved to
+Verifying". An issue filed before this release starts its record with
+"Edits and status moves are kept from here; verdict times above are as
+announced or approximate": nothing above it shows a status.
 
 A handoff places its issue until the agent's thread starts another turn: type
 into an agent that handed off and its issue moves back to In progress. Rows

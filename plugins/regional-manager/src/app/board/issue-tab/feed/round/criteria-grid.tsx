@@ -1,16 +1,15 @@
 // An issue's done-criteria as a criteria × rounds grid (round.ts criteriaGrid): each criterion's
-// number and words, then a cell per round with a verdict, its result by glyph and colour. A cell is
-// a button, named by a tooltip on hover and focus; pressed, the row opens under it to that round's
-// evidence for the criterion, read with the round's body. A research issue's questions list alone:
-// nothing judges them.
+// number and words, then a cell per round with a verdict, its result by glyph and colour, and beside
+// the heading the latest round's marks counted, as a diff counts its lines. A cell is a button, named
+// by a tooltip on hover and focus; pressed, the row opens under it to that round's evidence for the
+// criterion, read with the round's body. A research issue's questions list alone: nothing judges them.
 import { useId, useState } from "react";
-import { criteriaGrid, type Round } from "../../../../../model/feed/round.ts";
+import { criteriaGrid, type GridRow, type Round } from "../../../../../model/feed/round.ts";
 import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { CriterionResult } from "../../../../../model/verdict/verdict.ts";
 import { ReadFailure } from "../../../../ui/read-failure.tsx";
 import { RESULT_WORD, ResultGlyph } from "./result-glyph.tsx";
-import { Score } from "./score.tsx";
 import { useRoundBody } from "./round-body.tsx";
 import { useTip } from "./tip.ts";
 
@@ -33,7 +32,7 @@ export function CriteriaGrid({ coordinatorId, issueId, verified, criteria, round
         <h3 id={titleId} className="rmi-part-title">
           {verified ? "Done when" : "Questions"}
         </h3>
-        {verified && rows.length > 0 && <GridSubtitle criteria={rows.length} rounds={rounds} />}
+        {verified && <Tally rows={rows} />}
       </div>
       <ol className="rmi-grid">
         {rows.map((row, i) => (
@@ -108,19 +107,27 @@ function CellEvidence({ coordinatorId, issueId, round, row }: { coordinatorId: C
   );
 }
 
-/**
- * How many rounds judged the criteria and the latest's own score, as its line says it (score.tsx),
- * or how many criteria wait for a verdict. why its score, not a count of the cells: a round all of
- * whose criteria passed may have failed by CI or its checkout, or not be settled yet.
- */
-function GridSubtitle({ criteria, rounds }: { criteria: number; rounds: readonly Round[] }) {
-  const judged = rounds.filter(({ verdict }) => verdict !== null && verdict.results.length > 0);
-  const latest = judged.at(-1);
-  if (latest === undefined) return <span className="rmi-section-sub">{criteria} · no verdict yet</span>;
+/** The criteria's results in the latest round that judged them: as a diff stat, ✓ passed and ✗ failed, and ⚠ couldn't check while any did; nothing before a verdict. */
+function Tally({ rows }: { rows: readonly GridRow[] }) {
+  const latest = rows.flatMap(({ cells }) => cells.at(-1) ?? []);
+  const judged = latest.flatMap(({ result }) => result ?? []);
+  const round = latest[0]?.round;
+  if (round === undefined) return null;
+  const count = (result: CriterionResult) => judged.filter((one) => one === result).length;
+  const counts = TALLIED.map((result) => ({ result, n: count(result) })).filter(({ result, n }) => n > 0 || result !== "unverifiable");
   return (
-    <span className="rmi-section-sub">
-      {judged.length === 1 ? "1 round" : `${judged.length} rounds`} · latest <Score round={latest} />
+    <span className="rmi-tally">
+      {counts.map(({ result, n }) => (
+        <span key={result} data-result={result} aria-hidden>
+          <ResultGlyph result={result} />
+          {n}
+        </span>
+      ))}
+      <span className="sr-only">
+        Round {round}: {counts.map(({ result, n }) => `${n} ${RESULT_WORD[result]}`).join(", ")}
+      </span>
     </span>
   );
 }
 
+const TALLIED: readonly CriterionResult[] = ["pass", "fail", "unverifiable"];

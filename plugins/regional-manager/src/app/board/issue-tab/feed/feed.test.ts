@@ -8,7 +8,10 @@ import { decisionIdSchema } from "../../../../model/decision.ts";
 import { commentIdSchema, type Comment } from "../../../../model/feed/comment.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
 import { HUES } from "../../../../model/profile/avatar.ts";
-import { COORDINATOR, FEED, id, issue, MANAGER_NAME, opened } from "../test-tab.ts";
+import { STATUS_LABELS } from "../../../../model/issue/status.ts";
+import type { PrBadgeFacts, PrSnapshot } from "../../../../model/verdict/pr.ts";
+import { shortTime } from "../../../ui/time.ts";
+import { COORDINATOR, FEED, id, issue, MANAGER_NAME, opened, SHA } from "../test-tab.ts";
 
 // An issue's Activity: every entry of its feed in order, each drawn by its kind, under a filter; and
 // an open question answered from its card.
@@ -19,14 +22,22 @@ afterEach(() => {
   localStorage.clear();
 });
 
+/** When FEED's moments happened, as a row shows it: all of them fall in the epoch's first minute. */
+const EARLY = shortTime(1_000);
+
 const WEB_1 = [issue("WEB-1", { status: "in-review", headline: "✓ Verified: Retries land" })];
 
-/** The Activity section: its entries, each by its own text. */
+/** The Activity section: its entries, each by its own text, and its quiet rows'. */
 function activity(tab: ReturnType<typeof within>) {
-  const section = within(tab.getByRole("heading", { name: "Activity" }).closest("section") ?? assert.fail("no Activity"));
+  const element: HTMLElement = tab.getByRole("heading", { name: "Activity" }).closest("section") ?? assert.fail("no Activity");
+  const section = within(element);
   const items = () => section.queryAllByRole("listitem").filter((item) => item.parentElement?.classList.contains("rmi-entries"));
-  return { section, items, texts: () => items().map((item) => item.textContent?.replace(/\s+/g, " ").trim()) };
+  const lines = () => [...element.querySelectorAll<HTMLElement>(".rmi-line")];
+  return { section, items, lines, texts: () => items().map(spoken), rows: () => lines().map(spoken) };
 }
+
+/** An element's words and times, as read aloud. */
+const spoken = (element: HTMLElement) => element.textContent?.replace(/\s+/g, " ").trim();
 
 /** The options a question's card marks as the user's answer, each by its words. */
 function marked(card: HTMLElement): string[] {
@@ -35,19 +46,20 @@ function marked(card: HTMLElement): string[] {
     .flatMap((option) => /^(.+), your answer, \S/.exec(option.textContent ?? "")?.slice(1, 2) ?? []);
 }
 
-test("every entry kind draws as its own: rounds and decisions as cards, the rest as quiet lines naming who did it, in the order they happened", async () => {
+test("every entry kind draws as its own: rounds and decisions as cards, the rest as rows of words and a time, in the order they happened", async () => {
   const { view, tab } = await opened("WEB-1", WEB_1);
-  const { section, items } = activity(tab());
+  const { section, items, rows } = activity(tab());
   const lines = items().map((item) => item.querySelector(".rmi-round, .rmi-decision, .rmi-line")?.className.split(" ")[0]);
   assert.deepEqual(lines, ["rmi-line", "rmi-line", "rmi-round", "rmi-decision", "rmi-round", "rmi-decision", "rmi-line", "rmi-line", "rmi-round", "rmi-line", "rmi-line", "rmi-line", "rmi-decision"]);
-  for (const text of [
-    /^Webhook retries filed the issue/,
-    /^Webhook retries started a1/,
-    /^Webhook retries handed the issue on from a1/,
-    /^#219 CI passed, merged/,
-    /^a2 ended its turn with no handoff\s*Merged; nothing left\./,
-    /^Unblocked: WEB-7, the last of its dependencies, closed/,
-  ]) assert.ok(section.getAllByRole("paragraph").some((line) => text.test(line.textContent ?? "")), `a line reads ${text}`);
+  assert.deepEqual(rows(), [
+    `Filed ${EARLY}`,
+    `Started a1 ${EARLY}`,
+    `Handed the issue on from a1 ${EARLY}`,
+    `Started a2 ${EARLY}`,
+    `219 CI passed, merged ${EARLY}`,
+    `a2 ended its turn with no handoff: Merged; nothing left. ${EARLY}`,
+    `Unblocked: WEB-7, the last of its dependencies, closed ${EARLY}`,
+  ]);
   assert.ok(section.getByRole("article", { name: "Round 1" }));
   assert.ok(section.getByText("a1 loops: hand the issue to a fresh agent."));
   const answered = within(section.getByRole("article", { name: "Question d1" }));
@@ -72,7 +84,7 @@ test("the filter shows All, only Rounds, or only the Discussion, each pressed as
   assert.deepEqual([pressed(), kinds()], [["Rounds"], ["round", "round", "round"]]);
   fireEvent.click(filter("Discussion"));
   assert.deepEqual([pressed(), kinds()], [["Discussion"], ["decision", "decision", "decision"]]);
-  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Ship it Monday.", at: 7_000 }, moved: null };
+  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Ship it Monday.", at: 7_000 } };
   await refeed("WEB-1", () => ({ ...FEED, entries: [...FEED.entries, decided] }));
   await waitFor(() => assert.deepEqual([pressed(), kinds()], [["Discussion"], ["decision", "decision", "decision", "decision"]], "a read keeps the reader's filter"));
   fireEvent.click(filter("All"));
@@ -107,7 +119,7 @@ test("once the answer lands the question shows it answered, and focus on the opt
 
 /** FEED with a question d9 asking "How many retries?" with these options, answered with `answer`. */
 function answeredWith(options: string[], answer: string) {
-  const asked: Entry = { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d9"), question: "How many retries?", options, recommended: null, at: 6_400, answer: { text: answer, at: 6_500 }, cap: null }, moved: null };
+  const asked: Entry = { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d9"), question: "How many retries?", options, recommended: null, at: 6_400, answer: { text: answer, at: 6_500 }, cap: null } };
   return { feedOf: () => ({ ...FEED, entries: [...FEED.entries, asked] }) };
 }
 
@@ -141,15 +153,15 @@ test("a question with no options, answered, shows the answer once, under You ans
 });
 
 test("an agent's thread that failed reads as its line, with bb's error", async () => {
-  const failed: Entry = { kind: "thread", at: 6_500, agentId: agentIdSchema.parse("a2"), event: { kind: "failed", error: "The provider stopped responding" }, moved: null };
+  const failed: Entry = { kind: "thread", at: 6_500, agentId: agentIdSchema.parse("a2"), event: { kind: "failed", error: "The provider stopped responding" } };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, failed] }) });
-  assert.ok(activity(tab()).texts().some((text) => /^a2 failed: The provider stopped responding/.test(text ?? "")));
+  assert.ok(activity(tab()).rows().includes(`a2 failed: The provider stopped responding ${EARLY}`));
 });
 
 test("an agent that waited on a person reads as a moment past, not as waiting now", async () => {
-  const asked: Entry = { kind: "thread", at: 6_600, agentId: agentIdSchema.parse("a2"), event: { kind: "needs-input", question: "Approve the push?" }, moved: null };
+  const asked: Entry = { kind: "thread", at: 6_600, agentId: agentIdSchema.parse("a2"), event: { kind: "needs-input", question: "Approve the push?" } };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, asked] }) });
-  assert.ok(activity(tab()).texts().some((text) => /^a2 asked a person: Approve the push\?/.test(text ?? "")));
+  assert.ok(activity(tab()).rows().includes(`a2 asked a person: Approve the push? ${EARLY}`));
 });
 
 test("a question answered elsewhere, on the Board or in another window, while focus is on one of its options moves focus to its card, never the page", async () => {
@@ -167,36 +179,65 @@ test("a question answered elsewhere, on the Board or in another window, while fo
   assert.equal(document.activeElement, card());
 });
 
-test("an entry that moved the issue shows the status it moved to, as the Board draws it; plan changes and where the log began are quiet lines; a move nothing explains is a line of its own", async () => {
-  const moved = (entry: Entry): Entry => {
-    if (entry.kind === "round" && entry.round.number === 3) {
-      const { round } = entry;
-      return { kind: "round", round: { ...round, handed: { ...round.handed, moved: "verifying" }, outcome: round.outcome === null ? null : { ...round.outcome, moved: "in-review" } } };
-    }
-    return entry.kind === "pr" ? { ...entry, moved: "done" } : entry;
-  };
-  const began: Entry = { kind: "logged", at: 900, event: { kind: "log-began" }, moved: null };
+test("a row says what happened and when, never the status it moved the issue to: plan changes and where the log began are rows of words, a move nothing explains reads Moved to, and no row says a status twice", async () => {
+  const began: Entry = { kind: "logged", at: 900, event: { kind: "log-began" } };
   const logged: Entry[] = [
-    { kind: "logged", at: 6_400, event: { kind: "edited", fields: ["title", "criteria"] }, moved: null },
-    { kind: "logged", at: 6_410, event: { kind: "dependency-added", on: id("WEB-7") }, moved: null },
-    { kind: "logged", at: 6_420, event: { kind: "rested", rest: "backlog" }, moved: null },
+    { kind: "logged", at: 6_400, event: { kind: "edited", fields: ["title", "criteria"] } },
+    { kind: "logged", at: 6_410, event: { kind: "dependency-added", on: id("WEB-7") } },
+    { kind: "logged", at: 6_420, event: { kind: "rested", rest: "backlog" } },
+    { kind: "logged", at: 6_430, event: { kind: "accepted" } },
     { kind: "moved", at: 6_450, status: "reviewing" },
   ];
-  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [began, ...FEED.entries.map(moved), ...logged] }) });
-  const { section, texts } = activity(tab());
-  const lines = texts();
-  assert.match(lines[0] ?? "", /^Edits and status moves are kept from here; verdict times above are as announced or approximate/);
-  assert.ok(lines.some((text) => /^#219 CI passed, merged ·\s+Done/.test(text ?? "")), lines.join("\n"));
-  assert.ok(lines.some((text) => /^Webhook retries edited title, criteria Jan/.test(text ?? "")), "an edit names its fields, and moved nothing");
-  assert.ok(lines.some((text) => /^Webhook retries made it depend on WEB-7/.test(text ?? "")));
-  assert.ok(lines.some((text) => /^Webhook retries set it to rest in Backlog Jan/.test(text ?? "")), "where it rests is a setting: a move is only the status observed");
-  assert.ok(lines.some((text) => /^Reviewing Jan/.test(text ?? "")), "a move nothing explains: its glyph and name alone");
-  const card = within(section.getByRole("article", { name: "Round 3" }));
-  assert.match(card.getAllByRole("listitem")[0]?.textContent ?? "", /^a2 handed off ·\s+Verifying/);
-  assert.ok(card.getByRole("img", { name: "Verifying" }), "the glyph is the Board's, labelled with its status");
-  const outcome = section.getByRole("article", { name: "Round 3" }).querySelector(".rmi-outcome");
-  assert.match(outcome?.textContent ?? "", /^Passed ·\s+In review/, "what became of its verdict, and the status that moved it to");
-  assert.equal(section.getAllByRole("img", { name: "Done" }).length, 1);
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [began, ...FEED.entries, ...logged] }) });
+  const { lines: rowElements, rows } = activity(tab());
+  const lines = rows();
+  assert.deepEqual(lines.slice(0, 1), [`Edits and status moves are kept from here; verdict times above are as announced or approximate ${EARLY}`]);
+  assert.deepEqual(lines.slice(-5), [
+    `Edited title, criteria ${EARLY}`,
+    `Now depends on WEB-7 ${EARLY}`,
+    `Set to rest in Backlog ${EARLY}`,
+    `Accepted as it is, into In review ${EARLY}`,
+    `Moved to Reviewing ${EARLY}`,
+  ]);
+  for (const line of rowElements()) {
+    // why those two allowed: the pull request's badge and an agent's link draw their own glyph, part of what they open.
+    const icons = [...line.querySelectorAll("svg, img")].filter((icon) => icon.closest(".rmi-pr, .rmi-thread-link") === null).map((icon) => icon.outerHTML);
+    assert.deepEqual(icons, [], `no status glyph or icon, hidden from assistive tech or not, on "${line.textContent}"`);
+    for (const label of Object.values(STATUS_LABELS)) assert.ok((line.textContent ?? "").split(label).length <= 2, `"${line.textContent}" says ${label} once at most`);
+  }
+});
+
+test("no row names who did it: the manager, the user or the verifier is never its first word, and none carries an avatar", async () => {
+  const entries: Entry[] = [
+    ...FEED.entries,
+    { kind: "agent-ended", at: 6_500, agentId: agentIdSchema.parse("a2"), how: "stopped" },
+    { kind: "logged", at: 6_600, event: { kind: "closed", as: "canceled" } },
+    { kind: "logged", at: 6_700, event: { kind: "reopened" } },
+    { kind: "logged", at: 6_800, event: { kind: "parent-set", parentId: id("WEB-2") } },
+  ];
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries }) });
+  const { section, lines, rows } = activity(tab());
+  assert.deepEqual(rows().slice(-4), [`Stopped a2 ${EARLY}`, `Canceled ${EARLY}`, `Reopened ${EARLY}`, `Parent set to WEB-2 ${EARLY}`]);
+  for (const line of rows()) assert.doesNotMatch(line ?? "", new RegExp(`^(${MANAGER_NAME}|Regional manager|The plugin|You|Verifier)\\b`));
+  assert.equal(lines().filter((line) => line.querySelector(".rmi-manager") !== null).length, 0, "no avatar");
+  const head = (card: string) => section.getByRole("article", { name: card }).querySelector(".rmi-decision-head")?.textContent;
+  assert.equal(head("Decision"), `${MANAGER_NAME} decided ${EARLY}`, "a card keeps its author, and only its time after it");
+  assert.equal(head("Question d1"), `${MANAGER_NAME} asked you ${EARLY}`, "a question's head names no status and no id");
+});
+
+test("a pull request's row leads with its badge as that moment found it, linking to it, whatever the pull request is now", async () => {
+  const opened219: PrBadgeFacts = { forge: "github", number: 219, url: "https://github.com/acme/webhooks/pull/219", state: "open", draft: false, ci: "pending", failedChecks: [] };
+  const rows: Entry[] = [
+    { kind: "pr", at: 6_000, pr: opened219, changes: ["opened"] },
+    { kind: "pr", at: 6_100, pr: { ...opened219, state: "merged", ci: "pass" }, changes: ["ci-passed", "merged"] },
+  ];
+  const now: PrSnapshot = { forge: "github", number: 220, url: "https://github.com/acme/webhooks/pull/220", state: "open", draft: false, review: "none", ci: "none", headSha: SHA, failedChecks: [] };
+  const { tab } = await opened("WEB-1", [issue("WEB-1", { status: "reviewing", pr: now })], { feedOf: () => ({ ...FEED, entries: rows }) });
+  const [open, merged] = activity(tab()).lines();
+  const badge = (line: HTMLElement | undefined) => within(line ?? assert.fail("no row")).getByRole("link");
+  assert.deepEqual([badge(open).getAttribute("aria-label"), badge(open).dataset.state, badge(open).getAttribute("href")], ["Pull request 219, open, CI running", "open", opened219.url]);
+  assert.deepEqual([badge(merged).getAttribute("aria-label"), badge(merged).dataset.state], ["Pull request 219, merged, CI passing", "merged"]);
+  assert.deepEqual(activity(tab()).rows(), [`219 opened ${EARLY}`, `219 CI passed, merged ${EARLY}`]);
 });
 
 /** What the tab posted, without each post's submission, which the browser makes up. */
@@ -209,6 +250,80 @@ const comment = (n: number, at: number, author: Comment["author"], text: string,
   comment: { id: commentIdSchema.parse(`m${n}`), issueId: id("WEB-1"), at, text, replyTo: replyTo === null ? null : commentIdSchema.parse(`m${replyTo}`), author },
 });
 const COMMENTED = { ...FEED, entries: [...FEED.entries, comment(1, 6_400, { kind: "user" }, "Cap retries at five.\nAnd log each.", null), comment(2, 6_500, { kind: "manager" }, "Capped at five.", 1), comment(3, 6_600, { kind: "agent", agentId: agentIdSchema.parse("a2") }, "Done in retry.ts.", 1)] };
+
+/**
+ * Runs `body` with every cut-able text in the feed running past its lines while shut, as long words
+ * do in a narrow tab. why by hand: jsdom lays nothing out, so nothing in it ever runs over.
+ */
+async function withLongText(body: () => Promise<void>) {
+  const cut = (element: HTMLElement) => element.classList.contains("rmi-clamp") && element.dataset.open === undefined;
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: function (this: HTMLElement) { return cut(this) ? 54 : 18; } });
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 18 });
+  try {
+    await body();
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
+    Reflect.deleteProperty(HTMLElement.prototype, "clientHeight");
+  }
+}
+
+/** A cut text's control: whether it is open, and how many lines it is cut to while shut. */
+function cutText(button: HTMLElement) {
+  const text = button.querySelector<HTMLElement>(".rmi-clamp") ?? assert.fail("no text in the button");
+  return { open: button.getAttribute("aria-expanded"), lines: text.style.getPropertyValue("--rmi-lines"), drawnWhole: text.dataset.open !== undefined };
+}
+
+test("a decision shows its first sentence whole and the rest cut to two lines, a comment cut to three and a row to one; each opens on press and closes on another", async () => {
+  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Cap retries\nat five. Each retry waits twice as long as the one before.\nThe fifth gives up and tells on-call.", at: 6_400 } };
+  const said = comment(1, 6_500, { kind: "user" }, "Cap retries at five.\nAnd log each.\nAnd alert on-call.\nAnd page me.", null);
+  await withLongText(async () => {
+    const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, decided, said] }) });
+    const { section, lines } = activity(tab());
+    const [loops, capped] = section.getAllByRole("article", { name: "Decision" }).map((card) => within(card));
+    assert.equal(loops?.queryByRole("button"), null, "a one-sentence decision has nothing more to open");
+    assert.equal(capped?.getByText((_, element) => element?.textContent === "Cap retries\nat five.").tagName, "P", "the first sentence whole, a line break in it included");
+    const rest = capped?.getByRole("button", { name: /^Each retry waits twice as long as the one before\.\s+The fifth gives up and tells on-call\.$/ }) ?? assert.fail("no rest");
+    assert.deepEqual(cutText(rest), { open: "false", lines: "2", drawnWhole: false });
+    fireEvent.click(rest);
+    assert.deepEqual(cutText(rest), { open: "true", lines: "2", drawnWhole: true });
+    fireEvent.click(rest);
+    assert.deepEqual(cutText(rest), { open: "false", lines: "2", drawnWhole: false });
+
+    const text = within(section.getByRole("article", { name: "Comment m1" })).getByRole("button", { name: /^Cap retries at five\./ });
+    assert.deepEqual(cutText(text), { open: "false", lines: "3", drawnWhole: false });
+    fireEvent.click(text);
+    assert.deepEqual(cutText(text), { open: "true", lines: "3", drawnWhole: true });
+
+    const row = lines().find((line) => /ended its turn/.test(line.textContent ?? "")) ?? assert.fail("no row");
+    const quote = within(row).getByRole("button", { name: "Merged; nothing left." });
+    assert.deepEqual(cutText(quote), { open: "false", lines: "1", drawnWhole: false });
+    fireEvent.click(quote);
+    assert.deepEqual(cutText(quote), { open: "true", lines: "1", drawnWhole: true });
+  });
+});
+
+test("a decision whose first sentence ends in a closing quote shows that sentence alone as its headline, and the rest cut behind its press", async () => {
+  const first = "“Use the read-only default.”";
+  const rest = "The sandbox writes nowhere else. Every tool that needs more asks first.\nThe manager records each exception.";
+  const quoted: Entry = { kind: "decision", decision: { kind: "recorded", text: `${first}\n${rest}`, at: 6_400 } };
+  await withLongText(async () => {
+    const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, quoted] }) });
+    const card = within(activity(tab()).section.getAllByRole("article", { name: "Decision" }).at(-1) ?? assert.fail("no decision"));
+    assert.equal(card.getAllByRole("paragraph")[1]?.textContent, first, "the first sentence, its closing quote included, and no more");
+    const press = card.getByRole("button", { name: /^The sandbox writes nowhere else\./ });
+    assert.equal(press.textContent, rest);
+    assert.deepEqual(cutText(press), { open: "false", lines: "2", drawnWhole: false });
+    fireEvent.click(press);
+    assert.deepEqual(cutText(press), { open: "true", lines: "2", drawnWhole: true });
+  });
+});
+
+test("text that fits its lines is plain text, with nothing to press", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => COMMENTED });
+  const { section, lines } = activity(tab());
+  assert.equal(within(section.getByRole("article", { name: "Comment m1" })).queryByRole("button"), null);
+  assert.deepEqual(lines().flatMap((line) => within(line).queryAllByRole("button").map((button) => button.textContent)), ["a1", "a1", "a2", "a2"], "only the agents named, which open their threads");
+});
 
 /** The comment field at the foot of Activity, and its form's controls. */
 function composer(tab: ReturnType<typeof within>) {
@@ -398,18 +513,18 @@ test("the submission is kept with the text until the server takes it: a retry of
   assert.notEqual(again, retried, "the same words posted again once taken are a new comment");
 });
 
-test("a pass that filed a follow-up draws as a quiet line naming it, by no one, with the status it moved the issue to", async () => {
-  const followUp: Entry = { kind: "follow-up", at: Date.UTC(2026, 10, 26, 9, 34), issueId: id("WEB-9"), when: "passed", moved: "in-review" };
+test("a pass that filed a follow-up draws as a row naming it", async () => {
+  const followUp: Entry = { kind: "follow-up", at: Date.UTC(2026, 10, 26, 9, 34), issueId: id("WEB-9"), when: "passed" };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [followUp] }) });
   const { texts } = activity(tab());
   assert.equal(texts().length, 1);
-  assert.match(texts()[0] ?? "", /^Follow-up WEB-9 filed in Backlog, with the review findings that held without blocking it · In review/);
+  assert.equal(texts()[0], `Follow-up WEB-9 filed in Backlog, with the review findings that held without blocking it ${shortTime(followUp.at)}`);
 });
 
-test("a follow-up's feed begins with a line by no one saying the plugin filed it as the follow-up of its origin", async () => {
-  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: { issueId: id("WEB-1"), when: "passed" }, moved: "backlog" };
+test("a follow-up's feed begins with a row saying it was filed as the follow-up of its origin", async () => {
+  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: { issueId: id("WEB-1"), when: "passed" } };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [created] }) });
-  assert.match(activity(tab()).texts()[0] ?? "", /^Filed as the follow-up of WEB-1, when it passed · Backlog/);
+  assert.equal(activity(tab()).texts()[0], `Filed as the follow-up of WEB-1, when it passed ${shortTime(created.at)}`);
 });
 
 test("the brief folds under the description, closed until the reader opens it, showing the text whole, a long one included", async () => {
@@ -427,20 +542,20 @@ test("an issue with no brief yet draws no Brief fold", async () => {
   assert.equal(tab().queryAllByText("Brief").length, 0);
 });
 
-test("an accept draws as the manager's line, and its follow-up as a line naming the findings it was accepted with", async () => {
+test("an accept draws as a row, and its follow-up as a row naming the findings it was accepted with", async () => {
   const at = Date.UTC(2026, 10, 26, 9, 34);
   const entries: Entry[] = [
-    { kind: "logged", at, event: { kind: "accepted" }, moved: "in-review" },
-    { kind: "follow-up", at, issueId: id("WEB-9"), when: "accepted", moved: null },
+    { kind: "logged", at, event: { kind: "accepted" } },
+    { kind: "follow-up", at, issueId: id("WEB-9"), when: "accepted" },
   ];
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries }) });
   const [accept, followUp] = activity(tab()).texts();
-  assert.match(accept ?? "", /accepted it as it is, into In review · In review/);
+  assert.equal(accept, `Accepted as it is, into In review ${shortTime(at)}`);
   assert.match(followUp ?? "", /^Follow-up WEB-9 filed in Backlog, with the review findings it was accepted with, its unfixed must-fixes among them/);
 });
 
 test("a follow-up filed on its origin's accept begins its feed saying so", async () => {
-  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: { issueId: id("WEB-1"), when: "accepted" }, moved: "backlog" };
+  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: { issueId: id("WEB-1"), when: "accepted" } };
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [created] }) });
-  assert.match(activity(tab()).texts()[0] ?? "", /^Filed as the follow-up of WEB-1, when it was accepted as it was · Backlog/);
+  assert.equal(activity(tab()).texts()[0], `Filed as the follow-up of WEB-1, when it was accepted as it was ${shortTime(created.at)}`);
 });

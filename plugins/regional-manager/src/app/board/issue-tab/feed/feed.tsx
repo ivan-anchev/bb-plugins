@@ -77,13 +77,13 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
 
 type EntryViewProps = { coordinatorId: CoordinatorId; issue: IssueRow; agents: FeedAgents; comments: ReadonlyMap<CommentId, Comment>; entry: Entry; isOpen(round: Round): boolean; onToggle(round: Round): void; onEngage(round: Round): void };
 
-/** One entry, by its kind: a round, a decision or a comment as its card, anything else as a quiet line. */
+/** One entry, by its kind: a round, a decision or a comment as its card, anything else as a quiet row. */
 function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onToggle, onEngage }: EntryViewProps) {
   switch (entry.kind) {
     case "round":
       return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} onEngage={() => onEngage(entry.round)} />;
     case "decision":
-      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} moved={entry.moved} status={issue.status} />;
+      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} status={issue.status} />;
     case "comment": {
       const { replyTo } = entry.comment;
       return <CommentCard coordinatorId={coordinatorId} entry={entry} answered={replyTo === null ? null : (comments.get(replyTo) ?? null)} agents={agents} />;
@@ -98,7 +98,7 @@ function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onTo
     case "thread":
     case "follow-up":
     case "unblocked":
-      return <EntryLine coordinatorId={coordinatorId} entry={entry} agents={agents} />;
+      return <EntryLine entry={entry} agents={agents} />;
     default:
       // why nothing, not a throw: for a moment after an update, the server may send a kind this bundle doesn't know.
       entry satisfies never;

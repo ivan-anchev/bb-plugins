@@ -1,32 +1,43 @@
-// A machine event in an issue's feed as a quiet line: who did it, when the entry names someone
-// (entry.ts actorOf), what happened, the status it moved the issue to, and when; or a status move no
-// moment explains, alone.
+// A machine moment in an issue's feed as one quiet row: what happened, in words, then when. It names
+// an agent, or the pull request by its badge as that moment found it, where the moment does, never who did it, since its verb says that
+// (only the manager files, edits, starts and stops), nor the status it moved the issue to, which the
+// tab's header shows now. A status move no moment explains is a row of its own. Words longer than
+// the row are cut, and open on press.
 import type { ReactNode } from "react";
-import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
+import type { Entry } from "../../../../model/feed/entry.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
-import type { CoordinatorId } from "../../../../model/role.ts";
-import { PR_CHANGE_WORDS, prRef } from "../../../../model/verdict/pr.ts";
+import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
 import type { FiledWhen } from "../../../../model/verdict/rounds/follow-up.ts";
-import { AgentName, MovedTo, Status, When, Who, type FeedAgents } from "./byline.tsx";
+import { PrBadge } from "../../issue/pr-badge.tsx";
+import { AgentName, When, type FeedAgents } from "./byline.tsx";
+import { Clamp } from "./clamp.tsx";
 
-/** The entries drawn as lines with a who and a what: everything but rounds, decisions and comments, which are cards, and a status move alone. */
+/** The entries drawn as a row of words: everything but rounds, decisions and comments, which are cards, and a status move alone. */
 type LineEntry = Exclude<Entry, { kind: "round" | "decision" | "comment" | "moved" }>;
 
-export function EntryLine({ coordinatorId, entry, agents }: { coordinatorId: CoordinatorId; entry: LineEntry; agents: FeedAgents }) {
-  return (
-    <p className="rmi-line">
-      <Who actor={actorOf(entry)} coordinatorId={coordinatorId} agents={agents} />
-      {whatOf(entry, agents)}
-      <MovedTo status={entry.moved} /> <When at={entry.at} />
-    </p>
-  );
+/** A row's words: `head`, never cut, naming the agent or pull request it is about (null: none), then `text`, cut to the row (null: none). */
+type Words = { head: ReactNode; text: string | null };
+
+export function EntryLine({ entry, agents }: { entry: LineEntry; agents: FeedAgents }) {
+  return <Line words={wordsOf(entry, agents)} at={entry.at} />;
 }
 
 /** A status the issue moved to that no moment explains, as a parent rolling up or a turn ending. */
 export function MovedLine({ entry }: { entry: Extract<Entry, { kind: "moved" }> }) {
+  return <Line words={{ head: null, text: `Moved to ${STATUS_LABELS[entry.status]}` }} at={entry.at} />;
+}
+
+/** why the spaces: a flex row draws its gaps, and screen readers and copied text need words apart. */
+function Line({ words, at }: { words: Words; at: number }) {
   return (
     <p className="rmi-line">
-      <Status status={entry.status} /> <When at={entry.at} />
+      {words.head !== null && <span className="rmi-line-head">{words.head}</span>}{" "}
+      {words.text !== null && (
+        <Clamp lines={1} className="rmi-line-text">
+          {words.text}
+        </Clamp>
+      )}{" "}
+      <When at={at} />
     </p>
   );
 }
@@ -40,57 +51,62 @@ const FOLLOW_UP_HOLDS: Record<FiledWhen, string> = {
   accepted: "the review findings it was accepted with, its unfixed must-fixes among them",
 };
 
-function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
+const said = (text: string): Words => ({ head: null, text });
+
+function wordsOf(entry: LineEntry, agents: FeedAgents): Words {
   switch (entry.kind) {
     case "created":
-      return entry.followUpOf === null ? "filed the issue" : `Filed as the follow-up of ${entry.followUpOf.issueId}, ${FILED_WHEN[entry.followUpOf.when]}`;
+      return said(entry.followUpOf === null ? "Filed" : `Filed as the follow-up of ${entry.followUpOf.issueId}, ${FILED_WHEN[entry.followUpOf.when]}`);
     case "agent-started":
-      return (
-        <>
-          started <AgentName agentId={entry.agentId} agents={agents} />
-        </>
-      );
+      return {
+        head: (
+          <>
+            Started <AgentName agentId={entry.agentId} agents={agents} />
+          </>
+        ),
+        text: null,
+      };
     case "agent-ended":
-      return <Ended agentId={entry.agentId} how={entry.how} agents={agents} />;
+      return endedWords(entry, agents);
+    case "thread":
+      return threadWords(entry, agents);
     case "pr":
       // why PR_CHANGE_WORDS: the manager's doorbell and catch-up name a change in the same words.
-      return `${prRef(entry.pr)} ${entry.changes.flatMap((change) => PR_CHANGE_WORDS[change] ?? []).join(", ")}`;
-    case "thread":
-      return <ThreadSaid event={entry.event} />;
+      return { head: <PrBadge pr={entry.pr} />, text: entry.changes.flatMap((change) => PR_CHANGE_WORDS[change] ?? []).join(", ") };
     case "follow-up":
-      return `Follow-up ${entry.issueId} filed in Backlog, with ${FOLLOW_UP_HOLDS[entry.when]}`;
+      return said(`Follow-up ${entry.issueId} filed in Backlog, with ${FOLLOW_UP_HOLDS[entry.when]}`);
     case "unblocked":
-      return `Unblocked: ${entry.by}, the last of its dependencies, closed`;
+      return said(`Unblocked: ${entry.by}, the last of its dependencies, closed`);
     case "logged":
-      return loggedText(entry.event);
+      return said(loggedText(entry.event));
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
       entry satisfies never;
-      return null;
+      return { head: null, text: null };
   }
 }
 
-/** A change to the plan, by the manager, or where the log began. */
+/** A change to the issue's plan, by the manager, or where the log began. */
 function loggedText(event: Extract<Entry, { kind: "logged" }>["event"]): string {
   switch (event.kind) {
     case "edited":
       // why the fields' own names: they are the words the feed names them by (log-event.ts).
-      return `edited ${event.fields.join(", ")}`;
+      return `Edited ${event.fields.join(", ")}`;
     case "rested":
-      // why a setting, not a move: where it rests shows only while no agent's work or sub-issue places it; what it moved to is the status observed (its glyph).
-      return `set it to rest in ${STATUS_LABELS[event.rest]}`;
+      // why a setting, not a move: where it rests shows only while no agent's work or sub-issue places it.
+      return `Set to rest in ${STATUS_LABELS[event.rest]}`;
     case "closed":
-      return event.as === "canceled" ? "canceled it" : "accepted it as Done";
+      return event.as === "canceled" ? "Canceled" : "Accepted as Done";
     case "reopened":
-      return "reopened it";
+      return "Reopened";
     case "accepted":
-      return "accepted it as it is, into In review";
+      return "Accepted as it is, into In review";
     case "parent-set":
-      return event.parentId === null ? "made it top-level" : `set its parent to ${event.parentId}`;
+      return event.parentId === null ? "Made top-level" : `Parent set to ${event.parentId}`;
     case "dependency-added":
-      return `made it depend on ${event.on}`;
+      return `Now depends on ${event.on}`;
     case "dependency-removed":
-      return `removed its dependency on ${event.on}`;
+      return `No longer depends on ${event.on}`;
     case "log-began":
       return "Edits and status moves are kept from here; verdict times above are as announced or approximate";
     default:
@@ -100,43 +116,40 @@ function loggedText(event: Extract<Entry, { kind: "logged" }>["event"]): string 
   }
 }
 
-function Ended({ agentId, how, agents }: { agentId: Extract<Entry, { kind: "agent-ended" }>["agentId"]; how: Extract<Entry, { kind: "agent-ended" }>["how"]; agents: FeedAgents }) {
+function endedWords({ agentId, how }: Extract<Entry, { kind: "agent-ended" }>, agents: FeedAgents): Words {
   const agent = <AgentName agentId={agentId} agents={agents} />;
   switch (how) {
     case "stopped":
-      return <>stopped {agent}</>;
+      return { head: <>Stopped {agent}</>, text: null };
     case "replaced":
-      return <>handed the issue on from {agent}</>;
+      return { head: <>Handed the issue on from {agent}</>, text: null };
     case "archived":
-      return <>{agent}'s thread was archived</>;
+      return { head: <>{agent}'s thread was archived</>, text: null };
     case "deleted":
-      return <>{agent}'s thread was deleted</>;
+      return { head: <>{agent}'s thread was deleted</>, text: null };
     case "spawn-failed":
-      return <>{agent} never started: bb didn't confirm its thread</>;
+      return { head: <>{agent} never started:</>, text: "bb didn't confirm its thread" };
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
       how satisfies never;
-      return null;
+      return { head: agent, text: null };
   }
 }
 
-function ThreadSaid({ event }: { event: Extract<Entry, { kind: "thread" }>["event"] }) {
+/** What an agent's thread said: its own words, which can run long, as the row's text. */
+function threadWords({ agentId, event }: Extract<Entry, { kind: "thread" }>, agents: FeedAgents): Words {
+  const agent = <AgentName agentId={agentId} agents={agents} />;
   switch (event.kind) {
     case "reported-back":
-      return (
-        <>
-          ended its turn with no handoff
-          {event.lastAnswer !== null && <span className="rmi-line-quote">{event.lastAnswer}</span>}
-        </>
-      );
+      return { head: <>{agent} ended its turn with no handoff{event.lastAnswer !== null && ":"}</>, text: event.lastAnswer };
     case "failed":
-      return <>failed{event.error !== null && `: ${event.error}`}</>;
+      return { head: <>{agent} failed{event.error !== null && ":"}</>, text: event.error };
     case "needs-input":
       // why the past: the line is a moment of the issue's history, long after the question was answered.
-      return <>asked a person: {event.question}</>;
+      return { head: <>{agent} asked a person:</>, text: event.question };
     default:
       // why nothing, not the object: the server may be newer than this bundle for a moment after an update.
       event satisfies never;
-      return null;
+      return { head: agent, text: null };
   }
 }

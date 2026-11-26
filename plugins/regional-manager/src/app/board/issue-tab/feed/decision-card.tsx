@@ -1,33 +1,35 @@
-// A decision in an issue's feed, full size between its rounds: a question the regional manager put to
-// the user about the issue, with its options and the user's answer; or a decision it recorded on the
-// issue. An open question's options are buttons that answer it here, as on the Board.
+// A decision in an issue's feed, between its rounds: a question the regional manager put to the user
+// about the issue, with its options and the user's answer; or a decision it recorded on the issue,
+// its first sentence whole and the rest cut to two lines, opening on press. An open question's
+// options are buttons that answer it here, as on the Board.
 import { useLayoutEffect, useRef } from "react";
 import type { IssueDecision } from "../../../../model/decision.ts";
 import { isClosed } from "../../../../model/issue/relations.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../../model/issue/status.ts";
+import { firstSentence } from "../../../../model/one-line.ts";
 import { stillWaits } from "../../../../model/verdict/rounds/cap.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { Button } from "../../../ui/button.tsx";
 import { shortTime } from "../../../ui/time.ts";
 import { useAnswer } from "../../use-answer.ts";
-import { ManagerName, MovedTo, When } from "./byline.tsx";
+import { ManagerName, When } from "./byline.tsx";
+import { Clamp } from "./clamp.tsx";
 import { ResultGlyph } from "./round/result-glyph.tsx";
 
 type Asked = Extract<IssueDecision, { kind: "asked" }>;
 
-/** `moved`: the status the issue moved to after it (null: none); `status`: the issue's status now. */
-export function DecisionCard({ coordinatorId, decision, moved, status }: { coordinatorId: CoordinatorId; decision: IssueDecision; moved: IssueStatus | null; status: IssueStatus }) {
+/** `status`: the issue's status now. */
+export function DecisionCard({ coordinatorId, decision, status }: { coordinatorId: CoordinatorId; decision: IssueDecision; status: IssueStatus }) {
   switch (decision.kind) {
     case "asked":
-      return <Question coordinatorId={coordinatorId} decision={decision} moved={moved} status={status} />;
+      return <Question coordinatorId={coordinatorId} decision={decision} status={status} />;
     case "recorded":
       return (
         <article className="rmi-decision" aria-label="Decision">
           <p className="rmi-decision-head">
-            <ManagerName coordinatorId={coordinatorId} /> decided
-            <MovedTo status={moved} /> <When at={decision.at} />
+            <ManagerName coordinatorId={coordinatorId} /> decided <When at={decision.at} />
           </p>
-          <p className="rmi-decision-text">{decision.text}</p>
+          <Decided text={decision.text} />
         </article>
       );
     default:
@@ -44,7 +46,7 @@ export function DecisionCard({ coordinatorId, decision, moved, status }: { coord
  * focus on an option, which unmounts then, moves to the card, whatever took them: an answer from
  * this card, the Board or another window, or the issue's close.
  */
-function Question({ coordinatorId, decision, moved, status }: { coordinatorId: CoordinatorId; decision: Asked; moved: IssueStatus | null; status: IssueStatus }) {
+function Question({ coordinatorId, decision, status }: { coordinatorId: CoordinatorId; decision: Asked; status: IssueStatus }) {
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
   const card = useRef<HTMLElement>(null);
   // Whether focus is on one of the options. why a ref: whatever unmounts them fires no blur.
@@ -61,9 +63,7 @@ function Question({ coordinatorId, decision, moved, status }: { coordinatorId: C
     <article ref={card} tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`}>
       <p className="rmi-decision-head">
         {/* why by its cap: the plugin itself asks at an issue's cap of failed verifications (rounds/cap.ts), not the regional manager. */}
-        {decision.cap === null ? <ManagerName coordinatorId={coordinatorId} /> : <span className="rmi-actor">The plugin</span>} asked you
-        <MovedTo status={moved} /> <When at={decision.at} />
-        <span className="rmi-decision-id">{decision.id}</span>
+        {decision.cap === null ? <ManagerName coordinatorId={coordinatorId} /> : <span className="rmi-actor">The plugin</span>} asked you <When at={decision.at} />
       </p>
       <p className="rmi-decision-text">{decision.question}</p>
       {decision.answer !== null ? (
@@ -84,6 +84,21 @@ function Question({ coordinatorId, decision, moved, status }: { coordinatorId: C
         </p>
       )}
     </article>
+  );
+}
+
+/** A recorded decision's words: its first sentence, its headline, whole; the rest, if any, muted and cut to two lines. */
+function Decided({ text }: { text: string }) {
+  const { sentence, rest } = firstSentence(text);
+  return (
+    <div>
+      <p className="rmi-decision-text">{sentence}</p>
+      {rest !== null && (
+        <Clamp lines={2} className="rmi-decision-rest">
+          {rest}
+        </Clamp>
+      )}
+    </div>
   );
 }
 
