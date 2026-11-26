@@ -8,14 +8,16 @@ import type { IssueId } from "../../issue/issue.ts";
 import type { IssueView } from "../../issue/status.ts";
 import type { Check } from "../check.ts";
 import { failureHeadline, outcome, type Verdict } from "../verdict.ts";
+import { capChoice } from "./cap-choice.ts";
 
 /** How many failed verdicts an issue gets, across all its agents, before the user is asked. */
 export const MAX_FAILED_VERDICTS = 3;
 
-/** A question the plugin put to the user at an issue's cap, with `cap`, the count of failed verdicts it asked at. */
-export type CapQuestion = Decision & { cap: number };
+/** A question the plugin put to the user at an issue's cap, naming the issue, with `cap`, the count of failed verdicts it asked at. */
+export type CapQuestion = Decision & { issueId: IssueId; cap: number };
 
-const isCapQuestion = (decision: Decision): decision is CapQuestion => decision.cap !== null;
+/** Whether the plugin asked the decision at an issue's cap: it alone asks with a count, always naming the issue. */
+export const isCapQuestion = (decision: Decision): decision is CapQuestion => decision.cap !== null && decision.issueId !== null;
 
 /** The cap questions naming the issue, in the order asked. */
 export const capQuestionsOf = (decisions: readonly Decision[], issueId: IssueId): CapQuestion[] =>
@@ -31,14 +33,24 @@ export const countedFailures = (record: readonly { check: Check | null }[]): Che
   record.flatMap(({ check }) => (check !== null && check.subject.kind === "handoff" && outcome(check.verdict) === "fail" ? [check] : []));
 
 /**
- * The one rule for the cap, deciding both whether a failure goes back to nobody and whether the
- * plugin asks: with `failed` failures counted, the count to ask the user at, or null. It asks once
- * the cap is reached, while no cap question of the issue is open, and only above every count it
- * asked at before, so each answer allows one more round.
+ * The one rule for asking at the cap: with `failed` failures counted, the count to ask the user at,
+ * or null. It asks once the cap is reached, while no cap question of the issue is open, and only
+ * above every count it asked at before, so each answer allows one more round; but never while the
+ * user's answer to merge the issue as it is stands (mergeAnswer), which allows no further round.
  */
-export function capAsks(failed: number, questions: readonly Pick<CapQuestion, "cap" | "answer">[]): number | null {
-  if (failed < MAX_FAILED_VERDICTS || questions.some(({ answer }) => answer === null)) return null;
+export function capAsks(failed: number, questions: readonly Pick<CapQuestion, "cap" | "options" | "answer">[]): number | null {
+  if (failed < MAX_FAILED_VERDICTS || questions.some(({ answer }) => answer === null) || mergeAnswer(questions) !== null) return null;
   return questions.every(({ cap }) => cap < failed) ? failed : null;
+}
+
+/**
+ * The issue's latest cap question when the user answered it by choosing to merge the issue as it
+ * is (cap-choice.ts); null otherwise. While it stands, agents may start and be messaged on the issue
+ * so one can merge it, but no failure goes back to one, and none asks again.
+ */
+export function mergeAnswer<Question extends Pick<CapQuestion, "options" | "answer">>(questions: readonly Question[]): Question | null {
+  const latest = questions.at(-1);
+  return latest !== undefined && capChoice(latest) === "merge" ? latest : null;
 }
 
 /** The issue's cap question the user hasn't answered yet; null: none. */
@@ -59,8 +71,9 @@ export const capLock = (questions: readonly CapQuestion[], closed: boolean): Cap
  */
 export const stillWaits = ({ answer, cap }: Pick<Decision, "answer" | "cap">, issueClosed: boolean): boolean => answer === null && !(cap !== null && issueClosed);
 
-/** Whether a failure about to settle as the issue's `failed`th may go back to its agent: never while a cap question is unanswered, nor when it asks one. */
-export const mayGoBack = (failed: number, questions: readonly CapQuestion[]): boolean => unansweredCapQuestion(questions) === null && capAsks(failed, questions) === null;
+/** Whether a failure about to settle as the issue's `failed`th may go back to its agent: never while a cap question is unanswered or an answer to merge as is stands, nor when it asks one. */
+export const mayGoBack = (failed: number, questions: readonly CapQuestion[]): boolean =>
+  unansweredCapQuestion(questions) === null && mergeAnswer(questions) === null && capAsks(failed, questions) === null;
 
 /** The cap question a `checked` event names as asked. why throw: the event is recorded with its question, in one transaction, and only the plugin asks one. */
 export function askedQuestion(decision: Decision | null): CapQuestion {
@@ -99,19 +112,17 @@ export function askedText(issueId: IssueId, { cap, id }: CapQuestion, mayHaveRea
   return `${issueId}'s ${ordinal(cap)} failed verification, ${pastCap(cap)}: ${held}, and the plugin asked the user (${id})`;
 }
 
-/** The options a cap question offers; any answer allows one more round, and the regional manager reads the words. */
-export const CAP_OPTIONS = ["One more round", "Cancel it"];
-
 /**
  * The question the plugin asks at an issue's cap, leading with why its last round failed (`last`,
- * as the failure's headline words it) and how many criteria passed, then the count it asks at.
+ * as the failure's headline words it) and how many criteria passed, then the count it asks at and
+ * the three choices it offers (cap-choice.ts), each with what it does.
  * why no agent's words: a doorbell may quote the question (wake-text.ts), so it holds only what
  * the plugin derived; the round in the issue's tab has the rest. Bounded well under the question's
  * 500 characters, as every part is a word or a number.
  */
 export function capQuestionText(issueId: IssueId, last: Extract<Verdict, { state: "returned" }>, cap: number): string {
   const passed = last.criteria.filter(({ result }) => result === "pass").length;
-  return `${failureHeadline(last)}, ${passed} of ${last.criteria.length} criteria passed. ${issueId} has failed verification ${cap} times, ${pastCap(cap)}: nothing goes back to an agent until you answer, and any answer allows one more round.`;
+  return `${failureHeadline(last)}, ${passed} of ${last.criteria.length} criteria passed. ${issueId} has failed verification ${cap} times, ${pastCap(cap)}, and nothing goes back to an agent until you answer: merge it as is and file its open findings as a follow-up, give it one more round, or cancel it and close its pull request.`;
 }
 
 /** An ordinal in words a round's score and a catch-up use: 3rd, 4th, 21st. */
