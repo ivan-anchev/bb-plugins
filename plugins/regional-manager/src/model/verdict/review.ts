@@ -51,11 +51,15 @@ const storedFindingSchema = reviewFindingSchema
   .extend({ title: reviewFindingSchema.shape.title.optional() })
   .transform(({ title, ...finding }): ReviewFinding => ({ ...finding, title: title ?? titleOf(finding.claim) }));
 
-/** A claim's first sentence, on its first line, cut to MAX_FINDING_TITLE with an ellipsis: the title of a finding stored without one. */
+/**
+ * A claim's first sentence, cut to MAX_FINDING_TITLE with an ellipsis: the title of a finding
+ * stored without one. why its whitespace collapsed first: a claim wrapped mid-sentence keeps its
+ * whole first sentence, on one line.
+ */
 function titleOf(claim: string): string {
-  const line = claim.trim().replace(/[\r\n\u2028\u2029][\s\S]*$/, "");
-  const end = line.search(/[.!?](\s|$)/);
-  const sentence = end === -1 ? line : line.slice(0, end + 1);
+  const text = claim.trim().replace(/\s+/g, " ");
+  const end = text.search(/[.!?]( |$)/);
+  const sentence = end === -1 ? text : text.slice(0, end + 1);
   return sentence.length <= MAX_FINDING_TITLE ? sentence : `${sentence.slice(0, MAX_FINDING_TITLE - 1).trimEnd()}…`;
 }
 

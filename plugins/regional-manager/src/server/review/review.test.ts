@@ -517,21 +517,26 @@ test("issue_review refuses a finding with no title, a title over 80 characters o
   const one = (changed: object) => refusal({ findings: [{ ...finding, ...changed }] });
   assert.match(refusal({ findings: [untitled] }), /^findings\.0\.title: /, "no title");
   assert.match(one({ title: "   " }), /^findings\.0\.title: Too small/, "a blank title");
-  assert.match(one({ title: "x".repeat(81) }), /^findings\.0\.title: Too big/, "81 characters");
-  for (const lineBreak of ["\n", "\r", "\u2028"]) assert.equal(one({ title: `A dead endpoint${lineBreak}is retried forever` }), "findings.0.title: A title is one line", JSON.stringify(lineBreak));
-  assert.match(one({ claim: "x".repeat(1_201) }), /^findings\.0\.claim: Too big/, "a claim of 1,201 characters");
-  assert.equal(one({ title: `  ${"x".repeat(80)}  `, claim: "x".repeat(1_200) }), "taken", "80 and 1,200 characters, trimmed");
+  // why a space as the 81st, 1,201st and 301st character too: a cap counts what the reviewer passed, before it is trimmed.
+  for (const extra of ["x", " "]) {
+    assert.match(one({ title: `${"x".repeat(80)}${extra}` }), /^findings\.0\.title: Too big/, `81 characters, the last ${JSON.stringify(extra)}`);
+    assert.match(one({ claim: `${"x".repeat(1_200)}${extra}` }), /^findings\.0\.claim: Too big/, `a claim of 1,201 characters, the last ${JSON.stringify(extra)}`);
+  }
+  const lines = (text: string) => [`${text}\n`, `\n${text}`, ...["\n", "\r", "\u2028", "\u2029"].map((lineBreak) => text.replace(" ", lineBreak))];
+  for (const title of lines("A dead endpoint is retried forever")) assert.equal(one({ title }), "findings.0.title: A title is one line", JSON.stringify(title));
+  assert.equal(one({ title: "x".repeat(80), claim: "x".repeat(1_200) }), "taken", "80 and 1,200 characters");
   const note = (text: string) => refusal({ findings: [], earlier: [{ finding: 1, fixed: true, note: text }] });
-  assert.match(note("x".repeat(301)), /^earlier\.0\.note: Too big/, "a note of 301 characters");
-  assert.equal(note("Capped at 5 minutes.\nSee line 44."), "earlier.0.note: A note is one line");
+  for (const extra of ["x", " "]) assert.match(note(`${"x".repeat(300)}${extra}`), /^earlier\.0\.note: Too big/, `a note of 301 characters, the last ${JSON.stringify(extra)}`);
+  for (const text of lines("Capped at 5 minutes, see line 44.")) assert.equal(note(text), "earlier.0.note: A note is one line", JSON.stringify(text));
   assert.equal(note("x".repeat(300)), "taken");
   await assert.rejects(kit.call("issue_review", { findings: [untitled] }, reviewer()), /title/, "bb refuses the call before the tool runs");
   assert.equal(review().state, "running", "nothing was saved");
 
   const capped = { ...finding, title: "x".repeat(80), claim: "x".repeat(1_200) };
-  assert.match(textOf(await kit.call("issue_review", { findings: [capped] }, reviewer())), /^Review recorded: 1 finding\./);
+  const padded = { ...finding, title: "  A dead endpoint is retried forever ", claim: ` ${finding.claim}  ` };
+  assert.match(textOf(await kit.call("issue_review", { findings: [capped, padded] }, reviewer())), /^Review recorded: 2 findings\./);
   const stored = review();
-  assert.deepEqual(stored.state === "reported" && stored.findings, [{ ...capped, origin: "new" }]);
+  assert.deepEqual(stored.state === "reported" && stored.findings, [{ ...capped, origin: "new" }, { ...finding, origin: "new" }], "within its caps, a title or claim is stored trimmed");
 });
 
 /**

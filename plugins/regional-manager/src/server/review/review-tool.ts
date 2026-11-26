@@ -11,23 +11,25 @@ import type { Review } from "./review.ts";
 
 export const REVIEW = "issue_review";
 
+// why each text's caps and line rule run before it is trimmed: they hold what the reviewer passed,
+// a line break or a space at either end included.
 const reviewInputSchema = z.object({
   findings: z
     .array(
       z.object({
         title: z
           .string()
+          .regex(ONE_LINE, "A title is one line")
+          .max(MAX_FINDING_TITLE)
           .trim()
           .min(1)
-          .max(MAX_FINDING_TITLE)
-          .regex(ONE_LINE, "A title is one line")
           .describe(`What goes wrong, as a user or agent meets it, in one line of at most ${MAX_FINDING_TITLE} characters (aim for 60). No fix, no severity words, no file name.`),
         file: z.string().min(1).max(500).describe("The file the finding is in, as the diff names it."),
         line: z.number().int().min(1).nullable().describe("The line in that file at the reviewed commit; null when the finding names no one line."),
         severity: severitySchema.describe(
           `must-fix: a finding CREW.md gives that severity. Say in the claim which anchor below it meets, with the normal-use steps that reach it when it is a bug, or that it meets none: the verifier anchors or downgrades it, never you. should-fix: worth fixing, but never blocking: a principle or REVIEW.md violation, a missing test, unclear text, or a bug that needs a contrived setup. nit: a small improvement. ${ANCHOR_RULE}`,
         ),
-        claim: z.string().trim().min(1).max(1_200).describe("The failure scenario first, in a sentence; then why the code does it; then the fix in one sentence. At most 1,200 characters."),
+        claim: z.string().max(1_200).trim().min(1).describe("The failure scenario first, in a sentence; then why the code does it; then the fix in one sentence. At most 1,200 characters."),
         origin: z
           .enum(["new", "missed"])
           .default("new")
@@ -41,7 +43,7 @@ const reviewInputSchema = z.object({
       z.object({
         finding: z.number().int().min(1).describe("The earlier blocking finding's number in your first message."),
         fixed: z.boolean().describe("Whether this diff fixes it."),
-        note: z.string().trim().min(1).max(300).regex(ONE_LINE, "A note is one line").describe("What you saw that shows it fixed or not, in one line of at most 300 characters."),
+        note: z.string().regex(ONE_LINE, "A note is one line").max(300).trim().min(1).describe("What you saw that shows it fixed or not, in one line of at most 300 characters."),
       }),
     )
     .default([])

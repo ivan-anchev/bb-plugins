@@ -553,7 +553,7 @@ test("a reported review stored before findings had an origin, a title or earlier
   const long = "The retry loop doubles its delay on every failure with no upper bound at all, so a dead endpoint waits for hours";
   const findings = [
     { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap. The delay doubles forever." },
-    { file: "src/retry.css", line: null, severity: "nit", claim: "Padding is off by 2px\nagainst the row's." },
+    { file: "src/retry.css", line: null, severity: "nit", claim: "The rollback never\nclears the cache. A retry sees stale state." },
     { file: "src/retry.ts", line: 9, severity: "should-fix", claim: `${long}.\nSee line 9.` },
   ];
   const review = { state: "reported", at: 3_000, reviewerThreadId: "thr_reviewer", findings, model: { providerId: "codex", model: "gpt-5.4" } };
@@ -587,12 +587,13 @@ test("a reported review stored before findings had an origin, a title or earlier
   );
 
   const check = openStore(storage).check(checkIdSchema.parse(id)) ?? assert.fail("no check");
-  const titles = ["No cap.", "Padding is off by 2px", `${long.slice(0, 79)}…`];
+  // why the second whole: a claim wrapped mid-sentence keeps its first sentence, on one line.
+  const titles = ["No cap.", "The rollback never clears the cache.", `${long.slice(0, 79)}…`];
   assert.equal(titles[2]?.length, 80);
   assert.deepEqual(check.review.state === "reported" && [check.review.findings, check.review.earlier], [findings.map((finding, i) => ({ ...finding, title: titles[i], origin: "new" })), []]);
   assert.deepEqual(check.verdict.state === "returned" && check.verdict.triage.map(({ title, origin, result }) => [title, origin, result]), [
     ["No cap.", "new", "anchored"],
-    ["Padding is off by 2px", "new", "rejected"],
+    [titles[1], "new", "rejected"],
     [titles[2], "new", "confirmed"],
   ]);
 });
