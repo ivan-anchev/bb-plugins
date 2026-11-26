@@ -119,7 +119,7 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
           return `${started} ${joinedText(carried)}, ${runs}. It continues ${carried.from}'s work there: its commits, its uncommitted files and its pull request are ${agentId}'s now. ${earlier} ${ends}`;
         case "cut": {
           const { from, head, pr } = carried;
-          const opens = pr === null ? "" : ` ${from}'s PR #${pr} stays on its branch; ${agentId} opens its own.`;
+          const opens = pr === null ? "" : ` ${from}'s PR #${pr} stays on its branch, and ${agentId} doesn't push to it.`;
           // why a check, and the failure: bb cuts the branch after it answers the spawn, so the ref may have moved by then, and a base it can't resolve fails the thread then (bb-facts P2a).
           const checks = head === null ? `No commit of ${from}'s is on record for ${agentId} to check its branch against.` : `${agentId} checks that commit is on its branch before it changes anything, and hands off blocked if it isn't.`;
           return `${started} ${cutText(carried)}, ${runs}. ${checks} Nothing ${from} left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken.${opens} ${earlier} ${ends}`;

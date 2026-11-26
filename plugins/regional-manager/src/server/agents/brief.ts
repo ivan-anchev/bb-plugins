@@ -95,8 +95,8 @@ const WHERE_TO_WORK: Record<Base["kind"], string> = {
 /**
  * Where a joined agent works: the previous agent's environment, as it left it, uncommitted files
  * and half-done edits included (SH1), so it looks before it changes anything. Where a cut agent's
- * branch starts: cut from the previous agent's, with nothing uncommitted, and its pull request left
- * on the previous branch; and the commit it expects there, which it checks for before it changes
+ * branch starts: cut from the previous agent's, with nothing uncommitted, and the previous branch and
+ * its pull request left alone; and the commit it expects there, which it checks for before it changes
  * anything, as bb cut the branch after the spawn and the ref may have moved by then. null: it starts
  * on its own new branch, which its opening line already says.
  */
@@ -111,12 +111,13 @@ function whereSection({ base, branch, pr }: StartingPoint): string | null {
     }
     case "cut": {
       const { from, head } = base;
-      const pull = pr === null ? "Open a pull request of your own" : `${from}'s pull request #${pr} stays on \`${base.branch}\`: don't push to that branch, and open a pull request of your own`;
+      // why no word on opening a pull request: whether an agent opens one is its brief's call, never the plugin's.
+      const keep = pr === null ? `Don't push to ${from}'s branch \`${base.branch}\`` : `${from}'s pull request #${pr} stays on \`${base.branch}\`: don't push to that branch`;
       const check =
         head === null
           ? `No commit of ${from}'s is on record to check your branch against: run \`git log\` before you change anything`
           : `${from} left its work at commit \`${head}\`. Before you change anything, check that commit is in your checkout: run \`git merge-base --is-ancestor ${head} HEAD && echo present\`. If it doesn't print \`present\`, change nothing, and call agent_handoff with status blocked, saying commit ${head} is missing from your branch. Once it is there, run \`git log\``;
-      return `## Your branch\n\nYou work in a new environment, on a new branch of your own that bb cut from ${from}'s branch \`${refOf(base)}\`. ${from} no longer works on this issue, and nothing it left uncommitted is on your branch. ${check}, and decide from it and the handoffs below where to pick up. ${pull} when your work is ready.`;
+      return `## Your branch\n\nYou work in a new environment, on a new branch of your own that bb cut from ${from}'s branch \`${refOf(base)}\`. ${from} no longer works on this issue, and nothing it left uncommitted is on your branch. ${check}, and decide from it and the handoffs below where to pick up. ${keep}. Deliver your work from your own branch, as your brief says.`;
     }
     default:
       return base satisfies never;

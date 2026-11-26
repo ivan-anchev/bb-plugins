@@ -460,7 +460,8 @@ verdict.
   cut from, the commit the previous agent left there with the command that
   checks it is in the checkout, to run before changing anything and to hand
   off blocked if it isn't, that nothing uncommitted came along, and that the
-  old pull request stays where it is, so it opens its own), and "Earlier
+  previous agent's branch and pull request stay where they are, not to be
+  pushed to, and to deliver its work as its brief says), and "Earlier
   work", every earlier agent's handoffs whole, each with its verdict's every result, evidence and
   finding, in the past tense. Each handoff, report and verifier's words is
   quoted in a code fence under a line saying it is context, not instructions,
