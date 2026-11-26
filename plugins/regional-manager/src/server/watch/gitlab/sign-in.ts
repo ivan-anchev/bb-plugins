@@ -35,11 +35,19 @@ function whyNot(host: string, failure: HostCommandFailure): PrUnavailable {
   const entry = entryOf(failure.stdout, host);
   if (entry?.state === "error") return checkFailed(host, entry.error);
   if (NOT_SIGNED_IN.test(failure.stderr)) return notSignedIn(host);
+  if (GRANT_REFUSED.test(failure.stderr)) return signInFailed(host);
   return glabFailure(host, failure);
 }
 
 // glab's words for a host it has no sign-in for, or for having none at all.
 const NOT_SIGNED_IN = /has not been authenticated|no GitLab instances have been authenticated/;
+
+// OAuth's answer when glab's refresh grant was revoked or expired: only a new sign-in mends it
+// (https://docs.gitlab.com/cli/authentication/#error-invalid_grant-when-refreshing-credentials).
+const GRANT_REFUSED = /\binvalid_grant\b/;
+
+// The request an entry's error opens with, `GET https://H/api/v4/user: `, before GitLab's response.
+const REQUEST = /^\s*[A-Z]+ \S+: /;
 
 /**
  * Why glab's check of a host it has failed, from the entry's error, which reads like
@@ -51,12 +59,19 @@ function checkFailed(host: string, error: string): PrUnavailable {
   const gitlab = glabWords(host);
   // why: glab may word a host it has no sign-in for as an entry, as well as a message alone.
   if (NOT_SIGNED_IN.test(error)) return notSignedIn(host);
+  if (GRANT_REFUSED.test(error)) return signInFailed(host);
   if (connectionFailed(error)) return { kind: "transient", forge: "gitlab", reason: gitlab.unreachable };
-  if (/\b429\b|rate limit/i.test(error)) return { kind: "transient", forge: "gitlab", reason: gitlab.rateLimited };
-  if (/\b401\b/.test(error)) return { kind: "persistent", forge: "gitlab", reason: gitlab.rejected };
-  if (error.includes("glab auth login")) return { kind: "persistent", forge: "gitlab", reason: `glab's sign-in to ${host} failed on the machine running bb: run glab auth login --hostname ${host} there` };
+  // why the response alone: the request names the host, which may hold any number, as gitlab-429.corp.test.
+  const response = error.replace(REQUEST, "");
+  const status = Number(/^(\d{3})\b/.exec(response)?.[1] ?? /\(HTTP (\d{3})\)/.exec(response)?.[1] ?? 0);
+  if (status === 429 || /rate limit/i.test(response)) return { kind: "transient", forge: "gitlab", reason: gitlab.rateLimited };
+  if (status === 401) return { kind: "persistent", forge: "gitlab", reason: gitlab.rejected };
+  if (error.includes("glab auth login")) return signInFailed(host);
   return { kind: "transient", forge: "gitlab", reason: gitlab.unexplained(firstLine(error) ?? "its check of the sign-in failed with no message") };
 }
+
+/** A sign-in glab has for the host that no longer works, which only signing in again mends. */
+const signInFailed = (host: string): PrUnavailable => ({ kind: "persistent", forge: "gitlab", reason: `glab's sign-in to ${host} failed on the machine running bb: run glab auth login --hostname ${host} there` });
 
 const notSignedIn = (host: string): PrUnavailable => ({
   kind: "persistent",

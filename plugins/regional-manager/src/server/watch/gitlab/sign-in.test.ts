@@ -47,6 +47,8 @@ test("sign-in: a check glab ran that failed is GitLab's: rejected credentials an
   const cases: [string, Parameters<typeof glab>[0], "persistent" | "transient", string][] = [
     ["credentials rejected", exited(status("error", `GET https://${HOST}/api/v4/user: 401 {message: 401 Unauthorized}`)), "persistent", `GitLab at ${HOST} rejected glab's credentials (HTTP 401): run glab auth login --hostname ${HOST} on the machine running bb`],
     ["sign-in failed", exited(status("error", `the token for "${HOST}" is missing from the operating system keyring; run \`glab auth login --hostname ${HOST}\` to re-authenticate`)), "persistent", `glab's sign-in to ${HOST} failed on the machine running bb: run glab auth login --hostname ${HOST} there`],
+    ["an OAuth grant revoked or expired, in the status JSON", exited(status("error", `oauth2: "invalid_grant" "The provided authorization grant is invalid, expired, revoked, does not match the redirection URI used in the authorization request, or was issued to another client."`)), "persistent", `glab's sign-in to ${HOST} failed on the machine running bb: run glab auth login --hostname ${HOST} there`],
+    ["an OAuth grant revoked or expired, on stderr", exited("", `glab: oauth2: "invalid_grant" "The provided authorization grant is invalid, expired or revoked."\n`), "persistent", `glab's sign-in to ${HOST} failed on the machine running bb: run glab auth login --hostname ${HOST} there`],
     ["a rate limit in the status JSON", exited(status("error", `GET https://${HOST}/api/v4/user: 429 {message: Too Many Requests}`)), "transient", `GitLab at ${HOST} is limiting requests right now`],
     ["a rate limit on stderr", exited("", "glab: Too Many Requests (HTTP 429)\n"), "transient", `GitLab at ${HOST} is limiting requests right now`],
     ["anything unexplained in the status JSON", exited(status("error", `GET https://${HOST}/api/v4/user: 502 {message: Bad Gateway}`)), "transient", `glab couldn't read GitLab at ${HOST}: GET https://${HOST}/api/v4/user: 502 {message: Bad Gateway}`],
@@ -55,6 +57,16 @@ test("sign-in: a check glab ran that failed is GitLab's: rejected credentials an
     ["a transport error on stderr", exited("", `Get "https://${HOST}/api/v4/user": net/http: TLS handshake timeout\n`), "transient", `couldn't reach GitLab at ${HOST}`],
   ];
   for (const [name, answer, kind, reason] of cases) assert.deepEqual(await refusal(answer), { kind, forge: "gitlab", reason }, name);
+});
+
+test("sign-in: the HTTP status is read from GitLab's response, never from the host in the request", async () => {
+  const host = "gitlab-429.corp.test";
+  const run = async (_cli: Cli, args: string[]) => {
+    assert.deepEqual(args, ["auth", "status", "--hostname", host, "--output", "json"]);
+    const entry = { host, state: "error", error: `GET https://${host}/api/v4/user: 401 {message: 401 Unauthorized}` };
+    throw Object.assign(new Error("Command failed: glab auth status"), { code: 1, stdout: JSON.stringify({ hosts: [entry] }), stderr: "" });
+  };
+  assert.deepEqual(await glabSignIn(run, host), { kind: "refused", unavailable: { kind: "persistent", forge: "gitlab", reason: `GitLab at ${host} rejected glab's credentials (HTTP 401): run glab auth login --hostname ${host} on the machine running bb` } });
 });
 
 test("sign-in: a check glab never finished may pass, naming the host", async () => {
