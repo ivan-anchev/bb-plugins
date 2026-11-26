@@ -35,6 +35,11 @@ test("a confirmed should-fix plans one top-level Backlog build issue depending o
     dependsOn: [ORIGIN],
   });
   assert.match(plan.brief ?? "", /check that each still holds/);
+  assert.equal(
+    plan.description,
+    "2 review findings held without blocking WEB-4 when it passed. A later round may have fixed one: check each still holds first. Plan this issue's done-criteria before an agent starts.\n\n- src/retry.ts:42, round 2, nit: Name the constant. The verifier: It reads better.\n- src/retry.ts:42, round 2, should-fix: Log the retry. The verifier: Nobody sees a retry.",
+    "the tab and the board show each finding with its round, its severity as triaged and the verifier's reason",
+  );
   assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(nit\): Name the constant\.\n {2}The verifier: Confirmed\. It reads better\./);
   assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./);
 });
@@ -61,6 +66,17 @@ test("a follow-up of a follow-up is titled after the first origin, and depends o
   assert.equal(plan?.title, "Follow-ups from WEB-4: Add retries");
   assert.deepEqual(plan?.dependsOn, [second]);
   assert.match(plan?.brief ?? "", /The reviews of WEB-9 held/);
+});
+
+test("a description lists as many findings as fit its 2,000 characters, then how many more the brief lists", () => {
+  const many = Array.from({ length: 40 }, (_, i): Triaged => ({ ...shouldFix, claim: `Finding ${i}: ${"x".repeat(60)}` }));
+  const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: many }]);
+  const description = plan?.description ?? assert.fail("no plan");
+  assert.ok(description.length <= 2_000, `${description.length} characters`);
+  const listed = description.split("\n").filter((line) => line.startsWith("- ")).length;
+  assert.ok(listed > 0 && listed < 40);
+  assert.ok(description.endsWith(`… and ${40 - listed} more, each in the brief.`));
+  assert.equal((plan?.brief ?? "").split("Finding ").length - 1, 40, "the brief lists every one");
 });
 
 test("a title past the 80 characters an issue's title holds is cut with an ellipsis", () => {

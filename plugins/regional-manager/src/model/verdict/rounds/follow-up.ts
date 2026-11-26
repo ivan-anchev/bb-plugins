@@ -3,7 +3,7 @@
 // from a default branch without the origin's code. Nothing here is stored but which follow-up
 // collected each check (checks.follow_up_id): what a round left over is read from its verdict, and
 // a follow-up's first origin by following that column back.
-import type { Issue, IssueId, NewIssue } from "../../issue/issue.ts";
+import { MAX_DESCRIPTION_CHARS, type Issue, type IssueId, type NewIssue } from "../../issue/issue.ts";
 import type { Check } from "../check.ts";
 import { findingText, triageText, type Triaged } from "../review.ts";
 import { heldFindings } from "../verdict.ts";
@@ -27,7 +27,7 @@ export function followUpPlan(origin: IssueId, firstOrigin: Pick<Issue, "id" | "t
   return {
     kind: "build",
     title: oneTitle(`Follow-ups from ${firstOrigin.id}: ${firstOrigin.title}`),
-    description: `${findings.length === 1 ? "A review finding" : `${findings.length} review findings`} that held without blocking ${origin}, filed when it passed. Plan its work and done-criteria before an agent starts.`,
+    description: descriptionOf(origin, findings),
     brief: briefOf(origin, findings),
     doneCriteria: [],
     verifier: null,
@@ -53,6 +53,36 @@ const warrantsFollowUp = (finding: Triaged): boolean => finding.severity === "mu
 /** How much a finding matters as the verifier triaged it: the severity it downgraded it to, else the reviewer's. */
 const severityAsTriaged = (finding: Triaged): Triaged["severity"] => (finding.result === "downgraded" ? finding.to : finding.severity);
 
+/**
+ * What the follow-up is about, for the user, who reads it on the board and in its tab: each finding
+ * in a line with its round, its severity as triaged and the verifier's reason, as many as fit the
+ * characters a description holds (issue.ts MAX_DESCRIPTION_CHARS), then how many more its brief lists.
+ */
+function descriptionOf(origin: IssueId, findings: readonly Leftover[]): string {
+  const head = `${findings.length === 1 ? "A review finding" : `${findings.length} review findings`} held without blocking ${origin} when it passed. A later round may have fixed one: check each still holds first. Plan this issue's done-criteria before an agent starts.`;
+  const lines: string[] = [];
+  for (const [i, finding] of findings.entries()) {
+    const more = findings.length - i - 1;
+    const line = descriptionLine(finding);
+    const tail = more === 0 ? "" : `\n… and ${more} more, each in the brief.`;
+    if ([head, "", ...lines, line].join("\n").length + tail.length > MAX_DESCRIPTION_CHARS) {
+      lines.push(`… and ${findings.length - i} more, each in the brief.`);
+      break;
+    }
+    lines.push(line);
+  }
+  return [head, "", ...lines].join("\n");
+}
+
+/** A finding in a line of plain text: its place, round and severity as triaged, its claim, then the verifier's reason. */
+function descriptionLine(finding: Leftover): string {
+  const severity = finding.result === "downgraded" ? `${finding.severity} downgraded to ${finding.to}` : finding.severity;
+  const place = `${finding.file}${finding.line === null ? "" : `:${finding.line}`}`;
+  return `- ${place}, round ${finding.round}, ${severity}: ${oneLine(finding.claim)} The verifier: ${oneLine(finding.reason)}`;
+}
+
+const oneLine = (text: string): string => text.replaceAll(/\s+/g, " ").trim();
+
 function briefOf(origin: IssueId, findings: readonly Leftover[]): string {
   const each = findings.map((finding) => `- Round ${finding.round}: ${findingText(finding).replaceAll("\n", "\n  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason.replaceAll("\n", "\n  ")}`);
   return [
@@ -64,6 +94,6 @@ function briefOf(origin: IssueId, findings: readonly Leftover[]): string {
 
 /** A title cut to the 80 characters an issue's title holds (issue.ts titleSchema), on one line. */
 function oneTitle(title: string): string {
-  const line = title.replaceAll(/\s+/g, " ");
+  const line = oneLine(title);
   return line.length <= 80 ? line : `${line.slice(0, 79).trimEnd()}…`;
 }

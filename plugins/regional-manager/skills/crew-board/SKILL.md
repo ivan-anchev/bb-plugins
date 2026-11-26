@@ -672,8 +672,9 @@ before its verifier starts. The plugin starts a **reviewer**:
   finding its rounds held without blocking it, nits included, as one
   follow-up: a top-level build issue in Backlog, titled "Follow-ups from
   BBP-2: …" after the first issue of a chain of follow-ups, depending on
-  the issue, so it is blocked until the issue is Done. Its brief lists each
-  finding once, with its round and the verifier's reason, and tells its
+  the issue, so it is blocked until the issue is Done. Its description, in
+  its tab, and its brief list each finding once, with its round, its
+  severity as triaged and the verifier's reason, and its brief tells its
   agent to check each still holds first; it has no done-criteria, so the
   manager plans it before an agent starts. A pass whose leftovers are all
   nits files nothing, and the nits stay in the issue's feed. The issue's

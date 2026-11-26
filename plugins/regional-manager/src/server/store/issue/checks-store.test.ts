@@ -596,7 +596,8 @@ test("a pass with leftovers in two rounds files one top-level Backlog build issu
     closed: null,
     createdAt: 4_600,
   });
-  assert.match(description, /^3 review findings that held without blocking WEB-1/);
+  assert.match(description, /^3 review findings held without blocking WEB-1 when it passed\./);
+  assert.match(description, /\n- src\/retry.ts:42, round 2, must-fix downgraded to should-fix: The backoff never caps\. The verifier: No criterion names a cap\./);
   const listed = brief ?? assert.fail("no brief");
   for (const claim of [LOG_IT.claim, NAME_IT.claim, CAPLESS.claim]) assert.equal(listed.split(claim).length - 1, 1, `${claim} is listed once`);
   assert.match(listed, /- Round 2: `src\/retry.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Still no log\./);

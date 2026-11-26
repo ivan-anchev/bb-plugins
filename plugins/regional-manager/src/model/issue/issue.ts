@@ -17,8 +17,11 @@ export const issueIdOf = (key: IssueKey, number: number): IssueId => issueIdSche
 
 export const titleSchema = z.string().trim().min(1).max(80).regex(ONE_LINE, "A title is one line");
 
+/** The most characters a description holds. */
+export const MAX_DESCRIPTION_CHARS = 2_000;
+
 /** What the issue is about, in plain words, for the user. why short: the board shows it whole. */
-export const descriptionSchema = z.string().trim().min(1).max(2_000);
+export const descriptionSchema = z.string().trim().min(1).max(MAX_DESCRIPTION_CHARS);
 
 /** The agent's instructions: everything it needs to start without asking. */
 export const briefSchema = z.string().trim().min(1).max(20_000);
