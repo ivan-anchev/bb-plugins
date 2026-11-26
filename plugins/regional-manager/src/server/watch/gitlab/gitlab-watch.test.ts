@@ -281,3 +281,16 @@ test("older: a GitLab whose schema lacks a field the read needs shows MR status 
   await verified();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
 });
+
+test("discussions: a draft merge request that already has an unresolved discussion when first read announces it with opened, in the doorbell, catch-up and feed, and an unchanged second read adds nothing", async () => {
+  const { kit, threadId, mr, minute, prChanges } = await agentOnGitLab();
+  mr({ draft: true, detailedMergeStatus: "DRAFT_STATUS", resolvableDiscussionsCount: 1, resolvedDiscussionsCount: 0 });
+  await minute();
+  assert.equal(kit.doorbellsSent(threadId).at(-1), doorbellOf('WEB-1 "Add retries" (a1) MR !41: opened, unresolved discussions'));
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /MR !41: opened, unresolved discussions/);
+  assert.deepEqual(await prChanges(), [["opened", "unresolved-discussions"]]);
+  const doorbells = kit.doorbellsSent(threadId).length;
+  await minute();
+  assert.deepEqual(await prChanges(), [["opened", "unresolved-discussions"]], "the same counts again: no new entry");
+  assert.equal(kit.doorbellsSent(threadId).length, doorbells);
+});
