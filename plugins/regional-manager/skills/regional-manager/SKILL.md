@@ -442,8 +442,9 @@ verdict) stays one.
   machine. The new agent gets its own new branch, cut from the previous
   agent's branch (the one checked out in its environment now, or, once bb
   removed that, the one on record): its commits come along, its
-  uncommitted files don't, and its pull request stays on the old branch
-  (the new agent opens its own).
+  uncommitted files don't, and its pull request stays on the old branch,
+  which the new agent doesn't push to. Whether it opens a pull request of
+  its own is your brief's call, as for any agent.
   bb cuts the branch after the start answers, and a branch can move before
   that, so the result names the commit the new agent expects; it checks for
   it before changing anything, and hands off blocked if it is missing.

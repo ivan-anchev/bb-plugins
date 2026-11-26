@@ -17,6 +17,8 @@ const LATER = "2222222222222222222222222222222222222222";
 const BLOCKED = { status: "blocked", summary: "Needs the staging key", did: ["Wrote the retry loop"], evidence: [], concerns: [], deviations: [], findings: [], headSha: COMMITTED };
 const WORKTREE = { kind: "worktree" };
 const SANDBOX = { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } };
+// why: whether an agent opens a pull request is its brief's call, so a handover's own words never tell it to.
+const OPEN_A_PULL_REQUEST = /open (a|its|your)( own)? (pull request|PR)|pull request of your own/i;
 
 /** A regional manager whose agent a1 holds build issue WEB-1, started with `start` (a worktree by default), working. */
 async function holding(start: object = {}) {
@@ -58,8 +60,9 @@ test("criterion 1: worktree to worktree: a1's committed work moves to a fresh wo
   assert.match(message, /Do it on your own branch, which bb cut from an earlier agent's: check it first, as Your branch says\./);
   assert.equal(
     message.split("## Your branch\n\n")[1]?.split("\n\n")[0],
-    `You work in a new environment, on a new branch of your own that bb cut from a1's branch \`${branch}\`. a1 no longer works on this issue, and nothing it left uncommitted is on your branch. a1 left its work at commit \`${COMMITTED}\`. Before you change anything, check that commit is in your checkout: run \`git merge-base --is-ancestor ${COMMITTED} HEAD && echo present\`. If it doesn't print \`present\`, change nothing, and call agent_handoff with status blocked, saying commit ${COMMITTED} is missing from your branch. Once it is there, run \`git log\`, and decide from it and the handoffs below where to pick up. Open a pull request of your own when your work is ready.`,
+    `You work in a new environment, on a new branch of your own that bb cut from a1's branch \`${branch}\`. a1 no longer works on this issue, and nothing it left uncommitted is on your branch. a1 left its work at commit \`${COMMITTED}\`. Before you change anything, check that commit is in your checkout: run \`git merge-base --is-ancestor ${COMMITTED} HEAD && echo present\`. If it doesn't print \`present\`, change nothing, and call agent_handoff with status blocked, saying commit ${COMMITTED} is missing from your branch. Once it is there, run \`git log\`, and decide from it and the handoffs below where to pick up. Don't push to a1's branch \`${branch}\`. Deliver your work from your own branch, as your brief says.`,
   );
+  assert.doesNotMatch(message, OPEN_A_PULL_REQUEST, "whether to open a pull request is the brief's call");
 });
 
 test("criterion 1: the same move after a1's thread is archived, and after its worktree is removed, still cuts from its local branch", async () => {
@@ -227,7 +230,7 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   pushAndOpen();
   const result = textOf(await call({ placement: SANDBOX, execution: { providerId: "codex", model: "gpt-default" } }));
   const next = threadIn(result);
-  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`origin/${branch}\` expecting 1111111, on codex gpt-default \\(high\\)\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. a1's PR #44 stays on its branch; a2 opens its own\\.`));
+  assert.match(result, new RegExp(`in a new boat-sandbox environment, on a new branch cut from a1's \`origin/${branch}\` expecting 1111111, on codex gpt-default \\(high\\)\\. a2 checks that commit is on its branch before it changes anything, and hands off blocked if it isn't\\. Nothing a1 left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken\\. a1's PR #44 stays on its branch, and a2 doesn't push to it\\.`));
   assert.deepEqual(kit.thread(next).spawnedWith.environment, {
     type: "provider",
     environmentProviderId: "boat-sandbox",
@@ -237,7 +240,9 @@ test("criterion 5 (sandbox, harness): worktree to sandbox cuts from origin at a1
   assert.equal(headOf(next), COMMITTED, "the new sandbox's HEAD is a1's PR head");
   assert.notEqual(kit.thread(next).environmentBranchName, branch);
   assert.equal(kit.thread(next).providerId, "codex", "the execution named, checked against bb's primary machine");
-  assert.match(kit.thread(next).spawnedWith.prompt ?? "", new RegExp(`cut from a1's branch \`origin/${branch}\`\\. [^\\n]* a1 left its work at commit \`${COMMITTED}\`\\. [^\\n]* a1's pull request #44 stays on \`${branch}\`: don't push to that branch, and open a pull request of your own when your work is ready\\.`));
+  const message = kit.thread(next).spawnedWith.prompt ?? "";
+  assert.match(message, new RegExp(`cut from a1's branch \`origin/${branch}\`\\. [^\\n]* a1 left its work at commit \`${COMMITTED}\`\\. [^\\n]* a1's pull request #44 stays on \`${branch}\`: don't push to that branch\\. Deliver your work from your own branch, as your brief says\\.`));
+  assert.doesNotMatch(message, OPEN_A_PULL_REQUEST, "whether to open a pull request is the brief's call");
   assert.equal(kit.store.agent(coordinatorId, a2)?.base.kind, "cut");
 });
 

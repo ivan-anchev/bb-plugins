@@ -74,9 +74,9 @@ branch could move before bb cut yours, so check before you rely on them.
   hand off blocked, saying which commit is missing from your branch.
 - Look before you change anything: run `git log`, and read the earlier
   handoffs and verdicts, as above.
-- Work on your own branch. The earlier agent's pull request stays on its
-  branch: never push to that branch. Open a pull request of your own from
-  yours when your work is ready.
+- Work on your own branch. The earlier agent's branch, and its pull request
+  if it has one, stay where they are: never push to that branch. Deliver
+  your work from yours, as your brief says.
 
 Without "Where you work" or "Your branch", you start clean from the default
 branch, even when "Earlier work" is there: none of the earlier commits or
