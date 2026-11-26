@@ -86,10 +86,10 @@ export const roundBodySchema = z.object({
   /**
    * The findings its verifier triages, each with where it comes from (new, missed or unfixed) and
    * the verifier's triage once its verdict returned (null triage before): rejected, confirmed,
-   * anchored with what it breaks, or downgraded with its new severity. why no earlier answers: the
-   * tab shows none.
+   * anchored with what it breaks, or downgraded with its new severity. why no earlier answers and
+   * no title: the tab shows neither.
    */
-  findings: z.array(reviewFindingSchema.extend({ triage: triageSchema.nullable() })),
+  findings: z.array(reviewFindingSchema.omit({ title: true }).extend({ triage: triageSchema.nullable() })),
   /** Why no review was had (null: one was, or none was asked for). */
   reviewMissed: z.string().nullable(),
 });
@@ -268,6 +268,7 @@ const stepAt = (at: number): Step => ({ at, moved: null });
  * included; before, the review's findings with no triage yet.
  */
 function findingsOf({ review, verdict }: Check): RoundBody["findings"] {
-  if (verdict.state === "returned") return verdict.triage.map(({ file, line, severity, claim, origin, ...triage }) => ({ file, line, severity, claim, origin, triage }));
-  return review.state === "reported" ? review.findings.map((finding) => ({ ...finding, triage: null })) : [];
+  // why the title taken out: the tab shows none (roundBodySchema), so it isn't sent.
+  if (verdict.state === "returned") return verdict.triage.map(({ title, file, line, severity, claim, origin, ...triage }) => ({ file, line, severity, claim, origin, triage }));
+  return review.state === "reported" ? review.findings.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin, triage: null })) : [];
 }

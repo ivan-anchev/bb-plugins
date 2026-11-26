@@ -634,9 +634,11 @@ before its verifier starts. The plugin starts a **reviewer**:
   default branch, and the pull request when the agent named one), the
   issue's brief, done-criteria and decisions, and CREW.md whole, as agents
   get it.
-- **What it reports**: `issue_review`, its findings, each with its file, its
-  line, a severity (must-fix, should-fix or nit) and its claim; `[]` when it
-  found nothing.
+- **What it reports**: `issue_review`, its findings, each with its title
+  (what goes wrong, one line of at most 80 characters), its file, its line, a
+  severity (must-fix, should-fix or nit) and its claim (at most 1,200
+  characters); `[]` when it found nothing. A finding stored before titles
+  existed is titled by its claim's first sentence, cut to 80 characters.
 - **The issue** is Reviewing meanwhile ("Reviewing: <summary>"), between In
   progress and Verifying, and Verifying once its review is in.
 - **It never holds the issue**: a reviewer bb won't start, whose thread is

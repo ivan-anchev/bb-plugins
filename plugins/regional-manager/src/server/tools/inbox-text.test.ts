@@ -109,8 +109,8 @@ test("a verdict says what its verifier ran on: as named on the issue, why not th
 });
 
 test("a verdict's review says whether the findings that fail it reached the agent only as far as its settlement shows", () => {
-  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" }], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
-  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new", result: "anchored", anchor: "criterion", steps: null, reason: "It never caps." }] };
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [{ title: "No cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" }], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
+  const failed: Extract<Verdict, { state: "returned" }> = { ...returned(["fail"]), triage: [{ title: "No cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new", result: "anchored", anchor: "criterion", steps: null, reason: "It never caps." }] };
   const cases: [Extract<Verdict, { state: "returned" }>["settlement"], string][] = [
     [{ kind: "pending" }, "None has gone to the agent yet."],
     [{ kind: "waiting-for-ci" }, "None has gone to the agent yet."],
@@ -128,10 +128,10 @@ test("a verdict's review says whether the findings that fail it reached the agen
 
 test("catch-up words a round's review as the verifier's totals, anchored, downgraded, confirmed and rejected, then each finding in the review's order with its triage: what an anchored one breaks, a downgraded one's new severity", () => {
   const findings = [
-    { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" },
-    { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing.", origin: "new" },
-    { file: "src/retry.ts", line: 12, severity: "should-fix", claim: "Jitter computed twice.", origin: "new" },
-    { file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
+    { title: "No cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" },
+    { title: "The name says nothing", file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing.", origin: "new" },
+    { title: "Jitter computed twice", file: "src/retry.ts", line: 12, severity: "should-fix", claim: "Jitter computed twice.", origin: "new" },
+    { title: "Padding", file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
   ] as const;
   const triage = [
     { result: "anchored", anchor: "brief", steps: null, reason: "The brief says capped." },
@@ -150,7 +150,7 @@ test("catch-up words a round's review as the verifier's totals, anchored, downgr
     text.includes(
       [
         "Review: a reviewer on claude-code sonnet reported 4 findings; the verifier anchored 1, downgraded 1, confirmed 1 and rejected 1. The ones that fail it went back to the agent with the failed verdict. The others don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit.",
-        "- `src/retry.ts:4` (must-fix): No cap.\n  Anchored, as it breaks a requirement the issue's brief states explicitly: The brief says capped.\n- `src/retry.ts:9` (must-fix): The name says nothing.\n  Downgraded to nit: Breaks none of the five.\n- `src/retry.ts:12` (should-fix): Jitter computed twice.\n  Confirmed: Both calls on line 12.\n- `src/retry.css` (nit): Padding.\n  Rejected: Matches the row.",
+        "- No cap\n  `src/retry.ts:4` (must-fix): No cap.\n  Anchored, as it breaks a requirement the issue's brief states explicitly: The brief says capped.\n- The name says nothing\n  `src/retry.ts:9` (must-fix): The name says nothing.\n  Downgraded to nit: Breaks none of the five.\n- Jitter computed twice\n  `src/retry.ts:12` (should-fix): Jitter computed twice.\n  Confirmed: Both calls on line 12.\n- Padding\n  `src/retry.css` (nit): Padding.\n  Rejected: Matches the row.",
       ].join("\n\n"),
     ),
     text,
@@ -173,8 +173,8 @@ const lookupsOf = (record: readonly Handed[]): Lookups => ({
 });
 
 const FOLLOW_UP = issueIdSchema.parse("WEB-2");
-const LOG_IT = { file: "src/retry.ts", line: 10, severity: "should-fix", claim: "Log each retry.", origin: "new" } as const;
-const NAME_IT = { file: "src/retry.ts", line: 3, severity: "nit", claim: "Name the constant.", origin: "new" } as const;
+const LOG_IT = { title: "Log each retry", file: "src/retry.ts", line: 10, severity: "should-fix", claim: "Log each retry.", origin: "new" } as const;
+const NAME_IT = { title: "Name the constant", file: "src/retry.ts", line: 3, severity: "nit", claim: "Name the constant.", origin: "new" } as const;
 
 /** A check of the handoff whose reviewer reported `findings`, each of which the verifier confirmed, with every criterion `result`, stamped with `followUpId`. */
 function confirmedAll(findings: (typeof LOG_IT | typeof NAME_IT)[], result: CriterionResult, followUpId: Check["followUpId"] = null): Handed {
@@ -214,7 +214,7 @@ test("catch-up's merge line says how many held findings no follow-up collected, 
 test("catch-up's merge line counts a held finding that failed the latest verdict, when nothing fixed it before the merge", () => {
   const pr: PrSnapshot = { number: 41, url: "https://github.com/o/r/pull/41", state: "merged", draft: false, review: "none", ci: "pass", failedChecks: [], headSha: SHA };
   const merged: StoredEvent = { id: 2, at: 6_000, event: { kind: "pr", issueId, agentId, pr, changes: ["merged"] } };
-  const blocker = { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" } as const;
+  const blocker = { title: "No cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" } as const;
   const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [blocker], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };
   const failed = checkedWith({ ...returned(["pass"]), triage: [{ ...blocker, result: "anchored", anchor: "criterion", steps: null, reason: "It never caps." }] }, null, review);
   assert.match(updatesText([merged], lookupsOf([failed])), /It merged with 1 review finding its rounds held that no follow-up collected\./);

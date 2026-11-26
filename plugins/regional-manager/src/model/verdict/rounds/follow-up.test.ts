@@ -13,10 +13,10 @@ const SHA = "a".repeat(40);
 
 const PLACE = { file: "src/retry.ts", line: 42, origin: "new" } as const;
 
-const nit: Triaged = { ...PLACE, severity: "nit", claim: "Name the constant.", result: "confirmed", reason: "It reads better." };
-const shouldFix: Triaged = { ...PLACE, severity: "should-fix", claim: "Log the retry.", result: "confirmed", reason: "Nobody sees a retry." };
-const downgraded: Triaged = { ...PLACE, severity: "must-fix", claim: "The backoff never caps.", result: "downgraded", to: "should-fix", reason: "No criterion names a cap." };
-const downgradedShouldFix: Triaged = { ...PLACE, severity: "should-fix", claim: "Split the module.", result: "downgraded", to: "nit", reason: "Taste." };
+const nit: Triaged = { title: "Name the constant", ...PLACE, severity: "nit", claim: "Name the constant.", result: "confirmed", reason: "It reads better." };
+const shouldFix: Triaged = { title: "Log the retry", ...PLACE, severity: "should-fix", claim: "Log the retry.", result: "confirmed", reason: "Nobody sees a retry." };
+const downgraded: Triaged = { title: "The backoff never caps", ...PLACE, severity: "must-fix", claim: "The backoff never caps.", result: "downgraded", to: "should-fix", reason: "No criterion names a cap." };
+const downgradedShouldFix: Triaged = { title: "Split the module", ...PLACE, severity: "should-fix", claim: "Split the module.", result: "downgraded", to: "nit", reason: "Taste." };
 
 test("leftovers that are all nits plan no follow-up, a should-fix downgraded to a nit included", () => {
   assert.equal(followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [nit, downgradedShouldFix] }], "passed"), null);
@@ -42,13 +42,13 @@ test("a confirmed should-fix plans one top-level Backlog build issue depending o
     plan.description,
     "2 review findings held without blocking WEB-4 when it passed. Its brief lists each, with its round and the verifier's reason: check each still holds first. Plan this issue's done-criteria before an agent starts.",
   );
-  assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(nit\): Name the constant\.\n {2}The verifier: Confirmed\. It reads better\./);
-  assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./);
+  assert.match(plan.brief ?? "", /- Round 2: Name the constant\n {2}`src\/retry.ts:42` \(nit\): Name the constant\.\n {2}The verifier: Confirmed\. It reads better\./);
+  assert.match(plan.brief ?? "", /- Round 2: Log the retry\n {2}`src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./);
 });
 
 test("a downgraded must-fix plans one, naming the severity it was downgraded to and the verifier's reason", () => {
   const plan = followUpPlan(ORIGIN, { id: ORIGIN, title: "Add retries" }, [{ round: 1, leftovers: [downgraded] }], "passed");
-  assert.match(plan?.brief ?? "", /- Round 1: `src\/retry.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Downgraded to should-fix\. No criterion names a cap\./);
+  assert.match(plan?.brief ?? "", /- Round 1: The backoff never caps\n {2}`src\/retry.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Downgraded to should-fix\. No criterion names a cap\./);
 });
 
 test("a finding two rounds held is listed once, with the latest round that held it", () => {
@@ -58,8 +58,8 @@ test("a finding two rounds held is listed once, with the latest round that held 
   ], "passed");
   const brief = plan?.brief ?? "";
   assert.equal(brief.split("Log the retry.").length - 1, 1);
-  assert.match(brief, /- Round 3: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Confirmed\. Still no log\./);
-  assert.match(brief, /- Round 1: `src\/retry.ts:42` \(nit\): Name the constant\./);
+  assert.match(brief, /- Round 3: Log the retry\n {2}`src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Confirmed\. Still no log\./);
+  assert.match(brief, /- Round 1: Name the constant\n {2}`src\/retry.ts:42` \(nit\): Name the constant\./);
 });
 
 test("a follow-up of a follow-up is titled after the first origin, and depends on its own", () => {
@@ -78,7 +78,7 @@ test("a should-fix an earlier round held still files when a later round holds th
   ], "passed");
   assert.ok(plan !== null, "round 1's should-fix qualifies");
   assert.equal((plan.brief ?? "").split("Log the retry.").length - 1, 1);
-  assert.match(plan.brief ?? "", /- Round 2: `src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Downgraded to nit\. A later look: only taste\./);
+  assert.match(plan.brief ?? "", /- Round 2: Log the retry\n {2}`src\/retry.ts:42` \(should-fix\): Log the retry\.\n {2}The verifier: Downgraded to nit\. A later look: only taste\./);
 });
 
 test("a title past the 80 characters an issue's title holds is cut with an ellipsis", () => {
@@ -88,8 +88,8 @@ test("a title past the 80 characters an issue's title holds is cut with an ellip
 });
 
 test("a check's leftovers are what it held without failing it: an anchored must-fix and a rejected finding are not, and an unreturned verdict has none", () => {
-  const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
-  const rejected: Triaged = { ...PLACE, severity: "should-fix", claim: "Use a queue.", result: "rejected", reason: "Out of scope." };
+  const anchored: Triaged = { title: "Retries drop the payload", ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
+  const rejected: Triaged = { title: "Use a queue", ...PLACE, severity: "should-fix", claim: "Use a queue.", result: "rejected", reason: "Out of scope." };
   const verdict: Verdict = {
     state: "returned",
     at: 5_000,
@@ -127,7 +127,7 @@ const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Extract<Verdict,
 });
 const HANDOFF: Check["subject"] = { kind: "handoff", agentId: agentIdSchema.parse("a1"), handoffId: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), headSha: SHA, prUrl: null, branch: null };
 const round = (verdict: Verdict, followUpId: Check["followUpId"] = null) => ({ subject: HANDOFF, verdict, followUpId, acceptedAt: null });
-const anchored: Triaged = { ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
+const anchored: Triaged = { title: "Retries drop the payload", ...PLACE, severity: "must-fix", claim: "Retries drop the payload.", result: "anchored", anchor: "criterion", steps: null, reason: "Criterion 2 fails." };
 
 test("a merge leaves unfiled every uncollected round's leftovers, and the findings that failed the latest verdict when nothing fixed them", () => {
   assert.deepEqual(unfiledAtMerge([round(verdictOf("fail", [anchored]))]), [anchored], "a held blocker of the latest, failed verdict");

@@ -1047,10 +1047,10 @@ test("the fix round sent back to the agent lists each anchored must-fix with wha
   const { kit, agentThreadId, check, verifier, handOff } = await withAgent();
   kit.reviewers.reportAtOnce = false;
   const findings = [
-    { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
-    { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." },
-    { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports break REVIEW.md's order." },
-    { file: "src/retry.css", line: 2, severity: "nit", claim: "The padding differs from the row's." },
+    { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
+    { title: "The jitter is computed twice", file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." },
+    { title: "The imports break REVIEW.md's order", file: "src/retry.ts", line: 3, severity: "must-fix", claim: "The imports break REVIEW.md's order." },
+    { title: "The padding differs from the row's", file: "src/retry.css", line: 2, severity: "nit", claim: "The padding differs from the row's." },
   ];
   await handOff();
   const review = check().review;
@@ -1069,7 +1069,7 @@ test("the fix round sent back to the agent lists each anchored must-fix with wha
   await kit.idle(verifierThreadId, "Verdict returned.");
 
   const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
-  assert.match(sent, /- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\. The brief says retries back off; this never stops doubling\./);
+  assert.match(sent, /- The backoff never caps\n {2}`src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\. The brief says retries back off; this never stops doubling\./);
   assert.doesNotMatch(sent, /jitter is computed twice|Both calls sit/, "no confirmed should-fix");
   assert.doesNotMatch(sent, /REVIEW\.md's order|import order/, "no downgraded finding");
   assert.doesNotMatch(sent, /padding|Taste/, "no rejected finding");
@@ -1080,10 +1080,10 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
   const { kit, check, verifier, handOff } = await withAgent();
   kit.reviewers.reportAtOnce = false;
   const findings = [
-    { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
-    { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." },
-    { file: "src/retry.ts", line: null, severity: "must-fix", claim: "The helper's name says nothing about backoff." },
-    { file: "src/retry.css", line: 2, severity: "nit", claim: "The padding differs from the row's." },
+    { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." },
+    { title: "The jitter is computed twice", file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." },
+    { title: "The helper's name says nothing about backoff", file: "src/retry.ts", line: null, severity: "must-fix", claim: "The helper's name says nothing about backoff." },
+    { title: "The padding differs from the row's", file: "src/retry.css", line: 2, severity: "nit", claim: "The padding differs from the row's." },
   ];
   await handOff();
   const review = check().review;
@@ -1137,8 +1137,8 @@ test("issue_verdict refuses a bug anchored without the normal-use steps that rea
   const { kit, agentThreadId, row, check, verifier, handOff } = await withAgent();
   kit.reviewers.reportAtOnce = false;
   const findings = [
-    { file: "src/server/store/store.ts", line: 88, severity: "must-fix", claim: "REVIEW.md: the handoff writes its report and its row with no test that fails one write. Meets no anchor." },
-    { file: "src/retry.ts", line: 12, severity: "must-fix", claim: "A read held mid-await while a second handoff lands sends the findings twice. A bug." },
+    { title: "A handoff's report and row writes have no failure test", file: "src/server/store/store.ts", line: 88, severity: "must-fix", claim: "REVIEW.md: the handoff writes its report and its row with no test that fails one write. Meets no anchor." },
+    { title: "A second handoff mid-await sends the findings twice", file: "src/retry.ts", line: 12, severity: "must-fix", claim: "A read held mid-await while a second handoff lands sends the findings twice. A bug." },
   ];
   await handOff();
   const review = check().review;
@@ -1317,7 +1317,7 @@ test("a final check's first message gives its parent's brief and decisions, unde
   assert.deepEqual(headingsOf(await finalCheckPrompt(null)), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Rules"], "no decisions, no heading");
 });
 
-const CAP_FINDING = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
+const CAP_FINDING = { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
 
 /** WEB-1 after round 1, its review reporting CAP_FINDING, failed as the verifier anchored it and went back to the agent; then the agent's second done handoff, whose reviewer now runs. */
 async function afterBlockedRound() {
@@ -1343,7 +1343,7 @@ async function afterBlockedRound() {
 
 test("issue_verdict refuses an anchored finding the reviewer marked missed, with a safety anchor too, naming the downgrade that works; downgraded, the verdict passes", async () => {
   const { kit, row, verdict, verifier, reviewer } = await afterBlockedRound();
-  const missed = { file: "src/retry.ts", line: 3, severity: "must-fix", claim: "A token is logged in plain text.", origin: "missed" } as const;
+  const missed = { title: "A token is logged in plain text", file: "src/retry.ts", line: 3, severity: "must-fix", claim: "A token is logged in plain text.", origin: "missed" } as const;
   const threadId = reviewer();
   await kit.call("issue_review", { findings: [missed], earlier: [{ finding: 1, fixed: true, note: "Capped at 5 minutes." }] }, threadId);
   await kit.idle(threadId, "Reviewed.");
@@ -1356,7 +1356,7 @@ test("issue_verdict refuses an anchored finding the reviewer marked missed, with
     "the scope it was given and its fallback, never which one it ran",
   );
   assert.match(brief, /A finding marked unfixed is one of round 1's blocking findings[^\n]*; one marked missed sits on code round 1 reviewed unchanged; every other one is new, on code changed since, or anywhere when it reviewed the whole diff/);
-  assert.match(brief, /\n\n1\. `src\/retry\.ts:3` \(must-fix, missed\): A token is logged in plain text\.\n\nRound 1's blocking findings the reviewer answered fixed, for context; they are not yours to triage:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The reviewer: Capped at 5 minutes\./);
+  assert.match(brief, /\n\n1\. A token is logged in plain text\n   `src\/retry\.ts:3` \(must-fix, missed\): A token is logged in plain text\.\n\nRound 1's blocking findings the reviewer answered fixed, for context; they are not yours to triage:\n\n- The backoff never caps\n {2}`src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The reviewer: Capped at 5 minutes\./);
 
   for (const anchor of ["safety", "criterion"]) {
     const refused = await kit.call("issue_verdict", { ...PASSES, triage: [{ finding: 1, result: "anchored", anchor, reason: "A secret leaks to the log." }] }, verifier());
@@ -1385,12 +1385,12 @@ test("after a failed round, a round whose review was missed gives its verifier t
   const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
   assert.match(
     brief,
-    /## Round 1's blocking findings\n\nNo review was had: its reviewer ended its turn without reporting\. So each finding that failed round 1's verdict stands as unfixed until you check it here: triage every one in issue_verdict by its number\.[^\n]*\n\n1\. `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n/,
+    /## Round 1's blocking findings\n\nNo review was had: its reviewer ended its turn without reporting\. So each finding that failed round 1's verdict stands as unfixed until you check it here: triage every one in issue_verdict by its number\.[^\n]*\n\n1\. The backoff never caps\n   `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n/,
   );
   const skipped = await kit.call("issue_verdict", PASSES, verifier());
   assert.equal(
     textOf(skipped),
-    "issue_verdict is refused and nothing was saved: triage every finding of the reviewer's; missing 1 of 1 to 1. The findings to triage, by number:\n\n1. `src/retry.ts:42` (must-fix, unfixed): The backoff never caps.",
+    "issue_verdict is refused and nothing was saved: triage every finding of the reviewer's; missing 1 of 1 to 1. The findings to triage, by number:\n\n1. The backoff never caps\n   `src/retry.ts:42` (must-fix, unfixed): The backoff never caps.",
     "a stalled reviewer drops no blocker, and a verifier whose first message said to pass [], as one started before this release, learns what to triage",
   );
 
@@ -1404,7 +1404,7 @@ test("after a failed round, a round whose review was missed gives its verifier t
   assert.deepEqual([issue.lane, issue.headline], ["needs-you", "✗ A must-fix review finding upheld after its fix round: Retries land with backoff"], "every criterion passed, and the unfixed blocker failed it");
   assert.match(
     textOf(await kit.call("crew_catch_up", {}, threadId)),
-    /Review: no review was had, as its reviewer ended its turn without reporting, so the verifier triaged the 1 earlier blocking finding as unfixed; the verifier anchored 1, downgraded 0, confirmed 0 and rejected 0\. None of them went to the agent\.\n\n- `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n {2}Anchored, as it breaks a requirement the issue's brief states explicitly: retry\.ts:42 still doubles with no ceiling\./,
+    /Review: no review was had, as its reviewer ended its turn without reporting, so the verifier triaged the 1 earlier blocking finding as unfixed; the verifier anchored 1, downgraded 0, confirmed 0 and rejected 0\. None of them went to the agent\.\n\n- The backoff never caps\n {2}`src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n {2}Anchored, as it breaks a requirement the issue's brief states explicitly: retry\.ts:42 still doubles with no ceiling\./,
     "the manager reads the unfixed finding that failed it",
   );
   const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");

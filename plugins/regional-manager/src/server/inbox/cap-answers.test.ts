@@ -13,8 +13,8 @@ type Kit = Awaited<ReturnType<typeof coordinating>>["kit"];
 const d1 = decisionIdSchema.parse("d1");
 const a2 = agentIdSchema.parse("a2");
 const MERGE = "Merge as is, file follow-ups";
-const MUST_FIX = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." };
-const SHOULD_FIX = { file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." };
+const MUST_FIX = { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." };
+const SHOULD_FIX = { title: "The jitter is computed twice", file: "src/retry.ts", line: 7, severity: "should-fix", claim: "The jitter is computed twice." };
 
 /**
  * A regional manager whose issue WEB-1 reached its cap: its agent a1 failed verification twice, then
@@ -151,7 +151,7 @@ test("a merge answer after a review-only failure whose commit's CI has since fai
   await settled();
   const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
   assert.doesNotMatch(answered, /status: "in-review"/, "no accept is offered");
-  assert.match(answered, /File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  assert.match(answered, /File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- The backoff never caps\n {2}`src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
   const accept = await kit.call("issue_update", { id: "WEB-1", status: "in-review", decision: "The user chose to merge it as is (d1)." }, threadId);
   assert.ok(isRefusal(accept), "the accept the update didn't offer is refused");
   assert.match(textOf(accept), /^CI failed on #41 at 0123456/);
@@ -163,7 +163,7 @@ test("a merge answer read after its pull request merged offers no accept and no 
   await settled();
   await openPr(kit, fresh, "MERGED");
   const answered = /### The user answered d1[^]*?(?=\n### |\n## |$)/.exec(await catchUp())?.[0] ?? assert.fail("no answer in the catch-up");
-  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Its pull request #41 has merged since, which made WEB-1 Done, so nothing is left to merge\. File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
+  assert.match(answered, /They chose to merge WEB-1 as it is, so it gets no further round\. Its pull request #41 has merged since, which made WEB-1 Done, so nothing is left to merge\. File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n- The backoff never caps\n {2}`src\/retry\.ts:42` \(must-fix\): The backoff never caps\./);
   assert.doesNotMatch(answered, /status: "in-review"|Have its pull request/);
 });
 

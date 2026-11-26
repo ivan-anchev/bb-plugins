@@ -1269,7 +1269,7 @@ export async function startedAgent(kit: ReturnType<typeof harness>, threadId: st
 }
 
 /** The must-fix a review-only failure's reviewer reports (failsVerification `on` "review"), which its verifier anchors to the brief. */
-export const MUST_FIX = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
+export const MUST_FIX = { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
 
 /**
  * The agent in `agentThreadId` hands off done (its summary "Retries land with backoff", naming

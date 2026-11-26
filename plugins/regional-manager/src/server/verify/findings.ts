@@ -95,7 +95,7 @@ function returnedText(review: Review, verdict: Returned): string {
  * with no review stage.
  */
 function reviewedPart(review: Review, verdict: Returned): string[] {
-  const each = fenced(verdict.triage.map((finding) => `- ${findingText(finding)}\n  ${triageText(finding)}: ${finding.reason}`).join("\n"));
+  const each = fenced(verdict.triage.map((finding) => `- ${findingText(finding, "  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n"));
   if (review.state === "missed") return [`No review was had: ${review.reason}.`, ...(verdict.triage.length === 0 ? [] : [`The earlier blocking findings, as the verifier triaged them, in their words:\n\n${each}`])];
   if (review.state !== "reported") return [];
   if (review.findings.length === 0) return ["Its reviewer found nothing."];

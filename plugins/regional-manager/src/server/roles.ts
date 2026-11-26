@@ -2,7 +2,7 @@
 // session gets. Synchronous by contract; an indexed better-sqlite3 read is.
 import type { PluginAgentConfiguration, PluginAgentConfigurationContext, PluginAgents } from "@get-bb/plugin-sdk";
 import { ticketMetadataSchema, type Role } from "../model/role.ts";
-import { ANCHOR_RULE, FOLLOW_UP_RULE, MISSED_RULE } from "../model/verdict/review.ts";
+import { ANCHOR_RULE, FOLLOW_UP_RULE, MAX_FINDING_TITLE, MISSED_RULE } from "../model/verdict/review.ts";
 import { MAX_FAILED_VERDICTS, ordinal } from "../model/verdict/rounds/cap.ts";
 import { UNCHECKABLE_RULE } from "../model/verdict/verdict.ts";
 import { DISPLAY_NAME } from "../name.ts";
@@ -113,4 +113,13 @@ const REVIEWER_RULES = `You are a reviewer working for a regional manager: a thr
 - On a later round, your first message names the last reviewed round's commit: review only the change since it, in the files this branch changes. Answer each of that round's blocking findings it numbers, fixed or not, with a note; don't report again a finding it lists as known; and mark each finding you report new, or missed when it sits on code that round reviewed unchanged. ${MISSED_RULE}
 - Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree.
 - ${ALONE_RULE}
-- End with ${REVIEW}, as your last action: your findings reach the verifier only through it. When it refuses what you passed, correct that and call it again; stop once it records your review. Never end a turn before you call it, not even to wait for a command in the background: a turn that ends without it ends your review unheard.`;
+- End with ${REVIEW}, as your last action: your findings reach the verifier only through it. When it refuses what you passed, correct that and call it again; stop once it records your review. Never end a turn before you call it, not even to wait for a command in the background: a turn that ends without it ends your review unheard.
+
+## How you write a finding
+The feed shows each finding as one row, its title, and opens the rest on demand:
+- title: what goes wrong, as a user or agent meets it, in one line of at most ${MAX_FINDING_TITLE} characters (aim for 60: the row cuts it there at the tab's width): "A final check re-applies a decision blocker the user has since changed." No fix, no severity words, no file name: the row shows the place.
+- claim: the failure scenario first, in a sentence; then why the code does it; then the fix in one sentence. At most 1,200 characters. Don't restate the title, quote the diff at length, or argue the anchor: the verifier decides it.
+- One defect per finding: never bundle "also" issues. A finding you aren't sure of after checking the code isn't one.
+- On a later round, each answer's note is one line: what you saw that shows it fixed or not.
+- Found nothing: return []. No praise, no summary of the diff.
+- Plain words and contractions, no filler or hype; cut content, not grammar.`;

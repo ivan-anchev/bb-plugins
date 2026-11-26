@@ -62,9 +62,9 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
 
 /** What a round's reviewer reported: an earlier must-fix it found unfixed, which the verifier anchors; a missed must-fix it downgrades; and a new nit it rejects. */
 const FINDINGS = [
-  { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "unfixed" },
-  { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing.", origin: "missed" },
-  { file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
+  { title: "No cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "unfixed" },
+  { title: "The name says nothing", file: "src/retry.ts", line: 9, severity: "must-fix", claim: "The name says nothing.", origin: "missed" },
+  { title: "Padding", file: "src/retry.css", line: null, severity: "nit", claim: "Padding.", origin: "new" },
 ] as const;
 const TRIAGE = [
   { result: "anchored", anchor: "brief", steps: null, reason: "No cap in retry.ts; the brief says capped." },
@@ -193,7 +193,7 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   assert.deepStrictEqual(body.findings.map(({ triage }) => keysOf(triage ?? assert.fail("no triage"))), [["anchor", "reason", "result", "steps"], ["reason", "result", "to"], ["reason", "result"]], "an anchored finding names the anchor it meets and its steps, a downgraded one its new severity");
   assert.deepStrictEqual(
     body.findings,
-    FINDINGS.map((finding, i) => ({ ...finding, triage: TRIAGE[i] })),
+    FINDINGS.map(({ file, line, severity, claim, origin }, i) => ({ file, line, severity, claim, origin, triage: TRIAGE[i] })),
   );
 });
 
@@ -299,7 +299,7 @@ test("the feed of an issue whose pass filed a follow-up sends one follow-up entr
   assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
   const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
   assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: { issueId: "WEB-1", when: "passed" }, moved: null }], "the follow-up's own feed names its origin as it begins");
-  assert.match(followUp.brief ?? "", /- Round 1: `src\/retry\.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./, "its tab gets the brief that lists the finding, its round and the verifier's reason");
+  assert.match(followUp.brief ?? "", /- Round 1: Log each retry\n {2}`src\/retry\.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./, "its tab gets the brief that lists the finding, its round and the verifier's reason");
   const own = feed.entries.find(({ kind }) => kind === "created");
   assert.deepStrictEqual(own, { kind: "created", at: 1_000, followUpOf: null, moved: null });
 });

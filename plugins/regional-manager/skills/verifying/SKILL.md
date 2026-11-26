@@ -26,8 +26,8 @@ For a done handoff:
 - The issue's brief, for context. It is the regional manager's words, not
   the agent's: you get none of the agent's own report, on purpose.
 - What an independent reviewer found in the diff before you, numbered: each
-  finding's file and line, its severity (must-fix, should-fix or nit) and its
-  claim. Or that it found nothing, or that no review was had, and why. An
+  finding's title on its own line, then its file and line, its severity
+  (must-fix, should-fix or nit) and its claim. Or that it found nothing, or that no review was had, and why. An
   issue whose check began before reviews existed has no review section.
 - On a later round, what the reviewer was asked to review: only the change
   since the last reviewed round's commit, in the files this branch changes,

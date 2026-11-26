@@ -48,7 +48,7 @@ test("a criterion the verifier couldn't check is not a pass", () => {
 });
 
 /** A finding of the given severity, as the reviewer reported it. */
-const finding = (severity: Severity): ReviewFinding => ({ file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps.", origin: "new" });
+const finding = (severity: Severity): ReviewFinding => ({ title: "The backoff never caps", file: "src/retry.ts", line: 4, severity, claim: "The backoff never caps.", origin: "new" });
 type Severity = ReviewFinding["severity"];
 
 /** A verdict that passed both its criteria, as the store reads it with the findings its verifier triaged: each finding of `severity` triaged as `triage`. */

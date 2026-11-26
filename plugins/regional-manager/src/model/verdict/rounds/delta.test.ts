@@ -12,9 +12,9 @@ import { deltaOf, readInOrder, triageList } from "./delta.ts";
 
 type Triage = Extract<StoredVerdict, { state: "returned" }>["triage"][number];
 
-const CAP: ReviewFinding = { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff never caps.", origin: "new" };
-const FOUR_XX: ReviewFinding = { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "A 4xx is retried.", origin: "new" };
-const JITTER: ReviewFinding = { file: "src/retry.ts", line: 12, severity: "should-fix", claim: "The jitter is computed twice.", origin: "new" };
+const CAP: ReviewFinding = { title: "The backoff never caps", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff never caps.", origin: "new" };
+const FOUR_XX: ReviewFinding = { title: "A 4xx is retried", file: "src/retry.ts", line: 9, severity: "must-fix", claim: "A 4xx is retried.", origin: "new" };
+const JITTER: ReviewFinding = { title: "The jitter is computed twice", file: "src/retry.ts", line: 12, severity: "should-fix", claim: "The jitter is computed twice.", origin: "new" };
 const ANCHORED: Triage = { result: "anchored", anchor: "brief", steps: null, reason: "It grows without bound." };
 const CONFIRMED: Triage = { result: "confirmed", reason: "Both calls on line 12." };
 const REJECTED: Triage = { result: "rejected", reason: "It caps at 5 minutes." };
