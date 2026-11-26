@@ -1125,6 +1125,14 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
   assert.match(JSON.stringify(z.toJSONSchema(tool.parameters)), /For a downgrade, why the lower severity fits; for a downgraded must-fix, that it meets no anchor, as a principle violation or a bug that needs a contrived setup, or that it is marked missed\./, "a downgrade's reason asks why the lower severity fits, and the no-anchor reason only of a must-fix");
 });
 
+// why 4,096: bb truncates a tool's instructions past it, cutting the rules at their tail.
+test("issue_verdict's instructions, like every tool's, fit within bb's 4,096-character cap", async () => {
+  const { kit } = await withAgent();
+  const tools = kit.tools();
+  assert.ok(tools.some(({ name, instructions }) => name === "issue_verdict" && instructions !== null), "issue_verdict has instructions");
+  for (const { name, instructions } of tools) assert.ok((instructions ?? "").length <= 4_096, `${name}'s instructions are ${instructions?.length} characters`);
+});
+
 test("issue_verdict refuses a bug anchored without the normal-use steps that reach it; a principle violation and a contrived race downgraded to should-fix leave a verdict that passes every criterion Verified, with nothing sent back", async () => {
   const { kit, agentThreadId, row, check, verifier, handOff } = await withAgent();
   kit.reviewers.reportAtOnce = false;
@@ -1199,30 +1207,35 @@ test("a defect the verifier finds itself outside the criteria, hit in normal use
   assert.deepEqual(shown?.state === "returned" && [shown.blocking, shown.findings], [[{ ...crash, steps }], advisory], "the board lists the defect and the finding");
 });
 
-test("blocking defects an earlier verifier found carry into the next round's first message: each needs an answer, and one still blocking fails that round though its own verifier found nothing new", async () => {
+test("blocking defects an earlier verifier found carry into the next round's first message, which says to rerun a bug anchor's steps and recheck any other anchor's requirement: each needs an answer, and one still blocking fails that round though its own verifier found nothing new", async () => {
   const { kit, threadId, verifier, handOff, check } = await withAgent();
   await handOff();
   const crash = { claim: "`node cli.js` crashes on an empty counts.json.", anchor: "bug", steps: "1. Kill a run mid-save. 2. Run node cli.js signup: SyntaxError." } as const;
   const lost = { claim: "A count written twice in one run is lost.", anchor: "regression", steps: "1. Run node cli.js a b. 2. counts.json holds only b." } as const;
+  const renamed = { claim: "The helper is named withRetry, though the user decided on retry.", anchor: "decision", steps: null } as const;
   const first = verifier();
-  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, blocking: [crash, lost] }, first)), /^Verdict recorded/);
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, blocking: [crash, lost, renamed] }, first)), /^Verdict recorded/);
   await kit.idle(first, "Verdict returned.");
   await settled();
 
-  // Round 2 fixes only the lost count.
+  // Round 2 fixes the lost count and the name, not the crash.
   await handOff();
   const second = verifier();
   const prompt = kit.thread(second).spawnedWith.prompt ?? assert.fail("no prompt");
   assert.ok(
-    prompt.includes(`## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Run each one's steps again on this commit, and answer every one in issue_verdict's earlierDefects by its number: fixed only when its steps no longer reach it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a bug hit in normal use, reached by: ${crash.steps}: ${crash.claim}\n2. Blocks, as a regression: existing behaviour that breaks in normal use, reached by: ${lost.steps}: ${lost.claim}`),
-    "the second verifier's first message lists both defects, numbered, with their anchors and steps",
+    prompt.includes(
+      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a bug hit in normal use, reached by: ${crash.steps}: ${crash.claim}\n2. Blocks, as a regression: existing behaviour that breaks in normal use, reached by: ${lost.steps}: ${lost.claim}\n3. Blocks, as it breaks a recorded decision: ${renamed.claim}`,
+    ),
+    "the second verifier's first message lists every defect, numbered, with their anchors and a bug's steps, and says how to recheck each kind",
   );
+  const recheck = "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it.";
+  assert.ok(kit.tools().find(({ name }) => name === "issue_verdict")?.instructions?.includes(recheck), "issue_verdict's instructions say the same");
   const skipped = await kit.call("issue_verdict", PASSES, second);
   assert.ok(isRefusal(skipped));
-  assert.equal(textOf(skipped), "issue_verdict is refused and nothing was saved: answer every earlier blocking defect; missing 1, 2 of 1 to 2.", "no verdict passes that leaves an earlier defect unanswered");
+  assert.equal(textOf(skipped), "issue_verdict is refused and nothing was saved: answer every earlier blocking defect; missing 1, 2, 3 of 1 to 3.", "no verdict passes that leaves an earlier defect unanswered");
   assert.equal(check().verdict.state, "running", "nothing was saved");
 
-  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, earlierDefects: [{ defect: 1, fixed: false }, { defect: 2, fixed: true }] }, second)), /^Verdict recorded: 2 of 2 criteria passed/);
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, earlierDefects: [{ defect: 1, fixed: false }, { defect: 2, fixed: true }, { defect: 3, fixed: true }] }, second)), /^Verdict recorded: 2 of 2 criteria passed/);
   await kit.idle(second, "Verdict returned.");
   await settled();
   const round2 = check().verdict;
@@ -1280,7 +1293,7 @@ test("a verifier's first message holds the issue's decisions under a Decisions h
   assert.doesNotMatch(decisions, /d1|One more round|failed verification/, "the question at the cap is no decision about the work");
 });
 
-test("a final check's first message is unchanged by its parent's decisions: the same message whole, with a decision recorded on the parent or without one", async () => {
+test("a final check's first message gives its parent's brief and decisions, under a Decisions heading only when it has one", async () => {
   /** The first message of WEB-1's final check, its decision `decision` recorded on it first (null: none). */
   async function finalCheckPrompt(decision: string | null): Promise<string> {
     const { kit, threadId, coordinatorId } = await coordinating();
@@ -1298,8 +1311,10 @@ test("a final check's first message is unchanged by its parent's decisions: the 
   }
 
   const decided = await finalCheckPrompt("Use the hosted vault: the user's call.");
-  assert.equal(decided, await finalCheckPrompt(null), "the decision changes nothing in it");
-  assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## Rules"]);
+  assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Decisions on WEB-1", "## Rules"]);
+  assert.match(decided, /## WEB-1's brief, for context\n\nSplit into sub-issues\.\n\n/);
+  assert.match(decided, /\n- [^\n]+: Use the hosted vault: the user's call\.\n/);
+  assert.deepEqual(headingsOf(await finalCheckPrompt(null)), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Rules"], "no decisions, no heading");
 });
 
 const CAP_FINDING = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;

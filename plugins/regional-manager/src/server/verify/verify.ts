@@ -50,7 +50,7 @@ import type { AsksBb } from "../hidden/asks.ts";
 import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { verifierExecution } from "./verifier-model.ts";
 import { checkedIssue, earlierDefectsOf, scopeOf } from "../review/checker-brief.ts";
-import { verifierBrief } from "./verifier-brief.ts";
+import { finalCheckBrief, verifierBrief } from "./verifier-brief.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
 type ThreadRow = Awaited<ReturnType<Threads["list"]>>[number];
@@ -185,7 +185,15 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
         return handoffRequest({ ...check, subject }, coordinator, check.verdict.checkout);
       case "final": {
         const theirs = checkedAgents(check, store.agents(check.coordinatorId)).map(({ execution }) => execution);
-        return finalCheckerRequest(bb, { check: { ...check, subject }, coordinator, issue, theirs });
+        const final = { ...check, subject };
+        // why read in the prompt, after every await: the brief and the decisions it gives must agree, and be current (checkedIssue).
+        const prompt = (): string => {
+          const current = store.issue(check.coordinatorId, check.issueId);
+          // why throw: checks are kept while their issue is.
+          if (current === null) throw new Error(`The issue ${check.issueId} of ${check.coordinatorId} is missing.`);
+          return finalCheckBrief({ ...current, decisions: store.issueDecisions(check.coordinatorId, check.issueId) }, final, earlierDefectsOf(store, check));
+        };
+        return finalCheckerRequest(bb, { check: final, coordinator, issue, theirs, prompt });
       }
       default:
         return subject satisfies never;

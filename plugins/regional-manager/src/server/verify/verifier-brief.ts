@@ -9,7 +9,7 @@ import type { IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
-import { ANCHOR_RULE, defectText, findingText, MISSED_RULE, numberedText, TRIAGE_RULE, type BlockingDefect, type Review } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, defectText, findingText, MISSED_RULE, numberedText, RECHECK_RULE, TRIAGE_RULE, type BlockingDefect, type Review } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import { decisionsPart, type Scope } from "../review/checker-brief.ts";
@@ -60,17 +60,26 @@ export const QA_RULE =
 
 /**
  * A final check's verifier's: the parent's own criteria, on the default branch as origin has it,
- * in a fresh worktree of its own. No commit is named: the plugin reads the worktree as the
- * verifier returns, and judges the commit it holds then.
+ * in a fresh worktree of its own, with the blocking defects an earlier final check's verifier
+ * found (`earlier`), and the parent's brief, if it has one, and its decisions as they stand as it
+ * starts, against which a carried requirement is rechecked. No commit is named: the plugin reads
+ * the worktree as the verifier returns, and judges the commit it holds then.
  */
-export function finalCheckBrief(issue: Pick<Issue, "id" | "title" | "description">, check: Pick<FinalCheck, "criteria" | "subject">): string {
+export function finalCheckBrief(
+  issue: Pick<Issue, "id" | "title" | "description" | "brief"> & { decisions: readonly IssueDecision[] },
+  check: Pick<FinalCheck, "criteria" | "subject">,
+  earlier: readonly BlockingDefect[],
+): string {
   const { defaultBranch, merged } = check.subject;
   return [
     `# Final check of ${issue.id}: ${issue.title}`,
     `Every sub-issue of ${issue.id} is closed, and the work of ${merged.join(", ")} is merged on ${defaultBranch}. This environment is a fresh worktree of ${defaultBranch} as origin has it, made for you alone. Check every done-criterion of ${issue.id} yourself on it, as it is, then call issue_verdict once. Follow the verifying skill.`,
     `## The commit and the tree\n\nNo commit is named. When you call issue_verdict, the plugin reads this worktree through bb's git plugin and judges the commit it holds then, on a clean tree: a file changed or added there that git shows fails the verdict, whatever you find. Don't check the commit or the tree yourself, and don't fail a criterion over them.`,
     criteriaPart(check.criteria),
+    ...earlierPart(earlier),
     `## ${issue.id}, for context\n\n${issue.description.trim()}`,
+    ...(issue.brief === null ? [] : [`## ${issue.id}'s brief, for context\n\n${issue.brief.trim()}`]),
+    ...decisionsPart(issue.id, issue.decisions),
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: judge the worktree as it is.`,
   ].join("\n\n");
 }
@@ -139,7 +148,7 @@ function earlierPart(earlier: readonly BlockingDefect[]): string[] {
   if (earlier.length === 0) return [];
   const list = earlier.map((defect, i) => `${i + 1}. ${defectText(defect, "   ")}`).join("\n");
   return [
-    `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Run each one's steps again on this commit, and answer every one in issue_verdict's earlierDefects by its number: fixed only when its steps no longer reach it. One you answer not fixed stays blocking, and fails this verdict too.\n\n${list}`,
+    `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. ${RECHECK_RULE} One you answer not fixed stays blocking, and fails this verdict too.\n\n${list}`,
   ];
 }
 

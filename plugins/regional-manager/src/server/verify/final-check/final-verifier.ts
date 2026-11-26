@@ -16,7 +16,6 @@ import type { CatalogBb } from "../../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../../execution/thread-execution.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../../git-status.ts";
 import type { CheckerRequest } from "../../spawn.ts";
-import { finalCheckBrief } from "../verifier-brief.ts";
 import { verifierExecution } from "../verifier-model.ts";
 
 type ListedThread = { id: string; environmentId: string | null; environmentHostId: string | null; archivedAt: number | null; deletedAt: number | null };
@@ -25,11 +24,15 @@ type ListedThread = { id: string; environmentId: string | null; environmentHostI
 export type FinalVerifierBb = ListBb<ListedThread> & CatalogBb & ThreadExecutionBb & GitStatusBb;
 
 /**
- * Everything the verifier of a final check needs. It runs on the parent's named verifier when bb
- * lists it on the manager's machine and no agent whose work it checks (`theirs`) ran on it, else
- * as verifierExecution picks.
+ * Everything the verifier of a final check needs, its first message written by `prompt` after
+ * every await, so the brief and decisions it gives are current (verifier-brief.ts
+ * finalCheckBrief). It runs on the parent's named verifier when bb lists it on the manager's
+ * machine and no agent whose work it checks (`theirs`) ran on it, else as verifierExecution picks.
  */
-export async function finalCheckerRequest(bb: FinalVerifierBb, { check, coordinator, issue, theirs }: { check: FinalCheck; coordinator: Coordinator; issue: Issue; theirs: Execution[] }): Promise<CheckerRequest> {
+export async function finalCheckerRequest(
+  bb: FinalVerifierBb,
+  { check, coordinator, issue, theirs, prompt }: { check: FinalCheck; coordinator: Coordinator; issue: Issue; theirs: Execution[]; prompt: () => string },
+): Promise<CheckerRequest> {
   const manager = (await listedThreads<ListedThread>(bb, [coordinator.threadId])).get(coordinator.threadId);
   if (manager === undefined) throw new Error("the regional manager's thread was archived or deleted");
   const environment = environmentOf({ kind: "worktree" }, manager.environmentHostId, `origin/${check.subject.defaultBranch}`);
@@ -41,7 +44,7 @@ export async function finalCheckerRequest(bb: FinalVerifierBb, { check, coordina
     title: `Final check of ${issue.id}: ${issue.title}`,
     environment,
     execution,
-    prompt: finalCheckBrief(issue, check),
+    prompt: prompt(),
   };
 }
 

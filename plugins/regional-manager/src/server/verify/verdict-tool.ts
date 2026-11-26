@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { ANCHOR_RULE, anchorProblem, blockingDefectSchema, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, anchorProblem, blockingDefectSchema, numberedText, placeText, RECHECK_RULE, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
@@ -37,7 +37,7 @@ const verdictInputSchema = z.object({
     .array(
       z.object({
         defect: z.number().int().min(1).describe("The earlier blocking defect's number in your first message."),
-        fixed: z.boolean().describe("true only when you ran its steps again on this commit and they no longer reach it. false keeps it blocking: it fails this verdict too."),
+        fixed: z.boolean().describe(`true only when your recheck shows it gone. ${RECHECK_RULE} false keeps it blocking: it fails this verdict too.`),
       }),
     )
     .default([])
@@ -70,7 +70,7 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       // why throw: a verifier is started for a check, and checks are kept while their regional manager is.
       if (check === null) throw new Error(`The check ${role.checkId} this verifier runs is missing.`);
       if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
-      const report = reportOf(input, check.criteria, triagedOf(store, check), earlierOf(store, check));
+      const report = reportOf(input, check.criteria, triagedOf(store, check), earlierDefectsOf(store, check));
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
       const received = await verify.returned(check.id, threadId, report);
       if (received === "not-running") return failed(NOT_RUNNING);
@@ -93,19 +93,6 @@ function triagedOf(store: Pick<Store, "record" | "finalChecks">, check: Check): 
   switch (subject.kind) {
     case "handoff":
       return triageList(check.review, scopeOf(store, { ...check, subject }));
-    case "final":
-      return [];
-    default:
-      return subject satisfies never;
-  }
-}
-
-/** The blocking defects an earlier verifier of the issue found, for this one to answer (checker-brief.ts earlierDefectsOf); none for a final check. */
-function earlierOf(store: Pick<Store, "record">, check: Check): BlockingDefect[] {
-  const { subject } = check;
-  switch (subject.kind) {
-    case "handoff":
-      return earlierDefectsOf(store, { ...check, subject });
     case "final":
       return [];
     default:
@@ -194,9 +181,9 @@ function blockingRefusal(blocking: VerdictInput["blocking"]): string | null {
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or refuses because the check no longer waits for it or your worktree couldn't be read. The plugin judges the commit and the tree itself; you judge the criteria and triage the reviewer's findings.
-- criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
-- blocking: defects you found yourself outside the criteria, as with creed-qa, that meet a blocking anchor (below), up to 20: claim, anchor, and steps for a bug, safety or regression anchor. Each fails the verdict. [] for none.
-- earlierDefects: an answer for each earlier blocking defect your first message numbers: fixed only when its steps no longer reach it; one not fixed fails this verdict. [] for none.
-- findings: other problems no criterion covers, up to 20, with their severity; they never fail the verdict. [] for none.
-- triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor and steps, or downgraded with to, the lower severity. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`;
+const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves nothing: fix what it names and call again. Stop once it records your verdict or says stop. The plugin judges the commit and tree. Pass [] for an empty list.
+- criteria: one per done-criterion, by number: pass, fail or unverifiable, with evidence quoting what you ran and its output (up to 4,000 characters). ${UNCHECKABLE_RULE}
+- blocking: up to 20 defects outside the criteria you found yourself, as with creed-qa, that meet an anchor: claim, anchor, steps as it takes. Each fails the verdict.
+- earlierDefects: one answer per earlier blocking defect, by number. ${RECHECK_RULE} One not fixed fails it.
+- findings: up to 20 other problems no criterion covers, with severity; never failing it.
+- triage: one per reviewer's finding, by number. ${TRIAGE_RULE} ${ANCHOR_RULE}`;
