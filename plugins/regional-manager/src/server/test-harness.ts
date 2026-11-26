@@ -285,7 +285,7 @@ export type FakeMr = {
 };
 
 /** How glab stands on a host: signed in, or its check failing with `error`. A host absent from the map is one glab doesn't know. */
-export type FakeSignIn = { state: "success" } | { state: "error"; error: string };
+type FakeSignIn = { state: "success" } | { state: "error"; error: string };
 
 /** A glab run that exited 1, as Node's execFile rejects it. */
 const glabExited = (args: readonly string[], stdout: string, stderr: string) => Object.assign(new Error(`Command failed: glab ${args.slice(0, 2).join(" ")}`), { code: 1, stdout, stderr });

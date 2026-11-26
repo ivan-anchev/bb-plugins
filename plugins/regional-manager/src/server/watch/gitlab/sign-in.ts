@@ -8,7 +8,7 @@ import type { PrUnavailable } from "../../../model/verdict/pr.ts";
 import { connectionFailed, jsonOrNull, parseHostCommandFailure, type HostCommandFailure, type RunCli } from "../host-command.ts";
 import { glabWords } from "./glab-failure.ts";
 
-export type SignIn = { kind: "signed-in" } | { kind: "refused"; unavailable: PrUnavailable };
+type SignIn = { kind: "signed-in" } | { kind: "refused"; unavailable: PrUnavailable };
 
 /** Asks glab whether it is signed in to `host`. Signed in only when the host's entry reads `state: "success"`. */
 export async function glabSignIn(run: RunCli, host: string): Promise<SignIn> {
