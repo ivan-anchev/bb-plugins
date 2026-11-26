@@ -271,8 +271,9 @@ function headAnswer(args: string[], prs: ReadonlyMap<string, FakePr>): string {
 
 /**
  * A merge request as the fake GitLab holds it, in GitLab's words: its iid, its state (lower case),
- * draft flag, whether it reads approved and how many approved it, its head commit, and its head
- * pipeline (null: none) with each failed or canceled job.
+ * draft flag, whether it reads approved and how many approved it, its detailed merge status and
+ * discussion counts, its head commit, and its head pipeline (null: none) with each failed or
+ * canceled job.
  */
 export type FakeMr = {
   iid: number;
@@ -280,6 +281,9 @@ export type FakeMr = {
   draft: boolean;
   approved: boolean;
   approvers: number;
+  detailedMergeStatus: string;
+  resolvableDiscussionsCount: number;
+  resolvedDiscussionsCount: number;
   head: string;
   pipeline: { status: string; jobs: { name: string; allowFailure: boolean }[] } | null;
 };
@@ -293,8 +297,15 @@ const glabExited = (args: readonly string[], stdout: string, stderr: string) => 
 /** The fields the watch's query must select for the fake GitLab to answer with them, as GitLab answers only what is asked. */
 const MR_SELECTION = ["iid", "webUrl", "state", "draft", "approved", "approvedBy(first: 1) { nodes { id } }", "diffHeadSha", "headPipeline { status jobs(statuses: [FAILED, CANCELED], retried: false, first: 10) { nodes { name allowFailure } } }"];
 
-/** The fake GitLab behind glab: glab's sign-in on each host, the one project path GitLab shows the account, and each branch's merge request. */
-type FakeGitLab = { hosts: ReadonlyMap<string, FakeSignIn>; project: string; mrs: ReadonlyMap<string, FakeMr> };
+/** The fields of a merge request the fake GitLab answers only when the query asks for them. */
+const MR_FEEDBACK = ["detailedMergeStatus", "resolvableDiscussionsCount", "resolvedDiscussionsCount"] as const;
+
+/**
+ * The fake GitLab behind glab: glab's sign-in on each host, the one project path GitLab shows the
+ * account, each branch's merge request, and the merge request fields its schema lacks, as an older
+ * GitLab's does.
+ */
+type FakeGitLab = { hosts: ReadonlyMap<string, FakeSignIn>; project: string; mrs: ReadonlyMap<string, FakeMr>; lacks: ReadonlySet<string> };
 
 /**
  * glab as strict as glab: `auth status --hostname H --output json` answers from the host's
@@ -322,7 +333,8 @@ function authStatus(args: readonly string[], host: string, signIn: FakeSignIn | 
  * each `b<i>` alias answered with that branch's merge request (iid a string, states lower case);
  * more than 5 branches refused, as GitLab's complexity limit refuses them; a project the account
  * can't see, or any project on a host glab isn't signed in to, answered `project: null`; a host
- * whose sign-in fails answered 401.
+ * whose sign-in fails answered 401; a field the schema lacks refused as GitLab's GraphQL refuses it,
+ * glab joining its errors one a line.
  */
 function graphql(args: readonly string[], host: string, rest: readonly string[], gitlab: FakeGitLab): string {
   const fields = new Map<string, string>();
@@ -338,6 +350,8 @@ function graphql(args: readonly string[], host: string, rest: readonly string[],
   if (path === undefined || !query.includes("project(fullPath: $path)")) throw glabExited(args, "", "glab: Variable $path of type ID! was provided invalid value\n");
   for (const [alias] of branches) if (!query.includes(`${alias}: mergeRequests(sourceBranches: [$${alias}], sort: CREATED_DESC, first: 1)`)) throw glabExited(args, "", `glab: Variable $${alias} is declared by anonymous query but not used\n`);
   for (const field of MR_SELECTION) if (!query.includes(field)) throw glabExited(args, "", `glab: the fake GitLab answers the fields the watch reads, and ${field} wasn't asked\n`);
+  const lacking = [...gitlab.lacks].filter((field) => new RegExp(`\\b${field}\\b`).test(query));
+  if (lacking.length > 0) throw glabExited(args, "", `glab: ${lacking.map((field) => `Field '${field}' doesn't exist on type 'MergeRequest'`).join("\n")}\n`);
   const signIn = gitlab.hosts.get(host);
   if (signIn?.state === "error") throw glabExited(args, '{"message":"401 Unauthorized"}', "glab: 401 Unauthorized (HTTP 401)\n");
   if (signIn === undefined || path.toLowerCase() !== gitlab.project.toLowerCase()) return JSON.stringify({ data: { project: null } });
@@ -348,6 +362,7 @@ function graphql(args: readonly string[], host: string, rest: readonly string[],
     draft: mr.draft,
     approved: mr.approved,
     approvedBy: { nodes: mr.approvers > 0 ? [{ id: "gid://gitlab/User/1" }] : [] },
+    ...Object.fromEntries(MR_FEEDBACK.filter((field) => query.includes(field)).map((field) => [field, mr[field]])),
     diffHeadSha: mr.head,
     headPipeline: mr.pipeline === null ? null : { status: mr.pipeline.status, jobs: { nodes: mr.pipeline.jobs.slice(0, 10) } },
   });
@@ -398,13 +413,15 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
   /**
    * GitLab and glab as the PR watch reaches them (glabAnswer): glab's sign-in on each host, the one
-   * project path GitLab shows the account, each branch's merge request, a failure every `api` run
-   * rejects with instead (null: none), and every run's arguments. A test sets them between ticks.
+   * project path GitLab shows the account, each branch's merge request, the merge request fields its
+   * schema lacks, a failure every `api` run rejects with instead (null: none), and every run's
+   * arguments. A test sets them between ticks.
    */
-  const gitlab: { hosts: Map<string, FakeSignIn>; project: string; mrs: Map<string, FakeMr>; failure: Error | null; runs: string[][] } = {
+  const gitlab: { hosts: Map<string, FakeSignIn>; project: string; mrs: Map<string, FakeMr>; lacks: Set<string>; failure: Error | null; runs: string[][] } = {
     hosts: new Map(),
     project: "frontend/station-ws",
     mrs: new Map(),
+    lacks: new Set(),
     failure: null,
     runs: [],
   };

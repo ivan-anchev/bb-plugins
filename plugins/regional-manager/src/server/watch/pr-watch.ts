@@ -17,7 +17,7 @@ import { threadsById } from "../agents/threads.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
 import { parsePrHead, parsePrUrl, prHeadQueryArgs, readGitHub } from "./github/pr-query.ts";
-import { readGitLab } from "./gitlab/merge-requests.ts";
+import { createGitLabReader } from "./gitlab/merge-requests.ts";
 import type { RunCli } from "./host-command.ts";
 import { createLocator, type ForgeRepo, type Located } from "./locate.ts";
 
@@ -53,6 +53,7 @@ export type PrWatch = ReturnType<typeof createPrWatch>;
 
 export function createPrWatch({ bb, store, inbox, run, now }: Deps) {
   const locator = createLocator(run);
+  const readGitLab = createGitLabReader(run);
   // why: a tick that outlasts the minute must not overlap the next, or one read could save over a newer one.
   let running = false;
   let disposed = false;
@@ -140,7 +141,7 @@ export function createPrWatch({ bb, store, inbox, run, now }: Deps) {
       case "github":
         return readGitHub(run, repo.path, branches);
       case "gitlab": {
-        const result = await readGitLab(run, repo, branches);
+        const result = await readGitLab(repo, branches);
         if (result.kind === "unavailable") locator.forget(repo.host);
         return result;
       }

@@ -37,13 +37,18 @@ export const prName = (pr: PrNumber): string => `${FORGE[pr.forge].short} ${prRe
  */
 const ciSchema = z.enum(["none", "pending", "pass", "fail", "blocked"]);
 
-/** A branch's change request as one successful read of its forge found it. `failedChecks`: each failed check or job by name, while CI fails, as the forge gave them. */
+/**
+ * A branch's change request as one successful read of its forge found it. `review`: the blocking
+ * feedback first, `unresolved-discussions` only on GitLab, which reports review feedback as
+ * discussion threads. `failedChecks`: each failed check or job by name, while CI fails, as the forge
+ * gave them.
+ */
 export const prSnapshotSchema = z.object({
   ...prNumberShape,
   url: z.url(),
   state: z.enum(["open", "merged", "closed"]),
   draft: z.boolean(),
-  review: z.enum(["approved", "changes-requested", "none"]),
+  review: z.enum(["approved", "changes-requested", "unresolved-discussions", "none"]),
   ci: ciSchema,
   headSha: commitSchema,
   failedChecks: z.array(z.string()),
@@ -88,7 +93,7 @@ export type PrRead = { kind: "read"; pr: PrSnapshot | null } | { kind: "unread";
 export type PrStatus = ({ snapshot: null } | PrFound) & { unavailable: PrUnavailable | null };
 
 /** A change in a branch's pull request worth waking its coordinating thread for. */
-export const prChangeSchema = z.enum(["opened", "reopened", "merged", "closed", "ci-passed", "ci-failed", "approved", "changes-requested"]);
+export const prChangeSchema = z.enum(["opened", "reopened", "merged", "closed", "ci-passed", "ci-failed", "approved", "changes-requested", "unresolved-discussions"]);
 export type PrChange = z.infer<typeof prChangeSchema>;
 
 /** Each change in words, as the doorbell and the catch-up say it. */
@@ -101,12 +106,13 @@ export const PR_CHANGE_WORDS: Record<PrChange, string> = {
   "ci-failed": "CI failed",
   approved: "approved",
   "changes-requested": "changes requested",
+  "unresolved-discussions": "unresolved discussions",
 };
 
 /**
  * What changed between two snapshots of a branch's pull request that its coordinating thread should
  * hear of, in that order: it opened, reopened, merged or closed; its CI turned green or red; a
- * review approved it or asked for changes. Empty: nothing did. why not a new pending run: the
+ * review approved it, asked for changes or left discussions unresolved. Empty: nothing did. why not a new pending run: the
  * thread can't act on it, and the run's end is the change.
  */
 export function meaningfulChanges(before: PrSnapshot | null, after: PrSnapshot): PrChange[] {
