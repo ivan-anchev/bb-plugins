@@ -3,7 +3,6 @@
 // its first sentence whole and the rest cut to two lines, opening on press. An open question is
 // answered here, from its numbered rows: an option, or the user's own words.
 import "./decision.css";
-import { useLayoutEffect, useRef } from "react";
 import type { AskedDecision, IssueDecision } from "../../../../../model/decision.ts";
 import { isClosed } from "../../../../../model/issue/relations.ts";
 import type { IssueStatus } from "../../../../../model/issue/status.ts";
@@ -40,31 +39,15 @@ export function DecisionCard({ coordinatorId, decision, status }: { coordinatorI
 /**
  * A question put to the user: open, its numbered rows answer it; answered, its options with the one
  * chosen marked, or an answer in the user's own words under them; lapsed, its options and why none
- * takes an answer. One component for all three, so the card stays as the rows go, and focus on a row,
- * which unmounts then, moves to the card, whatever took them: an answer from this card, the Board or
+ * takes an answer. One component for all three, so the card stays as the rows go, and takes the focus
+ * they held as they leave (open-rows.tsx), whatever took them: an answer from this card, the Board or
  * another window, or the issue's close.
  */
 function Question({ coordinatorId, decision, status }: { coordinatorId: CoordinatorId; decision: AskedDecision; status: IssueStatus }) {
   const { sent, send, error } = useAnswer(coordinatorId, decision.id);
-  const card = useRef<HTMLElement>(null);
-  const rows = useRef<HTMLUListElement>(null);
-  // Whether focus is on one of the rows. why a ref: whatever unmounts them fires no blur.
-  const onRow = useRef(false);
   const takesAnswer = stillWaits(decision, isClosed(status));
-  // why an effect: focus is the browser's, and the row it was on is gone only once this commit lands.
-  useLayoutEffect(() => {
-    if (takesAnswer || !onRow.current) return;
-    onRow.current = false;
-    if (document.activeElement === null || document.activeElement === document.body) card.current?.focus();
-  }, [takesAnswer]);
   return (
-    <article
-      ref={card}
-      tabIndex={-1}
-      className="rmi-decision"
-      aria-label={`Question ${decision.id}`}
-      onKeyDown={takesAnswer ? (event) => pressAnswerKey(event, rows.current) : undefined}
-    >
+    <article tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`} onKeyDown={takesAnswer ? pressAnswerKey : undefined}>
       <p className="rmi-decision-head">
         {/* why by its cap: the plugin itself asks at an issue's cap of failed verifications (rounds/cap.ts), not the regional manager. */}
         {decision.cap === null ? <ManagerName coordinatorId={coordinatorId} /> : <span className="rmi-actor">The plugin</span>} asked you <When at={decision.at} />
@@ -73,7 +56,7 @@ function Question({ coordinatorId, decision, status }: { coordinatorId: Coordina
       {decision.answer !== null ? (
         <Answer decision={decision} answer={decision.answer} />
       ) : takesAnswer ? (
-        <OpenRows ref={rows} coordinatorId={coordinatorId} decision={decision} sent={sent} send={send} onFocusChange={(focused) => (onRow.current = focused)} />
+        <OpenRows coordinatorId={coordinatorId} decision={decision} sent={sent} send={send} />
       ) : (
         <Lapsed decision={decision} status={status} />
       )}

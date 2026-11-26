@@ -14,11 +14,13 @@ export function useAnswer(coordinatorId: CoordinatorId, decisionId: DecisionId) 
   const save = experimental_useRpcMutation({ contract, method: "answerDecision" });
   const [sent, setSent] = useState<string | null>(null);
 
-  function send(text: string): void {
-    if (sent !== null || text.trim() === "") return;
+  /** Sends `text`, unless an answer is on its way or it is blank; whether it went. */
+  function send(text: string): boolean {
+    if (sent !== null || text.trim() === "") return false;
     setSent(text);
     // why the catch: the hook's error shows beside the answer; the rejection carries nothing more.
     save.mutate({ coordinatorId, decisionId, answer: text }).catch(() => setSent(null));
+    return true;
   }
 
   return { sent, send, error: sent === null ? save.error : null };

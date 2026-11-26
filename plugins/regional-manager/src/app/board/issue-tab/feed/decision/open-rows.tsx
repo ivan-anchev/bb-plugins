@@ -1,43 +1,48 @@
 // An open question's rows in its card: a numbered row per option, the one the regional manager
 // recommended tagged so, then a last numbered row for the user's own words, whose Send shows once
 // they type. Pressing a row, or its number while focus is in the card, answers with it; while the
-// answer sends, its row says so and the others dim. None is ever disabled, so focus stays put.
-import type { KeyboardEvent, Ref } from "react";
+// answer sends, its row says so and the others dim. None is ever disabled, so focus stays put, and
+// when the rows leave, the card takes the focus they held.
+import { useState, type KeyboardEvent } from "react";
 import { MAX_ANSWER_CHARS, type AskedDecision, type DecisionId } from "../../../../../model/decision.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import { Button } from "../../../../ui/button.tsx";
+import { handFocusTo } from "../../../../ui/focus-hand-off.ts";
 import { GrowingTextarea } from "../../../../ui/growing-textarea.tsx";
 import { useAnswerDraft } from "../../../answer-draft.ts";
 
 type OpenRowsProps = {
-  ref: Ref<HTMLUListElement>;
   coordinatorId: CoordinatorId;
   decision: AskedDecision;
   /** The answer on its way, null for none. */
   sent: string | null;
-  send(text: string): void;
-  onFocusChange(focused: boolean): void;
+  /** Sends an answer; whether it went (not while another is on its way). */
+  send(text: string): boolean;
 };
 
-export function OpenRows({ ref, coordinatorId, decision, sent, send, onFocusChange }: OpenRowsProps) {
+// why a module constant: a stable ref runs its cleanup only as the rows leave, while focus is still in them.
+const handFocusToCard = handFocusTo((rows) => rows.closest<HTMLElement>(".rmi-decision"));
+
+export function OpenRows({ coordinatorId, decision, sent, send }: OpenRowsProps) {
   const { options, recommended } = decision;
+  // The row whose answer is on its way, by its number. why kept, not matched by the answer's words:
+  // words typed in the last row may be an option's too, and the row that sent them says so.
+  const [pressed, setPressed] = useState<number | null>(null);
   const busy = sent !== null;
+  const sendingRow = busy ? pressed : null;
+  const sendFrom = (number: number) => (text: string) => {
+    if (send(text)) setPressed(number);
+  };
+  const own = options.length + 1;
   return (
-    <ul
-      ref={ref}
-      aria-label="Options"
-      className="rmi-q-rows"
-      data-busy={busy || undefined}
-      onFocus={() => onFocusChange(true)}
-      onBlur={(event) => onFocusChange(event.currentTarget.contains(event.relatedTarget))}
-    >
+    <ul ref={handFocusToCard} aria-label="Options" className="rmi-q-rows" data-busy={busy || undefined}>
       {options.map((option, index) => (
         <li key={option}>
-          <OptionRow number={index + 1} option={option} recommended={option === recommended} busy={busy} sending={sent === option} onPress={() => send(option)} />
+          <OptionRow number={index + 1} option={option} recommended={option === recommended} busy={busy} sending={sendingRow === index + 1} onPress={() => sendFrom(index + 1)(option)} />
         </li>
       ))}
       <li>
-        <OwnWordsRow coordinatorId={coordinatorId} decisionId={decision.id} number={options.length + 1} alone={options.length === 0} busy={busy} sending={busy && !options.includes(sent)} send={send} />
+        <OwnWordsRow coordinatorId={coordinatorId} decisionId={decision.id} number={own} alone={options.length === 0} busy={busy} sending={sendingRow === own} send={sendFrom(own)} />
       </li>
     </ul>
   );
@@ -48,10 +53,10 @@ export function OpenRows({ ref, coordinatorId, decision, sent, send, onFocusChan
  * the field for the user's own words, and ↑/↓ move between the rows. The field keeps the keys typed
  * into it, but ↑ at its start goes back up to the options.
  */
-export function pressAnswerKey(event: KeyboardEvent<HTMLElement>, list: HTMLUListElement | null): void {
-  if (list === null || event.metaKey || event.ctrlKey || event.altKey) return;
+export function pressAnswerKey(event: KeyboardEvent<HTMLElement>): void {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
   // why by their shortcut: every row, and nothing else in the card, names the key that reaches it.
-  const rows = [...list.querySelectorAll<HTMLElement>("[aria-keyshortcuts]")];
+  const rows = [...event.currentTarget.querySelectorAll<HTMLElement>("[aria-keyshortcuts]")];
   const row = rowFor(event, rows);
   if (row === undefined) return;
   event.preventDefault();
@@ -64,12 +69,16 @@ export function pressAnswerKey(event: KeyboardEvent<HTMLElement>, list: HTMLULis
 /** The row a key reaches from where focus is now, if any. */
 function rowFor(event: KeyboardEvent<HTMLElement>, rows: readonly HTMLElement[]): HTMLElement | undefined {
   const field = event.target instanceof HTMLTextAreaElement ? event.target : null;
-  const at = rows.findIndex((row) => row === event.target);
+  // why by the whole row: focus on the last row's Send is on that row too.
+  const at = rows.findIndex((row) => rowOf(row).contains(document.activeElement));
   if (field === null && /^[1-9]$/.test(event.key)) return rows[Number(event.key) - 1];
   if (field === null && event.key === "ArrowDown") return rows[at + 1];
   if (event.key === "ArrowUp" && (field === null || caretAtStart(field)) && at > 0) return rows[at - 1];
   return undefined;
 }
+
+/** The row a row's shortcut element sits in: an option's button is its row; the field sits in the last row's form. */
+const rowOf = (keyed: HTMLElement): Element => keyed.closest(".rmi-q-row") ?? keyed;
 
 const caretAtStart = (field: HTMLTextAreaElement): boolean => field.selectionStart === 0 && field.selectionEnd === 0;
 

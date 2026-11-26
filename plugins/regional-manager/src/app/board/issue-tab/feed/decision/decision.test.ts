@@ -1,10 +1,11 @@
 import "../../../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
-import type { IssueFeed } from "../../../../../contract.ts";
-import { decisionIdSchema, type AskedDecision } from "../../../../../model/decision.ts";
-import { COORDINATOR, FEED, issue, opened } from "../../test-tab.ts";
+import { Worker } from "node:worker_threads";
+import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { COORDINATOR } from "../../test-tab.ts";
+import type { PageStep } from "./reloaded-page.ts";
+import { OPTIONS, openQuestion, press, watchFocusDrops } from "./test-question.ts";
 
 // An open question answered from its card in the issue's feed: by an option's row, pressed or by its
 // number, or in the user's own words, which the browser keeps until the answer lands. Focus stays in
@@ -16,56 +17,18 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const WEB_1 = [issue("WEB-1", { status: "in-progress", headline: "Round 3 running" })];
-const OPTIONS = ["Three", "Five", "Seven"];
-
-/** d9, "How many retries?", with OPTIONS (or `options`), Three recommended, answered with `answer` (null: open). */
-function asking(answer: string | null, options = OPTIONS): AskedDecision {
-  return {
-    kind: "asked",
-    id: decisionIdSchema.parse("d9"),
-    question: "How many retries?",
-    options,
-    recommended: options.includes("Three") ? "Three" : null,
-    at: 6_400,
-    answer: answer === null ? null : { text: answer, at: 6_500 },
-    cap: null,
-  };
-}
-
-/** FEED with d9 at its end. */
-const feedWith = (decision: AskedDecision) => (): IssueFeed => ({ ...FEED, entries: [...FEED.entries, { kind: "decision", decision }] });
-
-/** The tab open on WEB-1 with d9 open, and its card, its rows and its field as they are now. */
-async function openQuestion(options = OPTIONS) {
-  const mounted = await opened("WEB-1", WEB_1, { feedOf: feedWith(asking(null, options)) });
-  const card = () => mounted.tab().getByRole("article", { name: "Question d9" });
-  return {
-    ...mounted,
-    card,
-    /** The option rows, each a button, in order. */
-    rows: () => within(card()).getAllByRole("button").filter((button) => button.closest("form") === null),
-    field: (): HTMLTextAreaElement => {
-      const field = within(card()).getByRole("textbox");
-      assert.ok(field instanceof HTMLTextAreaElement);
-      return field;
-    },
-    /** The feed reads d9 answered with `text`. */
-    answered: (text: string) => mounted.refeed("WEB-1", feedWith(asking(text, options))),
-  };
-}
-
-/** Presses `key` where focus is, as the browser sends it. */
-const press = (key: string) => fireEvent.keyDown(document.activeElement ?? assert.fail("nothing has focus"), { key });
-
-/** Whether focus is on the page itself, which a screen reader and the keyboard lose their place on. */
-const onPage = () => document.activeElement === null || document.activeElement === document.body;
-
-/** Each settled row's marker as drawn: ✓ for a row with the check glyph in its slot and the selected look, "" for one without. */
-const markers = (card: HTMLElement) =>
+/**
+ * Each settled row as drawn: whether a check glyph sits in it, anywhere, and whether it has the
+ * selected look, each read on its own so an extra check or an extra selected row shows.
+ */
+const drawn = (card: HTMLElement) =>
   within(card)
     .getAllByRole("listitem")
-    .map((row) => (row.querySelector(".rmi-q-key > .rmi-result-glyph[data-result='pass']") !== null && row.hasAttribute("data-chosen") ? "✓" : ""));
+    .map((row) => ({ check: row.querySelector(".rmi-result-glyph[data-result='pass']") !== null, selected: row.hasAttribute("data-chosen") }));
+
+/** The rows drawn with option `n` (1-based) chosen, among OPTIONS. */
+const chosen = (n: number) => OPTIONS.map((_, i) => ({ check: i === n - 1, selected: i === n - 1 }));
+const NONE_CHOSEN = OPTIONS.map(() => ({ check: false, selected: false }));
 
 test("an open question's rows are numbered, the recommended one tagged so, then a last row for the user's own words", async () => {
   const { card, rows, field } = await openQuestion();
@@ -82,9 +45,10 @@ test("an open question's rows are numbered, the recommended one tagged so, then 
   assert.equal(within(card()).queryByRole("button", { name: "Send" }), null, "Send shows only once the user types");
 });
 
-test("pressing option 2's number sends it: Sending… shows on that row alone, then the answer marks that row with a ✓ and no other, and focus never drops to the page", async () => {
+test("pressing option 2's number sends it: Sending… shows on that row alone, then the answer marks that row with a ✓ and the selected look and no other, and focus never drops to the page", async () => {
   const { card, rows, answers, answered } = await openQuestion();
   card().focus();
+  const focus = watchFocusDrops();
   press("2");
   await waitFor(() => assert.deepEqual(answers, [{ coordinatorId: COORDINATOR.id, decisionId: "d9", answer: "Five" }]));
   assert.deepEqual(
@@ -103,22 +67,44 @@ test("pressing option 2's number sends it: Sending… shows on that row alone, t
   assert.equal(answers.length, 1, "one answer at a time");
 
   await answered("Five");
-  await waitFor(() => assert.deepEqual(markers(card()), ["", "✓", ""]));
+  await waitFor(() => assert.deepEqual(drawn(card()), chosen(2)));
+  assert.equal(card().querySelectorAll(".rmi-result-glyph").length, 1, "one check in the whole card");
   assert.equal(within(card()).queryAllByRole("button").length, 0, "an answered question offers nothing to press");
   assert.equal(within(card()).queryByRole("textbox"), null, "nor a field");
-  assert.ok(!onPage(), "focus never drops to the page");
+  assert.equal(focus.dropped(), false, "focus never dropped to the page");
+  focus.stop();
 });
 
-test("focus on the row pressed moves to the card once the answer lands, never the page", async () => {
+test("focus on the row pressed moves straight to the card once the answer lands, never through the page", async () => {
   const { card, rows, answers, answered } = await openQuestion();
   const second = rows()[1] ?? assert.fail("no option 2");
   second.focus();
+  const focus = watchFocusDrops();
   fireEvent.click(second);
   await waitFor(() => assert.equal(answers.length, 1));
   assert.equal(document.activeElement, second, "the pressed row keeps focus while it sends");
   await answered("Five");
-  await waitFor(() => assert.deepEqual(markers(card()), ["", "✓", ""]));
+  await waitFor(() => assert.deepEqual(drawn(card()), chosen(2)));
   assert.equal(document.activeElement, card());
+  assert.equal(focus.dropped(), false, "focus never dropped to the page");
+  focus.stop();
+});
+
+test("words typed into the last row that match an option's say Sending… on the last row, which sent them", async () => {
+  const { card, rows, field, answers } = await openQuestion();
+  fireEvent.change(field(), { target: { value: "Five" } });
+  field().focus();
+  press("Enter");
+  await waitFor(() => assert.equal(answers.length, 1));
+  const own = field().closest("form") ?? assert.fail("no own-words row");
+  assert.equal(within(own).getByRole("status").textContent, "Sending…");
+  assert.ok(own.hasAttribute("data-sending"), "the last row stays at full strength");
+  assert.deepEqual(
+    rows().map((row) => row.hasAttribute("data-sending")),
+    [false, false, false],
+    "no option row says it sends",
+  );
+  assert.equal(within(card()).getAllByRole("status").length, 1);
 });
 
 test("in the card, the number after the options goes to the field, ↑ and ↓ move between rows, and digits typed in the field stay text", async () => {
@@ -139,28 +125,37 @@ test("in the card, the number after the options goes to the field, ↑ and ↓ m
   assert.equal(document.activeElement, rows()[1]);
 });
 
+test("focus on Send is on the last row: ↑ goes to the last option and ↓ goes nowhere", async () => {
+  const { card, rows, field } = await openQuestion();
+  fireEvent.change(field(), { target: { value: "Four" } });
+  const send = within(card()).getByRole("button", { name: "Send" });
+  send.focus();
+  press("ArrowDown");
+  assert.equal(document.activeElement, send, "nothing is below the last row");
+  press("ArrowUp");
+  assert.equal(document.activeElement, rows()[2]);
+});
+
+/** Plays `step` in a page of its own, as a reload makes one: its own document and modules, and the storage given. */
+function inPage(step: PageStep): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const page = new Worker(new URL("./reloaded-page.ts", import.meta.url), { workerData: step });
+    page.once("message", resolve);
+    page.once("error", reject);
+  });
+}
+
 test("words typed into the own-words field survive a reload and send with Enter: Sending… shows on that row, then the words show once, and focus never drops to the page", async () => {
-  const typed = "Four, with a cap of 30 s";
-  const first = await openQuestion();
-  fireEvent.change(first.field(), { target: { value: typed } });
-  cleanup();
+  const words = "Four, with a cap of 30 s";
+  const typed = await inPage({ step: "type", words, storage: [] });
+  assert.ok(typed !== null && typeof typed === "object" && "storage" in typed && Array.isArray(typed.storage));
 
-  const { card, field, answers, answered } = await openQuestion();
-  assert.equal(field().value, typed, "the draft is kept through a reload");
-  assert.ok(within(card()).getByRole("button", { name: "Send" }), "Send shows for the words typed");
-  field().focus();
-  press("Enter");
-  await waitFor(() => assert.deepEqual(answers, [{ coordinatorId: COORDINATOR.id, decisionId: "d9", answer: typed }]));
-  const own = field().closest("form") ?? assert.fail("no own-words row");
-  assert.equal(within(own).getByRole("status").textContent, "Sending…");
-  assert.equal(field().readOnly, true, "the field holds still while it sends");
-  assert.equal(document.activeElement, field(), "focus stays in the field");
-
-  await act(() => answered(typed));
-  await waitFor(() => assert.match(card().textContent ?? "", /You answered/));
-  assert.equal((card().textContent ?? "").split(typed).length - 1, 1, "the words show once");
-  assert.deepEqual(markers(card()), ["", "", ""], "no option marked");
-  assert.equal(document.activeElement, card(), "focus moves from the field to the card");
+  const reloaded = await inPage({ step: "send", words, storage: typed.storage });
+  assert.deepEqual(reloaded, {
+    kept: words,
+    sending: { answers: [{ coordinatorId: COORDINATOR.id, decisionId: "d9", answer: words }], status: "Sending…", readOnly: true, focusInField: true },
+    answered: { shown: 1, focusOnCard: true, dropped: false },
+  });
 });
 
 test("a question with no options is answered in the card's field alone, numbered 1, with no pointer to the Board", async () => {
@@ -171,4 +166,10 @@ test("a question with no options is answered in the card's field alone, numbered
   fireEvent.change(field(), { target: { value: "Ship it" } });
   fireEvent.click(within(card()).getByRole("button", { name: "Send" }));
   await waitFor(() => assert.deepEqual(answers, [{ coordinatorId: COORDINATOR.id, decisionId: "d9", answer: "Ship it" }]));
+});
+
+test("an answered card draws its rows as the open card did: none chosen for an answer in the user's own words", async () => {
+  const { card, answered } = await openQuestion();
+  await answered("Eight");
+  await waitFor(() => assert.deepEqual(drawn(card()), NONE_CHOSEN));
 });
