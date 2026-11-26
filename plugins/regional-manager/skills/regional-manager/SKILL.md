@@ -305,7 +305,7 @@ In progress, Reviewing, Verifying or In review.
 | Todo | No agent holds it, ready to start. Where a new issue rests, and where it returns when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it and is working, idle without a handoff, fixing its verifier's findings, or stopped by something (blocked, gave up, failed). |
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff as CREW.md instructs reviewers, before its verifier starts. |
-| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or it passed every criterion with no must-fix finding anchored and waits for CI on the claimed commit. A build parent: its final check is due or running. |
+| Verifying | A build issue: its review is in (or none could be had), and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI on the claimed commit. A build parent: its final check is due or running. |
 | In review | A build issue: its done handoff passed verification (or was made with verification off). It waits for its pull request to merge, or for you to accept it. A build parent: its work is all merged and verification was off, so it waits for you to accept it. |
 | Done | A build issue: its pull request merged, or you accepted it; final. A build parent: its final check passed, or you accepted it. A research issue: its agent handed off done; a message to that agent makes it In progress again. |
 | Canceled | You canceled it. |
@@ -545,8 +545,8 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   reviewers: the plugin names no review of its own, so say in CREW.md what a
   reviewer runs. The issue sits in Reviewing. Then an independent verifier
   checks it there, and triages each of the reviewer's findings with a reason:
-  rejected, confirmed, anchored to what a must-fix breaks, or downgraded to
-  a lower severity. The issue sits in Verifying. Both get the issue's
+  rejected, confirmed, anchored to the anchor a must-fix meets, or
+  downgraded to a lower severity. The issue sits in Verifying. Both get the issue's
   decisions; work that follows one is never a finding. A reviewer that can't
   start, stalls or stops without reporting never holds the issue: the verifier
   starts anyway, and the verdict says no review was had. You hear of the
@@ -554,18 +554,34 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   with the output the verifier ran, and the model it ran on, then the review:
   how many it anchored, downgraded, confirmed and rejected, then each finding
   with the verifier's word and reason. A must-fix fails the verdict only when
-  the verifier anchors it to what it breaks: a done-criterion, the issue's
-  brief text, a recorded decision, safety (data loss, a crash, a security
-  hole) or existing behaviour, as a regression. It fails it as a failed
-  criterion does, even when every criterion passed, and your update names it
-  as the cause. A CREW.md or REVIEW.md rule anchors only when the brief or a
-  criterion names it: name the rules that must block in the brief.
-  Confirmed and downgraded findings never fail it. When a failed verdict
+  the verifier anchors it to one of four anchors (the user's decision d68):
+  a bug a user or agent hits in normal use, with the steps that reach it (as
+  safety when it loses data or does something irreversible, as a regression
+  when existing behaviour breaks); a broken done-criterion; a broken
+  requirement the issue's brief states explicitly, not one inferred from its
+  intent; or a broken recorded decision. It fails it as a failed criterion
+  does, even when every criterion passed, and your update names it as the
+  cause. A REVIEW.md or schrute-code principle violation, a missing test,
+  unclear text, and a bug that needs a contrived setup to reach (a read held
+  mid-await, a plugin disposed mid-call, calls interleaved by hand, a ref
+  with shell or Markdown metacharacters, a reply lost in transit, a state
+  reachable only across an upgrade) never block: the verifier downgrades
+  them to should-fix, so file them as follow-ups. A CREW.md or REVIEW.md rule
+  anchors only when the brief states it or a criterion names it: name the
+  rules that must block in the brief. A defect the verifier finds itself
+  outside the criteria, as with creed-qa, fails the verdict only when it
+  meets a blocking anchor: the verifier reports it as a blocking defect,
+  with its anchor and, for a bug, safety or regression anchor, the
+  normal-use steps that reach it, and your update names it as the cause.
+  The next round's verifier gets every blocking defect still open and must
+  answer each fixed or still blocking, so one stays until a verifier sees it
+  fixed. The rest reach you as its findings, which never fail it. Confirmed and downgraded
+  findings never fail it. When a failed verdict
   goes back to the agent as its automatic fix round, every finding that held
   goes with it. When the issue has a pull
-  request, a verdict that passed every criterion, with no must-fix finding
-  anchored, also waits for CI on the claimed commit; CI
-  failing fails it.
+  request, a verdict that passed every other check (every criterion, no
+  anchored must-fix finding, no blocking defect, the claimed commit on a
+  clean tree) also waits for CI on the claimed commit; CI failing fails it.
   - **verified**: In review. Report it to the user as checked, naming what
     the verifier ran. Its pull request merging makes it Done; to accept it
     without a merge, `issue_update` with `status: "done"`. "verified, CI not

@@ -49,7 +49,7 @@ import { refusalOf } from "./send-refusal.ts";
 import type { AsksBb } from "../hidden/asks.ts";
 import { watchHidden, type ActivityBb } from "../hidden/watch.ts";
 import { verifierExecution } from "./verifier-model.ts";
-import { checkedIssue, scopeOf } from "../review/checker-brief.ts";
+import { checkedIssue, earlierDefectsOf, scopeOf } from "../review/checker-brief.ts";
 import { verifierBrief } from "./verifier-brief.ts";
 
 type Threads = BbPluginApi["sdk"]["threads"];
@@ -113,7 +113,7 @@ type Deps = {
 };
 
 /** A verifier's report: each criterion named by its text, its findings, and its triage of the review's findings, in their order. */
-export type VerifierReport = Pick<ReceivedVerdict, "findings" | "triage"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
+export type VerifierReport = Pick<ReceivedVerdict, "findings" | "blocking" | "triage"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
 
 /** What became of a verifier's report: stored; refused, as its check no longer waits for it; or, for a final check, why its worktree couldn't be read, which ended the check as could-not-run. */
 type Received = "recorded" | "not-running" | { unread: string };
@@ -220,7 +220,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       title: `Verify ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId: thread.environmentId },
       execution,
-      prompt: verifierBrief(issue, check, checkout, scopeOf(store, check)),
+      prompt: verifierBrief(issue, check, checkout, scopeOf(store, check), earlierDefectsOf(store, check)),
     };
   }
 

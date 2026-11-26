@@ -19,7 +19,7 @@ import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
 import { capChoice, choiceText, mergeStandsText, type AnsweredAt } from "../../model/verdict/rounds/cap-choice.ts";
 import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion, mergeAnswer, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
-import { findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
+import { defectText, findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
 import { checkInFlight, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
@@ -413,7 +413,7 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       const ci = ciVerdictOf(verdict);
       const failedBy = failureReasons(verdict);
       const label = failedBy.length > 0 ? "Failed verification" : ci === null ? "Passed every criterion" : "Verified";
-      // why the checkout, must-fix findings and CI first when they failed the verdict: its criteria may all have passed.
+      // why the checkout, must-fix findings, blocking defects and CI first when they failed the verdict: its criteria may all have passed.
       const reasons = failurePhrases(failedBy, subject.kind);
       const reason = reasons.length === 0 ? "" : ` ${reasons.join(", and ")}.`;
       const count = verdict.criteria.filter((check) => check.result === "pass").length;
@@ -429,8 +429,9 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
         .filter((part) => part !== "")
         .join(" ");
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
+      const blocking = verdict.blocking.length === 0 ? [] : [`Blocking defects it found, each failing the verdict:\n${verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n")}`];
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
-      return [head, ...checks, findings, ...reviewText(check.review, verdict)].join("\n\n");
+      return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict)].join("\n\n");
     }
     case "could-not-run":
       return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;

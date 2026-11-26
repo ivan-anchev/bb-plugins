@@ -43,6 +43,7 @@ function returned(results: readonly CriterionResult[], at: number, settlement: E
     checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
     criteria: results.map((result, i) => ({ criterion: CRITERIA[i] ?? "", result, evidence: `evidence ${i + 1}` })),
     findings: [],
+    blocking: [],
     triage,
     mustFixFails: true,
     model: { providerId: "claude-code", model: "sonnet" },
@@ -65,7 +66,7 @@ const agent = (id: AgentId, startedAt: number, ended: Agent["ended"]): FeedFacts
 /** BBP-19 as it went: a1 failed twice, the manager handed it to a2, which failed once and then passed; #219 opened, passed CI and merged. */
 function bbp19(): FeedFacts {
   const one = handed(handoff(1, A1, 3_000), returned(["pass", "fail", "fail"], 3_500, { kind: "sent-back", round: 1, ci: { kind: "none" } }, [
-    { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", origin: "new", result: "anchored", anchor: "criterion", reason: "Seen." },
+    { file: "src/card.tsx", line: 4, severity: "must-fix", claim: "The spinner stays.", origin: "new", result: "anchored", anchor: "criterion", steps: null, reason: "Seen." },
     { file: "src/card.css", line: null, severity: "nit", claim: "Padding.", origin: "new", result: "rejected", reason: "Matches the row." },
   ]), {
     state: "reported",

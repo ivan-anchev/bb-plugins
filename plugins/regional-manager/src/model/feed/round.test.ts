@@ -38,7 +38,7 @@ const HANDOFF: Handoff = {
 };
 
 const TRIAGE: Triaged[] = [
-  { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", result: "anchored", anchor: "criterion", reason: "Seen: it grows without bound." },
+  { file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound." },
   { file: "src/retry.css", line: null, severity: "nit", claim: "The padding differs from the row's.", origin: "new", result: "rejected", reason: "It matches the row." },
   { file: "src/retry.test.ts", line: 12, severity: "should-fix", claim: "No test retries after a failure.", origin: "new", result: "confirmed", reason: "Only the first attempt is tested." },
   { file: "src/retry.ts", line: 30, severity: "must-fix", claim: "The helper's name says nothing.", origin: "new", result: "downgraded", to: "nit", reason: "It breaks none of the five." },
@@ -54,6 +54,7 @@ const RETURNED: Verdict = {
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
   criteria: [{ criterion: "npm test passes", result: "fail", evidence: "1 failing" }],
   findings: [],
+  blocking: [],
   triage: TRIAGE,
   mustFixFails: true,
   model: { providerId: "claude-code", model: "sonnet" },
@@ -74,7 +75,7 @@ test("a reported review counts its findings and, once the verdict triaged them, 
   assert.deepEqual(
     findings.map(({ triage }) => triage),
     [
-      { result: "anchored", anchor: "criterion", reason: "Seen: it grows without bound." },
+      { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound." },
       { result: "rejected", reason: "It matches the row." },
       { result: "confirmed", reason: "Only the first attempt is tested." },
       { result: "downgraded", to: "nit", reason: "It breaks none of the five." },

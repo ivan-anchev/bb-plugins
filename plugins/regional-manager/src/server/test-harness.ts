@@ -1288,3 +1288,11 @@ export async function toCap(kit: ReturnType<typeof harness>, threadId: string, c
   return fresh;
 }
 
+/** The anchor rule's three claims, as every place a reviewer or a verifier reads gives them (d68): the four anchors that block, what never blocks, and the brief narrowed to what it states. */
+export const ANCHOR_RULE_TEXT = {
+  anchors:
+    "A must-fix blocks the work only when it meets one of four anchors: a bug a user or agent hits in normal use, with the steps that reach it; a broken done-criterion; a broken requirement the issue's brief states explicitly, not one inferred from its intent; or a broken recorded decision.",
+  shouldFix:
+    "Never blocking, so should-fix at most: a REVIEW.md or schrute-code principle violation, a missing test, unclear text, and a bug that needs a contrived setup to reach, such as a read held mid-await, a plugin disposed mid-call, calls interleaved by hand, a ref with shell or Markdown metacharacters, a reply lost in transit, or a state reachable only across an upgrade.",
+  brief: "A CREW.md or REVIEW.md rule blocks only when the brief states it or a done-criterion names it.",
+};

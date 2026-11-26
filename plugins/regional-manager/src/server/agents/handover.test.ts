@@ -555,7 +555,7 @@ test("the first message of an agent taking the issue over words an earlier ancho
   const message = firstMessage(threadIn(textOf(await handover())));
   assert.ok(
     message.includes(
-      "Its reviewer's findings, as the verifier triaged them, in their words:\n\n```\n- `src/retry.ts:42` (must-fix): The backoff never caps.\n  Anchored, as it breaks the issue's brief: The brief says retries back off; this never stops doubling.\n- `src/retry.ts:3` (must-fix): The imports are out of order.\n  Downgraded to nit: No criterion, brief line or decision covers import order.\n```",
+      "Its reviewer's findings, as the verifier triaged them, in their words:\n\n```\n- `src/retry.ts:42` (must-fix): The backoff never caps.\n  Anchored, as it breaks a requirement the issue's brief states explicitly: The brief says retries back off; this never stops doubling.\n- `src/retry.ts:3` (must-fix): The imports are out of order.\n  Downgraded to nit: No criterion, brief line or decision covers import order.\n```",
     ),
     message,
   );

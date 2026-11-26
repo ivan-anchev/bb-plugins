@@ -65,7 +65,7 @@ export const roundSchema = z.object({
    */
   verdict: z
     .object({
-      outcome: z.discriminatedUnion("kind", [z.object({ kind: z.literal("fail"), by: z.enum(["checkout", "criteria", "must-fix", "ci"]) }), z.object({ kind: outcomeSchema.exclude(["fail"]) })]),
+      outcome: z.discriminatedUnion("kind", [z.object({ kind: z.literal("fail"), by: z.enum(["checkout", "criteria", "must-fix", "defect", "ci"]) }), z.object({ kind: outcomeSchema.exclude(["fail"]) })]),
       results: z.array(criterionResultSchema),
       fixRound: z.object({ round: z.number().int(), delivery: z.enum(["sent", "maybe"]) }).nullable(),
       step: stepSchema.nullable(),
@@ -141,7 +141,7 @@ export function bodyOf(handoff: Handoff | null, check: Check | null): RoundBody 
 type Score =
   | { kind: "judged"; passed: number; of: number }
   | { kind: "failed"; by: "criteria"; passed: number; of: number }
-  | { kind: "failed"; by: "checkout" | "must-fix" | "ci" }
+  | { kind: "failed"; by: "checkout" | "must-fix" | "defect" | "ci" }
   | { kind: "pending"; stage: "reviewing" | "verifying" | "ci" }
   | { kind: "unjudged"; outcome: "could-not-run" | "superseded" | "unverified" }
   | null;
@@ -151,7 +151,7 @@ export function scoreOf({ review, verdict }: Pick<Round, "review" | "verdict">):
   if (review.state === "pending") return { kind: "pending", stage: "reviewing" };
   const { outcome, results } = verdict;
   const passed = results.filter((result) => result === "pass").length;
-  // why its reason first: a checkout, a confirmed must-fix finding or CI that failed it is why, however many criteria passed (verdict.ts firstFailure).
+  // why its reason first: a checkout, an anchored must-fix finding, a blocking defect the verifier found or CI that failed it is why, however many criteria passed (verdict.ts firstFailure).
   if (outcome.kind === "fail" && outcome.by !== "criteria") return { kind: "failed", by: outcome.by };
   // why a failed criterion next: it has failed, however the verdict settles.
   if (passed < results.length) return { kind: "failed", by: "criteria", passed, of: results.length };
