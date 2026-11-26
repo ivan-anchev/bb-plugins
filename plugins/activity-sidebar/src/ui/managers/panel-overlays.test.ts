@@ -5,7 +5,7 @@ import { setTimeout as wait } from "node:timers/promises";
 import type { PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent } from "@testing-library/react";
-import { createElement } from "react";
+import { createElement, type ReactNode } from "react";
 import { DWELL } from "../../card/card-intent.ts";
 import type { View } from "../../data/local-choice/choices.ts";
 import { view as listView, quiet } from "../../list/fixtures.ts";
@@ -44,17 +44,22 @@ const THREADS = [
 
 function mount(view: View, threads: readonly PluginSidebarThread[] = THREADS) {
   const model = buildActivity({ threads, projects: PROJECTS, sleeps: new Map(), held: new Set(), now: 100, activeThreadId: null, filter: null, looks: [], lines: [] });
-  const list = createElement(ListViewport, {
-    items: listItems(model.sections, listView()),
-    card: { index: model.index, underWaySince: new Map() },
-    onNavigate: () => {},
-    sleep: { sleep: () => {}, wake: () => {} },
-    onToggle: () => {},
-    onShowMoreArchived: () => {},
-    onRetry: () => {},
-    viewMenu: createElement(ViewMenu, { projects: PROJECTS, chosen: null, onChoose: () => {}, compact: true, onCompact: () => {} }),
-  });
-  const props = (shown: View) => ({ managers: model.managers, underWaySince: new Map<string, number>(), view: shown, onView: () => {}, onNavigate: () => {}, threads: list });
+  const list = (viewMenu: ReactNode) =>
+    createElement(ListViewport, {
+      items: listItems(model.sections, listView()),
+      card: { index: model.index, underWaySince: new Map() },
+      onNavigate: () => {},
+      sleep: { sleep: () => {}, wake: () => {} },
+      onToggle: () => {},
+      onShowMoreArchived: () => {},
+      onRetry: () => {},
+      viewMenu,
+    });
+  const options = {
+    threads: createElement(ViewMenu, { view: "threads", projects: PROJECTS, chosen: null, onChoose: () => {}, compact: true, onCompact: () => {} }),
+    managers: createElement(ViewMenu, { view: "managers", projects: [], chosen: null, onChoose: () => {}, compact: false, onCompact: () => {} }),
+  };
+  const props = (shown: View) => ({ managers: model.managers, managersCompact: false, underWaySince: new Map<string, number>(), view: shown, onView: () => {}, onNavigate: () => {}, options, threads: list });
   const slot = renderSlot({ component: SidebarViews }, props(view));
   const choose = async (shown: View) => {
     await act(async () => {
@@ -92,7 +97,7 @@ test("a thread row's menu, or the threads' view menu, open as Managers is chosen
   for (const open of ["row menu", "view menu"] as const) {
     const { slot, choose, link } = mount("threads");
     if (open === "row menu") await act(async () => fireEvent.contextMenu(link("Fix the build")));
-    else await act(async () => fireEvent.keyDown(slot.getByRole("button", { name: "View options" }), { key: "Enter" }));
+    else await act(async () => fireEvent.keyDown(slot.getByRole("button", { name: "Threads options" }), { key: "Enter" }));
     assert.equal(menus(), 1, `${open} open`);
 
     await choose("managers");

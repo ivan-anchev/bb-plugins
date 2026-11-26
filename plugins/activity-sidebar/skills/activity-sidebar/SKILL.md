@@ -1,6 +1,6 @@
 ---
 name: activity-sidebar
-description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, a Managers | Threads segment at the top while there are regional managers (Managers shows pinned managers as a grid of avatar tiles, then lists the rest by avatar, name and the first sentence of the latest message, oldest first; an avatar follows the pointer while it is on its row or tile), the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for one or two lines a row, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what the Managers | Threads segment and the Managers view show, how pinned managers and their grid work, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
+description: Explain the Activity Sidebar plugin, which replaces bb's thread list with one Activity list of every parent thread from every project, latest first, with pinned threads above it, a row at the top while there are regional managers, holding a small Managers | Threads icon segment and the shown view's options (Managers shows pinned managers as a grid of avatar tiles, then lists the rest by avatar, name and the first sentence of the latest message, oldest first; an avatar follows the pointer while it is on its row or tile), the Working, Asleep and Archived shelves folded at its foot, a project filter and a Compact switch for each view, each row showing the thread's agent, project initial, title, running subthreads and its state or age, with a right-click menu (including Sleep and Wake), a hover Archive button and a hover card with the thread's details, its plan while it works and its subthread tree. Use when the user asks what the Activity list shows, why a thread is or isn't in it, what the Managers | Threads segment and the Managers view show, how pinned managers and their grid work, what a row's corner glyph means, what the shelves, the filter and the Compact switch do, how Sleep works and when a sleeping thread wakes, what a row's menu, its hover Archive button and its hover card do, or how to switch back to bb's own list.
 ---
 
 # Activity Sidebar
@@ -38,8 +38,13 @@ commands and no settings.
 ## Managers and Threads
 
 While you have a regional manager open (one started by the Regional Manager
-plugin and not archived), a **Managers | Threads** segment sits at the top of
-the sidebar, and each side owns the whole list under it.
+plugin and not archived), a row sits at the top of the sidebar. At its left,
+the **Managers | Threads** segment: two icons on a track, a plain white blob
+(the avatar a manager has before it gets a look of its own) for Managers and a
+list for Threads, the chosen one on a sliding thumb. Resting the pointer on an
+icon, or reaching it from the keyboard, names it in a small tooltip; Escape or
+a press puts it away. At the row's right end is the shown view's options
+button. Each side owns the whole list under it.
 
 - **Managers** lists your regional managers, oldest first, so a new one joins
   at the end and none above it moves. A row shows only the manager's avatar,
@@ -95,13 +100,23 @@ the sidebar, and each side owns the whole list under it.
 - **Threads** is the list described below, with the open managers taken out
   of Activity, Pinned, Working and Asleep. An archived manager stays an
   ordinary row on Archived.
-- The view menu (Compact and the project filter) sits on Activity's title, so
-  it shows in Threads only. The filter never hides a manager.
+- Each view has its own options, at the right end of the row while it shows,
+  and its own choices: the threads' filter never hides a manager, and the
+  managers' never narrows the threads.
+  - **Threads**: Compact and the project filter, as described below.
+  - **Managers**: a Compact switch, off by default. On, each manager is one
+    30px line, a small avatar and its name, without the latest reply's line;
+    the pinned grid stays as it is. Once your managers span two or more
+    projects, a project filter follows, listing only those projects; it
+    narrows the grid and the list. While they share one project, the menu
+    holds Compact alone, and a filter whose project no longer holds a manager
+    shows them all.
 - ← and → (and Home and End) move between the two tabs. The view you chose is
   kept in this browser; Threads shows first until you pick Managers.
-- With no open managers there is no segment, and the sidebar is the threads'
-  list alone. When the first one starts while you're working in that list,
-  Threads stays on screen until you pick Managers.
+- With no open managers there is no row: the sidebar is the threads' list
+  alone, and their options button sits at the end of Activity's title. When
+  the first one starts while you're working in that list, Threads stays on
+  screen, its options still on the title, until you pick a tab.
 - The avatar comes from the Regional Manager plugin. It is read again when a
   manager's thread is created, renamed or archived, and every minute, so an
   edit shows within about a minute. If the plugin can't be read, each manager
@@ -118,13 +133,14 @@ the sidebar, and each side owns the whole list under it.
 - Opened, Archived shows its latest 10 and a "Show 25 more" row. Past what is
   loaded, it reads "Show more" and loads the next page. If a page fails to
   load, the shelf says "Couldn't load archived threads · Retry".
-- The view button at the end of Activity's title narrows Pinned, Activity
+- The threads' options button (at the end of Activity's title, or at the right
+  of the top row while there are managers) narrows Pinned, Activity
   and every shelf to one project; the title then reads "Activity · project".
   Choose "All projects" to show everything again.
 - The same menu's Compact switch picks the density. On (the default), a row
   is one line. Off, each row grows to two: under its title, its branch behind
   a branch glyph, then its machine, each when bb names one.
-- The folds, the filter and the density are kept in this browser's local storage, so they
+- The folds, each view's filter and density are kept in this browser's local storage, so they
   survive a reload but aren't shared with other clients.
 
 ## Motion
@@ -298,7 +314,8 @@ characters.
   split.
 - Tab to the list, then use ↑ and ↓ to move between rows and section titles.
   Enter opens a row or folds a title. The filter button is the next Tab stop.
-  With managers, the segment's selected tab is the Tab stop before the list;
+  With managers, the segment's selected tab, then the options button, are the
+  Tab stops before the list;
   in Managers, ← and → move along the pinned grid, and ↑ and ↓ move a grid
   row at a time, then on through the managers' rows; from the first row, ↑
   goes back to the grid.

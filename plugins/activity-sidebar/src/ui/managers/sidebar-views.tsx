@@ -1,7 +1,9 @@
-// What the sidebar shows: with regional managers, the Managers | Threads segment over a panel per tab,
-// the chosen one shown; with none, the threads' list alone. Each list stays mounted in one place in the
+// What the sidebar shows: with regional managers, a control row (the Managers | Threads segment at its
+// left, the shown view's options at its right) over a panel per tab, the chosen one shown; with none,
+// the threads' list alone, its options on Activity's title. Each list stays mounted in one place in the
 // tree, the other tab's hidden, so neither a tab switch nor a manager started or archived remounts one:
-// its scroll and its focus stay. A first manager arriving never hides the threads from a reader at work in them.
+// its scroll and its focus stay. A first manager arriving never hides the threads, nor moves their
+// options, from a reader at work in them.
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { View } from "../../data/local-choice/choices.ts";
 import { OUT3 } from "../../list/motion-plan.ts";
@@ -11,26 +13,30 @@ import { PanelShown } from "../portal-scope.ts";
 import { panelId, tabId, ViewSegment } from "./view-segment.tsx";
 
 type Props = {
+  /** The managers the Managers view lists, narrowed to its project if it has one. */
   managers: Managers;
+  /** Each manager's row one line, its name alone. */
+  managersCompact: boolean;
   /** Since when each thread has worked, for a manager's card; null where no card shows (a compact viewport). */
   underWaySince: ReadonlyMap<string, number> | null;
   view: View;
   onView(view: View): void;
   onNavigate(): void;
-  /** The threads' list: a scroller (`.as-scroller`), the list's one tab stop. */
-  threads: ReactNode;
+  /** Each view's options menu, at the control row's right end while that view shows. */
+  options: Record<View, ReactNode>;
+  /** The threads' list: a scroller (`.as-scroller`), the list's one tab stop. `titleOptions`: for Activity's title while there is no row to hold them, else null. */
+  threads(titleOptions: ReactNode): ReactNode;
 };
 
 // why: the segment's thumb slides on the list's own ease-out, read from the one place it is defined.
 const MOTION: CSSProperties & Record<"--as-ease-out", string> = { "--as-ease-out": OUT3 };
 
-// why: the view menu (Compact, the project filter) rides on Activity's title, so the Managers view, which neither changes, has none.
-export function SidebarViews({ managers, underWaySince, view, onView, onNavigate, threads }: Props) {
+export function SidebarViews({ managers, managersCompact, underWaySince, view, onView, onNavigate, options, threads }: Props) {
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const hasManagers = managers.pinned.length + managers.unpinned.length > 0;
   const focus = useFocusInside();
-  const { shown, choose } = useShownView(hasManagers, view, onView, focus.inside);
+  const { shown, settled, choose } = useShownView(hasManagers, view, onView, focus.inside);
   useFocusKeptWhenManagersGo(root, hasManagers, focus.inside);
   const keepOutOfHidden = useFocusOutOfHiddenPanels(id, shown, focus.inside);
   // why: a hidden panel is out of the tab order, so the sidebar keeps one keyboard stop, the shown scroller.
@@ -47,18 +53,24 @@ export function SidebarViews({ managers, underWaySince, view, onView, onNavigate
       }}
       onBlur={focus.left}
     >
-      {hasManagers && <ViewSegment id={id} view={shown} onChange={choose} />}
+      {hasManagers && (
+        <div className="as-controls">
+          <ViewSegment id={id} view={shown} onChange={choose} />
+          {/* why keyed: each view's menu is its own, so one open closes as the other view is chosen. */}
+          {settled && <span key={shown} className="as-controls-end">{options[shown]}</span>}
+        </div>
+      )}
       {/* why: each panel tells what it holds whether it shows, so a hidden one's overlays close (portal-scope.ts). */}
       {hasManagers && (
         <PanelShown.Provider value={shown === "managers"}>
           <div className="as-panel" {...panel("managers")}>
-            <ManagerList managers={managers} underWaySince={underWaySince} onNavigate={onNavigate} />
+            <ManagerList managers={managers} compact={managersCompact} underWaySince={underWaySince} onNavigate={onNavigate} />
           </div>
         </PanelShown.Provider>
       )}
       <PanelShown.Provider value={shown === "threads"}>
         <div className="as-panel" {...panel("threads")}>
-          {threads}
+          {threads(settled ? null : options.threads)}
         </div>
       </PanelShown.Provider>
     </div>
@@ -86,7 +98,8 @@ function useFocusInside() {
  * The view on screen: the chosen one, but the threads while there are no managers, and still the
  * threads when the first manager arrives while the reader works in them (focus there, or in a menu
  * they opened), so the list isn't swapped out from under them. The chosen view returns with the next
- * pick of a tab, or the next time the sidebar opens.
+ * pick of a tab, or the next time the sidebar opens. `settled`: the control row holds the options;
+ * until then (no managers, or the threads kept) they stay on Activity's title, a menu open there too.
  */
 function useShownView(hasManagers: boolean, view: View, onView: (view: View) => void, focusInside: boolean) {
   const [had, setHad] = useState(hasManagers);
@@ -96,12 +109,13 @@ function useShownView(hasManagers: boolean, view: View, onView: (view: View) => 
     setHad(hasManagers);
     setKeptThreads(hasManagers && focusInside);
   }
-  const shown: View = !hasManagers || keptThreads ? "threads" : view;
+  const settled = hasManagers && !keptThreads;
+  const shown: View = settled ? view : "threads";
   const choose = (next: View) => {
     setKeptThreads(false);
     onView(next);
   };
-  return { shown, choose };
+  return { shown, settled, choose };
 }
 
 /**

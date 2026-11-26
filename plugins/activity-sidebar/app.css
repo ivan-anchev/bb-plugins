@@ -37,7 +37,7 @@
   pointer-events: none;
 }
 
-/* --- With regional managers: the Managers | Threads segment over the view it shows (src/ui/managers) */
+/* --- With regional managers: a control row over the view it shows (src/ui/managers/sidebar-views.tsx) */
 .as-views {
   display: flex;
   flex-direction: column;
@@ -58,90 +58,115 @@
   flex: 1 1 auto;
   min-height: 0;
 }
-/* Zeron's muted track and its flat selected thumb, inset to the nav icons' edge, 16 in. */
+/* One row under bb's nav: the Managers | Threads segment at its left, on the nav icons' edge, 16 in;
+   the shown view's options at its right end, on the rows' corner column, as on Activity's title. */
+.as-controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 28px;
+  margin-bottom: 6px;
+  padding: 0 12px 0 16px;
+  font-family: var(--font-sans);
+}
+.as-controls-end {
+  margin-left: auto;
+  display: flex;
+}
+.as-controls .as-filter {
+  margin-right: 0;
+}
+.as-controls .as-filter > * {
+  width: 16px;
+  height: 16px;
+}
+/* The segment: Zeron's muted track and its flat selected thumb, two icon tabs wide. */
 .as-segment {
   position: relative;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 28px 28px;
   box-sizing: border-box;
   height: 28px;
-  margin: 0 16px 6px;
   padding: 2px;
   border-radius: 8px;
   background: var(--muted);
-  font-family: var(--font-sans);
 }
 /* why: the list's own ease-out (OUT3, src/list/motion-plan.ts, set as --as-ease-out), short: the thumb follows the press, never trails it. */
 .as-segment-thumb {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: calc(50% - 2px);
+  width: 28px;
   height: 24px;
   border-radius: 6px;
   background: var(--surface-selected);
   transition: transform 180ms var(--as-ease-out);
 }
 .as-segment[data-on="threads"] .as-segment-thumb {
-  transform: translateX(100%);
+  transform: translateX(28px);
 }
-.as-segment > button {
+.as-segment [role="tab"] {
   all: unset;
   position: relative;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 24px;
   border-radius: 6px;
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 500;
   color: var(--muted-foreground);
   cursor: pointer;
   user-select: none;
   transition: color 150ms ease;
 }
-.as-segment > button[aria-selected="true"] {
+.as-segment [role="tab"] > svg {
+  width: 16px;
+  height: 16px;
+}
+.as-segment [role="tab"][aria-selected="true"] {
   color: var(--foreground);
 }
 @media (hover: hover) {
-  .as-segment > button:hover {
+  .as-segment [role="tab"]:hover {
     color: var(--foreground);
   }
 }
 /* why a 2px outline in the full ink, not the rows' --ring shadow: the ring falls under 3:1 on the selected
    thumb and wash in Zeron, and a shadow vanishes in forced colors; an outline is kept there. */
-.as-segment > button:focus-visible {
+.as-segment [role="tab"]:focus-visible {
   outline: 2px solid var(--foreground);
   outline-offset: -2px;
 }
-/* why: forced colors drop the thumb's wash and the labels' two inks, the only marks of the chosen tab;
+/* why: forced colors drop the thumb's wash and the icons' two inks, the only marks of the chosen tab;
    there it is filled in the system's Highlight instead. */
 @media (forced-colors: active) {
-  /* why: the fill and the label's HighlightText change at once, never the fill sliding under the wrong label. */
+  /* why: the fill and the icon's HighlightText change at once, never the fill sliding under the wrong icon. */
   .as-segment-thumb,
-  .as-segment > button {
+  .as-segment [role="tab"] {
     transition: none;
   }
   .as-segment-thumb {
     forced-color-adjust: none;
     background: Highlight;
   }
-  .as-segment > button[aria-selected="true"] {
+  .as-segment [role="tab"][aria-selected="true"] {
     forced-color-adjust: none;
     color: HighlightText;
     outline-color: HighlightText;
   }
 }
 /* why: on touch, each tab takes a 44px-tall press (24px drawn, 10px more above and below); the
-   segment is drawn the same. bb's sidebar clips what reaches above the plugin's top, so the segment
-   stands 10px lower there; raised so the press reaches over the list's top edge. */
+   row is drawn the same. bb's sidebar clips what reaches above the plugin's top, so the row stands
+   10px lower there; raised so the press reaches over the list's top edge. */
 @media (pointer: coarse) {
-  .as-segment {
+  .as-controls {
+    position: relative;
     z-index: 1;
     margin-top: 10px;
   }
-  .as-segment > button::after {
+  .as-segment [role="tab"]::after {
     content: "";
     position: absolute;
     inset: -10px 0;
@@ -149,8 +174,51 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .as-segment-thumb,
-  .as-segment > button {
+  .as-segment [role="tab"] {
     transition: none;
+  }
+}
+
+/* --- A control's name under it (src/ui/tooltip.tsx): the theme's tooltip, Zeron's lifted charcoal at 11px.
+   The gap above the bubble is padding inside the hover area, so the pointer never crosses a dead gap. */
+.as-tip-area {
+  position: relative;
+  display: flex;
+}
+.as-tip-place {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  padding-top: 6px;
+}
+.as-tip-place[hidden] {
+  display: none;
+}
+.as-tip {
+  display: block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--z-tooltip, var(--popover));
+  color: var(--ink, var(--popover-foreground));
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transform-origin: top left;
+  animation: as-tip-in 120ms var(--as-ease-out);
+}
+@keyframes as-tip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .as-tip {
+    animation: none;
   }
 }
 
@@ -233,6 +301,13 @@
   color: var(--foreground);
   font-weight: 500;
   line-height: 18px;
+}
+/* Compact: one 30px line, a 20px avatar on the agent marks' column and the name on the threads' titles' column. */
+.as-manager-compact > .as-manager-face {
+  padding-left: 5px;
+}
+.as-manager-compact > .as-manager-words {
+  padding-left: 5px;
 }
 /* One line, fading at its end like every title; muted on the selected row too (the user's call). */
 .as-manager-line {
