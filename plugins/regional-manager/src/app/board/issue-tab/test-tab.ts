@@ -82,7 +82,7 @@ export const FEED: IssueFeed = {
   blocks: [],
   agents: [agent("a1"), agent("a2")],
   entries: [
-    { kind: "created", at: 1_000, moved: null },
+    { kind: "created", at: 1_000, followUpOf: null, moved: null },
     { kind: "agent-started", at: 2_000, agentId: A1, moved: null },
     roundEntry(round(1, A1, 3_000, ["pass", "fail", "fail"], 1)),
     { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 }, cap: null }, moved: null },

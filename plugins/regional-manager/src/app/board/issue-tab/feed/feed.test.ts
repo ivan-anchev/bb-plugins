@@ -341,3 +341,9 @@ test("a pass that filed a follow-up draws as a quiet line naming it, by no one, 
   assert.equal(texts().length, 1);
   assert.match(texts()[0] ?? "", /^Follow-up WEB-9 filed in Backlog, with the review findings that held without blocking it · In review/);
 });
+
+test("a follow-up's feed begins with a line by no one saying the plugin filed it as the follow-up of its origin", async () => {
+  const created: Entry = { kind: "created", at: Date.UTC(2026, 10, 26, 9, 34), followUpOf: id("WEB-1"), moved: "backlog" };
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [created] }) });
+  assert.match(activity(tab()).texts()[0] ?? "", /^Filed as the follow-up of WEB-1, when it passed · Backlog/);
+});

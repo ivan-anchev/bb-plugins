@@ -15,7 +15,8 @@ const at = z.number();
 const moved = issueStatusSchema.nullable();
 
 export const entrySchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("created"), at, moved }),
+  /** The issue was filed: by the manager, or by the plugin as the follow-up of `followUpOf` when that issue passed (rounds/follow-up.ts). */
+  z.object({ kind: z.literal("created"), at, followUpOf: issueIdSchema.nullable(), moved }),
   /** A change to the issue's plan, or where its log began. */
   z.object({ kind: z.literal("logged"), at, event: lineEventSchema, moved }),
   z.object({ kind: z.literal("agent-started"), at, agentId: agentIdSchema, moved }),
@@ -84,6 +85,7 @@ export type Actor = CommentAuthor | { kind: "verifier" } | { kind: "github" } | 
 export function actorOf(entry: Entry): Actor {
   switch (entry.kind) {
     case "created":
+      return entry.followUpOf === null ? { kind: "manager" } : { kind: "plugin" };
     case "agent-started":
     case "decision":
       return { kind: "manager" };

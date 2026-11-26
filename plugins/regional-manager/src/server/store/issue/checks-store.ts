@@ -201,10 +201,16 @@ export function checksStore(db: Db) {
     for (const stamped of new Set([...collected.map((round) => round.checkId), checkId])) stamp.run(filed.issue.id, stamped);
   }
 
-  /** The issue a chain of follow-ups began at: `issueId` when it is no follow-up, else its origin's, following checks.follow_up_id back. why throw: a check is kept while its issue is. */
-  function firstOriginOf(coordinatorId: CoordinatorId, issueId: IssueId): Issue {
+  /** The issue whose pass filed `issueId` as its follow-up; null when it is no follow-up. */
+  function originOf(coordinatorId: CoordinatorId, issueId: IssueId): IssueId | null {
     const row = db().prepare("SELECT issue_id AS origin FROM checks WHERE coordinator_id = ? AND follow_up_id = ? LIMIT 1").get(coordinatorId, issueId);
-    if (row !== undefined) return firstOriginOf(coordinatorId, z.object({ origin: issueIdSchema }).parse(row).origin);
+    return row === undefined ? null : z.object({ origin: issueIdSchema }).parse(row).origin;
+  }
+
+  /** The issue a chain of follow-ups began at: `issueId` when it is no follow-up, else its origin's (originOf). why throw: a check is kept while its issue is. */
+  function firstOriginOf(coordinatorId: CoordinatorId, issueId: IssueId): Issue {
+    const origin = originOf(coordinatorId, issueId);
+    if (origin !== null) return firstOriginOf(coordinatorId, origin);
     const [issue] = issuesOf(db, coordinatorId, issueId);
     if (issue === undefined) throw new Error(`The issue ${issueId} of ${coordinatorId} is missing.`);
     return issue;
@@ -343,6 +349,9 @@ export function checksStore(db: Db) {
 
     /** Every final check of the issue, oldest first: none but a build parent's. */
     finalChecks: finalChecksOf,
+
+    /** The issue whose pass filed this one as its follow-up; null when it is no follow-up. */
+    originOf,
 
     /** One handoff with its check, or null when there is none by that id. */
     handoff: (id: HandoffId): Handed | null => handed("WHERE h.id = ?", id)[0] ?? null,

@@ -111,7 +111,7 @@ const byKind = (feed: Fed) => new Map(feed.entries.map((entry): [FedEntry["kind"
 
 /** The keys each entry kind sends: what its tab reads of it. */
 const EXPECTED_KEYS: Record<FedEntry["kind"], string[]> = {
-  created: ["at", "kind", "moved"],
+  created: ["at", "followUpOf", "kind", "moved"],
   logged: ["at", "event", "kind", "moved"],
   "agent-started": ["agentId", "at", "kind", "moved"],
   "agent-ended": ["agentId", "at", "how", "kind", "moved"],
@@ -287,7 +287,7 @@ test("through the feed RPC, only the round whose failure asked at the cap names 
   assert.equal(decision.decision.cap, 3, "the count it was asked at, which tells it from a question the regional manager asked");
 });
 
-test("the feed of an issue whose pass filed a follow-up sends one follow-up entry naming it, at when it was filed, with exactly its keys; the follow-up's own feed has none", async () => {
+test("the feed of an issue whose pass filed a follow-up sends one follow-up entry naming it, at when it was filed, with exactly its keys; the follow-up's own feed begins filed as its follow-up", async () => {
   const { store } = freshStore();
   const origin = filedIssue(store, MANAGER, newIssue(), 1_000).id;
   passWithShouldFix(store, origin, startAgent(store, origin, "agent-1"), 1, 3_000);
@@ -298,5 +298,7 @@ test("the feed of an issue whose pass filed a follow-up sends one follow-up entr
   assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", moved: null }]);
   assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
   const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
-  assert.deepStrictEqual(followUp.entries.map(({ kind }) => kind), ["created"]);
+  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: "WEB-1", moved: null }], "the follow-up's own feed names its origin as it begins");
+  const own = feed.entries.find(({ kind }) => kind === "created");
+  assert.deepStrictEqual(own, { kind: "created", at: 1_000, followUpOf: null, moved: null });
 });

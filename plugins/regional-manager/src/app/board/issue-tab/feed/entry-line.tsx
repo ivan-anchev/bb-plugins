@@ -32,7 +32,7 @@ export function MovedLine({ entry }: { entry: Extract<Entry, { kind: "moved" }> 
 function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
   switch (entry.kind) {
     case "created":
-      return "filed the issue";
+      return entry.followUpOf === null ? "filed the issue" : `Filed as the follow-up of ${entry.followUpOf}, when it passed`;
     case "agent-started":
       return (
         <>
