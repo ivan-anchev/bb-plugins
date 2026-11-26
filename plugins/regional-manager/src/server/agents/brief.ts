@@ -4,7 +4,9 @@
 // managerMessage). The issue's decisions follow them, the user's and the manager's, the later
 // winning. On an issue that had agents before, where it works and every earlier handoff with its
 // verdict come next, quoted as context and never as instructions. CREW.md and MEMORY.md are copied as they are at the start: the rules every agent follows, and the index of
-// the manager's memory, which is the manager's context and never the agent's instructions.
+// the manager's memory, which is the manager's context and never the agent's instructions. An agent
+// that delivers commits is told the forge its project is on, its host and CLI, when the PR watch
+// located it (agents.ts passes what `prs.forgeOf` returned), and nothing of a forge when it didn't.
 import { refOf, type AgentId, type Base } from "../../model/agent/agent.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
@@ -14,6 +16,7 @@ import type { MemoryText } from "../../model/memory-file.ts";
 import { FORGE, prRef, type PrNumber } from "../../model/verdict/pr.ts";
 import { handoffFieldsText } from "../tools/inbox-text.ts";
 import { earlierVerdictText, fenced } from "../verify/findings.ts";
+import type { ForgeRepo } from "../watch/locate.ts";
 
 /**
  * Where an agent's work starts, and what came before it: its base, the branch and open pull
@@ -34,11 +37,12 @@ export function agentBrief(
   issue: Pick<Issue, "id" | "kind" | "title" | "description" | "doneCriteria"> & { brief: string; decisions: readonly IssueDecision[] },
   start: StartingPoint,
   memory: { crewRules: MemoryText | null; index: MemoryText | null },
+  forge: ForgeRepo | null,
 ): string {
   const { work, handingOff } = BY_DELIVERY[PIPELINES[issue.kind].delivers];
   return [
     `# ${issue.id}: ${issue.title}`,
-    `You are agent ${agentId}, working on issue ${issue.id}. Your regional manager, your parent thread ${managerThreadId}, started you with this brief. ${work}${PIPELINES[issue.kind].delivers === "commit" ? ` ${WHERE_TO_WORK[start.base.kind]}` : ""}`,
+    `You are agent ${agentId}, working on issue ${issue.id}. Your regional manager, your parent thread ${managerThreadId}, started you with this brief. ${work}${PIPELINES[issue.kind].delivers === "commit" ? ` ${WHERE_TO_WORK[start.base.kind]}${forgeText(forge)}` : ""}`,
     `A message headed \`[bb message from thread:${managerThreadId}]\` is from your regional manager: its next instruction to you. Follow it, after a handoff too.`,
     `## What it is about\n\n${issue.description.trim()}`,
     `## Brief\n\n${issue.brief.trim()}`,
@@ -92,6 +96,17 @@ const WHERE_TO_WORK: Record<Base["kind"], string> = {
   joined: "Do it where an earlier agent left it: see Where you work.",
   cut: "Do it on your own branch, which bb cut from an earlier agent's: check it first, as Your branch says.",
 };
+
+/**
+ * The forge its project is on, its host and the CLI that reads it there, in one sentence, as the PR
+ * watch located it; empty when it is on no forge the plugin reads. why no word on opening one:
+ * whether an agent opens a pull request or merge request is its brief's call, never the plugin's.
+ */
+function forgeText(forge: ForgeRepo | null): string {
+  if (forge === null) return "";
+  const { name, cli, noun } = FORGE[forge.forge];
+  return ` Its project is on ${name} at ${forge.host}: use the \`${cli}\` CLI for its ${noun}s.`;
+}
 
 /**
  * Where a joined agent works: the previous agent's environment, as it left it, uncommitted files

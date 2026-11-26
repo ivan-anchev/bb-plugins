@@ -632,3 +632,58 @@ test("an issue whose agent was stopped at its cap is not ready while its questio
   assert.match(await ready(), /^Ready: \[WEB-1\]/);
   assert.match(textOf(await start()), /^Started a3 on WEB-1/);
 });
+
+const STATION_WS = "ssh://git@gitlab.corp.test:8022/frontend/station-ws.git";
+const ON_FORGE = "Its project is on";
+
+/** The first message of an agent started on WEB-1, filed as `issue`, with the project's remote and glab's sign-ins as `setUp` leaves them. */
+async function firstMessage(setUp: (kit: Awaited<ReturnType<typeof coordinating>>["kit"]) => void, issue: object = RETRIES): Promise<string> {
+  const { kit, threadId } = await coordinating();
+  setUp(kit);
+  await kit.call("issue_create", issue, threadId);
+  const result = textOf(await kit.call("agent_start", { issue: "WEB-1" }, threadId));
+  assert.match(result, /^Started a1 on WEB-1/);
+  return kit.thread(threadIn(result)).spawnedWith.prompt ?? assert.fail("spawned without a prompt");
+}
+
+test("an agent on a build issue of a GitLab project is told its forge, host and glab in its first message, and nothing about opening a merge request", async () => {
+  const prompt = await firstMessage((kit) => {
+    kit.project.remote = STATION_WS;
+    kit.gitlab.hosts.set("gitlab.corp.test", { state: "success" });
+  });
+  assert.match(prompt, /^You are agent a1, working on issue WEB-1\. [^\n]* Do it on your own branch\. Its project is on GitLab at gitlab\.corp\.test: use the `glab` CLI for its merge requests\.$/m);
+  assert.doesNotMatch(prompt, /\bgh\b|GitHub|open a merge request/);
+});
+
+test("an agent on a build issue of a GitHub project is told its forge, github.com and gh in its first message", async () => {
+  const prompt = await firstMessage((kit) => {
+    kit.project.remote = "https://github.com/acme/webhooks.git";
+  });
+  assert.match(prompt, /Do it on your own branch\. Its project is on GitHub at github\.com: use the `gh` CLI for its pull requests\.$/m);
+});
+
+test("an agent's first message names no forge, and the agent still starts, on a host glab doesn't know, a project with no remote, or one bb can't say the remote of", async () => {
+  const unknownHost = await firstMessage((kit) => {
+    kit.project.remote = "ssh://git@git.corp.test/frontend/station-ws.git";
+  });
+  const noRemote = await firstMessage((kit) => {
+    kit.project.remote = null;
+  });
+  const unreadable = await firstMessage((kit) => {
+    kit.project.failure = bbHttpError(503, "unavailable", "Service unavailable");
+  });
+  for (const prompt of [unknownHost, noRemote, unreadable]) {
+    assert.match(prompt, /Do it on your own branch\.$/m);
+    assert.ok(!prompt.includes(ON_FORGE), "it names a forge");
+  }
+});
+
+test("an agent on a research issue of a GitLab project is told no forge in its first message", async () => {
+  const research = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: ["Which one fits, and why?"] };
+  const prompt = await firstMessage((kit) => {
+    kit.project.remote = STATION_WS;
+    kit.gitlab.hosts.set("gitlab.corp.test", { state: "success" });
+  }, research);
+  assert.match(prompt, /^# WEB-1: Pick a card vault/);
+  assert.ok(!prompt.includes(ON_FORGE), "it names a forge");
+});

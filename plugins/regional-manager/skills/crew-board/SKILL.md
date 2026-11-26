@@ -1,6 +1,6 @@
 ---
 name: crew-board
-description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep memory in markdown files, plan the work as build or research issues, start an agent on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is reviewed, then verified, unless switched off, and a first failed verdict goes back to the agent; a research issue's carries a report saved to memory. gh watches PRs and CI. The Board lists issues by status. Use when the user asks how to create, start, rename or delete a manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders, decisions or issue links in chat work, where memory lives, or which thread has which tools.
+description: Explain the Regional Manager plugin (bb-plugin-regional-manager). Its panel starts long-lived regional managers that keep markdown memory, plan the work as build or research issues, start an agent on each, set reminders and ask the user on a board; all of one manager's agents are its crew. An agent ends with a handoff; a build issue's done one is reviewed, then verified, unless switched off, and a first failed verdict goes back to the agent; a research issue's report is saved to memory. gh or glab watches PRs, MRs and CI. The Board lists issues by status. Use when the user asks how to create, start, rename or delete a manager or start an agent, what an issue's kind, status or a verdict means, how verification or CI checks work, what an agent or verifier runs on, why PR or MR status is unavailable, why an agent got findings or an issue returned to Todo, why the thread woke or the board warns of edits, how reminders, decisions or issue links in chat work, where memory lives, or which thread has which tools.
 ---
 
 # Regional managers
@@ -156,7 +156,7 @@ An issue's status is derived from what its agents did, never stored:
 | Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
 | Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), was made with verification off ("Unverified"), or failed on review findings alone and the manager accepted it as it is ("Accepted with follow-ups"), its unfixed findings filed as a follow-up. Its pull request merging makes it Done. |
-| Done | A build issue: its pull request merged ("Merged #41"), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
+| Done | A build issue: its pull request merged ("Merged #41", or "Merged !41" on GitLab), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
 | Canceled | The manager canceled it. |
 
 **Needs you** is a flag on an open issue, shown above every status: its agent
@@ -318,7 +318,11 @@ starts it with `agent_start`:
   one, an environment provider such as `boat-sandbox` (see
   [Agents in a sandbox](#agents-in-a-sandbox)). It runs with auto permissions.
 - **What it runs on**: see [Who runs what](#who-runs-what).
-- **Its first message**: the issue's description, brief and numbered
+- **Its first message**: on a build issue, the forge its project is on, its
+  host and its CLI, as "Its project is on GitLab at gitlab.example.com: use
+  the `glab` CLI for its merge requests." (nothing when the remote is on no
+  forge the plugin reads; never whether to open one, which is the brief's
+  call); the issue's description, brief and numbered
   done-criteria (a research agent's under "Questions your report answers",
   followed by how to hand off its report, and no section when it has none),
   and `CREW.md` and `MEMORY.md` as they were at that moment, each file's
@@ -447,7 +451,7 @@ verdict.
   bb keeps after the old worktree is archived or removed. With a sandbox on
   either side the branch goes through origin, so the previous agent must have
   pushed it: the move is allowed once its pull request's head is the commit
-  the agent left, read fresh from GitHub at the move, never from the board's
+  the agent left, read fresh from its forge at the move, never from the board's
   last read. The
   plugin never pushes, commits or copies anything for an agent. A move reads
   the previous environment through bb's git plugin first, and again once the
@@ -583,7 +587,7 @@ name in brackets, how many updates there are, and one line each, naming the
 issue and its agent, such as
 `- BBP-1 "Add retries" (a1) handed off: done, failed verification`,
 `- BBP-2 "Dead letters" (a2) handed off: blocked`,
-`- BBP-1 "Add retries" (a1) PR #41: CI passed`,
+`- BBP-1 "Add retries" (a1) PR #41: CI passed` (`MR !41` on GitLab),
 `- BBP-3 "Metrics" (a3) returned to Todo: its agent was stopped`,
 `- BBP-4 "Card vault schema" is unblocked: BBP-2 done`,
 `- The user edited NOTES.md`, `- Your reminder r1: check on BBP-1`,
@@ -782,7 +786,8 @@ a **verifier** for each one:
   "Verifying, its verifier asking for an answer or an approval, which the
   plugin declines". An ask bb refuses to let the plugin decline ends the check
   "Couldn't verify", naming the ask, and stops the verifier. The verifier's
-  brief tells it to use the `gh` CLI for GitHub, never a connector or app.
+  brief tells it to use the forge's CLI, `gh` for GitHub or `glab` for
+  GitLab, never a connector or app.
 - **No verdict**: a verifier that ends a turn without one is reminded once,
   when its agent is idle;
   a second time, or a verifier bb wouldn't start, whose thread was archived,
@@ -860,10 +865,23 @@ regional manager:
 
 ## Pull requests and CI
 
-bb tells plugins nothing about pull requests, so the plugin reads them itself,
-with `gh` on the machine running bb, on the same once-a-minute tick:
+bb tells plugins nothing about pull requests or merge requests, so the plugin
+reads them itself on the same once-a-minute tick, from the project's forge:
 
-- **What**: each open build issue's newest pull request from its branch,
+- **Which forge**: the project's git remote decides. A remote on github.com
+  is GitHub, read with `gh`. A remote on any other host is GitLab once `glab`
+  on the machine running bb is signed in to that host (`glab auth login
+  --hostname H` there, with glab 1.122 or later); gitlab.com and a
+  self-hosted GitLab are read the same way. There is no setting and no host
+  list: glab's sign-in is how a host is recognised, and a signed-in host is
+  remembered until a read there fails. Remotes may be scp-like
+  (`git@host:group/project.git`), `ssh://` (a port is dropped, as gh and glab
+  drop it), `git://` or `https://`. Not read: an https remote that names a
+  port, a GitLab served under a path prefix (the prefix reads as part of the
+  project's path), and GitHub Enterprise (any host but github.com is taken
+  for GitLab).
+- **What**: each open build issue's newest pull request (merge request on
+  GitLab) from its branch,
   and a build sub-issue's the manager accepted unmerged while its parent is
   open (a research issue's branch is never read, so a pull request there
   changes nothing): the branch
@@ -872,25 +890,40 @@ with `gh` on the machine running bb, on the same once-a-minute tick:
   one bb made its environment on. It is read whether or not that agent's
   thread is still there, so an issue In review becomes Done when its pull
   request merges even after its agent's thread was archived. Nothing else
-  reads an agent's environment for its branch. For each, its number, state
-  (open, draft, merged, closed), review (approved, changes requested) and its
-  CI on its head commit, as GitHub's merge box rolls the checks up (passing,
-  failing with the failed checks' names, running, or no checks). A check
-  state GitHub adds later counts as running, never as a pass.
+  reads an agent's environment for its branch. For each, its number (`#41`
+  on GitHub, `!41` on GitLab), state (open, draft, merged, closed), review
+  and its CI on its head commit: on GitHub as its merge box rolls the checks
+  up (passing, failing with the failed checks' names, running, or no checks),
+  a check state GitHub adds later counting as running, never as a pass; on
+  GitLab its head pipeline (passing; failing with up to 10 failed job names,
+  leaving out jobs allowed to fail; running; skipped or none as no checks;
+  blocked on a manual job), any other status counting as running. Each failed
+  check or job name reaches a manager or agent on one line, cut to 100
+  characters.
+- **Review**: on GitHub, approved or changes requested. On GitLab, changes
+  requested when a reviewer requested them, else unresolved discussions when
+  the merge request has more resolvable discussions than resolved ones
+  (draft or not), else approved once someone approved it. Requested changes
+  on a draft merge request aren't seen (GitLab reports the draft first);
+  its unresolved discussions are. Feedback already there when a merge
+  request is first read is reported with its opening. A GitLab whose schema
+  lacks one of those fields is read without them from then on: its merge
+  requests, CI and merges still are, with no review feedback but approval.
 - **How often**: one `gh api graphql` call per GitHub repository for all its
-  branches. A repository is read every tick while any CI there is running or a
+  branches; one `glab api graphql` call per five branches on GitLab. A
+  project is read every tick while any CI there is running or a
   verdict waits for CI, else every five minutes. A canceled or accepted issue
   isn't read. A branch whose pull request was read merged or closed isn't read
-  again until its agent hands off again. Only projects whose git remote is on
-  github.com are read.
+  again until its agent hands off again.
 - **A merge makes the issue Done**, whatever its agent is doing; a check still
   pending or failed then is never sent back.
 - **A verdict waits for CI**: a done handoff whose verdict passed every other
   check (every criterion, no anchored must-fix finding, no blocking defect,
   the claimed commit on a clean tree), when
   it names a pull request or one is known for the issue, waits under Verifying
-  as "Waiting for CI on #41: <summary>" (or "Waiting for CI" before the pull
-  request is seen) until CI finishes on the very commit the handoff claims;
+  as "Waiting for CI on #41: <summary>" (`!41` on GitLab; or "Waiting for CI"
+  before the pull request is seen) until CI finishes on the very commit the
+  handoff claims;
   CI on another commit says nothing about it. CI passing makes it verified,
   and it moves to In review within about a minute. CI failing makes it a
   failure, which goes back to the agent as above, naming the failed checks.
@@ -901,19 +934,38 @@ with `gh` on the machine running bb, on the same once-a-minute tick:
   checks: <summary>", never as CI passing, only once a read five minutes or
   more after the plugin first saw that commit still finds none. Time passing
   without such a read, or a read that fails, never makes it no CI checks.
-- **When it can't read GitHub**, the board says "PR status unavailable:
-  <why>", rows keep the pull request and CI read last, and no update is
-  recorded. A failure that may pass by the next read (GitHub unreachable, a
-  timeout, a rate limit, an answer the plugin can't read, or anything gh
-  doesn't explain) says nothing about CI, so a verdict waiting for CI keeps
-  waiting and settles on the next read that succeeds. One that lasts until
-  someone acts (gh missing, signed out, or holding credentials GitHub
-  rejects) makes a verdict that would wait pass as "✓ Verified, CI not
-  checked: <summary>". The same goes for a verdict that waits on a pull
-  request in a project not on github.com, or one a read begun after the
-  handoff found merged or closed before CI finished on the claimed commit.
-  Sign gh in with `gh auth login` on the machine running bb; for rejected
-  credentials, check `gh auth status` there.
+- **A GitLab pipeline blocked on a manual job** that isn't allowed to fail
+  runs only once a person plays it, so the verdict doesn't wait for it: it
+  passes at once as "✓ Verified, CI not checked: <summary>", saying the
+  pipeline is blocked on a manual job nobody has played. The merge still
+  needs the job played, and a blocked pipeline alone doesn't make the
+  project read every tick.
+- **When it can't read the forge**, the board says "PR status unavailable:
+  <why>" ("MR status unavailable" on GitLab), rows keep the pull request and
+  CI read last, and no update is recorded. A failure that may pass by the
+  next read (the forge unreachable, a timeout, a rate limit, an answer the
+  plugin can't read, or anything gh or glab doesn't explain) says nothing
+  about CI, so a verdict waiting for CI keeps waiting and settles on the next
+  read that succeeds. One that lasts until someone acts makes a verdict that
+  would wait pass as "✓ Verified, CI not checked: <summary>". The same goes
+  for a verdict that waits on a pull request in a project on no forge the
+  plugin reads, or one a read begun after the handoff found merged or closed
+  before CI finished on the claimed commit. What lasts, and what fixes it:
+  - gh missing, signed out, or holding credentials GitHub rejects: sign gh
+    in with `gh auth login` on the machine running bb; for rejected
+    credentials, check `gh auth status` there.
+  - A host that isn't github.com and that glab isn't signed in to, or glab
+    not installed: if it is a GitLab, install glab and run `glab auth login
+    --hostname H` on the machine running bb.
+  - glab older than 1.122: update it there.
+  - GitLab rejected glab's credentials, or glab's sign-in to the host failed:
+    run `glab auth login --hostname H` there again.
+  - glab is signed in but can't see the project: check the project's git
+    remote, and that the account glab is signed in as can read it.
+  - The GitLab lacks a field the plugin's query reads: it is older than the
+    plugin reads.
+  - A remote the plugin can't read, an https remote naming a port, or a
+    github.com remote naming no owner/name repository: the remote itself.
 
 ## Reminders
 
@@ -1045,8 +1097,9 @@ and ends with its [memory](#read-and-edit-memory):
 - **Files changed in its own environment**: a warning with how many, and
   when its turn ended, while the latest read of its working tree found
   changed files (see [Edits it makes itself](#edits-it-makes-itself)).
-- **PR status unavailable: <why>**, only while the latest read of a pull
-  request failed.
+- **PR status unavailable: <why>** ("MR status unavailable" on GitLab), only
+  while the latest read of a pull request or merge request failed (see [Pull
+  requests and CI](#pull-requests-and-ci) for each reason and its fix).
 - **Lanes**: Needs you, then In review, Verifying, Reviewing, In progress, Todo,
   Backlog, Done and Canceled, each under a bar with its name, how many it
   holds and a chevron, and no glyph: each row draws its own. Pressing the
@@ -1058,7 +1111,7 @@ and ends with its [memory](#read-and-edit-memory):
 - **Issues**, each row one line: its status's glyph, its id in mono, in a
   column the ids share, its title, fading out at its end, then its pills
   and, once it has one, its pull request: its number in its state's colour,
-  with a dot for its CI, which opens it on GitHub. A flagged issue draws
+  with a dot for its CI, which opens it on its forge (`!41` on GitLab). A flagged issue draws
   Needs you's red glyph in place of its status's, wherever its row is; its
   status is in the row's spoken label, its card and its tab. Under Needs
   you a row adds a second line: what it waits on you for (such as
@@ -1418,9 +1471,11 @@ Every other method is the plugin's own app's, and may change without notice.
 
 ## What it needs
 
-- **`gh`, signed in, on the machine running bb**, for pull requests and CI.
-  Without it the board says "PR status unavailable: <why>" and verdicts that
-  would wait for CI pass as "CI not checked".
+- **`gh` or `glab`, signed in, on the machine running bb**, for pull
+  requests and CI: `gh` for GitHub; for GitLab, `glab` 1.122 or later, signed
+  in there with `glab auth login --hostname H`. Without them the board says "PR
+  status unavailable: <why>" ("MR status unavailable" on GitLab) and verdicts
+  that would wait for CI pass as "CI not checked".
 - **bb's git plugin** (`bb--git`, built in), to read the commit, tree and
   branch an agent has checked out as it hands off, and the regional manager's
   own working tree as each of its turns ends. When it can't read an agent's,
@@ -1440,7 +1495,8 @@ Every other method is the plugin's own app's, and may change without notice.
 - **Edits are detected, not prevented.** They are read after a turn ends, a
   committed one isn't seen, and nothing is blocked or reverted.
 - Reminders take no cron expressions and nothing finer than a minute.
-- The plugin never merges, approves or comments on a pull request.
+- The plugin never merges, approves or comments on a pull request or merge
+  request.
 - The plugin never runs an agent and its own verifier together, but you can:
   typing into an agent's thread while its verifier checks, or into a
   verifier's while its agent works, runs both in the same environment, and

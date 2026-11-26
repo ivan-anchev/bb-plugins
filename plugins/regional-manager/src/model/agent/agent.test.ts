@@ -167,25 +167,25 @@ test("cut 6: a head no pull request shows is refused: push and open one, or cont
   const alive = refusal(handoverOf("build", { from: "previous", placement: worktree }, { ...previous, now: behind, pushed: { kind: "read", pr: prAt(HEAD_C) } }));
   assert.equal(
     alive,
-    "a3's branch `bb/a3` isn't shown on origin at its head ddddddd: a move with a sandbox on either side reaches the branch only through origin, and only a pull request whose head is that commit shows it was pushed. Continue in its environment (leave out placement), or ask a3 to push and open a pull request, then call again.",
+    "a3's branch `bb/a3` isn't shown on origin at its head ddddddd: a move with a sandbox on either side reaches the branch only through origin, and only a pull request or merge request whose head is that commit shows it was pushed. Continue in its environment (leave out placement), or ask a3 to push and open a pull request or merge request, then call again.",
   );
   const gone = refusal(handoverOf("build", { from: "previous", placement: null }, { ...previous, environmentId: null, pushed: { kind: "read", pr: null } }));
   assert.equal(
     gone,
-    'bb removed a3\'s boat-sandbox environment, and nothing shows its branch `bb/a3` reached origin at its head ccccccc (no pull request has that head): its unpushed commits went with it. Start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent\'s first message.',
+    'bb removed a3\'s boat-sandbox environment, and nothing shows its branch `bb/a3` reached origin at its head ccccccc (no pull request or merge request has that head): its unpushed commits went with it. Start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent\'s first message.',
   );
   const never = refusal(handoverOf("build", { from: "previous", placement: null }, { ...previous, environmentId: null, agent: { ...sandboxAgent, checkout: { ...sandboxAgent.checkout, head: null } } }));
-  assert.match(never, /reached origin at the head it left \(no pull request has that head\): its unpushed commits went with it\. Start clean/);
+  assert.match(never, /reached origin at the head it left \(no pull request or merge request has that head\): its unpushed commits went with it\. Start clean/);
   const worktreeGone = refusal(handoverOf("build", { from: "previous", placement: sandbox }, { agent: worktreeAgent, environmentId: null, branch: "bb/a3", now: null, pushed: { kind: "read", pr: null } }));
   assert.equal(
     worktreeGone,
-    'bb removed a3\'s worktree, and nothing shows its branch `bb/a3` reached origin at its head ccccccc (no pull request has that head): its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request, and a move to a sandbox works after that. Or start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent\'s first message.',
+    'bb removed a3\'s worktree, and nothing shows its branch `bb/a3` reached origin at its head ccccccc (no pull request or merge request has that head): its commits are still on that branch on your machine, which a new worktree reaches. Leave out placement, or name a worktree, and the new agent starts on a branch cut from it; it can push and open its pull request or merge request, and a move to a sandbox works after that. Or start clean with from: "default", which starts from the default branch with every earlier handoff and verdict in the new agent\'s first message.',
   );
 });
 
 test("cut 7: a pull request GitHub couldn't be read for is refused saying why, never as unpushed", () => {
   const unread = refusal(handoverOf("build", { from: "previous", placement: worktree }, { ...previous, now: clean, pushed: { kind: "unread", reason: "gh isn't signed in" } }));
-  assert.equal(unread, "Whether a3's branch `bb/a3` is on origin at its head ccccccc can't be read now: gh isn't signed in. Continue in its environment (leave out placement), or call again once GitHub can be read.");
+  assert.equal(unread, "Whether a3's branch `bb/a3` is on origin at its head ccccccc can't be read now: gh isn't signed in. Continue in its environment (leave out placement), or call again once it can be read.");
 });
 
 test("a cut through origin asks for proof at the live head, else at the head of the agent's last handoff; a local cut and a refusal ask for none", () => {

@@ -9,11 +9,11 @@ import { commitSchema, type HandoffId } from "../agent/handoff.ts";
 export const forgeSchema = z.enum(["github", "gitlab"]);
 export type Forge = z.infer<typeof forgeSchema>;
 
-/** How each forge names a change request and its parts, as people and agents read them: the one home of `#`, `!`, PR, MR and the command that closes one. */
+/** How each forge names a change request and its parts, as people and agents read them: the one home of `#`, `!`, PR, MR, its CLI and the command that closes one. */
 export const FORGE = {
-  github: { name: "GitHub", short: "PR", noun: "pull request", sigil: "#", close: "gh pr close" },
-  gitlab: { name: "GitLab", short: "MR", noun: "merge request", sigil: "!", close: "glab mr close" },
-} as const satisfies Record<Forge, { name: string; short: string; noun: string; sigil: string; close: string }>;
+  github: { name: "GitHub", cli: "gh", short: "PR", noun: "pull request", sigil: "#", close: "gh pr close" },
+  gitlab: { name: "GitLab", cli: "glab", short: "MR", noun: "merge request", sigil: "!", close: "glab mr close" },
+} as const satisfies Record<Forge, { name: string; cli: string; short: string; noun: string; sigil: string; close: string }>;
 
 /**
  * A change request's number and the forge it is on. why a default: a row stored before GitLab was

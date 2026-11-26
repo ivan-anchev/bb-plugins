@@ -217,6 +217,16 @@ export function createPrWatch({ bb, store, inbox, run, now }: Deps) {
     readNow: (coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> => serially(() => readOne(coordinatorId, agent, branch)),
 
     /**
+     * The project the regional manager's remote is on, for an agent's first message; null when it is
+     * on no forge the plugin reads now. One locate, reading no change request: a signed-in host is
+     * remembered, so it costs no call there.
+     */
+    async forgeOf(coordinatorId: CoordinatorId): Promise<ForgeRepo | null> {
+      const located = await locatedOf(coordinatorId);
+      return located.kind === "on-forge" ? located.repo : null;
+    },
+
+    /**
      * The branch the pull request at `prUrl` is from, as GitHub has it now: one gh call, saving
      * nothing. null when the URL isn't a pull request of the regional manager's repository on
      * GitHub, or gh couldn't say. why its repository only: the watch reads pull requests there, by
