@@ -189,6 +189,10 @@ test("catch-up's pass line names the follow-up its settling filed, and the round
   assert.match(text, /confirmed 2 and rejected 0\. They are filed in WEB-2, its follow-up\./);
 
   assert.doesNotMatch(updatesText([event], lookupsOf([confirmedAll([], "pass")])), /filed/, "a pass that filed nothing says nothing of a follow-up");
+  const nitOnly = confirmedAll([NAME_IT], "pass");
+  const nitText = updatesText([{ ...event, event: { kind: "checked", issueId, checkId: nitOnly.check?.id ?? assert.fail("no check"), asked: null } }], lookupsOf([nitOnly]));
+  assert.match(nitText, /confirmed 1 and rejected 0\. They don't go back to the agent, and its pass filed no follow-up, as every finding left was a nit: they stay in the issue's feed\./, "a pass with only a nit left says nothing was filed");
+  assert.doesNotMatch(nitText, /It passed, so the plugin filed/);
 });
 
 test("catch-up's merge line says how many held findings no follow-up collected, and says nothing when a follow-up collected them all", () => {

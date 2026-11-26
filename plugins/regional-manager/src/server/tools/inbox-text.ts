@@ -477,16 +477,26 @@ function triageTotals(findings: readonly Triaged[]): string {
 
 /**
  * Where the review findings that held went, as far as the plugin knows: those that fail the verdict
- * go back to the agent only with a failed verdict sent back as its fix round; the others never do,
- * and wait for the issue's pass, which files them (review.ts FOLLOW_UP_RULE), or name the follow-up
- * that collected them.
+ * go back to the agent only with a failed verdict sent back as its fix round; the others never do
+ * (review.ts FOLLOW_UP_RULE, othersWent).
  */
 function heldSent(verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string {
   const { failing, others } = heldFindings(verdict);
   const they = failing.length === 0 ? "They" : "The others";
   const failed = failing.length === 0 ? [] : [failingSent(verdict.settlement)];
-  const rest = others.length === 0 ? [] : [followUpId === null ? `${they} don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit.` : `${they} are filed in ${followUpId}, its follow-up.`];
+  const rest = others.length === 0 ? [] : [othersWent(they, verdict, followUpId)];
   return [...failed, ...rest].join(" ");
+}
+
+/**
+ * Where the findings that held without failing a verdict went: into the follow-up that collected
+ * them; nowhere, when its pass filed none, as every finding left was a nit (rounds/follow-up.ts);
+ * or to the issue's pass, still to come.
+ */
+function othersWent(they: string, verdict: Extract<Verdict, { state: "returned" }>, followUpId: IssueId | null): string {
+  if (followUpId !== null) return `${they} are filed in ${followUpId}, its follow-up.`;
+  if (outcome(verdict) === "pass") return `${they} don't go back to the agent, and its pass filed no follow-up, as every finding left was a nit: they stay in the issue's feed.`;
+  return `${they} don't go back to the agent: when the issue passes, they are filed as a follow-up, unless every one is a nit.`;
 }
 
 /** Whether the findings that fail a verdict reached the agent, as far as its settlement shows. */
