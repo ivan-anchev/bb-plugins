@@ -57,7 +57,7 @@ export const handoffFieldsSchema = z.object({
   ),
   summary: summarySchema.describe("One line, up to 120 characters, your regional manager can pass on as it is. Don't open it with the status: it is shown after it, as in \"Blocked: <summary>\"."),
   did: givenItems.describe("What you did, one fact per item, up to 300 characters each and 10 items."),
-  evidence: givenEvidence.describe("On a build issue, one item per done-criterion: the command you ran and the lines of its output that decide it, up to 1,000 characters each and 10 items. [] for none."),
+  evidence: givenEvidence.describe("On a build issue, one item per done-criterion (with more than 10 criteria, group neighbouring ones in an item, as \"Criteria 10–11: …\"): the command you ran and the lines of its output that decide it, up to 1,000 characters each and 10 items. [] for none."),
   concerns: givenItems.describe("Risks your regional manager should act on, up to 300 characters each and 10 items. [] for none."),
   deviations: givenItems.describe("Where you departed from the brief, and why, up to 300 characters each and 10 items. [] for none."),
   findings: givenItems.describe("Things you noticed outside your brief, up to 300 characters each and 10 items. [] for none."),

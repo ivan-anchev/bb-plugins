@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
+import { z } from "zod";
 import { coordinatorContract } from "../../contract.ts";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { handoffIdSchema } from "../../model/agent/handoff.ts";
-import { issueIdSchema } from "../../model/issue/issue.ts";
+import { issueIdSchema, MAX_CRITERIA } from "../../model/issue/issue.ts";
 import { coordinating, isRefusal, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff." };
@@ -133,6 +136,24 @@ test("with verification off, once its turn ends a done handoff is In review as U
     ["WEB-2", "needs-you", "Blocked: Needs a staging key"],
     ["WEB-3", "needs-you", "Gave up: The queue API rejects batches"],
   ]);
+});
+
+test("an issue with more done-criteria than evidence takes items has its agent group them: one item per criterion is refused, grouped ones are taken, and every guide says so", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const doneCriteria = Array.from({ length: MAX_CRITERIA }, (_, i) => `Check ${i + 1} passes`);
+  const { agentThreadId } = await startedAgent(kit, threadId, { ...RETRIES, doneCriteria });
+  const perCriterion = doneCriteria.map((_, i) => `Criterion ${i + 1}: npm test printed ok`);
+  await assert.rejects(kit.call("agent_handoff", { ...DONE, evidence: perCriterion }, agentThreadId));
+  assert.equal(kit.store.latestHandoff(coordinatorId, a1), null);
+
+  const grouped = [...perCriterion.slice(0, 9), `Criteria 10–${MAX_CRITERIA}: npm test printed ok`];
+  assert.ok(!isRefusal(await kit.call("agent_handoff", { ...DONE, evidence: grouped }, agentThreadId)));
+  assert.deepEqual(kit.store.latestHandoff(coordinatorId, a1)?.handoff.evidence, grouped);
+
+  const skill = readFileSync(join(import.meta.dirname, "..", "..", "..", "skills", "agent-work", "SKILL.md"), "utf8").replace(/\s+/g, " ");
+  const tool = kit.tools().find(({ name }) => name === "agent_handoff") ?? assert.fail("no agent_handoff");
+  const guides = { rules: kit.configurationFor(agentThreadId, {}).instructions ?? "", instructions: tool.instructions ?? "", evidence: JSON.stringify(z.toJSONSchema(tool.parameters)), skill };
+  for (const [guide, text] of Object.entries(guides)) assert.match(text, /more (than 10 )?criteria, group neighbouring ones in an item/, guide);
 });
 
 test("a handoff stored under the old caps, 50 items of 2,000 characters in each list, still parses and shows whole in crew_catch_up, issue_read and its round", async () => {

@@ -107,7 +107,7 @@ const endedText = (issueId: IssueId, how: EndedHow) => failed(`${HANDOFF} is ref
 const HANDOFF_INSTRUCTIONS = `Ending your work: call agent_handoff once, as your last action, then stop. Your regional manager reads only this report, not your chat.
 - status: "done" (a build issue: every done-criterion met and committed; a research issue: your report written), "blocked" (you need a decision, or hit a problem you didn't cause), or "gave-up" (a retried approach failed again).
 - summary: one line, up to 120 characters, not opening with the status (it is shown after it, as in "Blocked: <summary>").
-- did, concerns, deviations, findings: up to 10 items each, each one fact of up to 300 characters. evidence: up to 10 items of up to 1,000 characters; on a build issue, one per done-criterion, the command you ran and the lines that decide it. Use [] for none.
+- did, concerns, deviations, findings: up to 10 items each, each one fact of up to 300 characters. evidence: up to 10 items of up to 1,000 characters; on a build issue, one per done-criterion, the command you ran and the lines that decide it; with more than 10 criteria, group neighbouring ones in an item, as "Criteria 10–11: …". Use [] for none.
 - A build issue's done handoff: headSha (required), the output of \`git rev-parse HEAD\` after your last commit; prUrl, the pull request, if you opened one.
 - A research issue's done handoff: report (required), your whole report in markdown, up to 20,000 characters. It names no commit: nothing you commit or push is read.
 A turn that ends without agent_handoff tells your regional manager you stopped without reporting.`;

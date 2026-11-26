@@ -131,7 +131,8 @@ then stop:
 - **did**, **concerns**, **deviations**, **findings**: lists of up to 10
   items, each one fact of up to 300 characters. **evidence**: up to 10
   items of up to 1,000 characters; on a build issue, one per done-criterion:
-  the command you ran and the lines that decide it. Use `[]` for an empty
+  the command you ran and the lines that decide it. With more than 10
+  criteria, group neighbouring ones in an item. Use `[]` for an empty
   list. A handoff past these caps is refused, and nothing is saved.
 - **headSha** (a build issue's done only, required): `git rev-parse HEAD`
   after your last commit. **prUrl**: the pull request, if you opened one. Name
@@ -222,7 +223,8 @@ line per item, so write for that:
     investigation found several places to trim, including…"
 - **Evidence is one item per done-criterion**, opening "Criterion N:", then
   the command and the lines of its output that decide it, not the whole
-  output, up to 1,000 characters.
+  output, up to 1,000 characters. A list takes 10 items: with more
+  criteria, group neighbouring ones in an item, as "Criteria 10–11: …".
   - Good: "Criterion 2: `node --test src/model/agent/handoff.test.ts` printed
     `ℹ pass 7` and `ℹ fail 0`."
 - **Concerns are risks your regional manager should act on. Deviations say
