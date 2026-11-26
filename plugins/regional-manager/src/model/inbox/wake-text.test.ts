@@ -128,7 +128,7 @@ test("a checked done handoff is announced with what its verdict found, derived f
 test("a failure whose settling asked the user at the issue's cap says so with the question's id and count; one that asked nothing doesn't", () => {
   const failed = returned(["pass", "fail"]);
   const d4 = decisionIdSchema.parse("d4");
-  const question: CapQuestion = { id: d4, issueId: i1, question: "Anything", options: [], askedAt: 6_000, answer: null, cap: 4 };
+  const question: CapQuestion = { id: d4, issueId: i1, question: "Anything", options: [], recommended: null, askedAt: 6_000, answer: null, cap: 4 };
   assert.equal(
     doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1, asked: d4 }]), checkedWith(failed, question)),
     `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- WEB-1 "Add retries" (a1) handed off: done, failed verification; WEB-1's 4th failed verification, past its cap of 3: nothing went back to an agent, and the plugin asked the user (d4)`,
@@ -140,7 +140,7 @@ test("a failure that asked at the cap while its findings may have reached its ag
   const failed = returned(["pass", "fail"]);
   const maybe: Verdict = failed.state === "returned" ? { ...failed, settlement: { kind: "maybe-sent-back", round: 1, ci: { kind: "none" } } } : assert.fail("not returned");
   const d1 = decisionIdSchema.parse("d1");
-  const question: CapQuestion = { id: d1, issueId: i1, question: "Anything", options: [], askedAt: 6_000, answer: null, cap: 3 };
+  const question: CapQuestion = { id: d1, issueId: i1, question: "Anything", options: [], recommended: null, askedAt: 6_000, answer: null, cap: 3 };
   const text = doorbellText(stored([{ kind: "checked", issueId: i1, checkId: k1, asked: d1 }]), checkedWith(maybe, question));
   assert.match(text, /WEB-1's 3rd failed verification, its cap: its findings may have reached its agent, as the plugin stopped while sending them; nothing more goes back to one, and the plugin asked the user \(d1\)$/);
   assert.doesNotMatch(text, /nothing went back/);
@@ -153,7 +153,7 @@ test("the user's switch is announced as on or off", () => {
 
 test("an answered decision is announced with the regional manager's own question, never the user's answer", () => {
   const d1 = decisionIdSchema.parse("d1");
-  const answered: Decision = { id: d1, issueId: null, question: "Target main or release/2?", options: ["main", "release/2"], askedAt: 1_000, answer: { text: WRITTEN, at: 2_000 }, cap: null };
+  const answered: Decision = { id: d1, issueId: null, question: "Target main or release/2?", options: ["main", "release/2"], recommended: null, askedAt: 1_000, answer: { text: WRITTEN, at: 2_000 }, cap: null };
   const text = doorbellText(stored([{ kind: "decision-answered", decisionId: d1 }]), { ...noChecks, decision: (id) => (id === d1 ? answered : null) });
   assert.equal(text, `[${DISPLAY_NAME}] 1 update. Call crew_catch_up to read it in full.\n- The user answered your question d1: Target main or release/2?`);
 });

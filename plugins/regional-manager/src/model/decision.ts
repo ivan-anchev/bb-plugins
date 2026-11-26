@@ -27,18 +27,24 @@ export const answerSchema = z.string().trim().min(1).max(MAX_ANSWER_CHARS);
  * A decision as the board and crew_catch_up read it: the issue it flags Needs you until the user
  * answers (null: none), and the user's answer and when they gave it, null until they do. `cap`: for
  * a question the plugin itself asked at the issue's cap of failed verdicts (rounds/cap.ts), the
- * count it asked at; null for one the regional manager asked with crew_ask_user.
+ * count it asked at; null for one the regional manager asked with crew_ask_user. `recommended`: the
+ * option the regional manager recommended, null for none, and always for the plugin's own question.
+ * `issueId` is null only for a question asked before crew_ask_user required an issue.
  */
 export const decisionSchema = z.object({
   id: decisionIdSchema,
   issueId: issueIdSchema.nullable(),
   question: z.string(),
   options: z.array(z.string()),
+  recommended: z.string().nullable(),
   askedAt: z.number(),
   answer: z.object({ text: z.string(), at: z.number() }).nullable(),
   cap: z.number().int().min(1).nullable(),
 });
 export type Decision = z.infer<typeof decisionSchema>;
+
+/** A question as it is put to the user, before it has an id: every new one names the issue it is about. */
+export type NewDecision = Pick<Decision, "question" | "options" | "recommended" | "cap"> & { issueId: IssueId };
 
 /** A decision the user hasn't answered yet: it sits under Needs you until they do. */
 export type OpenDecision = Decision & { answer: null };
@@ -49,11 +55,11 @@ export const decisionTextSchema = z.string().trim().min(1).max(2_000);
 
 /**
  * One of an issue's decisions: a question put to the user about it, with crew_ask_user or by the
- * plugin at its cap (`cap`, as Decision has it), the options it offered, and their answer once given
+ * plugin at its cap (`cap`, as Decision has it), the options it offered and the one it recommended, and their answer once given
  * (null: not yet), or a decision the regional manager recorded on it. `at`: when it was asked, or recorded.
  */
 export const issueDecisionSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("asked"), id: decisionIdSchema, question: z.string(), options: z.array(z.string()), at: z.number(), answer: decisionSchema.shape.answer, cap: decisionSchema.shape.cap }),
+  z.object({ kind: z.literal("asked"), id: decisionIdSchema, question: z.string(), options: z.array(z.string()), recommended: decisionSchema.shape.recommended, at: z.number(), answer: decisionSchema.shape.answer, cap: decisionSchema.shape.cap }),
   z.object({ kind: z.literal("recorded"), text: z.string(), at: z.number() }),
 ]);
 export type IssueDecision = z.infer<typeof issueDecisionSchema>;
@@ -61,7 +67,7 @@ export type RecordedDecision = Extract<IssueDecision, { kind: "recorded" }>;
 
 /** The issue's decisions, its one list, oldest first: every question put to the user naming it, answered or not, and every decision recorded on it. */
 export function issueDecisions(issueId: IssueId, asked: readonly Decision[], recorded: readonly RecordedDecision[]): IssueDecision[] {
-  const questions = asked.filter((decision) => decision.issueId === issueId).map(({ id, question, options, askedAt, answer, cap }) => ({ kind: "asked", id, question, options, at: askedAt, answer, cap }) as const);
+  const questions = asked.filter((decision) => decision.issueId === issueId).map(({ id, question, options, recommended, askedAt, answer, cap }) => ({ kind: "asked", id, question, options, recommended, at: askedAt, answer, cap }) as const);
   return [...questions, ...recorded].sort((a, b) => a.at - b.at);
 }
 
@@ -74,8 +80,9 @@ export function decisionsText(decisions: readonly IssueDecision[]): string {
 function entryText(decision: IssueDecision): string {
   switch (decision.kind) {
     case "asked": {
-      const { id, question, answer } = decision;
-      return `asked the user (${id}): ${question} ${answer === null ? "Not answered yet." : `They answered at ${timeOf(answer.at)}: ${answer.text}`}`;
+      const { id, question, recommended, answer } = decision;
+      const advised = recommended === null ? "" : ` The recommended option was "${recommended}".`;
+      return `asked the user (${id}): ${question}${advised} ${answer === null ? "Not answered yet." : `They answered at ${timeOf(answer.at)}: ${answer.text}`}`;
     }
     case "recorded":
       return decision.text;

@@ -13,7 +13,7 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 const { DecisionRow } = await import("./decision-row.tsx");
 
 const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
-const OPEN: OpenDecision = { id: decisionIdSchema.parse("d2"), issueId: null, question: "Which zone first?", options: ["eu-west", "us-east"], askedAt: 1_000, answer: null, cap: null };
+const OPEN: OpenDecision = { id: decisionIdSchema.parse("d2"), issueId: null, question: "Which zone first?", options: ["eu-west", "us-east"], recommended: null, askedAt: 1_000, answer: null, cap: null };
 const TYPED = "Freeform unsent QA,\nwith a second line";
 
 afterEach(() => {

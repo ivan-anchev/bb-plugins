@@ -82,7 +82,7 @@ function seeded() {
   const agentId = handoff.agentId;
   // why here: the move its verdict's going back made, observed after its outcome, as the watch logs it.
   store.observeStatuses(MANAGER, [{ issue: store.issue(MANAGER, issueId) ?? assert.fail("no issue"), status: "in-progress" }], 3_650);
-  store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId }, 3_700);
+  store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], recommended: "SQS", issueId }, 3_700);
   store.updateIssue(MANAGER, issueId, { decision: { text: "SQS: it is already deployed.", at: 3_800 } }, { requireUnheld: false, closes: new Map(), at: 3_000 });
   const pr: PrSnapshot = { number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, review: "none", ci: "pending", headSha: SHA, failedChecks: [] };
   store.insertEvent(MANAGER, { kind: "pr", issueId, agentId, pr, changes: ["opened"] }, 3_900);
@@ -154,7 +154,8 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   );
   const asked = feed.entries.find((entry) => entry.kind === "decision" && entry.decision.kind === "asked");
   assert.ok(asked?.kind === "decision");
-  assert.deepStrictEqual(keysOf(asked.decision), ["answer", "at", "cap", "id", "kind", "options", "question"]);
+  assert.deepStrictEqual(keysOf(asked.decision), ["answer", "at", "cap", "id", "kind", "options", "question", "recommended"]);
+  assert.deepStrictEqual(asked.decision, { kind: "asked", id: "d1", question: "Which queue?", options: ["SQS", "Redis"], recommended: "SQS", at: 3_700, answer: null, cap: null });
   assert.deepStrictEqual(
     feed.entries.flatMap((entry) => (entry.kind === "comment" ? [entry.comment] : [])),
     [
@@ -283,8 +284,9 @@ test("through the feed RPC, only the round whose failure asked at the cap names 
   const decision = feed.entries.find((entry) => entry.kind === "decision");
   assert.ok(decision?.kind === "decision" && decision.decision.kind === "asked" && decision.decision.id === "d1", "the question shows as the issue's decision entry");
   assert.deepStrictEqual(keysOf(decision), ["decision", "kind", "moved"]);
-  assert.deepStrictEqual(keysOf(decision.decision), ["answer", "at", "cap", "id", "kind", "options", "question"]);
+  assert.deepStrictEqual(keysOf(decision.decision), ["answer", "at", "cap", "id", "kind", "options", "question", "recommended"]);
   assert.equal(decision.decision.cap, 3, "the count it was asked at, which tells it from a question the regional manager asked");
+  assert.equal(decision.decision.recommended, null, "the plugin's own question recommends no option");
 });
 
 test("the feed of an issue whose pass filed a follow-up sends one follow-up entry naming it, at when it was filed, with exactly its keys; the follow-up's own feed begins filed as its follow-up", async () => {

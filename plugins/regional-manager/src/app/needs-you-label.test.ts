@@ -12,6 +12,7 @@ const decision = (id: string, answered: boolean): Decision => ({
   issueId: null,
   question: "Which zone first?",
   options: [],
+  recommended: null,
   askedAt: 1_000,
   cap: null,
   answer: answered ? { text: "eu-west", at: 2_000 } : null,

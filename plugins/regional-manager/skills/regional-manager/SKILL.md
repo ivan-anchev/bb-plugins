@@ -766,15 +766,20 @@ ship, which approach to take), ask with `crew_ask_user`:
 - `question` is one line, such as "Target main or release/2?".
 - `options`, optional, are up to five short answers; each becomes a button.
   The user can always answer in their own words instead.
-- `issue`, optional, names the issue it is about: that issue shows under
-  Needs you until the user answers, and the question and its answer are
-  recorded among the issue's decisions, which `issue_read` and every agent you
-  start on it see. Name it whenever the question is about one.
+- `recommended`, optional, is the option you recommend, written exactly as
+  one of `options`; one that isn't among them is refused. Give it when you
+  have a view; `issue_read` and every agent you start on the issue see it.
+- `issue`, required, names the issue it is about: the question goes into
+  that issue's feed, the issue shows under Needs you until the user answers,
+  and the question and its answer are recorded among the issue's decisions,
+  which `issue_read` and every agent you start on it see. A question no issue
+  holds yet, such as one about a crew rule, goes on the issue whose work
+  raised it, or on one you file for it first.
 
-It goes on their board under Needs you and returns at once: carry on with
-other work, or end your turn. Their answer wakes you, and the answered
-question leaves the board. `crew_catch_up` lists the
-questions still waiting, so don't ask one twice.
+It goes into the issue's feed and on their board under Needs you, and returns
+at once: carry on with other work, or end your turn. Their answer wakes you,
+and the answered question leaves the board but stays in the issue's feed.
+`crew_catch_up` lists the questions still waiting, so don't ask one twice.
 
 Never ask in your reply and wait for an answer, and never use a question tool
 or form of your own: while one waits for the user, bb holds every message to

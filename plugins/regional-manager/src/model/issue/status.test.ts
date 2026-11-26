@@ -80,7 +80,7 @@ const thread = (status: HolderThread["status"], hasPendingInteraction = false): 
 const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, accepted: null, pr: null, openDecisions: [], finalCheck: null, verifierAsks: false, ...over });
 /** WEB-1 named by one unanswered question: the plugin's at its cap when `cap` is a count, else the regional manager's. */
 const asking = (cap: number | null): Partial<IssueFacts> => ({ openDecisions: [question(cap)] });
-const question = (cap: number | null): Decision => ({ id: decisionIdSchema.parse("d1"), issueId: issue.id, question: "Another round?", options: [], askedAt: 1_000, answer: null, cap });
+const question = (cap: number | null): Decision => ({ id: decisionIdSchema.parse("d1"), issueId: issue.id, question: "Another round?", options: [], recommended: null, askedAt: 1_000, answer: null, cap });
 const held = (thread: HolderThread | null, current: Handed | null = null, fixRounds = 0): Partial<IssueFacts> => ({ holder: { agent: { ...agent, fixRounds }, thread, current } });
 const view = (over: Partial<IssueFacts>) => {
   const [placed] = issueViews([facts(over)]);

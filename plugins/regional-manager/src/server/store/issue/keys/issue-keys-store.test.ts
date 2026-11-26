@@ -32,7 +32,7 @@ function storedBy050() {
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: sub.id, checkId: check.id }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier_1");
   store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 4_000);
-  store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId: dependent.id }, 4_000);
+  store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], recommended: null, issueId: dependent.id }, 4_000);
   store.updateIssue(MANAGER, dependent.id, { decision: { text: "Retry three times", at: 4_100 } }, { requireUnheld: false, closes: new Map(), at: 3_000 });
   for (const [change, at] of [[{ add: [parent.id], remove: [] }, 4_200], [{ add: [], remove: [parent.id] }, 4_300]] as const) {
     store.updateIssue(MANAGER, dependent.id, { dependsOn: { add: [...change.add], remove: [...change.remove] } }, { requireUnheld: false, closes: new Map(), at });

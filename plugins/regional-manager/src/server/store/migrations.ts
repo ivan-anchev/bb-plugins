@@ -286,6 +286,10 @@ export const MIGRATIONS: readonly string[] = [
   `UPDATE checks SET subject = json_set(subject, '$.branch',
        (SELECT a.branch FROM agents a WHERE a.coordinator_id = checks.coordinator_id AND a.id = json_extract(checks.subject, '$.agentId')))
      WHERE json_extract(subject, '$.kind') = 'handoff'`,
+
+  // The option the regional manager recommended when it asked (decision.ts); null: none, as for
+  // every question asked before, and the plugin's own at a cap.
+  `ALTER TABLE decisions ADD COLUMN recommended TEXT`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

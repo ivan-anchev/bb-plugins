@@ -88,7 +88,7 @@ export const FEED: IssueFeed = {
     { kind: "created", at: 1_000, followUpOf: null, moved: null },
     { kind: "agent-started", at: 2_000, agentId: A1, moved: null },
     roundEntry(round(1, A1, 3_000, ["pass", "fail", "fail"], 1)),
-    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], at: 3_700, answer: { text: "Keep", at: 3_800 }, cap: null }, moved: null },
+    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], recommended: null, at: 3_700, answer: { text: "Keep", at: 3_800 }, cap: null }, moved: null },
     roundEntry(round(2, A1, 4_000, ["pass", "pass", "fail"], null)),
     { kind: "decision", decision: { kind: "recorded", text: "a1 loops: hand the issue to a fresh agent.", at: 4_700 }, moved: null },
     { kind: "agent-ended", at: 4_800, agentId: A1, how: "replaced", moved: null },
@@ -97,7 +97,7 @@ export const FEED: IssueFeed = {
     { kind: "pr", at: 6_000, number: 219, changes: ["ci-passed", "merged"], moved: null },
     { kind: "thread", at: 6_100, agentId: A2, event: { kind: "reported-back", lastAnswer: "Merged; nothing left." }, moved: null },
     { kind: "unblocked", at: 6_200, by: id("WEB-7"), moved: null },
-    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], at: 6_300, answer: null, cap: null }, moved: null },
+    { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], recommended: null, at: 6_300, answer: null, cap: null }, moved: null },
   ],
 };
 
