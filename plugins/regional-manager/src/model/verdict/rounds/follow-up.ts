@@ -1,5 +1,5 @@
-// A follow-up: when an issue passes, every finding its rounds held without blocking it is filed as
-// one new build issue, top-level in Backlog, that depends on its origin, so its agent never starts
+// A follow-up: when an issue passes, every finding its rounds held without blocking it, the
+// reviewers' that the verifiers held and the verifiers' own, is filed as one new build issue, top-level in Backlog, that depends on its origin, so its agent never starts
 // from a default branch without the origin's code. When the regional manager accepts a failure on
 // review findings alone, the accepted round's unfixed must-fixes are filed with them. Nothing here
 // is stored but which follow-up collected each check (checks.follow_up_id) and when one was
@@ -7,13 +7,14 @@
 // follow-up's first origin by following that column back.
 import { z } from "zod";
 import { MAX_TITLE_CHARS, type Issue, type IssueId, type NewIssue } from "../../issue/issue.ts";
+import { clipped } from "../../one-line.ts";
 import type { Check } from "../check.ts";
 import { findingText, triageText, type Triaged } from "../review.ts";
-import { heldFindings } from "../verdict.ts";
+import { heldFindings, verifierFindingText, type VerifierFinding } from "../verdict.ts";
 import { findingKey } from "./delta.ts";
 
-/** A round's leftovers, numbered as the issue's feed numbers its rounds. */
-type Collected = { round: number; leftovers: readonly Triaged[] };
+/** A round's leftovers, numbered as the issue's feed numbers its rounds: the review's (leftoversOf) and the verifier's own findings (ownFindingsOf). */
+type Collected = { round: number; leftovers: readonly Triaged[]; own: readonly VerifierFinding[] };
 
 /** How a follow-up came to be filed: its origin passed, or the regional manager accepted its failure on review findings alone. */
 export const filedWhenSchema = z.enum(["passed", "accepted"]);
@@ -37,26 +38,35 @@ export function leftoversOf({ verdict, acceptedAt }: Pick<Check, "verdict" | "ac
   return acceptedAt === null ? others : [...failing, ...others];
 }
 
+/** The findings a check's verifier made itself, outside the review: every one, as none fails its verdict. [] while its verdict hasn't returned. */
+export const ownFindingsOf = ({ verdict }: Pick<Check, "verdict">): VerifierFinding[] => (verdict.state === "returned" ? verdict.findings : []);
+
 /** Whether leftovers file nothing: none is a confirmed should-fix or a downgraded must-fix, so every one is a nit. The one rule a pass files by. */
 export const onlyNits = (leftovers: readonly Triaged[]): boolean => !leftovers.some(warrantsFollowUp);
+
+/** Whether a verifier's own findings file nothing: each is a nit, by the severity it gave it. */
+const ownOnlyNits = (own: readonly VerifierFinding[]): boolean => own.every(({ severity }) => severity === "nit");
 
 /**
  * The follow-up to file for `origin`'s collected rounds, titled after `firstOrigin`, the issue its
  * chain of follow-ups began at (`origin` itself when it is no follow-up); null when the rounds left
- * only nits (onlyNits), which stay in the origin's feed. why decided before each finding is listed
- * once: a later round may hold a finding an earlier one held as a should-fix at a lower severity,
- * and the earlier round still qualifies. Its brief lists each finding once, by file, line and claim
- * as written (delta.ts findingKey), from the latest round that held it. why no done-criteria: the
- * manager plans it before an agent can start (issue.ts briefToStart).
+ * only nits (onlyNits, and each verifier's own finding at the severity it gave), which stay in the
+ * origin's feed. why decided before each finding is listed once: a later round may hold a finding
+ * an earlier one held as a should-fix at a lower severity, and the earlier round still qualifies.
+ * Its brief lists each review finding once, by file, line and claim as written (delta.ts
+ * findingKey), and each of the verifiers' own once, by title and detail, from the latest round
+ * that held it. why no done-criteria: the manager plans it before an agent can start (issue.ts
+ * briefToStart).
  */
 export function followUpPlan(origin: IssueId, firstOrigin: Pick<Issue, "id" | "title">, collected: readonly Collected[], when: FiledWhen): NewIssue | null {
-  if (onlyNits(collected.flatMap(({ leftovers }) => leftovers))) return null;
-  const findings = latestOfEach(collected);
+  if (onlyNits(collected.flatMap(({ leftovers }) => leftovers)) && ownOnlyNits(collected.flatMap(({ own }) => own))) return null;
+  const findings = latestOfEach(collected, ({ leftovers }) => leftovers, findingKey);
+  const own = latestOfEach(collected, ({ own }) => own, ({ title, detail }) => `${title}\n${detail}`);
   return {
     kind: "build",
     title: oneTitle(`Follow-ups from ${firstOrigin.id}: ${firstOrigin.title}`),
-    description: `${findings.length === 1 ? "A review finding" : `${findings.length} review findings`} ${LEFT[when](origin)}. Its brief lists each, with its round and the verifier's reason: check each still holds first. Plan this issue's done-criteria before an agent starts.`,
-    brief: briefOf(origin, findings, when),
+    description: `${countText(findings.length, own.length)} ${LEFT[when](origin)}. Its brief lists each, with its round and the verifier's reason: check each still holds first. Plan this issue's done-criteria before an agent starts.`,
+    brief: briefOf(origin, findings, own, when),
     doneCriteria: [],
     verifier: null,
     rest: "backlog",
@@ -81,13 +91,20 @@ export function unfiledAtMerge(checks: readonly Pick<Check, "subject" | "verdict
 }
 
 /** A leftover with the round that held it. */
-type Leftover = Triaged & { round: number };
+type Leftover<Finding> = Finding & { round: number };
 
-/** Every leftover once, by file, line and claim as written, from the latest round that held it, in the order first held. */
-function latestOfEach(collected: readonly Collected[]): Leftover[] {
-  const byIdentity = new Map<string, Leftover>();
-  for (const { round, leftovers } of collected) for (const finding of leftovers) byIdentity.set(findingKey(finding), { ...finding, round });
+/** Every leftover of one kind (`of`) once, by its identity (`key`), from the latest round that held it, in the order first held. */
+function latestOfEach<Finding extends object>(collected: readonly Collected[], of: (round: Collected) => readonly Finding[], key: (finding: Finding) => string): Leftover<Finding>[] {
+  const byIdentity = new Map<string, Leftover<Finding>>();
+  for (const held of collected) for (const finding of of(held)) byIdentity.set(key(finding), { ...finding, round: held.round });
   return [...byIdentity.values()];
+}
+
+/** How many findings a follow-up holds, by kind, as its description counts them: "2 review findings and a verifier's finding". */
+function countText(review: number, own: number): string {
+  const counted = (count: number, one: string, many: string): string[] => (count === 0 ? [] : [count === 1 ? one : `${count} ${many}`]);
+  const words = [...counted(review, "a review finding", "review findings"), ...counted(own, "a verifier's finding", "verifiers' findings")].join(" and ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
 /** Whether a leftover is worth a follow-up of its own: the reviewer's must-fix the verifier downgraded, or one that held as a should-fix. A nit never is. */
@@ -104,9 +121,9 @@ const LEFT: Record<FiledWhen, (origin: IssueId) => string> = {
 
 /** How a follow-up's brief opens, by how it was filed. */
 const OPENING: Record<FiledWhen, (origin: IssueId) => string> = {
-  passed: (origin) => `The reviews of ${origin} held these findings without blocking it, and it passed.`,
+  passed: (origin) => `The reviews and verifiers of ${origin} held these findings without blocking it, and it passed.`,
   accepted: (origin) =>
-    `The reviews of ${origin} held these findings, and its regional manager accepted it as it is, every criterion passing, with the must-fixes that failed its last round unfixed (its decisions say why).`,
+    `The reviews and verifiers of ${origin} held these findings, and its regional manager accepted it as it is, every criterion passing, with the must-fixes that failed its last round unfixed (its decisions say why).`,
 };
 
 /** How the verifier's word on a finding reads, by how it was filed: an accepted round's must-fixes were anchored, failing it. */
@@ -115,17 +132,15 @@ const WORDS: Record<FiledWhen, string> = {
   accepted: "anchored to what it breaks, which failed the round; confirmed at the reviewer's severity; or downgraded to the severity it names",
 };
 
-function briefOf(origin: IssueId, findings: readonly Leftover[], when: FiledWhen): string {
-  const each = findings.map((finding) => `- Round ${finding.round}: ${findingText(finding, "  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason.replaceAll("\n", "\n  ")}`);
+function briefOf(origin: IssueId, findings: readonly Leftover<Triaged>[], own: readonly Leftover<VerifierFinding>[], when: FiledWhen): string {
+  const review = findings.map((finding) => `- Round ${finding.round}: ${findingText(finding, "  ")}\n  The verifier: ${triageText(finding)}. ${finding.reason.replaceAll("\n", "\n  ")}`);
+  const theirs = own.map((finding) => `- Round ${finding.round}: ${verifierFindingText(finding, "  ")}`);
   return [
     `${OPENING[when](origin)} Each held when its round was verified, but a later round, or work merged since, may have fixed it: check that each still holds on the default branch before you change anything, and leave alone, saying so in your handoff, any that no longer does.`,
-    `Each finding with the round that held it last, its place, the reviewer's severity and claim, then the verifier's word on it (${WORDS[when]}) and its reason:`,
-    each.join("\n"),
+    ...(review.length === 0 ? [] : [`Each review finding with the round that held it last, its place, the reviewer's severity and claim, then the verifier's word on it (${WORDS[when]}) and its reason:`, review.join("\n")]),
+    ...(theirs.length === 0 ? [] : ["Each finding a verifier made itself, outside the review, with the round that found it last, its title, the severity the verifier gave it and its detail:", theirs.join("\n")]),
   ].join("\n\n");
 }
 
 /** A title on one line, cut with an ellipsis to the characters an issue's title holds (issue.ts MAX_TITLE_CHARS). */
-function oneTitle(title: string): string {
-  const line = title.replaceAll(/\s+/g, " ").trim();
-  return line.length <= MAX_TITLE_CHARS ? line : `${line.slice(0, MAX_TITLE_CHARS - 1).trimEnd()}…`;
-}
+const oneTitle = (title: string): string => clipped(title, MAX_TITLE_CHARS);

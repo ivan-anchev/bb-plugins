@@ -21,7 +21,7 @@ import type { ModelRef } from "../../../model/agent/execution.ts";
 import { CAP_OPTIONS } from "../../../model/verdict/rounds/cap-choice.ts";
 import { capAsks, capQuestionsOf, capQuestionText, countedFailures } from "../../../model/verdict/rounds/cap.ts";
 import { readInOrder } from "../../../model/verdict/rounds/delta.ts";
-import { filedWhen, followUpPlan, leftoversOf, type FiledWhen, type FollowUpOrigin } from "../../../model/verdict/rounds/follow-up.ts";
+import { filedWhen, followUpPlan, leftoversOf, ownFindingsOf, type FiledWhen, type FollowUpOrigin } from "../../../model/verdict/rounds/follow-up.ts";
 import { numberedRounds } from "../../../model/feed/feed.ts";
 import { decisionsOf, insertDecision, insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
@@ -190,7 +190,8 @@ export function checksStore(db: Db) {
 
   /**
    * Files the issue's follow-up as the one plan says (rounds/follow-up.ts followUpPlan), from every
-   * handoff round of the issue no follow-up collected yet, as `checkId` passed or was accepted
+   * round of the issue no follow-up collected yet, a handoff's or a build parent's final check's
+   * (whose verifier's own findings it files, as it has no review), as `checkId` passed or was accepted
    * (`when`), and stamps with it each round's check it collected, and that check, which names the
    * follow-up it filed. A round is so collected once. `close`: how that check closed the issue as it
    * filed it (null: it is open). Returns the follow-up; null when the rounds left only nits, and
@@ -199,9 +200,11 @@ export function checksStore(db: Db) {
   function fileFollowUp(coordinatorId: CoordinatorId, issueId: IssueId, checkId: CheckId, when: FiledWhen, close: Closure | null, at: number): Issue | null {
     const record = handed("WHERE h.coordinator_id = ? AND h.issue_id = ? ORDER BY h.rowid", coordinatorId, issueId);
     const collected = numberedRounds(record, finalChecksOf(coordinatorId, issueId)).flatMap((begun) => {
-      const uncollected = begun.kind === "handoff" && begun.handed.check?.followUpId === null ? begun.handed.check : null;
-      const leftovers = uncollected === null ? [] : leftoversOf(uncollected);
-      return uncollected === null || leftovers.length === 0 ? [] : [{ round: begun.number, checkId: uncollected.id, leftovers }];
+      const judged = begun.kind === "handoff" ? begun.handed.check : begun.check;
+      if (judged === null || judged.followUpId !== null) return [];
+      const leftovers = leftoversOf(judged);
+      const own = ownFindingsOf(judged);
+      return leftovers.length === 0 && own.length === 0 ? [] : [{ round: begun.number, checkId: judged.id, leftovers, own }];
     });
     const plan = followUpPlan(issueId, firstOriginOf(coordinatorId, issueId), collected, when);
     if (plan === null) return null;

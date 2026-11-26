@@ -477,7 +477,7 @@ test("an accept is refused leading with the reason when a criterion failed, when
     text: "WEB-1's latest done handoff is still being checked, so there is no failed verdict to accept yet. Wait for its verdict, which crew_catch_up brings you.",
   });
   const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
-  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", evidence: "# pass" }], findings: [] }, verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict?.state}`));
+  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "# pass" }], findings: [] }, verdict?.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict?.state}`));
   await settled();
   assert.deepEqual(await update({ status: "in-review", decision: REASON }), { refused: true, text: "WEB-1's latest verdict didn't fail (it passed), so there is no failure on review findings to accept." });
   assert.deepEqual(kit.store.issues(coordinatorId).map(({ id }) => id), ["WEB-1"], "no follow-up filed");

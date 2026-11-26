@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { agentIdSchema } from "../agent/agent.ts";
 import { handoffIdSchema } from "../agent/handoff.ts";
 import { ciOf, type PrSnapshot } from "./pr.ts";
-import type { Review, ReviewFinding } from "./review.ts";
+import type { BlockingDefect, Review, ReviewFinding } from "./review.ts";
 import { acceptableAsIs, failedOnReviewOnly, failureReasons, judge, outcome, shownVerdict, storedVerdictSchema, withReview, type CriterionResult, type StoredVerdict, type Verdict } from "./verdict.ts";
 
 /** The claimed commit, on a clean tree, as bb's git plugin read it. */
@@ -16,7 +16,7 @@ const returned = (results: CriterionResult[], settlement: Settlement = { kind: "
   verifierThreadId: "thr_v",
   headSha: "a".repeat(40),
   checkout: CLEAN,
-  criteria: results.map((result, i) => ({ criterion: `criterion ${i + 1}`, result, evidence: "ran it" })),
+  criteria: results.map((result, i) => ({ criterion: `criterion ${i + 1}`, result, shows: "Ran it.", evidence: "ran it" })),
   findings: [],
   blocking: [],
   model: { providerId: "codex", model: "gpt-default" },
@@ -103,10 +103,10 @@ test("a stored safety or regression anchor with no steps, as before d68, reads a
 });
 
 test("a blocking defect the verifier found itself fails a verdict whose criteria all pass, after any failing review finding; findings never do", () => {
-  const defect = { claim: "`node cli.js` crashes on an empty counts.json.", anchor: "bug", steps: "1. Create an empty counts.json. 2. Run node cli.js signup." } as const;
+  const defect: BlockingDefect = { title: "`node cli.js` crashes on an empty counts.json", claim: "It parses the file before checking it.", anchor: "bug", steps: ["Create an empty counts.json.", "Run node cli.js signup."] };
   assert.deepEqual(failureReasons({ ...returned(["pass", "pass"]), blocking: [defect, { ...defect, claim: "Another." }] }), [{ kind: "defect", count: 2 }]);
   assert.deepEqual(failureReasons({ ...readWith([["must-fix", ANCHORED]]), blocking: [defect] }), [{ kind: "must-fix", count: 1 }, { kind: "defect", count: 1 }]);
-  assert.equal(outcome({ ...returned(["pass", "pass"]), findings: ["A read held mid-await loses an update (should-fix)."] }), "pass");
+  assert.equal(outcome({ ...returned(["pass", "pass"]), findings: [{ severity: "should-fix", title: "A read held mid-await loses an update", detail: "Hold a read across the await." }] }), "pass");
   assert.deepEqual(shownVerdict({ ...returned(["pass"]), blocking: [defect] }), { ...shownVerdict(returned(["pass"])), blocking: [defect] }, "the board gets the defects it lists");
 });
 
@@ -119,6 +119,37 @@ test("a returned verdict is pending until it is settled: its findings reached th
     [{ kind: "waiting-for-ci" }, "waiting-for-ci"],
   ];
   for (const [settlement, expected] of cases) assert.equal(outcome(returned(["fail"], settlement)), expected, settlement.kind);
+});
+
+test("a verdict stored before headlines parses once at the boundary: free-prose findings get a title and the severity their words name, step lines become steps, and criteria and defects get their headline", () => {
+  const stored = storedVerdictSchema.parse({
+    state: "returned",
+    at: 5_000,
+    verifierThreadId: "thr_v",
+    headSha: "a".repeat(40),
+    checkout: CLEAN,
+    criteria: [{ criterion: "npm test passes", result: "pass", evidence: "$ npm test\n# pass 13" }, { criterion: "CI passes", result: "pass", evidence: "CI on #271 passed under Node 22. All 4 checks green." }],
+    findings: ["A read held mid-await loses an update. Should-Fix: a contrived setup.", "Name the constant (nit).", "The log repeats the payload."],
+    blocking: [{ claim: "`node cli.js` crashes on an empty counts.json. A killed run leaves one.", anchor: "bug", steps: "1. Run node cli.js v2. and kill it mid-save. 2. Run it again: SyntaxError." }],
+    triage: [{ result: "anchored", anchor: "safety", steps: "Point a webhook at a dead endpoint and watch the queue fill.", reason: "It never caps." }],
+    mustFixFails: true,
+    model: { providerId: "codex", model: "gpt-default" },
+    sameModel: false,
+  });
+  assert.ok(stored.state === "returned");
+  assert.deepEqual(stored.criteria.map(({ shows }) => shows), ["$ npm test # pass 13", "CI on #271 passed under Node 22."], "its first sentence, else the whole text on one line");
+  assert.deepEqual(stored.findings, [
+    { severity: "should-fix", title: "A read held mid-await loses an update.", detail: "A read held mid-await loses an update. Should-Fix: a contrived setup." },
+    { severity: "nit", title: "Name the constant (nit).", detail: "Name the constant (nit)." },
+    { severity: "should-fix", title: "The log repeats the payload.", detail: "The log repeats the payload." },
+  ]);
+  assert.deepEqual(stored.blocking, [
+    { title: "`node cli.js` crashes on an empty counts.json.", claim: "`node cli.js` crashes on an empty counts.json. A killed run leaves one.", anchor: "bug", steps: ["Run node cli.js v2. and kill it mid-save.", "Run it again: SyntaxError."] },
+  ], "split at each next number only, so a number inside a step stays");
+  assert.deepEqual(stored.triage[0]?.result === "anchored" && stored.triage[0].steps, ["Point a webhook at a dead endpoint and watch the queue fill."], "an unnumbered line is one step");
+  assert.deepEqual(storedVerdictSchema.parse(stored), stored, "a parsed verdict parses to itself, as the board's payload does");
+  const long = storedVerdictSchema.parse({ ...stored, findings: [`${"word ".repeat(30)}end.`] });
+  assert.ok(long.state === "returned" && long.findings[0]?.title.length === 80 && long.findings[0].title.endsWith("…"), "a long first sentence is cut to 80");
 });
 
 test("a verdict stored before settlements existed reads as settled", () => {
@@ -171,9 +202,9 @@ test("a settled verdict keeps the CI it settled with: a pass that CI failed read
 test("a verdict failed on review findings alone only when every reason it failed is an anchored must-fix: never with a failed criterion, a dirty tree, a blocking defect or failed CI, nor when it passed or is still to settle", () => {
   const reviewOnly = readWith([["must-fix", ANCHORED]]);
   assert.equal(failedOnReviewOnly(reviewOnly), true);
-  assert.equal(failedOnReviewOnly({ ...reviewOnly, criteria: [...reviewOnly.criteria, { criterion: "lint", result: "fail", evidence: "1 problem" }] }), false, "a criterion failed too");
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, criteria: [...reviewOnly.criteria, { criterion: "lint", result: "fail", shows: "Lint found 1 problem.", evidence: "1 problem" }] }), false, "a criterion failed too");
   assert.equal(failedOnReviewOnly({ ...reviewOnly, checkout: { ...CLEAN, changedFiles: ["x.ts"], changedFileCount: 1 } }), false, "not on a clean tree");
-  assert.equal(failedOnReviewOnly({ ...reviewOnly, blocking: [{ claim: "Retries leak a socket.", anchor: "brief", steps: null }] }), false, "a blocking defect of the verifier's");
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, blocking: [{ title: "Retries leak a socket", claim: "Retries leak a socket.", anchor: "brief", steps: null }] }), false, "a blocking defect of the verifier's");
   assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "checked", refused: null, ci: { kind: "fail", number: 41, failedChecks: ["test"] } } }), false, "CI failed");
   assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "pending" } }), false, "still to settle");
   assert.equal(failedOnReviewOnly(readWith([["must-fix", DOWNGRADED]])), false, "it passed");

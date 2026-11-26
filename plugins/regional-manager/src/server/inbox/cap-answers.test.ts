@@ -51,7 +51,7 @@ async function failsOnMustFix(kit: Kit, coordinatorId: CoordinatorId, agentThrea
   await settled();
   const { verdict, criteria } = check();
   const verifier = verdict.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict.state}`);
-  const passes = criteria.map((_, i) => ({ criterion: i + 1, result: "pass", evidence: "# pass" }));
+  const passes = criteria.map((_, i) => ({ criterion: i + 1, result: "pass", shows: "Ran it.", evidence: "# pass" }));
   assert.match(textOf(await kit.call("issue_verdict", { criteria: passes, findings: [], triage }, verifier)), /^Verdict recorded/);
   await kit.idle(verifier, "Verdict returned.");
   await settled();

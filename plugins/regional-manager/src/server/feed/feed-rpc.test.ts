@@ -53,7 +53,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
   store.receiveReview(check.id, `thr_reviewer_${ticket}`, { findings: [...FINDINGS], earlier: [{ fixed: false, note: "Still uncapped at retry.ts:4." }] }, MODEL, 3_200);
   checker("verifier");
   const triage = TRIAGE;
-  const criteria = [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }] as const;
+  const criteria = [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "# fail 1" }] as const;
   store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], blocking: [], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
   store.claimFixRound(check.id, { kind: "none" });
   store.settleReturned(check.id, { kind: "sent-back" }, 3_600, null);

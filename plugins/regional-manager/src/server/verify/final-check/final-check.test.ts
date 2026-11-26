@@ -12,8 +12,8 @@ const PARENT = { ...ISSUE, title: "Card vault", description: "Cards are stored i
 const SUB = { ...ISSUE, parent: "WEB-1" };
 /** origin's main once the sub-issues' pull requests merged; the local main stays at HEAD. */
 const MERGED = "b".repeat(40);
-const PASSES = { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm run vault-suite\n# pass 21\n# fail 0" }], findings: [] };
-const FAILS = { criteria: [{ criterion: 1, result: "fail", evidence: "$ npm run vault-suite\nnot ok 4 - tokens survive a restart\n# fail 1" }], findings: ["The vault client logs card numbers"] };
+const PASSES = { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm run vault-suite\n# pass 21\n# fail 0" }], findings: [] };
+const FAILS = { criteria: [{ criterion: 1, result: "fail", shows: "Ran it.", evidence: "$ npm run vault-suite\nnot ok 4 - tokens survive a restart\n# fail 1" }], findings: [{ severity: "should-fix", title: "The vault client logs card numbers", detail: "At debug level." }] };
 const CODEX = { providerId: "codex", model: "gpt-default" };
 
 /** A regional manager with a build parent WEB-1 and two build sub-issues WEB-2 and WEB-3, an agent at work on each (started with `start`), and the manager idle. */
@@ -150,8 +150,8 @@ test("3: a failed final check flags the parent, wakes the manager with a line th
 
 test("a parent whose final check failed on two blocking defects can't pass its next one while either is unanswered or still blocking, though a sub-issue fixed the other and every criterion passes", async () => {
   const { kit, text, started, merge, mergeAll, tick, returns, row, latest, verifier } = await withParent();
-  const leak = { claim: "The vault client logs card numbers at debug level.", anchor: "safety", steps: "1. Run npm run vault-suite with DEBUG=vault. 2. The log holds a full card number." } as const;
-  const advice = { claim: "The README still tells you to store cards in Postgres.", anchor: "brief", steps: null } as const;
+  const leak = { title: "The vault client logs card numbers", claim: "It logs them at debug level.", anchor: "safety", steps: ["Run npm run vault-suite with DEBUG=vault.", "The log holds a full card number."] };
+  const advice = { title: "The README tells you to store cards in Postgres", claim: "The brief drops Postgres.", anchor: "brief", steps: null };
   await mergeAll();
   assert.match(await returns({ ...PASSES, blocking: [leak, advice] }), /^Verdict recorded: 1 of 1 criteria passed\./);
   assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"));
@@ -163,7 +163,7 @@ test("a parent whose final check failed on two blocking defects can't pass its n
   const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no brief");
   assert.ok(
     prompt.includes(
-      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a safety bug: one hit in normal use that loses data or does something irreversible, reached by: ${leak.steps}: ${leak.claim}\n2. Blocks, as it breaks a requirement the issue's brief states explicitly: ${advice.claim}`,
+      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. ${leak.title} (blocks, as a safety bug: one hit in normal use that loses data or does something irreversible, reached by: 1. Run npm run vault-suite with DEBUG=vault. 2. The log holds a full card number.): ${leak.claim}\n2. ${advice.title} (blocks, as it breaks a requirement the issue's brief states explicitly): ${advice.claim}`,
     ),
     "the second final check's verifier is given both defects to recheck, each by its anchor",
   );
@@ -186,7 +186,7 @@ test("a parent whose final check failed on two blocking defects can't pass its n
 test("a decision blocker the user's later decision lifts: the next final check gives the current brief and that decision, and says a requirement they no longer make is fixed", async () => {
   const { kit, text, started, merge, mergeAll, tick, returns, row, verifier } = await withParent({ parent: { brief: "Split into sub-issues. Exports are JSON." } });
   await text("issue_update", { id: "WEB-1", decision: "Exports are JSON: the user's call." });
-  const json = { claim: "Exports are CSV, though the user decided on JSON.", anchor: "decision", steps: null } as const;
+  const json = { title: "Exports are CSV, not JSON", claim: "The user decided on JSON.", anchor: "decision", steps: null };
   await mergeAll();
   await returns({ ...PASSES, blocking: [json] });
   assert.deepEqual(await row(), at("in-progress", "✗ Final check failed", "✗ Final check failed"));
@@ -197,7 +197,7 @@ test("a decision blocker the user's later decision lifts: the next final check g
   merge(await started("WEB-4"), "c".repeat(40));
   await tick();
   const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no brief");
-  assert.ok(prompt.includes(`1. Blocks, as it breaks a recorded decision: ${json.claim}`), "the old blocker is carried");
+  assert.ok(prompt.includes(`1. ${json.title} (blocks, as it breaks a recorded decision): ${json.claim}`), "the old blocker is carried");
   assert.ok(prompt.includes("recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it."), "and may be cleared when they no longer require it");
   assert.ok(prompt.includes("## WEB-1's brief, for context\n\nSplit into sub-issues. Exports are CSV."), "the current brief");
   assert.match(prompt, /## Decisions on WEB-1\n[^]*: Exports are CSV after all: the user approved it\./, "the decision that lifts it");
@@ -397,7 +397,7 @@ test("an opened parent sends its final checks as rounds, each with only what its
       verifierThreadId,
       headSha: MERGED,
       checkout: { headSha: MERGED, changedFiles: [], changedFileCount: 0 },
-      criteria: FAILS.criteria.map(({ result, evidence }) => ({ criterion: "npm run vault-suite passes on the default branch", result, evidence })),
+      criteria: FAILS.criteria.map(({ result, shows, evidence }) => ({ criterion: "npm run vault-suite passes on the default branch", result, shows, evidence })),
       findings: FAILS.findings,
       blocking: [],
       sameModel: false,

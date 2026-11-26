@@ -9,7 +9,7 @@ import { checkoutText } from "../../model/verdict/checkout.ts";
 import type { CiVerdict } from "../../model/verdict/pr.ts";
 import type { Check } from "../../model/verdict/check.ts";
 import { defectText, findingText, FOLLOW_UP_RULE, triageText, type Review } from "../../model/verdict/review.ts";
-import { ciVerdictOf, heldFindings, failedCheckout, failureReasons, failureText, type CriterionResult, type FailureReason, type Verdict } from "../../model/verdict/verdict.ts";
+import { ciVerdictOf, heldFindings, failedCheckout, failureReasons, failureText, verifierFindingText, type CriterionResult, type FailureReason, type Verdict } from "../../model/verdict/verdict.ts";
 
 type Returned = Extract<Verdict, { state: "returned" }>;
 
@@ -83,9 +83,9 @@ function returnedText(review: Review, verdict: Returned): string {
     ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}. ${ciFailure(ci.failedChecks)}`] : []),
     ...(verdict.settlement.kind === "superseded" ? ["CI was still to finish on this commit when a newer handoff or the handover replaced it, so it was never judged."] : []),
   ].join(" ");
-  const criteria = verdict.criteria.map(({ criterion, result, evidence }, i) => `${i + 1}. ${criterion}: ${PAST[result]}. The verifier's evidence:\n\n${fenced(evidence)}`);
+  const criteria = verdict.criteria.map(({ criterion, result, shows, evidence }, i) => `${i + 1}. ${criterion}: ${PAST[result]}. What the run showed, then the verifier's evidence:\n\n${fenced(`${shows}\n\n${evidence}`)}`);
   const blocking = verdict.blocking.length === 0 ? [] : [`The defects it found itself that blocked, in its words:\n\n${fenced(verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n"))}`];
-  const findings = verdict.findings.length === 0 ? "It found nothing else." : `Its other findings, in its words:\n\n${fenced(verdict.findings.map((finding) => `- ${finding}`).join("\n"))}`;
+  const findings = verdict.findings.length === 0 ? "It found nothing else." : `Its other findings, in its words:\n\n${fenced(verdict.findings.map((finding) => `- ${verifierFindingText(finding, "  ")}`).join("\n"))}`;
   return [result, ...criteria, ...blocking, findings, ...reviewedPart(review, verdict)].join("\n\n");
 }
 
@@ -118,13 +118,13 @@ function whatFailed(verdict: Returned, ci: CiVerdict | null): string[] {
     failed === null
       ? []
       : [`### The commit and the tree\n\n${checkoutText(verdict.headSha, failed)} Commit what belongs to the work and remove what doesn't, so the commit you hand off is checked out on a clean tree.`];
-  const checks = verdict.criteria.flatMap((check, i) => (check.result === "pass" ? [] : [`### ${i + 1}. ${check.criterion}\n\n**${RESULT[check.result]}.** The verifier's evidence:\n\n${fenced(check.evidence)}`]));
+  const checks = verdict.criteria.flatMap((check, i) => (check.result === "pass" ? [] : [`### ${i + 1}. ${check.criterion}\n\n**${RESULT[check.result]}.** What the run showed, then the verifier's evidence:\n\n${fenced(`${check.shows}\n\n${check.evidence}`)}`]));
   const failedCi = ci?.kind === "fail" ? [`### CI failed on #${ci.number}\n\n${ciFailure(ci.failedChecks)} Read the runs on the pull request, fix the cause, and push.`] : [];
   const blocking =
     verdict.blocking.length === 0
       ? []
       : [`### Blocking defects the verifier found\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n${verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n")}`];
-  const findings = verdict.findings.length === 0 ? [] : [`### Other findings\n\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`];
+  const findings = verdict.findings.length === 0 ? [] : [`### Other findings\n\n${verdict.findings.map((finding) => `- ${verifierFindingText(finding, "  ")}`).join("\n")}`];
   return [...checkout, ...checks, ...failedCi, ...blocking, ...findings];
 }
 

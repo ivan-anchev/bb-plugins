@@ -1303,7 +1303,7 @@ export async function failsVerification(kit: ReturnType<typeof harness>, coordin
   const { verdict, criteria: all } = check();
   const verifierThreadId = verdict.state === "running" ? verdict.verifierThreadId : assert.fail(`the verdict is ${verdict.state}`);
   const fails = (i: number): boolean => on === "criterion" && i === 0;
-  const criteria = all.map((_, i) => ({ criterion: i + 1, result: fails(i) ? "fail" : "pass", evidence: fails(i) ? "# fail 1" : "# pass" }));
+  const criteria = all.map((_, i) => ({ criterion: i + 1, result: fails(i) ? "fail" : "pass", shows: "Ran it.", evidence: fails(i) ? "# fail 1" : "# pass" }));
   const anchored = { result: "anchored", anchor: "brief", reason: "The brief says retries back off; this never stops doubling." };
   const triage = on === "review" ? Array.from({ length: Math.max(unfixed, 1) }, (_, i) => ({ finding: i + 1, ...anchored })) : [];
   await kit.call("issue_verdict", { criteria, findings: [], triage }, verifierThreadId);

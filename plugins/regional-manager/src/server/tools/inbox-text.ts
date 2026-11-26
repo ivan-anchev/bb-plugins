@@ -20,7 +20,7 @@ import { capChoice, choiceText, mergeStandsText, type AnsweredAt, type FollowUp 
 import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion, mergeAnswer, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { defectText, findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
-import { acceptableAsIs, checkInFlight, type PrOfBranch, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, type Verdict } from "../../model/verdict/verdict.ts";
+import { acceptableAsIs, checkInFlight, type PrOfBranch, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, verifierFindingText, type Verdict } from "../../model/verdict/verdict.ts";
 import { onlyNits, unfiledAtMerge } from "../../model/verdict/rounds/follow-up.ts";
 import { reportFileOf } from "../memory/report-file.ts";
 
@@ -285,7 +285,7 @@ export function reminderText({ id, note, dueAt, everyMs }: Reminder): string {
  */
 function passedLine({ issueId, followUpId }: Check, titles: Lookups["titles"]): string {
   if (followUpId === null) return "";
-  return `\n\nIt passed, so the plugin filed every review finding its rounds held without blocking it as ${titled(followUpId, titles)}, top-level in Backlog and depending on ${issueId}: agent_start on it is refused while ${issueId} is open. It has no done-criteria yet: plan it with issue_update before an agent starts on it, or cancel it if the user doesn't want it.`;
+  return `\n\nIt passed, so the plugin filed every finding its rounds held without blocking it, its reviewers' and its verifiers' own, as ${titled(followUpId, titles)}, top-level in Backlog and depending on ${issueId}: agent_start on it is refused while ${issueId} is open. It has no done-criteria yet: plan it with issue_update before an agent starts on it, or cancel it if the user doesn't want it.`;
 }
 
 /**
@@ -503,9 +503,9 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       ]
         .filter((part) => part !== "")
         .join(" ");
-      const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
+      const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   Shows: ${check.shows}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const blocking = verdict.blocking.length === 0 ? [] : [`Blocking defects it found, each failing the verdict:\n${verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n")}`];
-      const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${finding.replaceAll("\n", "\n  ")}`).join("\n")}`;
+      const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${verifierFindingText(finding, "  ")}`).join("\n")}`;
       return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict, check)].join("\n\n");
     }
     case "could-not-run":

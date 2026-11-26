@@ -357,13 +357,13 @@ test("a round whose criteria all passed but whose verifier found a blocking defe
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "defect" } } } } : entry,
   );
   const body = bodyOf(3);
-  const blocking = [{ claim: "cli.js crashes on an empty counts.json.", anchor: "bug", steps: "1. Kill a run mid-save. 2. Run it again." }] as const;
-  const verdict = body.verdict?.state === "returned" ? { ...body.verdict, blocking: [...blocking] } : assert.fail("no returned verdict");
+  const blocking = { title: "cli.js crashes on an empty counts.json", claim: "It reads the file before checking it.", anchor: "bug", steps: ["Kill a run mid-save.", "Run it again."] } as const;
+  const verdict = body.verdict?.state === "returned" ? { ...body.verdict, blocking: [{ ...blocking, steps: [...blocking.steps] }] } : assert.fail("no returned verdict");
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: defect }), bodies: () => ({ ...body, verdict }) });
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldBlocking defect found");
   const three = rounds(tab()).card(3);
   assert.ok(await three.findByText("Blocking defects the verifier found"));
-  assert.ok(three.getByText("Blocks, as a bug hit in normal use, reached by: 1. Kill a run mid-save. 2. Run it again.: cli.js crashes on an empty counts.json."));
+  assert.ok(three.getByText("cli.js crashes on an empty counts.json (blocks, as a bug hit in normal use, reached by: 1. Kill a run mid-save. 2. Run it again.): It reads the file before checking it."));
 });
 
 test("a final check whose own worktree was dirty says so, never that a claimed commit was missing", async () => {

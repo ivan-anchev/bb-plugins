@@ -30,7 +30,7 @@ import { isReviewing, reviewPending } from "../../model/verdict/review.ts";
 import type { Checkout, CheckoutRead } from "../../model/verdict/checkout.ts";
 import { ciOf, type CiVerdict } from "../../model/verdict/pr.ts";
 import { capQuestionsOf, countedFailures, mayGoBack } from "../../model/verdict/rounds/cap.ts";
-import { isSettled, judge, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
+import { isSettled, judge, type Verdict, type VerifierFinding } from "../../model/verdict/verdict.ts";
 import { environmentGone, type EnvironmentsBb } from "../agents/environments.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
 import { isRunning, latestTurnSeq, listedThreads, stopThreads, threadsById, type TurnsBb } from "../agents/threads.ts";
@@ -113,7 +113,7 @@ type Deps = {
 };
 
 /** A verifier's report: each criterion named by its text, its findings, and its triage of the review's findings, in their order. */
-export type VerifierReport = Pick<ReceivedVerdict, "findings" | "blocking" | "triage"> & { criteria: { criterion: string; result: CriterionResult; evidence: string }[] };
+export type VerifierReport = Pick<ReceivedVerdict, "criteria" | "findings" | "blocking" | "triage">;
 
 /** What became of a verifier's report: stored; refused, as its check no longer waits for it; or, for a final check, why its worktree couldn't be read, which ended the check as could-not-run. */
 type Received = "recorded" | "not-running" | { unread: string };
@@ -603,8 +603,11 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
   };
 }
 
-/** A finding of a verdict whose verifier asked a person something, as the plugin declined it. */
-const declinedFinding = (asked: string): string =>
-  `The verifier asked a person "${asked}"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.`;
+/** A finding of a verdict whose verifier asked a person something, as the plugin declined it: a nit, as it says nothing about the work, so no follow-up files it. */
+const declinedFinding = (asked: string): VerifierFinding => ({
+  severity: "nit",
+  title: "The verifier asked a person something, and the plugin declined it",
+  detail: `The verifier asked a person "${asked}"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.`,
+});
 
 const messageOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));

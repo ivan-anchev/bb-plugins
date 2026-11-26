@@ -39,7 +39,7 @@ const returned = (verifierThreadId: string, result: "pass" | "fail"): Received =
   verifierThreadId,
   headSha: SHA,
   checkout: CLEAN.checkout,
-  criteria: [{ criterion: "npm test passes", result, evidence: "npm test" }],
+  criteria: [{ criterion: "npm test passes", result, shows: "Ran it.", evidence: "npm test" }],
   findings: [],
   blocking: [],
   model: { providerId: "claude-code", model: "sonnet" },
@@ -173,7 +173,7 @@ test("a fix round claimed before its findings are sent survives a reload, and se
     verifierThreadId: "thr_verifier",
     headSha: SHA,
     checkout: CLEAN.checkout,
-    criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }],
+    criteria: [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "# fail 1" }],
     findings: [],
     blocking: [],
     model: { providerId: "claude-code", model: "sonnet" },
@@ -622,6 +622,40 @@ test("a pass with only nits left files none and stamps nothing, and neither does
   assert.equal(store.settleReturned(nits.id, CHECKED, 4_600, null), MANAGER);
   assert.deepEqual(store.issues(MANAGER).map(({ id }) => id), [issue.id]);
   assert.deepEqual(followUpsOf(store, [nits]), [null]);
+});
+
+test("a pass files the verifier's own findings by the severity it gave each: a should-fix files a follow-up listing it, a nit alone files none, whatever its words say", () => {
+  const { store, issue, agentId } = withAgent();
+  const nitInWords = { severity: "nit", title: "The log says should-fix where it means nit", detail: "A must-fix in its words." } as const;
+  const nits = reviewedWith(store, issue.id, agentId, 1, []);
+  assert.equal(store.receiveVerdict(nits.id, { ...returned("thr_verifier_1", "pass"), findings: [nitInWords] }, 4_001), true);
+  assert.equal(store.settleReturned(nits.id, CHECKED, 4_600, null), MANAGER);
+  assert.deepEqual(followUpsOf(store, [nits]), [null], "a nit, by its severity, files nothing");
+
+  const leak = { severity: "should-fix", title: "The retry log prints the payload", detail: "Ran npm test: the log holds it." } as const;
+  const second = reviewedWith(store, issue.id, agentId, 2, []);
+  assert.equal(store.receiveVerdict(second.id, { ...returned("thr_verifier_2", "pass"), findings: [leak] }, 4_002), true);
+  assert.equal(store.settleReturned(second.id, CHECKED, 4_700, null), MANAGER);
+  const filed = store.issues(MANAGER).find(({ id }) => id !== issue.id) ?? assert.fail("no follow-up filed");
+  assert.equal(filed.description, "2 verifiers' findings held without blocking WEB-1 when it passed. Its brief lists each, with its round and the verifier's reason: check each still holds first. Plan this issue's done-criteria before an agent starts.");
+  assert.ok(filed.brief?.includes("- Round 2: The retry log prints the payload (should-fix): Ran npm test: the log holds it."), filed.brief ?? "");
+  assert.ok(filed.brief?.includes(`- Round 1: ${nitInWords.title} (nit): ${nitInWords.detail}`), "the earlier round's nit is listed beside it, as a review's nits are");
+});
+
+test("a build parent's final check that passes with a should-fix of its verifier's own files it as the parent's follow-up", () => {
+  const { store, parent, sub } = withParent();
+  const final = store.insertFinalCheck(MANAGER, parent.id, { defaultBranch: "main", merged: [sub.id] }, 4_000);
+  store.insertCheckerTicket("final-1", { kind: "verifier", coordinatorId: MANAGER, issueId: parent.id, checkId: final.id }, 4_100);
+  store.bindTicket("final-1", "thr_final_1");
+  const leak = { severity: "should-fix", title: "The vault client logs card numbers at debug level", detail: "Ran the suite with DEBUG=vault: the log holds one." } as const;
+  const clean = { headSha: "b".repeat(40), changedFiles: [], changedFileCount: 0 };
+  assert.ok(store.receiveVerdict(final.id, { ...returned("thr_final_1", "pass"), headSha: clean.headSha, checkout: clean, findings: [leak] }, 4_500));
+  assert.equal(store.settleReturned(final.id, CHECKED, 4_600, null), MANAGER);
+
+  const filed = store.issues(MANAGER).find(({ id }) => id !== parent.id && id !== sub.id) ?? assert.fail("no follow-up filed");
+  assert.deepEqual([filed.title, filed.dependsOn], ["Follow-ups from WEB-1: Card vault", [parent.id]]);
+  assert.ok(filed.brief?.includes(`- Round 1: ${leak.title} (should-fix): ${leak.detail}`), filed.brief ?? "");
+  assert.equal(store.check(final.id)?.followUpId, filed.id, "the final check is stamped as collected");
 });
 
 test("a follow-up of a follow-up is titled after the first origin and depends on its own", () => {

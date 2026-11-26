@@ -45,7 +45,7 @@ const returned = (n: number, triage: Triage[]): StoredVerdict => ({
   verifierThreadId: `thr_v${n}`,
   headSha: sha(n),
   checkout: { headSha: sha(n), changedFiles: [], changedFileCount: 0 },
-  criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ok" }],
+  criteria: [{ criterion: "npm test passes", result: "pass", shows: "Ran it.", evidence: "ok" }],
   findings: [],
   blocking: [],
   triage,

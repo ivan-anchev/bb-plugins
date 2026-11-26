@@ -108,7 +108,7 @@ function verdictOf(n: number, results: readonly CriterionResult[]): ShownVerdict
     verifierThreadId: `thr_verifier_${n}`,
     headSha: SHA,
     checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
-    criteria: results.map((result, i) => ({ criterion: CRITERIA[i] ?? "", result, evidence: `Round ${n}, criterion ${i + 1}: ${result === "pass" ? "ok" : "1 failing: caps the backoff"}` })),
+    criteria: results.map((result, i) => ({ criterion: CRITERIA[i] ?? "", result, shows: "Ran it.", evidence: `Round ${n}, criterion ${i + 1}: ${result === "pass" ? "ok" : "1 failing: caps the backoff"}` })),
     findings: [],
     blocking: [],
     sameModel: false,

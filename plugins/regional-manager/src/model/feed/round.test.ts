@@ -52,7 +52,7 @@ const RETURNED: Verdict = {
   verifierThreadId: "thr_verifier",
   headSha: SHA,
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
-  criteria: [{ criterion: "npm test passes", result: "fail", evidence: "1 failing" }],
+  criteria: [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "1 failing" }],
   findings: [],
   blocking: [],
   triage: TRIAGE,

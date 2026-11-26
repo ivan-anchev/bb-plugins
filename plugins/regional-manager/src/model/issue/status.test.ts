@@ -65,7 +65,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
   verifierThreadId: "thr_v",
   headSha: SHA,
   checkout: CLEAN,
-  criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "npm test" })),
+  criteria: results.map((result) => ({ criterion: "npm test passes", result, shows: "Ran it.", evidence: "npm test" })),
   findings: [],
   blocking: [],
   model: { providerId: "claude-code", model: "sonnet" },

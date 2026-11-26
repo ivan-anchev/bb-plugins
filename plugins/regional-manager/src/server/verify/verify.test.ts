@@ -28,16 +28,16 @@ const DONE = {
 };
 const PASSES = {
   criteria: [
-    { criterion: 1, result: "pass", evidence: "$ npm test\n# pass 13\n# fail 0" },
-    { criterion: 2, result: "pass", evidence: "$ npm run lint\n0 problems" },
+    { criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\n# pass 13\n# fail 0" },
+    { criterion: 2, result: "pass", shows: "Ran it.", evidence: "$ npm run lint\n0 problems" },
   ],
   findings: [],
 };
 const FAILS = {
   ...PASSES,
   criteria: [
-    { criterion: 1, result: "fail", evidence: "$ npm test\nnot ok 13 - backoff caps at 6000\n  expected: 6000\n  actual: 5000\n# fail 1" },
-    { criterion: 2, result: "pass", evidence: "$ npm run lint\n0 problems" },
+    { criterion: 1, result: "fail", shows: "Ran it.", evidence: "$ npm test\nnot ok 13 - backoff caps at 6000\n  expected: 6000\n  actual: 5000\n# fail 1" },
+    { criterion: 2, result: "pass", shows: "Ran it.", evidence: "$ npm run lint\n0 problems" },
   ],
 };
 
@@ -122,7 +122,7 @@ test("a first failed verdict goes back to the agent as its verifier's message, w
   assert.deepEqual([toAgent[0]?.senderThreadId, toAgent[0]?.mode], [verifierThreadId, "queue-if-active"], "marked as the verifier's message, never the user's");
   const findings = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
   assert.match(findings, /^## Verifier findings: 1 of 2 done-criteria not met\n\nA verifier checked your done handoff at commit `0123456`/);
-  assert.match(findings, /### 1\. npm test passes\n\n\*\*Failed\.\*\* The verifier's evidence:\n\n```\n\$ npm test\nnot ok 13 - backoff caps at 6000\n  expected: 6000\n  actual: 5000\n# fail 1\n```/);
+  assert.match(findings, /### 1\. npm test passes\n\n\*\*Failed\.\*\* What the run showed, then the verifier's evidence:\n\n```\nRan it\.\n\n\$ npm test\nnot ok 13 - backoff caps at 6000\n  expected: 6000\n  actual: 5000\n# fail 1\n```/);
   assert.doesNotMatch(findings, /npm run lint/, "a passed criterion is not sent back");
   assert.equal(kit.thread(agentThreadId).status, "active", "the agent works again");
   assert.deepEqual([(await row()).lane, (await row()).headline], ["in-progress", "Working"]);
@@ -138,7 +138,7 @@ test("a first failed verdict goes back to the agent as its verifier's message, w
   ]);
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(catchUp, /findings sent back to it\n\nAt [^\n]* as its automatic fix round 1\. Nothing to do yet/);
-  assert.match(catchUp, /Failed verification: 1 of 2 criteria passed[\s\S]*1\. FAIL: npm test passes\n {3}\$ npm test\n {3}not ok 13 - backoff caps at 6000/);
+  assert.match(catchUp, /Failed verification: 1 of 2 criteria passed[\s\S]*1\. FAIL: npm test passes\n {3}Shows: Ran it\.\n {3}\$ npm test\n {3}not ok 13 - backoff caps at 6000/);
 });
 
 test("findings sent back wake the coordinating thread neither at once nor from the tick; the next update's doorbell and the catch-up list them", async () => {
@@ -475,7 +475,7 @@ test("an issue opened on the board sends of each verdict only what the board sho
     verifierThreadId,
     headSha: HEAD,
     checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 },
-    criteria: FAILS.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
+    criteria: FAILS.criteria.map(({ criterion, result, shows, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, shows, evidence })),
     findings: [],
     blocking: [],
     sameModel: false,
@@ -550,7 +550,7 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
       verifierThreadId,
       headSha: HEAD,
       checkout: { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 },
-      criteria: PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
+      criteria: PASSES.criteria.map(({ criterion, result, shows, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, shows, evidence })),
       findings: [],
       blocking: [],
       sameModel: false,
@@ -756,9 +756,9 @@ test("a verifier's MCP sign-in, question or approval is declined at once, its ch
   const shown = (await opened()).rounds.at(-1)?.body.verdict;
   assert.ok(shown?.state === "returned");
   assert.deepEqual(shown.findings.slice(0, 3), [
-    'The verifier asked a person "Reconnect GitHub on ChatGPT"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.',
-    'The verifier asked a person "Is HELLO.md the right file name?"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.',
-    'The verifier asked a person "Asks to approve the command `git push`: It pushes the branch"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.',
+    { severity: 'nit', title: 'The verifier asked a person something, and the plugin declined it', detail: 'The verifier asked a person "Reconnect GitHub on ChatGPT"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.' },
+    { severity: 'nit', title: 'The verifier asked a person something, and the plugin declined it', detail: 'The verifier asked a person "Is HELLO.md the right file name?"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.' },
+    { severity: 'nit', title: 'The verifier asked a person something, and the plugin declined it', detail: 'The verifier asked a person "Asks to approve the command `git push`: It pushes the branch"; nobody answers a verifier, so the plugin declined it, and the verifier went on without it.' },
   ]);
   assert.match(doorbells().at(-1) ?? "", /handed off: done, verified$/);
 });
@@ -1133,6 +1133,75 @@ test("issue_verdict's instructions, like every tool's, fit within bb's 4,096-cha
   for (const { name, instructions } of tools) assert.ok((instructions ?? "").length <= 4_096, `${name}'s instructions are ${instructions?.length} characters`);
 });
 
+// why 3,600: room under bb's 4,096 for the rules the instructions quote to grow; the writing rules live in the verifier's rules and its skill.
+test("issue_verdict's instructions stay within 3,600 characters, and the verifier's rules and its skill carry \"How you write your verdict\"", async () => {
+  const { kit, verifier, handOff } = await withAgent();
+  await handOff();
+  const instructions = kit.tools().find(({ name }) => name === "issue_verdict")?.instructions ?? assert.fail("no instructions");
+  assert.ok(instructions.length <= 3_600, `${instructions.length} characters`);
+  assert.match(instructions, /result, shows, evidence[\s\S]*title, claim, anchor, steps[\s\S]*severity, title, detail/, "the instructions name the fields only");
+  const skill = readFileSync(join(import.meta.dirname, "..", "..", "..", "skills", "verifying", "SKILL.md"), "utf8").replace(/\s+/g, " ");
+  const rules = (kit.configurationFor(verifier(), {}).instructions ?? assert.fail("no rules")).replace(/\s+/g, " ");
+  for (const [place, text] of Object.entries({ rules, skill })) {
+    for (const rule of [
+      /How you write your verdict/,
+      /shows\W+ one line per criterion, at most 140 characters, saying what the run showed, not that it passed: "CI on #271 at 2f90cdf passed under Node 22\."/,
+      /evidence\W+ the command and the lines that decide it, nothing else; for a fail, the failing lines\./,
+      /reason\W+ one line, at most 160 characters: what you ran or read that decided the triage\. Don't restate the reviewer's claim/,
+      /steps\W+ one action per step, at most six, each a line: "Record the CSV approval through issue_update\."/,
+      /blocking and findings\W+ a title like a reviewer's \(what goes wrong, at most 80 characters/,
+      /Plain words and contractions, no filler or hype; cut content, not grammar\./,
+    ]) assert.match(text, rule, place);
+  }
+});
+
+test("issue_verdict refuses a criterion without shows or over 140 characters, a triage reason over 160 or on two lines, more than 6 steps or a step over 160, and a blocking defect without a title, saving nothing; within the caps it records", async () => {
+  const { kit, check, verifier, handOff } = await withAgent();
+  kit.reviewers.reportAtOnce = false;
+  await handOff();
+  const review = check().review;
+  const reviewer = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
+  await kit.call("issue_review", { findings: [{ title: "A dead endpoint is retried forever", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." }] }, reviewer);
+  await kit.idle(reviewer, "Reviewed.");
+  await settled();
+
+  const steps = ["Point a webhook at a dead endpoint.", "Watch the queue: it never drains."];
+  const anchored = { finding: 1, result: "anchored", anchor: "bug", steps, reason: "Ran it against a dead endpoint for 5 minutes: 300 retries." };
+  const crash = { title: "`node cli.js` crashes on an empty counts.json", claim: "It parses the file unchecked.", anchor: "bug", steps: ["Create an empty counts.json.", "Run node cli.js."] };
+  const valid = { ...PASSES, triage: [anchored], blocking: [crash] };
+  const [first, second] = PASSES.criteria;
+  const { shows: _, ...unshown } = first;
+  const { title: __, ...untitled } = crash;
+  const refused: [string, object, (string | number)[]][] = [
+    ["a criterion without shows", { ...valid, criteria: [unshown, second] }, ["criteria", 0, "shows"]],
+    ["shows over 140", { ...valid, criteria: [{ ...first, shows: "x".repeat(141) }, second] }, ["criteria", 0, "shows"]],
+    ["shows on two lines", { ...valid, criteria: [{ ...first, shows: "Ran it.\nIt passed." }, second] }, ["criteria", 0, "shows"]],
+    ["a reason over 160", { ...valid, triage: [{ ...anchored, reason: "x".repeat(161) }] }, ["triage", 0, "reason"]],
+    ["a reason on two lines", { ...valid, triage: [{ ...anchored, reason: "Ran it.\n300 retries." }] }, ["triage", 0, "reason"]],
+    ["a reason ending in a line break", { ...valid, triage: [{ ...anchored, reason: "Ran the tests.\n" }] }, ["triage", 0, "reason"]],
+    ["a reason opening with a line break", { ...valid, triage: [{ ...anchored, reason: "\nRan the tests." }] }, ["triage", 0, "reason"]],
+    ["shows ending in a line break", { ...valid, criteria: [{ ...first, shows: "Ran it.\n" }, second] }, ["criteria", 0, "shows"]],
+    ["a title ending in a line break", { ...valid, blocking: [{ ...crash, title: `${crash.title}\n` }] }, ["blocking", 0, "title"]],
+    ["a step ending in a line break", { ...valid, triage: [{ ...anchored, steps: ["Point a webhook at a dead endpoint.\n"] }] }, ["triage", 0, "steps", 0]],
+    ["7 steps", { ...valid, triage: [{ ...anchored, steps: Array.from({ length: 7 }, (_, i) => `Step ${i + 1}.`) }] }, ["triage", 0, "steps"]],
+    ["a step over 160", { ...valid, triage: [{ ...anchored, steps: ["x".repeat(161)] }] }, ["triage", 0, "steps", 0]],
+    ["a step in the old numbered line", { ...valid, triage: [{ ...anchored, steps: "1. Point a webhook at a dead endpoint. 2. Watch the queue." }] }, ["triage", 0, "steps"]],
+    ["a defect's 7 steps", { ...valid, blocking: [{ ...crash, steps: Array.from({ length: 7 }, (_, i) => `Step ${i + 1}.`) }] }, ["blocking", 0, "steps"]],
+    ["a blocking defect without a title", { ...valid, blocking: [untitled] }, ["blocking", 0, "title"]],
+    ["a title over 80", { ...valid, blocking: [{ ...crash, title: "x".repeat(81) }] }, ["blocking", 0, "title"]],
+    ["evidence over 2,000", { ...valid, criteria: [{ ...first, evidence: "x".repeat(2_001) }, second] }, ["criteria", 0, "evidence"]],
+    ["a claim over 1,200", { ...valid, blocking: [{ ...crash, claim: "x".repeat(1_201) }] }, ["blocking", 0, "claim"]],
+    ["a finding as free prose", { ...valid, findings: ["The log repeats the payload (should-fix)."] }, ["findings", 0]],
+  ];
+  for (const [what, input, path] of refused) {
+    await assert.rejects(kit.call("issue_verdict", input, verifier()), (error) => error instanceof z.ZodError && error.issues.some((issue) => JSON.stringify(issue.path) === JSON.stringify(path)), what);
+  }
+  assert.equal(check().verdict.state, "running", "nothing was saved");
+
+  const limits = { ...valid, criteria: [{ ...first, shows: "x".repeat(140) }, second], triage: [{ ...anchored, reason: "x".repeat(160), steps: Array.from({ length: 6 }, () => "x".repeat(160)) }] };
+  assert.match(textOf(await kit.call("issue_verdict", limits, verifier())), /^Verdict recorded/, "at each cap it records");
+});
+
 test("issue_verdict refuses a bug anchored without the normal-use steps that reach it; a principle violation and a contrived race downgraded to should-fix leave a verdict that passes every criterion Verified, with nothing sent back", async () => {
   const { kit, agentThreadId, row, check, verifier, handOff } = await withAgent();
   kit.reviewers.reportAtOnce = false;
@@ -1156,7 +1225,7 @@ test("issue_verdict refuses a bug anchored without the normal-use steps that rea
     "issue_verdict is refused and nothing was saved: finding 2, the must-fix at `src/retry.ts:12`: a bug anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: downgrade it to should-fix.",
   );
   assert.equal(check().verdict.state, "running", "nothing was saved");
-  const briefWithSteps = { finding: 1, result: "anchored", anchor: "brief", steps: "1. Read the brief.", reason: "The brief names REVIEW.md." };
+  const briefWithSteps = { finding: 1, result: "anchored", anchor: "brief", steps: ["Read the brief."], reason: "The brief names REVIEW.md." };
   assert.equal(
     textOf(await kit.call("issue_verdict", { ...PASSES, triage: [briefWithSteps, race] }, verifier())),
     "issue_verdict is refused and nothing was saved: finding 1, the must-fix at `src/server/store/store.ts:88`: a brief anchor takes no steps, as it is no bug: pass steps as null.",
@@ -1177,15 +1246,15 @@ test("issue_verdict refuses a bug anchored without the normal-use steps that rea
 test("a defect the verifier finds itself outside the criteria, hit in normal use, fails a verdict whose criteria all pass: refused without its steps, it goes back to the agent, and the manager and the board name it; findings beside it never fail it", async () => {
   const { kit, threadId, agentThreadId, opened, verifier, handOff } = await withAgent();
   await handOff();
-  const crash = { claim: "`node cli.js` crashes on an empty counts.json, which a first run leaves when it is killed.", anchor: "bug" };
-  const advisory = ["A read held mid-await by hand loses an update (should-fix: a contrived setup)."];
+  const crash = { title: "`node cli.js` crashes on an empty counts.json", claim: "A first run killed mid-save leaves counts.json empty, and the next run parses it unchecked.", anchor: "bug" };
+  const advisory = [{ severity: "should-fix", title: "A read held mid-await by hand loses an update", detail: "Only a contrived setup reaches it: hold the read by hand." }];
 
   const refused = await kit.call("issue_verdict", { ...PASSES, findings: advisory, blocking: [crash] }, verifier());
   assert.equal(
     textOf(refused),
     "issue_verdict is refused and nothing was saved: blocking defect 1: a bug anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: report it in findings instead.",
   );
-  const steps = "1. Run node cli.js signup and kill it while it saves. 2. Run node cli.js signup again: it throws SyntaxError.";
+  const steps = ["Run node cli.js signup and kill it while it saves.", "Run node cli.js signup again: it throws SyntaxError."];
   const verifierThreadId = verifier();
   assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, findings: advisory, blocking: [{ ...crash, steps }] }, verifierThreadId)), /^Verdict recorded: 2 of 2 criteria passed/);
   await kit.idle(verifierThreadId, "Verdict returned.");
@@ -1194,13 +1263,13 @@ test("a defect the verifier finds itself outside the criteria, hit in normal use
   const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
   assert.match(sent, /^## Verifier findings: a blocking defect the verifier found, though every done-criterion passed\n/);
   assert.ok(
-    sent.includes(`### Blocking defects the verifier found\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n- Blocks, as a bug hit in normal use, reached by: ${steps}: ${crash.claim}`),
-    "the agent gets the defect with its anchor and steps",
+    sent.includes(`### Blocking defects the verifier found\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n- ${crash.title} (blocks, as a bug hit in normal use, reached by: 1. ${steps[0]} 2. ${steps[1]}): ${crash.claim}`),
+    "the agent gets the defect with its title, anchor and steps",
   );
-  assert.ok(sent.includes(`### Other findings\n\n- ${advisory[0]}`), "the advisory finding goes beside it");
+  assert.ok(sent.includes("### Other findings\n\n- A read held mid-await by hand loses an update (should-fix): Only a contrived setup reaches it: hold the read by hand."), "the advisory finding goes beside it, by its title and severity");
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
   assert.match(catchUp, /Failed verification: a blocking defect the verifier found\. 2 of 2 criteria passed/);
-  assert.ok(catchUp.includes(`Blocking defects it found, each failing the verdict:\n- Blocks, as a bug hit in normal use, reached by: ${steps}: ${crash.claim}`));
+  assert.ok(catchUp.includes(`Blocking defects it found, each failing the verdict:\n- ${crash.title} (blocks, as a bug hit in normal use, reached by: 1. ${steps[0]} 2. ${steps[1]}): ${crash.claim}`));
   const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");
   assert.deepEqual(round.round.verdict?.outcome, { kind: "fail", by: "defect" });
   const shown = round.body.verdict;
@@ -1210,9 +1279,9 @@ test("a defect the verifier finds itself outside the criteria, hit in normal use
 test("blocking defects an earlier verifier found carry into the next round's first message, which says to rerun a bug anchor's steps and recheck any other anchor's requirement: each needs an answer, and one still blocking fails that round though its own verifier found nothing new", async () => {
   const { kit, threadId, verifier, handOff, check } = await withAgent();
   await handOff();
-  const crash = { claim: "`node cli.js` crashes on an empty counts.json.", anchor: "bug", steps: "1. Kill a run mid-save. 2. Run node cli.js signup: SyntaxError." } as const;
-  const lost = { claim: "A count written twice in one run is lost.", anchor: "regression", steps: "1. Run node cli.js a b. 2. counts.json holds only b." } as const;
-  const renamed = { claim: "The helper is named withRetry, though the user decided on retry.", anchor: "decision", steps: null } as const;
+  const crash = { title: "`node cli.js` crashes on an empty counts.json", claim: "It parses the file unchecked.", anchor: "bug", steps: ["Kill a run mid-save.", "Run node cli.js signup: SyntaxError."] };
+  const lost = { title: "A count written twice in one run is lost", claim: "The second write replaces the first.", anchor: "regression", steps: ["Run node cli.js a b.", "counts.json holds only b."] };
+  const renamed = { title: "The helper is named withRetry, not retry", claim: "The user decided on retry.", anchor: "decision", steps: null };
   const first = verifier();
   assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, blocking: [crash, lost, renamed] }, first)), /^Verdict recorded/);
   await kit.idle(first, "Verdict returned.");
@@ -1224,7 +1293,7 @@ test("blocking defects an earlier verifier found carry into the next round's fir
   const prompt = kit.thread(second).spawnedWith.prompt ?? assert.fail("no prompt");
   assert.ok(
     prompt.includes(
-      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a bug hit in normal use, reached by: ${crash.steps}: ${crash.claim}\n2. Blocks, as a regression: existing behaviour that breaks in normal use, reached by: ${lost.steps}: ${lost.claim}\n3. Blocks, as it breaks a recorded decision: ${renamed.claim}`,
+      `## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Answer every one in issue_verdict's earlierDefects by its number. Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. ${crash.title} (blocks, as a bug hit in normal use, reached by: 1. Kill a run mid-save. 2. Run node cli.js signup: SyntaxError.): ${crash.claim}\n2. ${lost.title} (blocks, as a regression: existing behaviour that breaks in normal use, reached by: 1. Run node cli.js a b. 2. counts.json holds only b.): ${lost.claim}\n3. ${renamed.title} (blocks, as it breaks a recorded decision): ${renamed.claim}`,
     ),
     "the second verifier's first message lists every defect, numbered, with their anchors and a bug's steps, and says how to recheck each kind",
   );

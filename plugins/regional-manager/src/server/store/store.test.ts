@@ -518,7 +518,7 @@ test("a verdict and a review stored before they kept their time take their check
     verifierThreadId: "thr_verifier",
     headSha: "a".repeat(40),
     checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 },
-    criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }],
+    criteria: [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "# fail 1" }],
     findings: [],
     triage: [{ result: "confirmed", reason: "Seen." }],
     model: { providerId: "claude-code", model: "sonnet" },
@@ -563,7 +563,7 @@ test("a reported review stored before findings had an origin, a title or earlier
     verifierThreadId: "thr_verifier",
     headSha: "a".repeat(40),
     checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 },
-    criteria: [{ criterion: "npm test passes", result: "pass", evidence: "# pass 1" }],
+    criteria: [{ criterion: "npm test passes", result: "pass", shows: "Ran it.", evidence: "# pass 1" }],
     findings: [],
     triage: [
       { result: "anchored", anchor: "brief", reason: "Seen." },
