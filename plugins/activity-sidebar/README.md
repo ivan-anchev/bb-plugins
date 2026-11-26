@@ -5,7 +5,8 @@ Experimental: it may break with a bb update. It relies on bb's experimental plug
 Replaces bb's thread list with one Activity list of every parent thread from
 every project, latest first, with pinned threads above it and the Working,
 Asleep and Archived shelves folded at its foot. A filter narrows it to one
-project, and rows are one line or two. Each row shows the thread's agent, its
+project, and rows are one line or two. With regional managers, a small icon
+segment switches to a Managers view with its own filter and Compact switch. Each row shows the thread's agent, its
 project's coloured initial, its title, its pull request, how many threads run
 under it, and its state or how long ago it last moved. Right-click a row for
 bb's own thread menu, with Sleep (or Wake) added; under the pointer, its corner

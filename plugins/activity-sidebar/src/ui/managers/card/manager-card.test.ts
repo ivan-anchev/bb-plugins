@@ -15,6 +15,8 @@ import type { ManagerIssues } from "../../../model/manager-issues.ts";
 
 const { SidebarViews } = await import("../sidebar-views.tsx");
 
+const NO_OPTIONS = { managers: null, threads: null };
+
 afterEach(cleanup);
 
 const THREADS = [thread("thr_pr", { originPluginId: "regional-manager", createdAt: 1, displayTitle: "PR Reviews", projectId: "prj_a", ...WORKING })];
@@ -26,7 +28,7 @@ async function openCard(issues: () => Record<string, ManagerIssues | null>, look
   const { managers } = buildActivity({ threads: THREADS, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null, looks: look === null ? [] : [look], lines: [] });
   const slot = renderSlot(
     { component: SidebarViews },
-    { managers, underWaySince: new Map([["thr_pr", Date.now()]]), view: "managers", onView: () => {}, onNavigate: () => {}, threads: null },
+    { managers, underWaySince: new Map([["thr_pr", Date.now()]]), view: "managers", onView: () => {}, onNavigate: () => {}, managersCompact: false, options: NO_OPTIONS, threads: () => null },
     {
       experimental_rpcContract: activitySidebarContract,
       rpc: {
@@ -161,7 +163,7 @@ test("keyboard focus on a manager's row shows its card at once, so Tab right aft
     const { managers } = buildActivity({ threads: THREADS, projects: [project("prj_a", "bb-plugins")], sleeps: new Map(), held: new Set(), now: 0, activeThreadId: null, filter: null, looks: [LOOK], lines: [] });
     const slot = renderSlot(
       { component: SidebarViews },
-      { managers, underWaySince: new Map([["thr_pr", Date.now()]]), view: "managers", onView: () => {}, onNavigate: () => {}, threads: null },
+      { managers, underWaySince: new Map([["thr_pr", Date.now()]]), view: "managers", onView: () => {}, onNavigate: () => {}, managersCompact: false, options: NO_OPTIONS, threads: () => null },
       { experimental_rpcContract: activitySidebarContract, rpc: { managerIssues: () => OPEN_ISSUES } },
     );
     const row = slot.getByRole("link", { name: /^PR Reviews/ });
