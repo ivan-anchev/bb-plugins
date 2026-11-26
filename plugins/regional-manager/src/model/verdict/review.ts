@@ -7,6 +7,7 @@
 // verdict; while the verdict is queued and the review is to come, the issue is Reviewing.
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
+import { headline } from "../one-line.ts";
 import type { Verdict } from "./verdict.ts";
 
 /** How much a finding matters, by the reviewer's judgement: must-fix, should-fix, or a nit. */
@@ -108,7 +109,7 @@ export type Review = z.infer<typeof reviewSchema>;
  * behaviour, else as a bug; a broken done-criterion; a broken requirement the issue's brief states
  * explicitly; or a broken recorded decision.
  */
-const anchorSchema = z.enum(["bug", "safety", "regression", "criterion", "brief", "decision"]);
+export const anchorSchema = z.enum(["bug", "safety", "regression", "criterion", "brief", "decision"]);
 type Anchor = z.infer<typeof anchorSchema>;
 
 /** The anchors that are bugs reached in normal use, each anchored with the steps that reach it. */
@@ -144,28 +145,50 @@ export const MISSED_RULE =
 export const RECHECK_RULE =
   "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it.";
 
-/** What a blocking anchor carries besides its name: for a bug, the normal-use steps that reach it; null for any other anchor (anchorProblem). */
-const stepsSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(1_000)
+/** How long a finding's title is at most, as the feed shows it on one row; the length a record stored before titles derives its own to (headline). */
+export const TITLE_CHARS = 80;
+
+/**
+ * What a blocking anchor carries besides its name, as a stored triage or defect has it: for a bug,
+ * the normal-use steps that reach it, in order; null for any other anchor (anchorProblem). why the
+ * string: one stored before steps were a list is one numbered line, "1. … 2. …", split here once
+ * (legacySteps). issue_verdict takes them capped (verdict-tool.ts).
+ */
+const storedStepsSchema = z
+  .union([z.array(z.string().min(1)), z.string().min(1).transform(legacySteps)])
   .nullable()
-  .default(null)
-  .describe('For a bug, safety or regression anchor: the normal-use steps that reach it, numbered on one line, as "1. … 2. …". null for any other anchor.');
+  .default(null);
+
+/** The steps of a numbered line, "1. … 2. …", as stored before steps were a list: split at each next number in turn, so a number inside a step stays in it; the whole line as one step when it isn't numbered. */
+function legacySteps(line: string): string[] {
+  const text = line.trim();
+  const first = /^1\.\s+/.exec(text);
+  if (first === null) return [text];
+  const steps: string[] = [];
+  let rest = text.slice(first[0].length);
+  for (let n = 2; ; n++) {
+    const next = new RegExp(`\\s${n}\\.\\s+`).exec(rest);
+    if (next === null) return [...steps, rest.trim()];
+    steps.push(rest.slice(0, next.index).trim());
+    rest = rest.slice(next.index + next[0].length);
+  }
+}
 
 /**
  * A defect the verifier found itself outside the done-criteria, as when creed-qa's checks of the
- * surrounding code turn one up, that meets a blocking anchor: its claim, the anchor and, for a bug,
- * the normal-use steps that reach it. Each one fails the verdict (verdict.ts failureReasons). A
- * defect that meets no anchor is no such thing: it goes in the verdict's findings, which never fail it.
+ * surrounding code turn one up, that meets a blocking anchor: its title, its claim, the anchor and,
+ * for a bug, the normal-use steps that reach it. Each one fails the verdict (verdict.ts
+ * failureReasons). A defect that meets no anchor is no such thing: it goes in the verdict's
+ * findings, which never fail it. why the title derived: a defect stored before titles has none, so
+ * its claim's first sentence stands in, once, here. issue_verdict takes it capped (verdict-tool.ts).
  */
-export const blockingDefectSchema = z.object({
-  claim: z.string().trim().min(1).max(2_000).describe("What is wrong, where, and what you ran that shows it, in a few lines."),
-  anchor: anchorSchema,
-  steps: stepsSchema,
-});
-export type BlockingDefect = z.infer<typeof blockingDefectSchema>;
+export const blockingDefectSchema = z
+  .object({ title: z.string().min(1).optional(), claim: z.string().min(1), anchor: anchorSchema, steps: storedStepsSchema })
+  .transform(({ title, ...defect }) => ({ title: title ?? headline(defect.claim, TITLE_CHARS), ...defect }));
+export type BlockingDefect = z.output<typeof blockingDefectSchema>;
+
+/** A bug anchor's steps as one line, numbered: "1. … 2. …". */
+const stepsText = (steps: readonly string[]): string => steps.map((step, i) => `${i + 1}. ${step.replaceAll(/\s+/g, " ")}`).join(" ");
 
 /**
  * Why an anchor can't be taken with its steps, in a phrase; null when it can: a bug, safety or
@@ -173,17 +196,17 @@ export type BlockingDefect = z.infer<typeof blockingDefectSchema>;
  * `otherwise`: what to do with a bug that has no such steps, as the refusal's way forward. The one
  * rule issue_verdict checks every anchor with, a triage's and a blocking defect's.
  */
-export function anchorProblem({ anchor, steps }: { anchor: Anchor; steps: string | null }, otherwise: string): string | null {
+export function anchorProblem({ anchor, steps }: { anchor: Anchor; steps: readonly string[] | null }, otherwise: string): string | null {
   if (BUG_ANCHORS.has(anchor)) return steps === null ? `a ${anchor} anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: ${otherwise}` : null;
   return steps === null ? null : `a ${anchor} anchor takes no steps, as it is no bug: pass steps as null`;
 }
 
 /** What an anchor names, with a bug's steps on the same line, as every place gives it after "Anchored" or "Blocks": "as a bug hit in normal use, reached by: 1. … 2. …". */
-const anchorText = ({ anchor, steps }: { anchor: Anchor; steps: string | null }): string =>
-  `as ${ANCHOR_WORDS[anchor]}${steps === null ? "" : `, reached by: ${steps.replaceAll("\n", " ")}`}`;
+const anchorText = ({ anchor, steps }: { anchor: Anchor; steps: readonly string[] | null }): string =>
+  `as ${ANCHOR_WORDS[anchor]}${steps === null ? "" : `, reached by: ${stepsText(steps)}`}`;
 
-/** A blocking defect in a line, as catch-up, the agent's fix round and the board give it: its anchor, then its claim, the claim's later lines indented by `indent`. */
-export const defectText = (defect: BlockingDefect, indent = ""): string => `Blocks, ${anchorText(defect)}: ${defect.claim.replaceAll("\n", `\n${indent}`)}`;
+/** A blocking defect in a line, as catch-up, the agent's fix round and the board give it: its title and anchor, then its claim, the claim's later lines indented by `indent`. */
+export const defectText = (defect: BlockingDefect, indent = ""): string => `${defect.title} (blocks, ${anchorText(defect)}): ${defect.claim.replaceAll("\n", `\n${indent}`)}`;
 
 /**
  * Where the findings that hold go, in the one wording every place a reviewer, a verifier, an agent
@@ -198,20 +221,20 @@ export const FOLLOW_UP_RULE =
  * review's order, each with why in a line: rejected, it doesn't hold or isn't worth fixing;
  * confirmed, a should-fix or nit that holds; anchored, a must-fix that holds and meets `anchor`,
  * with `steps`, the normal-use steps that reach it when the anchor is a bug (null otherwise);
- * downgraded, one that holds at the lower severity `to`. why `common`: issue_verdict takes the
- * same variants with the finding's number beside them (verdict-tool.ts). why steps default to
- * null: rows stored before d68 anchored safety and regression with none. Stored rows from before
- * the anchor rule are confirmed or rejected, and parse as they are.
+ * downgraded, one that holds at the lower severity `to`. why `common` and `steps`: issue_verdict
+ * takes the same variants with the finding's number beside them and its caps (verdict-tool.ts).
+ * why steps default to null: rows stored before d68 anchored safety and regression with none.
+ * Stored rows from before the anchor rule are confirmed or rejected, and parse as they are.
  */
-export const triageVariants = <Common extends z.ZodRawShape>(common: Common) =>
+export const triageVariants = <Common extends z.ZodRawShape, Steps extends z.ZodType<readonly string[] | null>>(common: Common, steps: Steps) =>
   z.discriminatedUnion("result", [
     z.object({ result: z.literal("rejected"), ...common }),
     z.object({ result: z.literal("confirmed"), ...common }),
-    z.object({ result: z.literal("anchored"), anchor: anchorSchema, steps: stepsSchema, ...common }),
+    z.object({ result: z.literal("anchored"), anchor: anchorSchema, steps, ...common }),
     z.object({ result: z.literal("downgraded"), to: severitySchema, ...common }),
   ]);
-export const triageSchema = triageVariants({ reason: z.string().min(1) });
-type Triage = z.infer<typeof triageSchema>;
+export const triageSchema = triageVariants({ reason: z.string().min(1) }, storedStepsSchema);
+type Triage = z.output<typeof triageSchema>;
 
 /**
  * A finding of the reviewer's with the verifier's triage of it: the one shape a verdict's readers

@@ -64,7 +64,7 @@ const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId
   verifierThreadId: "thr_v",
   headSha: SHA,
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
-  criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "ran npm test" })),
+  criteria: results.map((result) => ({ criterion: "npm test passes", result, shows: "Ran it.", evidence: "ran npm test" })),
   findings: [],
   blocking: [],
   triage: [],
@@ -188,7 +188,7 @@ test("catch-up's pass line names the follow-up its settling filed, and the round
   const checkId = passed.check?.id ?? assert.fail("no check");
   const event: StoredEvent = { id: 1, at: 5_000, event: { kind: "checked", issueId, checkId, asked: null } };
   const text = updatesText([event], lookupsOf([passed]));
-  assert.match(text, /\n\nIt passed, so the plugin filed every review finding its rounds held without blocking it as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and depending on WEB-1: agent_start on it is refused while WEB-1 is open\./);
+  assert.match(text, /\n\nIt passed, so the plugin filed every finding its rounds held without blocking it, its reviewers' and its verifiers' own, as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and depending on WEB-1: agent_start on it is refused while WEB-1 is open\./);
   assert.match(text, /confirmed 2 and rejected 0\. They are filed in WEB-2, its follow-up\./);
 
   assert.doesNotMatch(updatesText([event], lookupsOf([confirmedAll([], "pass")])), /filed/, "a pass that filed nothing says nothing of a follow-up");
@@ -233,5 +233,5 @@ test("a build parent's final check that passed names the follow-up its settling 
   const final: Check = { ...(confirmedAll([], "pass").check ?? assert.fail("no check")), subject: { kind: "final", defaultBranch: "main", merged: [] }, review: { state: "none" }, followUpId: FOLLOW_UP };
   const event: StoredEvent = { id: 3, at: 7_000, event: { kind: "checked", issueId, checkId: final.id, asked: null } };
   const lookups = { ...lookupsOf([]), check: () => final };
-  assert.match(updatesText([event], lookups), /It passed, so the plugin filed every review finding its rounds held without blocking it as WEB-2 "Follow-ups from WEB-1: Add retries"/);
+  assert.match(updatesText([event], lookups), /It passed, so the plugin filed every finding its rounds held without blocking it, its reviewers' and its verifiers' own, as WEB-2 "Follow-ups from WEB-1: Add retries"/);
 });

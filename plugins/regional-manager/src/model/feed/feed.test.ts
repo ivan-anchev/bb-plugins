@@ -41,7 +41,7 @@ function returned(results: readonly CriterionResult[], at: number, settlement: E
     verifierThreadId: "thr_verifier",
     headSha: SHA,
     checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
-    criteria: results.map((result, i) => ({ criterion: CRITERIA[i] ?? "", result, evidence: `evidence ${i + 1}` })),
+    criteria: results.map((result, i) => ({ criterion: CRITERIA[i] ?? "", result, shows: "Ran it.", evidence: `evidence ${i + 1}` })),
     findings: [],
     blocking: [],
     triage,

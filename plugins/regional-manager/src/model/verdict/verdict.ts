@@ -4,8 +4,9 @@
 // is never stored: `judge` derives it, so the board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
+import { headline } from "../one-line.ts";
 import type { Check, CheckSubject } from "./check.ts";
-import { blockingDefectSchema, holds, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
+import { blockingDefectSchema, holds, severitySchema, TITLE_CHARS, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict, type PrSnapshot } from "./pr.ts";
 
@@ -19,6 +20,43 @@ export type CriterionResult = z.infer<typeof criterionResultSchema>;
  */
 export const UNCHECKABLE_RULE =
   "A criterion you can't check as it is written, as when it names a step that hasn't happened yet, is unverifiable, with why as its evidence: never pass it on a nearby fact you could check.";
+
+/** How long a criterion's `shows` line is at most, as the feed shows it on one row; the length a criterion judged before it had one derives its own to (headline). */
+export const SHOWS_CHARS = 140;
+
+/**
+ * One done-criterion as the verifier judged it: its text, its result, `shows`, what the run showed
+ * in a line, and the evidence it ran. why derived: a criterion judged before `shows` existed has
+ * none, so its evidence's first sentence stands in, once, here. issue_verdict takes it capped
+ * (verdict-tool.ts).
+ */
+const judgedCriterionSchema = z
+  .object({ criterion: z.string(), result: criterionResultSchema, shows: z.string().min(1).optional(), evidence: z.string() })
+  .transform(({ shows, ...judged }) => ({ ...judged, shows: shows ?? headline(judged.evidence, SHOWS_CHARS) }));
+
+/**
+ * A problem the verifier found itself that no criterion covers and that meets no blocking anchor,
+ * in the review finding's shape: its severity, by CREW.md's Reviewers section, its title and its
+ * detail. It never fails the verdict; one that holds above a nit is filed with the issue's
+ * follow-up (rounds/follow-up.ts). why a string: one stored before findings had a shape was free
+ * prose, parsed once here (legacyFinding). issue_verdict takes it capped (verdict-tool.ts).
+ */
+const verifierFindingShape = z.object({ severity: severitySchema, title: z.string().min(1), detail: z.string().min(1) });
+export type VerifierFinding = z.output<typeof verifierFindingShape>;
+const verifierFindingSchema = z.union([verifierFindingShape, z.string().min(1).transform(legacyFinding)]);
+
+/**
+ * A finding stored as free prose: titled by its first sentence, whole as its detail, at the first
+ * severity its words name (the tool asked for one in them); should-fix when they name none, as a
+ * finding that meets no anchor is at most that.
+ */
+function legacyFinding(text: string): VerifierFinding {
+  const named = /\b(must-fix|should-fix|nit)\b/i.exec(text)?.[1];
+  return { severity: named === undefined ? "should-fix" : severitySchema.parse(named.toLowerCase()), title: headline(text, TITLE_CHARS), detail: text };
+}
+
+/** A verifier's own finding in a line, as catch-up, the agent's fix round and the follow-up give it: its title and severity, then its detail, the detail's later lines indented by `indent`. */
+export const verifierFindingText = ({ title, severity, detail }: VerifierFinding, indent = ""): string => `${title} (${severity}): ${detail.replaceAll("\n", `\n${indent}`)}`;
 
 const verifierThreadIdSchema = z.string().min(1);
 
@@ -75,8 +113,8 @@ const returnedSchema = z.object({
   verifierThreadId: verifierThreadIdSchema,
   headSha: z.string(),
   checkout: checkoutSchema,
-  criteria: z.array(z.object({ criterion: z.string(), result: criterionResultSchema, evidence: z.string() })).min(1),
-  findings: z.array(z.string()),
+  criteria: z.array(judgedCriterionSchema).min(1),
+  findings: z.array(verifierFindingSchema),
   /** The defects the verifier found itself, outside the criteria, that meet a blocking anchor: each one fails the verdict. why the default: a verdict stored before d68 reported none. */
   blocking: z.array(blockingDefectSchema).default([]),
   /** The verifier's triage of each of the review's findings, in their order: only its triage, as the findings are the review's. */

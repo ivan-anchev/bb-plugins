@@ -127,7 +127,7 @@ function settledRound(
   store.receiveReview(check.id, `thr_reviewer-${of}`, { findings: [{ file: "src/retry.ts", line: 10, origin: "new", ...finding }], earlier: [] }, model, at);
   store.insertCheckerTicket(`verifier-${of}`, { kind: "verifier", ...on }, at);
   store.bindTicket(`verifier-${of}`, `thr_verifier-${of}`);
-  const criteria = [{ criterion: "npm test passes", result: "pass" as const, evidence: "ok" }];
+  const criteria = [{ criterion: "npm test passes", result: "pass" as const, shows: "Ran it.", evidence: "ok" }];
   store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier-${of}`, headSha, checkout: { headSha, changedFiles: [], changedFileCount: 0 }, criteria, blocking: [], findings: [], triage: [triage], model, sameModel: false }, at);
   if (store.settleReturned(check.id, { kind: "checked", refused: null, ci: { kind: "none" } }, at, null) === null) throw new Error(`${issueId}'s round didn't settle`);
   return check;

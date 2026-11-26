@@ -255,7 +255,7 @@ test("the user's comment on an issue whose verdict waits for CI says not to rela
   await kit.tick();
   const running = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
   const verifierThreadId = running?.state === "running" ? running.verifierThreadId : assert.fail("no verifier running");
-  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm test\n# pass 13" }], findings: [] }, verifierThreadId);
+  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\n# pass 13" }], findings: [] }, verifierThreadId);
   await settled();
   const waiting = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
   assert.equal(waiting?.state === "returned" && waiting.settlement.kind, "waiting-for-ci");

@@ -13,8 +13,8 @@ const DONE = { status: "done", summary: "Retries land with backoff", did: ["Adde
 const PASSES = {
   headSha: HEAD,
   criteria: [
-    { criterion: 1, result: "pass", evidence: "$ npm test\n# fail 0" },
-    { criterion: 2, result: "pass", evidence: "$ npm run lint\n0 problems" },
+    { criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\n# fail 0" },
+    { criterion: 2, result: "pass", shows: "Ran it.", evidence: "$ npm run lint\n0 problems" },
   ],
   findings: [],
 };
@@ -560,7 +560,7 @@ test("a pull request merged while its check is pending makes the issue Done, and
   await minute();
   assert.deepEqual(await row(), { lane: "done", headline: "Merged #41", pr: "#41 merged CI pending" });
 
-  await kit.call("issue_verdict", { ...PASSES, criteria: [{ criterion: 1, result: "fail", evidence: "# fail 1" }, PASSES.criteria[1]] }, running.verifierThreadId);
+  await kit.call("issue_verdict", { ...PASSES, criteria: [{ criterion: 1, result: "fail", shows: "Ran it.", evidence: "# fail 1" }, PASSES.criteria[1]] }, running.verifierThreadId);
   await settled();
   await minute();
   assert.deepEqual(kit.delivered(agentThreadId).filter((text) => text.startsWith("## Verifier findings")), [], "nothing goes back to the agent");

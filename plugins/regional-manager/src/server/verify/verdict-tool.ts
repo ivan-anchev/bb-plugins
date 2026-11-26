@@ -5,9 +5,10 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { ANCHOR_RULE, anchorProblem, blockingDefectSchema, numberedText, placeText, RECHECK_RULE, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
+import { ONE_LINE } from "../../model/one-line.ts";
+import { ANCHOR_RULE, anchorProblem, anchorSchema, numberedText, placeText, RECHECK_RULE, severitySchema, TITLE_CHARS, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
-import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
+import { criterionResultSchema, SHOWS_CHARS, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
 import { earlierDefectsOf, scopeOf } from "../review/checker-brief.ts";
 import { failed, numbersRefusal, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
@@ -15,21 +16,54 @@ import type { Verify, VerifierReport } from "./verify.ts";
 
 export const VERDICT = "issue_verdict";
 
+/** Text the feed shows as one row: one line of at most `max` characters, as `what` says. */
+const lineSchema = (max: number, what: string) =>
+  z.string().trim().min(1).max(max).regex(ONE_LINE, "must be one line, with no line break").describe(what);
+
+/** A title like a reviewer's, the feed's row for a defect or finding. */
+const titleSchema = lineSchema(TITLE_CHARS, `What goes wrong, as a user or agent meets it, in one line of at most ${TITLE_CHARS} characters (aim for 60). No fix, no severity words.`);
+
+/** A bug anchor's steps, as issue_verdict takes them: at most six, one action each, each a line. */
+const stepsInputSchema = z
+  .array(lineSchema(160, "One action, in one line of at most 160 characters."))
+  .min(1)
+  .max(6)
+  .nullable()
+  .default(null)
+  .describe("For a bug, safety or regression anchor: the normal-use steps that reach it, in order, one action each, at most 6. null for any other anchor.");
+
 const verdictInputSchema = z.object({
   criteria: z
     .array(
       z.object({
         criterion: z.number().int().min(1).max(MAX_CRITERIA).describe("The criterion's number in your first message."),
         result: criterionResultSchema.describe("pass: what you ran proves it as it is written. fail: what you ran disproves it. unverifiable: you couldn't check it as it is written; say why in evidence."),
-        evidence: z.string().trim().min(1).max(4_000).describe("The command you ran and what it printed, quoted; for a fail, the failing lines."),
+        shows: lineSchema(SHOWS_CHARS, `What the run showed, in one line of at most ${SHOWS_CHARS} characters, not that it passed: "CI on #271 at 2f90cdf passed under Node 22."`),
+        evidence: z.string().trim().min(1).max(2_000).describe("The command you ran and the lines it printed that decide it, nothing else; for a fail, the failing lines."),
       }),
     )
     .min(1)
     .max(MAX_CRITERIA)
     .describe("One entry for every done-criterion, none skipped."),
-  findings: z.array(z.string().trim().min(1).max(2_000)).max(20).describe("Problems you saw that no criterion covers and that meet no blocking anchor, each with the severity CREW.md's Reviewers section gives it. They never fail the verdict. [] for none."),
+  findings: z
+    .array(
+      z.object({
+        severity: severitySchema.describe("The severity CREW.md's Reviewers section gives it."),
+        title: titleSchema,
+        detail: z.string().trim().min(1).max(1_200).describe("What is wrong, where, and what you ran that shows it."),
+      }),
+    )
+    .max(20)
+    .describe("Problems you saw that no criterion covers and that meet no blocking anchor. They never fail the verdict. [] for none."),
   blocking: z
-    .array(blockingDefectSchema)
+    .array(
+      z.object({
+        title: titleSchema,
+        claim: z.string().trim().min(1).max(1_200).describe("What is wrong, where, and what you ran that shows it."),
+        anchor: anchorSchema,
+        steps: stepsInputSchema,
+      }),
+    )
     .max(20)
     .default([])
     .describe(`Defects you found yourself, as with creed-qa's checks of the surrounding code, that no criterion covers and that meet a blocking anchor: each with its anchor and, for a bug, the normal-use steps that reach it. Each one fails the verdict. ${ANCHOR_RULE} [] for none.`),
@@ -44,10 +78,16 @@ const verdictInputSchema = z.object({
     .describe("One answer for every blocking defect an earlier verifier found that your first message numbers, none skipped. [] when it lists none."),
   triage: z
     .array(
-      triageVariants({
-        finding: z.number().int().min(1).describe("The reviewer's finding's number in your first message."),
-        reason: z.string().trim().min(1).max(500).describe("Why, in a line: what you ran or read that shows it holds, or doesn't. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it meets no anchor, as a principle violation or a bug that needs a contrived setup, or that it is marked missed."),
-      }),
+      triageVariants(
+        {
+          finding: z.number().int().min(1).describe("The reviewer's finding's number in your first message."),
+          reason: lineSchema(
+            160,
+            "Why, in one line of at most 160 characters: what you ran or read that decided it, not the reviewer's claim again. For a downgrade, why the lower severity fits; for a downgraded must-fix, that it meets no anchor, as a principle violation or a bug that needs a contrived setup, or that it is marked missed.",
+          ),
+        },
+        stepsInputSchema,
+      ),
     )
     .default([])
     .describe(`One entry for every finding of the reviewer's in your first message, none skipped, by its number. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`),
@@ -137,7 +177,7 @@ function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: re
       const check = byNumber.get(i + 1);
       // why throw: missing numbers were refused above.
       if (check === undefined) throw new Error(`Criterion ${i + 1} has no result.`);
-      return { criterion, result: check.result, evidence: check.evidence };
+      return { criterion, result: check.result, shows: check.shows, evidence: check.evidence };
     }),
     triage: findings.map((_, i) => {
       const triage = byFinding.get(i + 1);
@@ -181,9 +221,9 @@ function blockingRefusal(blocking: VerdictInput["blocking"]): string | null {
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves nothing: fix what it names and call again. Stop once it records your verdict or says stop. The plugin judges the commit and tree. Pass [] for an empty list.
-- criteria: one per done-criterion, by number: pass, fail or unverifiable, with evidence quoting what you ran and its output (up to 4,000 characters). ${UNCHECKABLE_RULE}
-- blocking: up to 20 defects outside the criteria you found yourself, as with creed-qa, that meet an anchor: claim, anchor, steps as it takes. Each fails the verdict.
+const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves nothing: fix what it names and call again. Stop once it records your verdict or says stop. The plugin judges the commit and tree. Pass [] for an empty list. Write each field as your rules' "How you write your verdict" says.
+- criteria: one per done-criterion, by number: result, shows, evidence. ${UNCHECKABLE_RULE}
+- blocking: up to 20 defects outside the criteria you found yourself, as with creed-qa, that meet an anchor: title, claim, anchor, steps as it takes. Each fails the verdict.
 - earlierDefects: one answer per earlier blocking defect, by number. ${RECHECK_RULE} One not fixed fails it.
-- findings: up to 20 other problems no criterion covers, with severity; never failing it.
-- triage: one per reviewer's finding, by number. ${TRIAGE_RULE} ${ANCHOR_RULE}`;
+- findings: up to 20 other problems no criterion covers: severity, title, detail; never failing it.
+- triage: one per reviewer's finding, by number, with its reason. ${TRIAGE_RULE} ${ANCHOR_RULE}`;

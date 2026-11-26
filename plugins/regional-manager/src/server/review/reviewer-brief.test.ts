@@ -77,7 +77,7 @@ function roundOne(sha: string): StoredCheck {
       verifierThreadId: "thr_v",
       headSha: sha,
       checkout: { headSha: sha, changedFiles: [], changedFileCount: 0 },
-      criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }],
+      criteria: [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "# fail 1" }],
       findings: [],
       blocking: [],
       triage: [],

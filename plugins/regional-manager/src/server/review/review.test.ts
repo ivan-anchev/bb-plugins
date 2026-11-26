@@ -21,12 +21,12 @@ const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
 const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing, trust me"], concerns: [], deviations: [], findings: [], headSha: HEAD };
 const PASSES = {
   criteria: [
-    { criterion: 1, result: "pass", evidence: "$ npm test\n# pass 13" },
-    { criterion: 2, result: "pass", evidence: "$ npm run lint\n0 problems" },
+    { criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\n# pass 13" },
+    { criterion: 2, result: "pass", shows: "Ran it.", evidence: "$ npm run lint\n0 problems" },
   ],
   findings: [],
 };
-const FAILS = { ...PASSES, criteria: [{ criterion: 1, result: "fail", evidence: "$ npm test\nnot ok 13" }, PASSES.criteria[1]] };
+const FAILS = { ...PASSES, criteria: [{ criterion: 1, result: "fail", shows: "Ran it.", evidence: "$ npm test\nnot ok 13" }, PASSES.criteria[1]] };
 const FINDINGS = [
   { title: "A dead endpoint is retried forever", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps, so a dead endpoint is retried every 2^n ms forever." },
   { title: "The retry helper's name hides its backoff", file: "src/retry.ts", line: null, severity: "nit", claim: "The retry helper's name says nothing about backoff." },
@@ -34,7 +34,7 @@ const FINDINGS = [
 /** The verdict `stored` of a handoff that passed both its criteria, as the board shows it in its round, settled as `settlement`: no model, triage or rule's flag. */
 function shownPassing(stored: Verdict, settlement: object) {
   if (stored.state !== "returned") return assert.fail("not returned");
-  const criteria = PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence }));
+  const criteria = PASSES.criteria.map(({ criterion, result, shows, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, shows, evidence }));
   return { state: "returned", verifierThreadId: stored.verifierThreadId, headSha: HEAD, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 }, criteria, findings: [], blocking: [], sameModel: false, settlement };
 }
 
@@ -380,7 +380,7 @@ test("a verdict that fails on a must-fix finding while CI is still to come says 
   const { check, handOff, reported, returned, catchUp } = await withAgent();
   await handOff({ ...DONE, prUrl: "https://github.com/acme/webhooks/pull/7" });
   await reported([FINDINGS[0]]);
-  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "safety", steps: "1. Point a webhook at a dead endpoint.\n2. It retries forever, filling the queue.", reason: "It never caps." }] });
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "safety", steps: ["Point a webhook at a dead endpoint.", "It retries forever, filling the queue."], reason: "It never caps." }] });
   await settled();
 
   const stored = check().verdict;
@@ -416,7 +416,7 @@ test("confirmed should-fix and nit findings, a downgraded must-fix and a rejecte
   const update = await catchUp();
   assert.match(update, /Verified: 2 of 2 criteria passed/);
   assert.match(update, /the verifier anchored 0, downgraded 1, confirmed 2 and rejected 1\. They are filed in WEB-2, its follow-up\./);
-  assert.match(update, /It passed, so the plugin filed every review finding its rounds held without blocking it as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and depending on WEB-1: agent_start on it is refused while WEB-1 is open\./);
+  assert.match(update, /It passed, so the plugin filed every finding its rounds held without blocking it, its reviewers' and its verifiers' own, as WEB-2 "Follow-ups from WEB-1: Add retries", top-level in Backlog and depending on WEB-1: agent_start on it is refused while WEB-1 is open\./);
   assert.match(update, /\n- The retry helper's name hides its backoff\n {2}`src\/retry\.ts` \(nit\)[^\n]*\n {2}Confirmed: The name says retry, not backoff\.\n- The jitter is computed twice\n {2}`src\/retry\.ts:7` \(should-fix\)[^\n]*\n {2}Confirmed: Both calls sit on line 7\.\n- The import order breaks REVIEW\.md\n {2}`src\/retry\.ts:3` \(must-fix\)[^\n]*\n {2}Downgraded to nit: Neither the brief/);
   assert.doesNotMatch(update, /must-fix review finding upheld/);
 
@@ -576,7 +576,7 @@ test("issues stored before reviews, in every status, load with the same status, 
   const reviewed = await started(await filed({})); // WEB-5, In review: verified
   await handedOff(reviewed);
   const passed = verdictOf("WEB-5");
-  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", evidence: "ok" }], findings: [] }, passed?.state === "running" ? passed.verifierThreadId : assert.fail());
+  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "ok" }], findings: [] }, passed?.state === "running" ? passed.verifierThreadId : assert.fail());
   await settled();
   await kit.call("issue_create", { kind: "research", title: "Pick a vault", description: "Which vault?", brief: "Compare two.", doneCriteria: [] }, threadId); // WEB-6
   const researcher = await started("WEB-6");
@@ -766,7 +766,7 @@ test("a verdict that fails only on anchored must-fix findings after the agent's 
 
   await handOff();
   await reported([FINDINGS[0], { title: "A 4xx is retried", file: "src/retry.ts", line: 9, severity: "must-fix", claim: "A 4xx is retried." }]);
-  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "criterion", reason: "It never caps." }, { finding: 2, result: "anchored", anchor: "regression", steps: "1. Deliver to an endpoint that answers 404.\n2. Watch the log: it retries 5 times.", reason: "A 404 is retried 5 times." }] });
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "criterion", reason: "It never caps." }, { finding: 2, result: "anchored", anchor: "regression", steps: ["Deliver to an endpoint that answers 404.", "Watch the log: it retries 5 times."], reason: "A 404 is retried 5 times." }] });
   await settled();
 
   assert.equal(kit.delivered(agentThreadId).length, sentBefore, "its one fix round is spent: nothing more goes back");

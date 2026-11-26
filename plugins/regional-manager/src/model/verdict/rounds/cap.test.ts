@@ -27,8 +27,8 @@ const returned = (passed: boolean, settlement: Settlement = CHECKED): Verdict =>
   headSha: SHA,
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
   criteria: [
-    { criterion: "npm test passes", result: "pass", evidence: "ok" },
-    { criterion: "npm run lint passes", result: passed ? "pass" : "fail", evidence: passed ? "ok" : "2 errors" },
+    { criterion: "npm test passes", result: "pass", shows: "Ran it.", evidence: "ok" },
+    { criterion: "npm run lint passes", result: passed ? "pass" : "fail", shows: "Ran it.", evidence: passed ? "ok" : "2 errors" },
   ],
   findings: [],
   blocking: [],

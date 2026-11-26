@@ -241,7 +241,7 @@ test("a cap question asked while the board's host read is held arrives with its 
   const badge = kit.rpc.needsYou({ keys: [coordinatorId] });
   await settled();
   // The third verdict returns and settles while the badge's host read is held, asking the user.
-  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], blocking: [], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
+  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "# fail 1" }], blocking: [], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
   kit.store.settleReturned(third.id, { kind: "checked", refused: null, ci: { kind: "none" } }, Date.now(), null);
   kit.threadLists.holding = false;
   for (const release of kit.threadLists.held.splice(0)) release();
@@ -269,7 +269,7 @@ test("a failure that asks at the cap while crew_catch_up's host read is held wai
   const caughtUp = kit.call("crew_catch_up", {}, threadId);
   while (kit.turnEvents.held.length === 0) await new Promise((resolve) => setImmediate(resolve));
   // The third verdict returns and settles while catch-up reads a2's turns, asking the user.
-  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }], blocking: [], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
+  kit.store.receiveVerdict(third.id, { state: "returned", verifierThreadId: running.verifierThreadId, headSha: HEAD, checkout, criteria: [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "# fail 1" }], blocking: [], findings: [], triage: [], model: { providerId: "codex", model: "gpt-default" }, sameModel: false }, Date.now());
   kit.store.settleReturned(third.id, { kind: "checked", refused: null, ci: { kind: "none" } }, Date.now(), null);
   kit.turnEvents.holding = false;
   for (const release of kit.turnEvents.held.splice(0)) release();

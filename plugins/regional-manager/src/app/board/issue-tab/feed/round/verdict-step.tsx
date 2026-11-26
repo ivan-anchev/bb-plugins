@@ -4,7 +4,7 @@
 import type { Round } from "../../../../../model/feed/round.ts";
 import { checkoutText, NOT_CLEAN, NOT_CLEAN_TREE, worktreeText } from "../../../../../model/verdict/checkout.ts";
 import { defectText } from "../../../../../model/verdict/review.ts";
-import { ciVerdictOf, failedCheckout, type CriterionResult, type ShownVerdict } from "../../../../../model/verdict/verdict.ts";
+import { ciVerdictOf, failedCheckout, verifierFindingText, type CriterionResult, type ShownVerdict } from "../../../../../model/verdict/verdict.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { RESULT_WORD, ResultGlyph } from "./result-glyph.tsx";
 
@@ -100,7 +100,7 @@ function Returned({ verdict, judged }: { verdict: ReturnedVerdict; judged: Judge
           <h4>Verifier's findings</h4>
           <ul>
             {verdict.findings.map((finding, i) => (
-              <li key={i}>{finding}</li>
+              <li key={i}>{verifierFindingText(finding)}</li>
             ))}
           </ul>
         </section>

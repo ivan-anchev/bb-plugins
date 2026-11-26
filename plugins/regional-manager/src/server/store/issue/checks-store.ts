@@ -21,7 +21,7 @@ import type { ModelRef } from "../../../model/agent/execution.ts";
 import { CAP_OPTIONS } from "../../../model/verdict/rounds/cap-choice.ts";
 import { capAsks, capQuestionsOf, capQuestionText, countedFailures } from "../../../model/verdict/rounds/cap.ts";
 import { readInOrder } from "../../../model/verdict/rounds/delta.ts";
-import { filedWhen, followUpPlan, leftoversOf, type FiledWhen, type FollowUpOrigin } from "../../../model/verdict/rounds/follow-up.ts";
+import { filedWhen, followUpPlan, leftoversOf, ownFindingsOf, type FiledWhen, type FollowUpOrigin } from "../../../model/verdict/rounds/follow-up.ts";
 import { numberedRounds } from "../../../model/feed/feed.ts";
 import { decisionsOf, insertDecision, insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
@@ -200,8 +200,10 @@ export function checksStore(db: Db) {
     const record = handed("WHERE h.coordinator_id = ? AND h.issue_id = ? ORDER BY h.rowid", coordinatorId, issueId);
     const collected = numberedRounds(record, finalChecksOf(coordinatorId, issueId)).flatMap((begun) => {
       const uncollected = begun.kind === "handoff" && begun.handed.check?.followUpId === null ? begun.handed.check : null;
-      const leftovers = uncollected === null ? [] : leftoversOf(uncollected);
-      return uncollected === null || leftovers.length === 0 ? [] : [{ round: begun.number, checkId: uncollected.id, leftovers }];
+      if (uncollected === null) return [];
+      const leftovers = leftoversOf(uncollected);
+      const own = ownFindingsOf(uncollected);
+      return leftovers.length === 0 && own.length === 0 ? [] : [{ round: begun.number, checkId: uncollected.id, leftovers, own }];
     });
     const plan = followUpPlan(issueId, firstOriginOf(coordinatorId, issueId), collected, when);
     if (plan === null) return null;

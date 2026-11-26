@@ -10,8 +10,8 @@ import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, text
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("WEB-1");
 const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
-const FAILS = { criteria: [{ criterion: 1, result: "fail", evidence: "$ npm test\nnot ok 13" }], findings: [] };
-const PASSES = { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm test\nok" }], findings: [] };
+const FAILS = { criteria: [{ criterion: 1, result: "fail", shows: "Ran it.", evidence: "$ npm test\nnot ok 13" }], findings: [] };
+const PASSES = { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\nok" }], findings: [] };
 
 /** A promise bb's fake waits on, and the function that lets it go. */
 function hold(): { done: Promise<void>; release: () => void } {
@@ -84,7 +84,7 @@ test("a superseded verifier bb won't stop keeps the next verifier from starting 
   kit.stopRequests.byThread.delete(old.id);
   await kit.tick();
   assert.deepEqual([old.status, verifiers().length, check().verdict.state], ["idle", 2, "running"], "the tick stops it, then starts the queued check's verifier");
-  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", evidence: "$ npm test\nok" }], findings: [] }, verifiers()[1]?.id ?? assert.fail());
+  await kit.call("issue_verdict", { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\nok" }], findings: [] }, verifiers()[1]?.id ?? assert.fail());
   await kit.idle(verifiers()[1]?.id ?? assert.fail(), "Done.");
   assert.match(textOf(await start()), /^Stopped a1 and started a2/);
 });

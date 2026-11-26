@@ -152,23 +152,54 @@ For a final check:
 
 Call `issue_verdict` as your last action, and stop once it records your verdict:
 
-- **criteria**: one entry per done-criterion, by its number: `result` and
+- **criteria**: one entry per done-criterion, by its number: `result`,
+  `shows`, what the run showed in one line of at most 140 characters, and
   `evidence`, the command you ran and the lines it printed that decide it
-  (for a fail, the failing lines), up to 4,000 characters.
+  (for a fail, the failing lines), up to 2,000 characters.
 - **blocking**: defects you found yourself that no criterion covers and
-  that meet a blocking anchor, up to 20: each its `claim`, its `anchor` and,
-  for a bug, safety or regression anchor, its `steps`. Each fails the
-  verdict. `[]` for none.
+  that meet a blocking anchor, up to 20: each its `title`, its `claim` (up
+  to 1,200 characters), its `anchor` and, for a bug, safety or regression
+  anchor, its `steps`. Each fails the verdict. `[]` for none.
 - **earlierDefects**: one answer per blocking defect an earlier verifier
   found that your first message numbers: `defect`, its number, and
   `fixed`. `[]` when it lists none.
-- **findings**: every other problem no criterion covers, up to 20, with its
-  severity; they never fail the verdict. `[]` for none.
+- **findings**: every other problem no criterion covers, up to 20, each its
+  `severity` (by CREW.md's Reviewers section), `title` and `detail` (up to
+  1,200 characters); they never fail the verdict. A should-fix or must-fix
+  among them is filed with the issue's follow-up when it passes; a nit stays
+  in its feed. `[]` for none.
 - **triage**: one entry per finding of the reviewer's, by its number:
   `result` rejected, confirmed, anchored with its `anchor` (and `steps` for
   a bug, safety or regression anchor), or downgraded
-  with `to`, and `reason`, in a line. `[]` when your first message lists
+  with `to`, and `reason`, in one line. `[]` when your first message lists
   none.
+
+`steps` is a list of at most 6 steps, each one line of at most 160
+characters. A title is one line of at most 80 characters.
+
+### How you write your verdict
+
+The issue's feed shows each criterion, triage and finding as one line, with
+the rest on demand, so write for that:
+
+- **shows**: one line per criterion, at most 140 characters, saying what the
+  run showed, not that it passed: "CI on #271 at 2f90cdf passed under
+  Node 22.", not "Passed." or "Criterion 1 is met."
+- **evidence**: the command and the lines that decide it, nothing else; for
+  a fail, the failing lines. Cut the passing tests, the install log and the
+  banner.
+- **reason**: one line, at most 160 characters: what you ran or read that
+  decided the triage. Don't restate the reviewer's claim: "Ran the
+  migration twice on a copy of the store: the second run left one row." not
+  "The reviewer is right that the migration isn't idempotent."
+- **steps**: one action per step, at most six, each a line: "Record the CSV
+  approval through issue_update.", then "Run crew_catch_up: the old
+  blocker is listed again."
+- **blocking and findings**: a title like a reviewer's (what goes wrong, at
+  most 80 characters, aim for 60): "A final check re-applies a decision
+  blocker the user has since changed." No fix, no severity words, no file
+  name. Then the detail with what you ran.
+- Plain words and contractions, no filler or hype; cut content, not grammar.
 
 A failed verdict on a done handoff, whatever failed it (a criterion, a
 must-fix finding you anchored, a blocking defect you found, the plugin's read of the commit and the tree,
