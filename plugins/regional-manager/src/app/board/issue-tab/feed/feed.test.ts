@@ -333,3 +333,11 @@ test("the submission is kept with the text until the server takes it: a retry of
   assert.equal(retried, edited, "the same text sent again after a failure is the same submission");
   assert.notEqual(again, retried, "the same words posted again once taken are a new comment");
 });
+
+test("a pass that filed a follow-up draws as a quiet line naming it, by no one, with the status it moved the issue to", async () => {
+  const followUp: Entry = { kind: "follow-up", at: Date.UTC(2026, 10, 26, 9, 34), issueId: id("WEB-9"), moved: "in-review" };
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [followUp] }) });
+  const { texts } = activity(tab());
+  assert.equal(texts().length, 1);
+  assert.match(texts()[0] ?? "", /^Follow-up WEB-9 filed in Backlog, with the review findings that held without blocking it · In review/);
+});

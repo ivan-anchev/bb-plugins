@@ -47,7 +47,7 @@ function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
     case "thread":
       return <ThreadSaid event={entry.event} />;
     case "follow-up":
-      return `filed the review findings that held without blocking it as the follow-up ${entry.issueId}, in Backlog`;
+      return `Follow-up ${entry.issueId} filed in Backlog, with the review findings that held without blocking it`;
     case "unblocked":
       return `Unblocked: ${entry.by}, the last of its dependencies, closed`;
     case "logged":
