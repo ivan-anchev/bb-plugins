@@ -46,14 +46,20 @@ const NOT_SIGNED_IN = /has not been authenticated|no GitLab instances have been 
 // (https://docs.gitlab.com/cli/authentication/#error-invalid_grant-when-refreshing-credentials).
 const GRANT_REFUSED = /\binvalid_grant\b/;
 
-// The request an entry's error opens with, `GET https://H/api/v4/user: `, before GitLab's response.
-const REQUEST = /^\s*[A-Z]+ \S+: /;
+// The request an entry's error opens with, before GitLab's response: go-gitlab's `GET https://H/api/v4/user: `,
+// or Go's own `Get "https://H/api/v4/user": ` when the request failed before it, as an OAuth refresh does.
+const REQUEST = /^\s*[A-Za-z]+ \S+: /;
+
+// An HTTP status in GitLab's response, wherever glab puts it: `401 {message: …}`, `… (HTTP 429)`, or
+// an OAuth refresh's `oauth2: cannot fetch token: 401 Unauthorized`.
+const HTTP_STATUS = /\b([1-5]\d\d)\b/;
 
 /**
  * Why glab's check of a host it has failed, from the entry's error, which reads like
- * `GET https://H/api/v4/user: 401 {message: 401 Unauthorized}`: credentials GitLab rejected, and
- * a sign-in glab says to redo, last until someone signs in again; a connection that never
- * answered, a rate limit and anything unexplained may pass.
+ * `GET https://H/api/v4/user: 401 {message: 401 Unauthorized}`: credentials GitLab rejected, on the
+ * check or on the OAuth refresh before it (an HTTP 401 either way), and a sign-in glab says to redo,
+ * last until someone signs in again; a connection that never answered, a rate limit and anything
+ * unexplained may pass.
  */
 function checkFailed(host: string, error: string): PrUnavailable {
   const gitlab = glabWords(host);
@@ -63,7 +69,7 @@ function checkFailed(host: string, error: string): PrUnavailable {
   if (connectionFailed(error)) return { kind: "transient", forge: "gitlab", reason: gitlab.unreachable };
   // why the response alone: the request names the host, which may hold any number, as gitlab-429.corp.test.
   const response = error.replace(REQUEST, "");
-  const status = Number(/^(\d{3})\b/.exec(response)?.[1] ?? /\(HTTP (\d{3})\)/.exec(response)?.[1] ?? 0);
+  const status = Number(HTTP_STATUS.exec(response)?.[1] ?? 0);
   if (status === 429 || /rate limit/i.test(response)) return { kind: "transient", forge: "gitlab", reason: gitlab.rateLimited };
   if (status === 401) return { kind: "persistent", forge: "gitlab", reason: gitlab.rejected };
   if (error.includes("glab auth login")) return signInFailed(host);

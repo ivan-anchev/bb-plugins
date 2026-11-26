@@ -162,6 +162,23 @@ test("sign-in: GitLab rejecting glab's credentials shows MR status unavailable n
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: "!41 open CI pending" });
 });
 
+test("sign-in: glab's OAuth refresh rejected with 401 settles a verdict waiting on CI as CI not checked, saying to sign glab in again to the host", async () => {
+  const { kit, threadId, board, row, mr, minute, verified } = await agentOnGitLab();
+  mr();
+  await minute();
+  await verified();
+  assert.equal((await row()).lane, "verifying", "waiting for CI");
+  // why both: a rejected refresh fails the read too, which may pass, so the next tick asks the sign-in again, which settles it.
+  kit.gitlab.failure = Object.assign(new Error("Command failed: glab api graphql"), { code: 1, stdout: "", stderr: `glab: Post "https://${HOST}/api/graphql": oauth2: cannot fetch token: 401 Unauthorized\n` });
+  kit.gitlab.hosts.set(HOST, { state: "error", error: "oauth2: cannot fetch token: 401 Unauthorized" });
+  await minute();
+  await minute();
+  const rejected = `GitLab at ${HOST} rejected glab's credentials (HTTP 401): run glab auth login --hostname ${HOST} on the machine running bb`;
+  assert.deepEqual((await board()).prUnavailable, { forge: "gitlab", reason: rejected });
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: "!41 open CI pending" });
+  assert.ok(textOf(await kit.call("crew_catch_up", {}, threadId)).includes(`CI: not checked (MR status unavailable: ${rejected}).`));
+});
+
 test("a project on a host glab isn't signed in to is never read; a verdict waiting on its merge request passes with CI not checked, saying why", async () => {
   const { kit, board, row, glabRuns, minute, verified } = await agentOnGitLab({ signedIn: false });
   await minute();
