@@ -17,7 +17,7 @@ import { roundKeySchema, type Round, type RoundBody } from "../../../model/feed/
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../../model/role.ts";
 import type { CriterionResult, ShownVerdict } from "../../../model/verdict/verdict.ts";
-import { PROJECT } from "../../test-sidebar.ts";
+import { PROJECT, sidebarThread } from "../../test-sidebar.ts";
 
 // why: jsdom has none of these; the working ring asks for Reduce motion and a canvas.
 Object.assign(globalThis, {
@@ -32,6 +32,8 @@ HTMLCanvasElement.prototype.getContext = () => null;
 export const { issueTab } = await import("./issue-tab.tsx");
 
 export const COORDINATOR = { id: coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10"), threadId: "thr_1", projectId: PROJECT.id, description: null, avatar: { kind: "blob", shape: "circle", hue: "purple", expression: "neutral" } } as const;
+/** The name bb shows COORDINATOR's thread by, which names the regional manager. */
+export const MANAGER_NAME = "Webhook retries";
 export const SHA = "4b1d9e0c2a7f3e5d6c8b9a0f1e2d3c4b5a697881";
 export const id = (raw: string) => issueIdSchema.parse(raw);
 export const agent = (raw: string) => ({ id: agentIdSchema.parse(raw), threadId: `thr_${raw}` });
@@ -137,10 +139,11 @@ function bodyOfKey(key: string): RoundBody | null {
 
 /** How the plugin answers a comment posted from the tab: its output, a promise of it, or a throw. */
 type CommentAnswer = (input: unknown) => unknown;
-type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: CommentAnswer };
+/** `managerListed`: whether bb lists the regional manager's thread, which names it (false: archived). */
+type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: CommentAnswer; managerListed?: boolean };
 
 /** The tab mounted with `params`, on a board of `issues`; the reads and writes it made, and ways to make the plugin answer anew. */
-export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }) }: MountOptions = {}) {
+export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }), managerListed = true }: MountOptions = {}) {
   const feedReads: unknown[] = [];
   const bodyReads: string[][] = [];
   const answers: unknown[] = [];
@@ -153,6 +156,7 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
     {
       experimental_rpcContract: coordinatorContract,
       experimental_panel: { openTab: () => true },
+      sidebarThreads: { status: "ready", threads: managerListed ? [sidebarThread(COORDINATOR.threadId, MANAGER_NAME)] : [], projects: [PROJECT] },
       rpc: {
         coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }),
         board: () => ({ verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues: currentIssues }),

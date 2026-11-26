@@ -172,6 +172,23 @@
   font-weight: 500;
   color: var(--foreground);
 }
+/* The regional manager as its thread's row draws it (thread/manager-segment.tsx): its avatar, then its
+   name, 6px apart. why one line's height, top-aligned: the avatar overhangs it a little rather than
+   making the manager's lines taller than the rest. */
+.rmi-manager {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 1lh;
+  vertical-align: top;
+}
+.rmi-manager > .rmi-actor {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* A status an entry moved the issue to, mid-line: the Board's glyph (issue-board.css `.rmi-state`) and its name, kept together. */
 .rmi-status {
   white-space: nowrap;

@@ -229,7 +229,7 @@ test("only the round whose failure asked the user at the cap says so by its scor
   assert.equal((await card(2).findByText(/^Not sent back/)).textContent, "Not sent back: at its cap, the plugin asked you (d4)", "the user decides, not the regional manager");
   const question = tab().getByRole("article", { name: "Question d4" });
   assert.match(question.querySelector(".rmi-decision-head")?.textContent ?? "", /^The plugin asked you/);
-  assert.match(tab().getByRole("article", { name: "Question d1" }).querySelector(".rmi-decision-head")?.textContent ?? "", /^Regional manager asked you/);
+  assert.match(tab().getByRole("article", { name: "Question d1" }).querySelector(".rmi-decision-head")?.textContent ?? "", /^Webhook retries asked you/);
 });
 
 /** The feed with round 2's failure asking question d4 at the cap, the latest round; round 3 not yet handed off. */

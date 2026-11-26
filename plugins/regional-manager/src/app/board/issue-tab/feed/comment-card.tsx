@@ -19,7 +19,7 @@ export function CommentCard({ coordinatorId, entry, answered, agents }: CommentC
   return (
     <article className="rmi-decision" aria-label={`Comment ${comment.id}`}>
       <p className="rmi-decision-head">
-        <Who actor={actorOf(entry)} agents={agents} />
+        <Who actor={actorOf(entry)} coordinatorId={coordinatorId} agents={agents} />
         {comment.replyTo === null ? "commented" : `replied to ${comment.replyTo}`} <When at={comment.at} />
         <span className="rmi-decision-id">{comment.id}</span>
       </p>

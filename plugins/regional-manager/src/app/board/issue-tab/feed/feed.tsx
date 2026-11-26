@@ -98,7 +98,7 @@ function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onTo
     case "thread":
     case "follow-up":
     case "unblocked":
-      return <EntryLine entry={entry} agents={agents} />;
+      return <EntryLine coordinatorId={coordinatorId} entry={entry} agents={agents} />;
     default:
       // why nothing, not a throw: for a moment after an update, the server may send a kind this bundle doesn't know.
       entry satisfies never;
