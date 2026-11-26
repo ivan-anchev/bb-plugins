@@ -2,7 +2,7 @@
 // everything, whole, however long. This is where an agent's own words, a verifier's, and the user's
 // answers reach the regional manager, as a tool result, each marked as whose they are.
 import { sameModel } from "../../model/agent/execution.ts";
-import type { Agent } from "../../model/agent/agent.ts";
+import { issueBranch, type Agent } from "../../model/agent/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
 import { firstLine, type Comment, type CommentId } from "../../model/feed/comment.ts";
 import type { Handoff, HandoffId } from "../../model/agent/handoff.ts";
@@ -16,7 +16,7 @@ import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
-import { capChoice, choiceText, mergeText, type AnsweredAt } from "../../model/verdict/rounds/cap-choice.ts";
+import { capChoice, choiceText, mergeStandsText, type AnsweredAt } from "../../model/verdict/rounds/cap-choice.ts";
 import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion, mergeAnswer, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
@@ -210,20 +210,27 @@ function lockOf(issueId: IssueId, { capQuestions, view }: Pick<Lookups, "capQues
  * A decision the user answered: what was asked and offered, then the answer, marked as theirs. A
  * question the plugin asked at an issue's cap says so, and ends with what their choice leaves to do.
  */
-function answeredText(decision: Decision, when: string, lookups: Pick<Lookups, "record" | "view">): string {
+function answeredText(decision: Decision, when: string, lookups: Pick<Lookups, "record" | "view" | "agents">): string {
   const { id, question, options, answer } = decision;
   if (answer === null) throw new Error(`The decision ${id} is announced as answered, but has no answer.`);
   const offered = options.map((option) => `"${option}"`).join(", ");
   const theirs = options.includes(answer.text) ? `They chose "${answer.text}".` : `Their answer, in their own words:\n\n${answer.text}`;
   if (!isCapQuestion(decision)) return `### The user answered your question ${id}\n\n${when} You asked: ${question} ${options.length === 0 ? "You offered no options." : `You offered: ${offered}.`} ${theirs}`;
   const { issueId } = decision;
-  return `### The user answered ${id}, the plugin's question at ${issueId}'s cap\n\n${when} It asked: ${question} It offered: ${offered}. ${theirs}\n\n${choiceText(issueId, capChoice(answer.text), answeredAt(issueId, lookups))}`;
+  return `### The user answered ${id}, the plugin's question at ${issueId}'s cap\n\n${when} It asked: ${question} It offered: ${offered}. ${theirs}\n\n${choiceText(issueId, capChoice(decision), answeredAt(issueId, answer.at, lookups))}`;
 }
 
-/** Where the issue stands for an answer at its cap: its pull request as its view places it, and the must-fix findings its last counted failure upheld (rounds/cap.ts countedFailures). */
-function answeredAt(issueId: IssueId, { record, view }: Pick<Lookups, "record" | "view">): AnsweredAt {
-  const last = countedFailures(record(issueId)).at(-1)?.verdict;
-  return { pr: view(issueId)?.pr?.number ?? null, mustFix: last?.state === "returned" ? heldFindings(last).failing : [] };
+/**
+ * Where the issue stood for an answer at its cap given at `answeredAt`: its pull request as its view
+ * places it; its branch as its agents' handoffs recorded it (agent.ts issueBranch, with no thread
+ * read, as catch-up reads none); and the must-fix findings of its last counted failure returned
+ * before the answer (rounds/cap.ts countedFailures). why before: the follow-up files what the user
+ * chose to merge past, never a later round's findings.
+ */
+function answeredAt(issueId: IssueId, answeredAt: number, { record, view, agents }: Pick<Lookups, "record" | "view" | "agents">): AnsweredAt {
+  const last = countedFailures(record(issueId)).filter(({ verdict }) => verdict.state === "returned" && verdict.at <= answeredAt).at(-1)?.verdict;
+  const branch = issueBranch(agents().filter((agent) => agent.issueId === issueId), () => null)?.branch ?? null;
+  return { pr: view(issueId)?.pr?.number ?? null, branch, mustFix: last?.state === "returned" ? heldFindings(last).failing : [] };
 }
 
 /** The decisions section of a catch-up: every decision still waiting for the user, oldest first. */
@@ -271,14 +278,14 @@ const MOVE_TO_AN_AGENT =
  * the merge, while the user's answer to merge it as is stands; else decide, or, while the issue's
  * cap question is open, only what works then (rounds/cap.ts).
  */
-function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view" | "record">): string {
+function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<Lookups, "decision" | "capQuestions" | "view">): string {
   const asked = askedId === null ? null : askedQuestion(lookups.decision(askedId));
   const led = asked === null ? "" : `This was ${askedText(check.issueId, asked, mayHaveReachedAgent(check.verdict))}. `;
   const closed = closedNow(check.issueId, lookups);
   // why first: a closed issue takes no agent, and its question no longer waits for the user.
   if (closed !== null) return `${led}${closedText(check.issueId, closed, asked)}`;
   const merge = mergeAnswer(lookups.capQuestions(check.issueId));
-  if (merge !== null) return `${led}Nothing went back to an agent: the user chose to merge ${check.issueId} as it is (${merge.id}). ${mergeText(check.issueId, answeredAt(check.issueId, lookups))}`;
+  if (merge !== null) return `${led}${mergeStandsText(check.issueId, merge.id, lookups.view(check.issueId)?.pr?.number ?? null)}`;
   const open = lockOf(check.issueId, lookups);
   if (open === null) return `${led}${FAILED_IS_YOURS}`;
   const held = asked?.id === open.id ? "" : `Nothing went back to an agent: the plugin's question at ${check.issueId}'s cap (${open.id}) is still open. `;

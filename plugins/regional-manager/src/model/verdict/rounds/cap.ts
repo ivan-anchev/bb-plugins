@@ -38,7 +38,7 @@ export const countedFailures = (record: readonly { check: Check | null }[]): Che
  * above every count it asked at before, so each answer allows one more round; but never while the
  * user's answer to merge the issue as it is stands (mergeAnswer), which allows no further round.
  */
-export function capAsks(failed: number, questions: readonly Pick<CapQuestion, "cap" | "answer">[]): number | null {
+export function capAsks(failed: number, questions: readonly Pick<CapQuestion, "cap" | "options" | "answer">[]): number | null {
   if (failed < MAX_FAILED_VERDICTS || questions.some(({ answer }) => answer === null) || mergeAnswer(questions) !== null) return null;
   return questions.every(({ cap }) => cap < failed) ? failed : null;
 }
@@ -48,10 +48,9 @@ export function capAsks(failed: number, questions: readonly Pick<CapQuestion, "c
  * is (cap-choice.ts); null otherwise. While it stands, agents may start and be messaged on the issue
  * so one can merge it, but no failure goes back to one, and none asks again.
  */
-export function mergeAnswer<Question extends Pick<CapQuestion, "answer">>(questions: readonly Question[]): Question | null {
+export function mergeAnswer<Question extends Pick<CapQuestion, "options" | "answer">>(questions: readonly Question[]): Question | null {
   const latest = questions.at(-1);
-  if (latest === undefined || latest.answer === null) return null;
-  return capChoice(latest.answer.text) === "merge" ? latest : null;
+  return latest !== undefined && capChoice(latest) === "merge" ? latest : null;
 }
 
 /** The issue's cap question the user hasn't answered yet; null: none. */

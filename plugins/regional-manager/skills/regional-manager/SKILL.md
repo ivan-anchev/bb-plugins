@@ -607,14 +607,20 @@ turn. So when you reply after a wake, name the issue your reply is about, as
       Have its pull request merged without another review or verifier: ask
       its agent with `agent_message` to merge it, or start one with
       `agent_start` to do only that (both are allowed again); never merge it
-      yourself. File the last verdict's open must-fix findings, which the
-      update lists, as one follow-up issue with `issue_create`. While that
+      yourself. While that answer stands, `agent_start` only continues in
+      the last agent's environment, on the pull request's branch: a start
+      on a new branch (`from: "default"`, a placement, or an environment bb
+      removed) is refused, as the pull request would be left behind. File
+      the open must-fix findings of the last failed verdict before the
+      answer, which the update lists, as one follow-up issue with
+      `issue_create`, once: a later failure's update files none. While that
       answer stands, a failed done handoff on the issue goes back to no
       agent and asks the user nothing. The merge makes the issue Done.
     - **One more round**: tell the agent what to fix, or hand the issue to a
       fresh agent. If that round fails too, the plugin asks again.
     - **Cancel the issue**: stop its agent with `agent_stop`, close its pull
-      request with `gh pr close`, and cancel it with `issue_update`.
+      request with `gh pr close` and the number or branch the update names,
+      and cancel it with `issue_update`.
     - An answer in their own words allows one more round: read it for what
       they want.
 

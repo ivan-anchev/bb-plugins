@@ -71,8 +71,8 @@ function line(event: InboxEvent, lookups: Lookups): string {
  */
 function answeredLine(decision: Decision): string {
   const asWords = `The user answered your question ${decision.id}: ${decision.question}`;
-  if (!isCapQuestion(decision) || decision.answer === null) return asWords;
-  const choice = capChoice(decision.answer.text);
+  if (!isCapQuestion(decision)) return asWords;
+  const choice = capChoice(decision);
   return choice === null ? asWords : `The user answered ${decision.id}, the plugin's question at ${decision.issueId}'s cap: ${choicePhrase(choice)}`;
 }
 

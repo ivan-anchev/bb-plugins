@@ -150,9 +150,14 @@ test("while the latest answer at the cap is to merge as is, no failure goes back
   }
 });
 
-test("an answer reads as the choice of the option it names, a question's from before the merge choice included; an answer in the user's own words makes none", () => {
+test("an answer reads as the choice of the option it names, only when its question offered that option; any other answer is in the user's own words", () => {
+  const today = ["Merge as is, file follow-ups", "One more round", "Cancel the issue"];
+  const earlier = ["One more round", "Cancel it"];
+  const chosen = (options: string[], text: string) => capChoice({ options, answer: { text, at: 7_000 } });
   assert.deepEqual(
-    ["Merge as is, file follow-ups", "One more round", "Cancel the issue", "Cancel it", "Merge it, but fix the cap first"].map(capChoice),
-    ["merge", "round", "cancel", "cancel", null],
+    [chosen(today, "Merge as is, file follow-ups"), chosen(today, "One more round"), chosen(today, "Cancel the issue"), chosen(today, "Merge it, but fix the cap first")],
+    ["merge", "round", "cancel", null],
   );
+  assert.deepEqual([chosen(earlier, "Cancel it"), chosen(earlier, "Merge as is, file follow-ups"), chosen(today, "Cancel it")], ["cancel", null, null], "an earlier question's Cancel it still cancels; an option it never offered is the user's own words");
+  assert.equal(capChoice({ options: today, answer: null }), null, "an unanswered question chose nothing");
 });

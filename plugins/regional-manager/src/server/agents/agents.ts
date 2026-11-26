@@ -36,7 +36,7 @@ import { headlineText, keepsPlaceAfterEnd, type IssueView } from "../../model/is
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { PrRead } from "../../model/verdict/pr.ts";
-import { capMovesText, capQuestionsOf, unansweredCapQuestion } from "../../model/verdict/rounds/cap.ts";
+import { capMovesText, capQuestionsOf, mergeAnswer, unansweredCapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatusBb } from "../git-status.ts";
 import { inheritedFrom, type Inherited, type ThreadExecutionBb } from "../execution/thread-execution.ts";
@@ -339,6 +339,8 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     const asked: Asked = { kind: filed.kind, from, placement: named };
     const spot = await spotOf(coordinatorId, filed.id, asked, prove);
     if ("refused" in spot) return { refused: `Nothing changed. ${spot.refused}` };
+    const merging = mergeRefusal(filed.id, mergeAnswer(capQuestionsOf(store.decisions(coordinatorId), filed.id)), asked, spot);
+    if (merging !== null) return { refused: `Nothing changed. ${merging}` };
     const runsOn = await executionFor(coordinatorOf(coordinatorId), execution, spot.environment, whereText(spot));
     if ("refused" in runsOn) return runsOn;
     // why read again: where it runs was read with awaits since, while a merge may have made it Done; this read is the last before quieting.
@@ -615,7 +617,22 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
 function capRefusal(view: IssueView): string | null {
   const { issue: { id }, capLock } = view;
   if (capLock === null) return null;
-  return `${id} failed verification ${capLock.cap} times, so the plugin asked the user (${capLock.id}) whether to merge it as is, give it another round or cancel it, and until they answer no agent starts on ${id} and none is messaged on it. ${capMovesText(id, capLock.id, view)}`;
+  const offered = capLock.options.map((option) => `"${option}"`).join(", ");
+  return `${id} failed verification ${capLock.cap} times, so the plugin asked the user (${capLock.id}) to choose ${offered}, and until they answer no agent starts on ${id} and none is messaged on it. ${capMovesText(id, capLock.id, view)}`;
+}
+
+/**
+ * Why no agent may start on the issue `id` where `spot` places it: the user's answer to merge it as
+ * is (`merge`, rounds/cap.ts mergeAnswer) stands, and the start would leave the branch its pull
+ * request is on, which the issue's branch (agent.ts issueBranch) would no longer name, so its merge
+ * would never make it Done. Only a join, in its last agent's environment on that branch, goes. null:
+ * nothing stands, or it joins.
+ */
+function mergeRefusal(id: IssueId, merge: { id: string } | null, { from, placement }: Asked, spot: Spot): string | null {
+  if (merge === null || spot.base.kind === "joined") return null;
+  const why = `The user chose to merge ${id} as it is (${merge.id}), so an agent starts on it only in its last agent's environment, on its pull request's branch: on a new branch, that pull request would be left behind and its merge wouldn't make ${id} Done.`;
+  if (from === "default" || placement !== null) return `${why} Start one with no from or placement.`;
+  return `${why} bb has removed that environment, so no agent can continue there: ask the user to merge the pull request themselves, which makes ${id} Done.`;
 }
 
 function finalText(issue: Issue, view: IssueView): string | null {
