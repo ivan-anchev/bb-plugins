@@ -365,12 +365,12 @@ test("an accept is refused while the plugin's question at the issue's cap is ope
   await toCap(kit, threadId, coordinatorId, issue, agentThreadId, "review");
   const [question] = kit.store.decisions(coordinatorId);
   assert.equal(question?.cap, 3);
-  assert.match(textOf(await call("crew_catch_up", {})), /Until the user answers d1, agent_start, agent_message and an accept of WEB-1 are refused\. .* Once they answer, if they want it as it is: It failed on review findings alone, so you may accept it as it is/);
+  assert.match(textOf(await call("crew_catch_up", {})), /Until the user answers d1, agent_start, agent_message and an accept of WEB-1 are refused\. .* If they choose to merge it as is: It failed on review findings alone, so you may accept it as it is/);
   const refused = await update({ status: "in-review", decision: REASON });
   assert.equal(refused.refused, true);
   assert.match(refused.text, /^WEB-1 failed verification 3 times, so the plugin asked the user \(d1\), and until they answer, accepting it is theirs to decide there\. Once they answer, accept it if that is their call\. Wait for their answer/);
 
-  await kit.rpc.answerDecision({ coordinatorId, decisionId: question.id, answer: "Merge it as is" });
+  await kit.rpc.answerDecision({ coordinatorId, decisionId: question.id, answer: "Merge as is, file follow-ups" });
   assert.equal((await update({ status: "in-review", decision: "The user chose to take it as it is (d1)." })).refused, false);
   assert.match(textOf(await call("issue_read", { id: "WEB-1" })), /In review: Accepted with follow-ups: Retries land with backoff/);
 });

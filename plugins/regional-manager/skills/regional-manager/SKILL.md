@@ -643,8 +643,8 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     why the last round failed, then naming its three options: Merge as is,
     file follow-ups; One more round; and Cancel the issue. The issue
     is under Needs you, its reason led by "At its cap of 3 failed
-    verifications". While that question is open, `agent_start` and
-    `agent_message` on the issue are refused, naming it: wait for the
+    verifications". While that question is open, `agent_start`,
+    `agent_message` and an accept of the issue are refused, naming it: wait for the
     answer, reply on the issue with `issue_comment` pointing the user at its
     id, or stop the agent with `agent_stop` and cancel the issue (not while a
     sub-issue of it is open, which a cancel refuses). Their answer reaches
@@ -656,10 +656,15 @@ turn. So when you reply after a wake, name the issue your reply is about, as
       yourself. While that answer stands, `agent_start` only continues in
       the last agent's environment, on the pull request's branch: a start
       on a new branch (`from: "default"`, a placement, or an environment bb
-      removed) is refused, as the pull request would be left behind. File
-      the open must-fix findings of the last failed verdict before the
-      answer, which the update lists, as one follow-up issue with
-      `issue_create`, once: a later failure's update files none. While that
+      removed) is refused, as the pull request would be left behind. When
+      the last failed verdict before the answer failed on review findings
+      alone, accept the issue as it is first, with `issue_update` (`status:
+      "in-review"` and a `decision` naming their answer): that files the
+      findings it leaves, its open must-fix findings among them, as the one
+      follow-up, and keeps it In review until the merge. Otherwise file the
+      open must-fix findings of that verdict, which the update lists, as one
+      follow-up issue with `issue_create`, once: a later failure's update
+      files none. While that
       answer stands, a failed done handoff on the issue goes back to no
       agent and asks the user nothing. The merge makes the issue Done.
     - **One more round**: tell the agent what to fix, or hand the issue to a
