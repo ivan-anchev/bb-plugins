@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
-import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
+import { PR_CHANGE_WORDS, prRef } from "../../../../model/verdict/pr.ts";
 import type { FiledWhen } from "../../../../model/verdict/rounds/follow-up.ts";
 import { AgentName, MovedTo, Status, When, Who, type FeedAgents } from "./byline.tsx";
 
@@ -54,7 +54,7 @@ function whatOf(entry: LineEntry, agents: FeedAgents): ReactNode {
       return <Ended agentId={entry.agentId} how={entry.how} agents={agents} />;
     case "pr":
       // why PR_CHANGE_WORDS: the manager's doorbell and catch-up name a change in the same words.
-      return `#${entry.number} ${entry.changes.flatMap((change) => PR_CHANGE_WORDS[change] ?? []).join(", ")}`;
+      return `${prRef(entry.pr)} ${entry.changes.flatMap((change) => PR_CHANGE_WORDS[change] ?? []).join(", ")}`;
     case "thread":
       return <ThreadSaid event={entry.event} />;
     case "follow-up":

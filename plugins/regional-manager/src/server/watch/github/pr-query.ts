@@ -1,22 +1,23 @@
 // The GitHub reads the PR watch makes: every watched branch of one repository in one
 // `gh api graphql` call, each as an aliased pullRequests(headRefName:) field, and its answer parsed
-// at this boundary into snapshots; and the branch a pull request named by its URL is from.
+// at this boundary into snapshots; and the branch a pull request named by its URL is from. A
+// repository is `owner/name`, as locate.ts reads it from a github.com remote.
 import { z } from "zod";
-import { commitSchema } from "../../model/agent/handoff.ts";
-import type { PrSnapshot } from "../../model/verdict/pr.ts";
+import { commitSchema } from "../../../model/agent/handoff.ts";
+import type { BranchesRead, PrSnapshot } from "../../../model/verdict/pr.ts";
+import { jsonOrNull, parseHostCommandFailure, type RunCli } from "../host-command.ts";
+import { ghFailure, UNREADABLE_ANSWER } from "./gh-failure.ts";
 
-/** A repository on github.com, as `owner/name`. why a brand: only parsing a remote mints one. */
-const repoSchema = z.string().regex(/^[\w.-]+\/[\w.-]+$/).brand<"Repo">();
-export type Repo = z.infer<typeof repoSchema>;
-
-// The remote shapes git writes for github.com: git@github.com:owner/name(.git),
-// ssh://git@github.com/owner/name(.git), https://(user@)github.com/owner/name(.git)(/).
-const GITHUB_REMOTE = /^(?:git@github\.com:|(?:ssh|https?|git):\/\/(?:[^@/]+@)?github\.com\/)([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i;
-
-/** The repository of a github.com remote, or null for any other remote. Copied from pr-reviews (src/github/repo.ts). */
-export function parseGitHubRepo(remoteUrl: string): Repo | null {
-  const match = GITHUB_REMOTE.exec(remoteUrl.trim());
-  return match === null ? null : repoSchema.parse(`${match[1]}/${match[2]}`);
+/** Every branch's newest pull request in the repository (null: none), in one gh call with no --hostname, so on github.com; or why it couldn't be read. */
+export async function readGitHub(run: RunCli, repo: string, branches: readonly string[]): Promise<BranchesRead> {
+  let stdout: string;
+  try {
+    stdout = await run("gh", prQueryArgs(repo, branches));
+  } catch (error) {
+    return { kind: "unavailable", unavailable: ghFailure(parseHostCommandFailure(error)) };
+  }
+  const prs = parsePrs(stdout, branches);
+  return prs === null ? { kind: "unavailable", unavailable: UNREADABLE_ANSWER } : { kind: "read", prs };
 }
 
 /**
@@ -29,7 +30,7 @@ const PR_FIELDS = `number url state isDraft reviewDecision
     __typename ... on CheckRun { name conclusion } ... on StatusContext { context state } } } } } } }`;
 
 /** The `gh api graphql` arguments that read each branch's newest pull request. Every value goes as a variable, never into the query's text. */
-export function prQueryArgs(repo: Repo, branches: readonly string[]): string[] {
+function prQueryArgs(repo: string, branches: readonly string[]): string[] {
   const [owner, name] = repo.split("/");
   const variables = branches.map((_, i) => `$b${i}: String!`).join(", ");
   const fields = branches.map((_, i) => `b${i}: pullRequests(headRefName: $b${i}, first: 1, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ${PR_FIELDS} } }`).join("\n");
@@ -40,14 +41,14 @@ export function prQueryArgs(repo: Repo, branches: readonly string[]): string[] {
 // A pull request's page on github.com: https://github.com/owner/name/pull/41, with any path, query or fragment after it.
 const PR_URL = /^https:\/\/github\.com\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)(?:[/?#].*)?$/i;
 
-/** The repository and number of a github.com pull request's URL, or null for any other URL. */
-export function parsePrUrl(url: string): { repo: Repo; number: number } | null {
+/** The repository, `owner/name`, and number of a github.com pull request's URL, or null for any other URL. */
+export function parsePrUrl(url: string): { repo: string; number: number } | null {
   const match = PR_URL.exec(url.trim());
-  return match === null ? null : { repo: repoSchema.parse(`${match[1]}/${match[2]}`), number: Number(match[3]) };
+  return match === null ? null : { repo: `${match[1]}/${match[2]}`, number: Number(match[3]) };
 }
 
 /** The `gh api graphql` arguments that read the branch a pull request is from. Every value goes as a variable, never into the query's text. */
-export function prHeadQueryArgs(repo: Repo, number: number): string[] {
+export function prHeadQueryArgs(repo: string, number: number): string[] {
   const [owner, name] = repo.split("/");
   const query = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { headRefName } } }";
   return ["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`, "-F", `number=${number}`];
@@ -96,6 +97,7 @@ const prNodeSchema = z
     const rollup = commit.statusCheckRollup;
     const ci = rollup === null ? "none" : CI[rollup.state];
     return {
+      forge: "github",
       number: pr.number,
       url: pr.url,
       state: STATE[pr.state],
@@ -110,7 +112,7 @@ const prNodeSchema = z
 const responseSchema = z.object({ data: z.object({ repository: z.record(z.string(), z.object({ nodes: z.array(prNodeSchema).max(1) })) }) });
 
 /** Each branch's newest pull request (null: it has none) from gh's answer to prQueryArgs, or null when the answer isn't one. */
-export function parsePrs(stdout: string, branches: readonly string[]): Map<string, PrSnapshot | null> | null {
+function parsePrs(stdout: string, branches: readonly string[]): Map<string, PrSnapshot | null> | null {
   const parsed = responseSchema.safeParse(jsonOrNull(stdout));
   if (!parsed.success) return null;
   const { repository } = parsed.data.data;
@@ -121,12 +123,4 @@ export function parsePrs(stdout: string, branches: readonly string[]): Map<strin
     prs.set(branch, field.nodes[0] ?? null);
   }
   return prs;
-}
-
-function jsonOrNull(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
 }

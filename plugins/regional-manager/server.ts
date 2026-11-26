@@ -39,7 +39,7 @@ import { registerHandoffTool } from "./src/server/tools/handoff-tool.ts";
 import { createFinalChecks } from "./src/server/verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./src/server/verify/verdict-tool.ts";
 import { createVerify } from "./src/server/verify/verify.ts";
-import { runGh } from "./src/server/watch/host-command.ts";
+import { runHostCli } from "./src/server/watch/host-command.ts";
 import { createPrWatch } from "./src/server/watch/pr-watch.ts";
 
 export default function plugin(host: BbPluginApi): void {
@@ -78,7 +78,7 @@ export default function plugin(host: BbPluginApi): void {
   const viewWatch = watchViews({ bb, store, views, inbox, publish: (id) => issueTags.publish(id), now: Date.now });
   written.tell((id) => viewWatch.changed(id));
   const turns = issueTurns(instance.signal);
-  const prWatch = createPrWatch({ bb, store, inbox, gh: runGh, now: Date.now });
+  const prWatch = createPrWatch({ bb, store, inbox, run: runHostCli, now: Date.now });
   const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
   const issues = createIssues({ bb, store, views, onChange });
   const review = createReview({ bb, store, spawner, memory, turns, now: Date.now });

@@ -161,7 +161,7 @@ test("a verdict stored before settlements existed reads as settled", () => {
 const HEAD = "a".repeat(40);
 const PR_URL = "https://github.com/octo-org/widgets/pull/12";
 const passed = () => returned(["pass", "pass"], { kind: "pending" });
-const snapshot = (fields: Partial<PrSnapshot>): PrSnapshot => ({ number: 12, url: PR_URL, state: "open", draft: false, review: "none", ci: "pending", headSha: HEAD, failedChecks: [], ...fields });
+const snapshot = (fields: Partial<PrSnapshot>): PrSnapshot => ({ forge: "github", number: 12, url: PR_URL, state: "open", draft: false, review: "none", ci: "pending", headSha: HEAD, failedChecks: [], ...fields });
 const HANDOFF = handoffIdSchema.parse("6f1c2a54-0b8e-4c3e-9d7a-2f5e8b1c4d90");
 /** The done handoff CI is judged for: its commit is HEAD, and it names this pull request (null: none). */
 const claim = (prUrl: string | null) => ({ id: HANDOFF, headSha: HEAD, prUrl });
@@ -187,15 +187,15 @@ test("judge: CI on the handoff's commit decides a verdict that passed every crit
   assert.equal(judge(passed(), ci({ ci: "none" })), "waiting-for-ci", "zero checks a minute after the commit was seen: GitHub may still attach them");
   assert.equal(judge(passed(), ciOf(claim(PR_URL), { ...seen({ ci: "none" }), readAt: 5 * 60_000 })), "pass", "still none past the window: a pass, labelled no CI checks elsewhere");
   assert.equal(judge(passed(), ciOf(claim(null), null)), "pass", "no pull request named or known");
-  assert.equal(judge(passed(), ciOf(claim(PR_URL), { snapshot: null, unavailable: { kind: "persistent", reason: "gh isn't signed in" } })), "pass", "a pass whose CI can't be checked, labelled so elsewhere");
-  assert.equal(judge(passed(), ciOf(claim(PR_URL), { snapshot: null, unavailable: { kind: "transient", reason: "couldn't reach GitHub" } })), "waiting-for-ci", "a read that failed for now says nothing about CI");
+  assert.equal(judge(passed(), ciOf(claim(PR_URL), { snapshot: null, unavailable: { kind: "persistent", reason: "gh isn't signed in", forge: "github" } })), "pass", "a pass whose CI can't be checked, labelled so elsewhere");
+  assert.equal(judge(passed(), ciOf(claim(PR_URL), { snapshot: null, unavailable: { kind: "transient", reason: "couldn't reach GitHub", forge: "github" } })), "waiting-for-ci", "a read that failed for now says nothing about CI");
   const failed = returned(["pass", "fail"], { kind: "pending" });
   assert.equal(judge(failed, ci({ ci: "pending" })), "fail");
   assert.equal(judge(failed, ci({ ci: "pass" })), "fail");
 });
 
 test("a settled verdict keeps the CI it settled with: a pass that CI failed reads fail", () => {
-  assert.equal(outcome(returned(["pass"], { kind: "checked", refused: null, ci: { kind: "fail", number: 12, failedChecks: ["test"] } })), "fail");
+  assert.equal(outcome(returned(["pass"], { kind: "checked", refused: null, ci: { kind: "fail", forge: "github", number: 12, failedChecks: ["test"] } })), "fail");
   assert.equal(outcome(returned(["pass"], { kind: "checked", refused: null, ci: { kind: "not-checked", reason: "PR status unavailable: gh isn't signed in" } })), "pass");
 });
 
@@ -205,7 +205,7 @@ test("a verdict failed on review findings alone only when every reason it failed
   assert.equal(failedOnReviewOnly({ ...reviewOnly, criteria: [...reviewOnly.criteria, { criterion: "lint", result: "fail", shows: "Lint found 1 problem.", evidence: "1 problem" }] }), false, "a criterion failed too");
   assert.equal(failedOnReviewOnly({ ...reviewOnly, checkout: { ...CLEAN, changedFiles: ["x.ts"], changedFileCount: 1 } }), false, "not on a clean tree");
   assert.equal(failedOnReviewOnly({ ...reviewOnly, blocking: [{ title: "Retries leak a socket", claim: "Retries leak a socket.", anchor: "brief", steps: null }] }), false, "a blocking defect of the verifier's");
-  assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "checked", refused: null, ci: { kind: "fail", number: 41, failedChecks: ["test"] } } }), false, "CI failed");
+  assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "checked", refused: null, ci: { kind: "fail", forge: "github", number: 41, failedChecks: ["test"] } } }), false, "CI failed");
   assert.equal(failedOnReviewOnly({ ...reviewOnly, settlement: { kind: "pending" } }), false, "still to settle");
   assert.equal(failedOnReviewOnly(readWith([["must-fix", DOWNGRADED]])), false, "it passed");
   assert.equal(failedOnReviewOnly(returned(["fail"])), false, "a criterion alone");

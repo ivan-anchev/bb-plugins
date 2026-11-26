@@ -3,6 +3,7 @@
 // evidence, and the passes folded; or, with no verdict returned, where its check stands.
 import type { Round } from "../../../../../model/feed/round.ts";
 import { checkoutText, NOT_CLEAN, NOT_CLEAN_TREE, worktreeText } from "../../../../../model/verdict/checkout.ts";
+import { prRef } from "../../../../../model/verdict/pr.ts";
 import { defectText } from "../../../../../model/verdict/review.ts";
 import { ciVerdictOf, failedCheckout, verifierFindingText, type CriterionResult, type ShownVerdict } from "../../../../../model/verdict/verdict.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
@@ -152,7 +153,7 @@ function CiLine({ verdict }: { verdict: ReturnedVerdict }) {
     case "fail":
       return (
         <p className="rmi-verdict-meta" data-tone="failed">
-          CI failed on #{ci.number}
+          CI failed on {prRef(ci)}
           {ci.failedChecks.length > 0 && <>: {ci.failedChecks.join(", ")}</>}
         </p>
       );

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ghFailure } from "./gh-failure.ts";
-import { parseHostCommandFailure } from "./host-command.ts";
+import { parseHostCommandFailure } from "../host-command.ts";
 
 // Each fixture is the rejection of a real gh run, saved field for field. not-signed-in,
 // bad-credentials-401 and network ran this watch's own query against ivan-anchev/bb-plugins with
@@ -13,8 +13,8 @@ const recorded = (name: string) => ghFailure(parseHostCommandFailure(JSON.parse(
 
 const failed = (stderr: string) => ghFailure({ code: 1, stdout: "", stderr: `${stderr}\n`, killed: false });
 
-const persistent = (reason: string) => ({ kind: "persistent", reason });
-const transient = (reason: string) => ({ kind: "transient", reason });
+const persistent = (reason: string) => ({ kind: "persistent", reason, forge: "github" });
+const transient = (reason: string) => ({ kind: "transient", reason, forge: "github" });
 
 test("gh missing, and gh signed out, each say so and last; a token GitHub refuses says it was rejected, not that gh is signed out", () => {
   assert.deepEqual(recorded("not-installed"), persistent("gh, the GitHub CLI, isn't installed on the machine running bb"));

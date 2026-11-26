@@ -60,7 +60,7 @@ function handed(made: Handoff, verdict: Verdict | null, review: Review = { state
 
 const checkIdOf = ({ check }: Handed) => check?.id ?? assert.fail("no check");
 const stored = (events: [number, InboxEvent][]): StoredEvent[] => events.map(([at, event], i) => ({ id: i + 1, at, event }));
-const pr = (state: PrSnapshot["state"], ci: PrSnapshot["ci"]): PrSnapshot => ({ number: 219, url: "https://github.com/ivan-anchev/bb-plugins/pull/219", state, draft: false, review: "none", ci, headSha: SHA, failedChecks: [] });
+const pr = (state: PrSnapshot["state"], ci: PrSnapshot["ci"]): PrSnapshot => ({ forge: "github", number: 219, url: "https://github.com/ivan-anchev/bb-plugins/pull/219", state, draft: false, review: "none", ci, headSha: SHA, failedChecks: [] });
 const agent = (id: AgentId, startedAt: number, ended: Agent["ended"]): FeedFacts["agents"][number] => ({ id, startedAt, ended });
 
 /** BBP-19 as it went: a1 failed twice, the manager handed it to a2, which failed once and then passed; #219 opened, passed CI and merged. */
@@ -81,7 +81,7 @@ function bbp19(): FeedFacts {
   });
   const two = handed(handoff(2, A1, 4_000), returned(["pass", "pass", "fail"], 4_500, { kind: "checked", refused: null, ci: { kind: "none" } }));
   const three = handed(handoff(3, A2, 5_000), returned(["pass", "pass", "fail"], 5_500, { kind: "sent-back", round: 1, ci: { kind: "none" } }));
-  const four = handed(handoff(4, A2, 5_800), returned(["pass", "pass", "pass"], 6_400, { kind: "checked", refused: null, ci: { kind: "pass", number: 219 } }));
+  const four = handed(handoff(4, A2, 5_800), returned(["pass", "pass", "pass"], 6_400, { kind: "checked", refused: null, ci: { kind: "pass", forge: "github", number: 219 } }));
   const decisions: IssueDecision[] = [
     { kind: "asked", id: decisionIdSchema.parse("d1"), question: "Keep the row's facts?", options: ["Keep", "Hide"], recommended: null, at: 3_700, answer: { text: "Keep", at: 3_800 }, cap: null },
     { kind: "recorded", text: "a1 loops: hand BBP-19 to a fresh agent.", at: 4_700 },
@@ -213,8 +213,8 @@ test("a round whose criteria all passed scores a pass only once it is settled: b
   assert.deepEqual(passed({ kind: "pending" }), { kind: "pending", stage: "verifying" });
   assert.deepEqual(passed({ kind: "waiting-for-ci" }), { kind: "pending", stage: "ci" });
   assert.deepEqual(passed({ kind: "superseded" }), { kind: "unjudged", outcome: "superseded" });
-  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "pass", number: 7 } }), { kind: "judged", passed: 3, of: 3 });
-  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "fail", number: 7, failedChecks: ["test"] } }), { kind: "failed", by: "ci" }, "every criterion passed: it leads with why it failed");
+  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "pass", forge: "github", number: 7 } }), { kind: "judged", passed: 3, of: 3 });
+  assert.deepEqual(passed({ kind: "checked", refused: null, ci: { kind: "fail", forge: "github", number: 7, failedChecks: ["test"] } }), { kind: "failed", by: "ci" }, "every criterion passed: it leads with why it failed");
   const clean = returned(["pass", "pass", "pass"], 3_500, { kind: "checked", refused: null, ci: { kind: "none" } });
   const dirty: Verdict = clean.state === "returned" ? { ...clean, checkout: { headSha: SHA, changedFiles: ["?? notes.md"], changedFileCount: 1 } } : assert.fail("not returned");
   assert.deepEqual(scored(dirty), { kind: "failed", by: "checkout" });

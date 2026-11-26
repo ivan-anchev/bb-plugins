@@ -84,7 +84,7 @@ function seeded() {
   store.observeStatuses(MANAGER, [{ issue: store.issue(MANAGER, issueId) ?? assert.fail("no issue"), status: "in-progress" }], 3_650);
   store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], recommended: "SQS", issueId }, 3_700);
   store.updateIssue(MANAGER, issueId, { decision: { text: "SQS: it is already deployed.", at: 3_800 } }, { requireUnheld: false, closes: new Map(), at: 3_000 });
-  const pr: PrSnapshot = { number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, review: "none", ci: "pending", headSha: SHA, failedChecks: [] };
+  const pr: PrSnapshot = { forge: "github", number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, review: "none", ci: "pending", headSha: SHA, failedChecks: [] };
   store.insertEvent(MANAGER, { kind: "pr", issueId, agentId, pr, changes: ["opened"] }, 3_900);
   store.insertEvent(MANAGER, { kind: "idle-without-handoff", issueId, agentId, lastAnswer: "Still on it." }, 4_000);
   store.insertEvent(MANAGER, { kind: "unblocked", issueId, by: dependency, closedAs: "done" }, 4_100);
@@ -118,7 +118,7 @@ const EXPECTED_KEYS: Record<FedEntry["kind"], string[]> = {
   round: ["kind", "round"],
   decision: ["decision", "kind", "moved"],
   comment: ["comment", "kind"],
-  pr: ["at", "changes", "kind", "moved", "number"],
+  pr: ["at", "changes", "kind", "moved", "pr"],
   thread: ["agentId", "at", "event", "kind", "moved"],
   "follow-up": ["at", "issueId", "kind", "moved", "when"],
   unblocked: ["at", "by", "kind", "moved"],
@@ -137,6 +137,8 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   const entries = byKind(feed);
   assert.deepStrictEqual([...entries.keys()].sort(), keysOf(EXPECTED_KEYS).filter((kind) => kind !== "follow-up"), "an entry of every kind but a follow-up, which a pass files (the test below)");
   for (const [kind, entry] of entries) assert.deepStrictEqual(keysOf(entry), EXPECTED_KEYS[kind], kind);
+  const pr = entries.get("pr");
+  assert.deepStrictEqual(pr?.kind === "pr" ? pr.pr : null, { forge: "github", number: 7 }, "a pr entry names its forge with its number, and nothing else of the snapshot");
   const round = entries.get("round");
   assert.ok(round?.kind === "round");
   assert.deepStrictEqual(keysOf(round.round), ["by", "handed", "inFlight", "key", "number", "outcome", "review", "verdict"]);

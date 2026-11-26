@@ -74,7 +74,7 @@ const worktreeAgent: Agent = { ...sandboxAgent, placement: worktree, checkout: {
 const readAt = (headSha: string, changedFiles: string[] = [], branch: string | null = "bb/a3"): CheckoutRead => ({ kind: "read", branch, checkout: { headSha, changedFiles, changedFileCount: changedFiles.length } });
 const clean = readAt(HEAD_C);
 const previous: Previous = { agent: sandboxAgent, environmentId: "env_sbx", branch: "bb/a3", now: null, pushed: null };
-const prAt = (headSha: string): PrSnapshot => ({ number: 44, url: "https://github.com/acme/webhooks/pull/44", state: "open", draft: false, review: "none", ci: "pass", headSha, failedChecks: [] });
+const prAt = (headSha: string): PrSnapshot => ({ forge: "github", number: 44, url: "https://github.com/acme/webhooks/pull/44", state: "open", draft: false, review: "none", ci: "pass", headSha, failedChecks: [] });
 
 test("a handover continues in the previous agent's environment, whatever made it, inheriting its checkout and placement", () => {
   assert.deepEqual(handoverOf("build", { from: "previous", placement: null }, previous), {

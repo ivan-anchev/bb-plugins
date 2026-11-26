@@ -258,5 +258,5 @@ test("answering cancel before the plugin read any pull request names the issue's
   await kit.rpc.answerDecision({ coordinatorId, decisionId: d1, answer: "Cancel the issue" });
   await settled();
   const branch = kit.thread(fresh).environmentBranchName ?? assert.fail("no branch");
-  assert.ok(textOf(await kit.call("crew_catch_up", {}, threadId)).includes(`close its pull request, if one is open on its branch, with \`gh pr close ${branch}\`; and cancel WEB-1`));
+  assert.ok(textOf(await kit.call("crew_catch_up", {}, threadId)).includes(`close its pull request or merge request, if one is open on its branch, with \`gh pr close ${branch}\` on GitHub or \`glab mr close ${branch}\` on GitLab; and cancel WEB-1`));
 });

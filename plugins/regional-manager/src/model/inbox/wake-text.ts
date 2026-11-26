@@ -11,7 +11,7 @@ import type { IssueId } from "../issue/issue.ts";
 import type { Check, CheckId } from "../verdict/check.ts";
 import { capChoice, choicePhrase } from "../verdict/rounds/cap-choice.ts";
 import { askedQuestion, askedText, isCapQuestion, type CapQuestion } from "../verdict/rounds/cap.ts";
-import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
+import { PR_CHANGE_WORDS, prName } from "../verdict/pr.ts";
 import { ciVerdictOf, failurePhrases, failureReasons, mayHaveReachedAgent, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
 import type { InboxEvent, StoredEvent } from "./inbox-event.ts";
@@ -54,7 +54,7 @@ function line(event: InboxEvent, lookups: Lookups): string {
     case "needs-input":
       return `${on} is waiting on the user in its thread`;
     case "pr":
-      return `${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}`;
+      return `${on} ${prName(event.pr)}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}`;
     case "returned-to-todo":
       return `${on} returned to Todo: its agent was ${event.how}`;
     case "comment":

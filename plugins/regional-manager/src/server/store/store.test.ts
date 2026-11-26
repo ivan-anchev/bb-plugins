@@ -622,3 +622,41 @@ test("a check stored before checks kept their work's branch gets its agent's bra
   const check = openStore(storage).check(checkIdSchema.parse(id)) ?? assert.fail("no check");
   assert.deepEqual(check.subject, { ...subject, branch: "bb/thr_b" });
 });
+
+test("a snapshot, a pr event, a settled CI verdict and an unavailable reason stored by 0.22.0, before forge, read back as GitHub's, the reason on no forge, every other field as stored", () => {
+  const { db, storage, store } = freshStore();
+  const issue = filedIssue(store, MANAGER, newIssue(), 1_500);
+  const agentId = startAgent(store, issue.id, "agent-1");
+  // As 0.22.0 wrote them: no forge on the snapshot, the event's pull request, the verdict's CI or the reason.
+  const snapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "open", draft: false, review: "none", ci: "fail", headSha: "a".repeat(40), failedChecks: ["test (node 22)"] };
+  const unavailable = { kind: "transient", reason: "couldn't reach GitHub" };
+  const ci = { kind: "fail", number: 41, failedChecks: ["test (node 22)"] };
+  db.prepare("INSERT INTO pr_snapshots (coordinator_id, branch, snapshot, head_seen_at, read_at, handoff_at_read, unavailable, polled_at) VALUES (?, 'bb/retries', ?, 2000, 2050, NULL, ?, 2100)").run(MANAGER, JSON.stringify(snapshot), JSON.stringify(unavailable));
+  db.prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, 2050)").run(MANAGER, JSON.stringify({ kind: "pr", issueId: issue.id, agentId, pr: snapshot, changes: ["ci-failed"] }));
+  const verdict = {
+    state: "returned",
+    at: 4_000,
+    verifierThreadId: "thr_verifier",
+    headSha: "a".repeat(40),
+    checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 },
+    criteria: [{ criterion: "npm test passes", result: "pass", evidence: "# pass 1" }],
+    findings: [],
+    triage: [],
+    mustFixFails: true,
+    model: { providerId: "claude-code", model: "sonnet" },
+    sameModel: false,
+    settlement: { kind: "checked", refused: null, ci },
+  };
+  const subject = { kind: "handoff", agentId, handoffId: randomUUID(), headSha: "a".repeat(40), prUrl: snapshot.url, branch: "bb/retries" };
+  const id = randomUUID();
+  db.prepare("INSERT INTO checks (id, coordinator_id, issue_id, subject, criteria, verdict, review, at) VALUES (?, ?, ?, ?, '[\"npm test passes\"]', ?, '{\"state\":\"queued\"}', 3000)").run(id, MANAGER, issue.id, JSON.stringify(subject), JSON.stringify(verdict));
+
+  const reopened = openStore(storage);
+  assert.deepEqual(reopened.prOfBranch(MANAGER, "bb/retries"), { snapshot: { ...snapshot, forge: "github" }, headSeenAt: 2_000, readAt: 2_050, handoffAtRead: null, unavailable: { ...unavailable, forge: null }, polledAt: 2_100 });
+  assert.deepEqual(
+    reopened.unannounced(MANAGER).map(({ event }) => event),
+    [{ kind: "pr", issueId: issue.id, agentId, pr: { ...snapshot, forge: "github" }, changes: ["ci-failed"] }],
+  );
+  const check = reopened.check(checkIdSchema.parse(id)) ?? assert.fail("no check");
+  assert.deepEqual(check.verdict.state === "returned" && check.verdict.settlement, { kind: "checked", refused: null, ci: { ...ci, forge: "github" } });
+});

@@ -94,7 +94,7 @@ export const FEED: IssueFeed = {
     { kind: "agent-ended", at: 4_800, agentId: A1, how: "replaced", moved: null },
     { kind: "agent-started", at: 4_800, agentId: A2, moved: null },
     roundEntry(round(3, A2, 5_000, ["pass", "pass", "pass"], null)),
-    { kind: "pr", at: 6_000, number: 219, changes: ["ci-passed", "merged"], moved: null },
+    { kind: "pr", at: 6_000, pr: { forge: "github", number: 219 }, changes: ["ci-passed", "merged"], moved: null },
     { kind: "thread", at: 6_100, agentId: A2, event: { kind: "reported-back", lastAnswer: "Merged; nothing left." }, moved: null },
     { kind: "unblocked", at: 6_200, by: id("WEB-7"), moved: null },
     { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d2"), question: "Ship #219 to everyone now?", options: ["Ship now", "Wait a day"], recommended: null, at: 6_300, answer: null, cap: null }, moved: null },

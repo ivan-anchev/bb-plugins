@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
-import { coordinating, doorbellOf, failsVerification, isRefusal, settled, startedAgent, textOf, withoutLinks, type FakePr } from "../test-harness.ts";
+import { assertQuotedHostileName, coordinating, doorbellOf, failsVerification, HOSTILE_CHECK_NAME, isRefusal, settled, startedAgent, textOf, withoutLinks, type FakePr } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
@@ -21,7 +21,7 @@ const PASSES = {
 const MINUTE = 60_000;
 
 /** The rejection of a real gh run, recorded in fixtures/gh-failures. */
-const recorded = (name: string) => Object.assign(new Error("Command failed: gh api graphql"), JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
+const recorded = (name: string) => Object.assign(new Error("Command failed: gh api graphql"), JSON.parse(readFileSync(new URL(`./github/fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 /** A gh run that failed with this on stderr. */
 const ghSaid = (stderr: string) => Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stdout: "", stderr: `${stderr}\n` });
 
@@ -123,9 +123,20 @@ test("the same verdict with failing CI fails, and the findings sent back to the 
   assert.deepEqual(verdict?.state === "returned" ? verdict.settlement : null, {
     kind: "sent-back",
     round: 1,
-    ci: { kind: "fail", number: 41, failedChecks: ["test (node 22)", "e2e"] },
+    ci: { kind: "fail", forge: "github", number: 41, failedChecks: ["test (node 22)", "e2e"] },
   });
   assert.equal((await row()).lane, "in-progress", "the agent works on its fix");
+});
+
+test("check names: a GitHub check named with a backtick, a line break, U+202E and 300 characters reaches the agent's findings and the manager's catch-up as one capped code span", async () => {
+  const { kit, threadId, agentThreadId, pr, minute, verified } = await agentOnGitHub();
+  pr();
+  await minute();
+  await verified();
+  pr({ rollup: "FAILURE", failed: [HOSTILE_CHECK_NAME] });
+  await minute();
+  assertQuotedHostileName(kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent"), "the agent's findings");
+  assertQuotedHostileName(textOf(await kit.call("crew_catch_up", {}, threadId)), "catch-up");
 });
 
 test("a CI failure after the agent's fix round reaches the coordinating thread as a CI failure, under Needs you", async () => {
@@ -142,7 +153,7 @@ test("a CI failure after the agent's fix round reaches the coordinating thread a
   assert.deepEqual(await row(), { lane: "needs-you", headline: "✗ CI failed on #41 after its fix round: Retries land with backoff", pr: "#41 open CI fail" });
   // why the catch-up: the coordinating thread is busy with an earlier doorbell by now, so bb holds this one queued.
   const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
-  assert.match(catchUp, /### WEB-1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: CI failed on #41\. 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: test\./);
+  assert.match(catchUp, /### WEB-1 "Add retries" \(a1\) handed off: done\n[\s\S]*Failed verification: CI failed on #41\. 2 of 2 criteria passed, checked at 0123456789abcdef0123456789abcdef01234567 by a verifier on [^.]*\. bb's git plugin read the agent's environment as it handed off: the claimed commit 0123456789abcdef0123456789abcdef01234567 checked out, on a clean working tree\. CI: failed on #41 at this commit; failed checks, as GitHub names them: `test`\./);
   assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /#### Verdict\n\nFailed verification: CI failed on #41\. 2 of 2 criteria passed, checked at /);
 });
 
@@ -161,7 +172,7 @@ test("with gh signed out the board shows why PR status is unavailable, no pr eve
   kit.github.failure = Object.assign(new Error("Command failed: gh api graphql"), { code: 4, stdout: "", stderr: "To get started with GitHub CLI, please run:  gh auth login\nAlternatively, populate the GH_TOKEN environment variable with a GitHub API authentication token.\n" });
   pr({ rollup: "SUCCESS" });
   await minute();
-  assert.equal((await board()).prUnavailable, "gh isn't signed in on the machine running bb: run gh auth login there");
+  assert.deepEqual((await board()).prUnavailable, { forge: "github", reason: "gh isn't signed in on the machine running bb: run gh auth login there" });
   assert.equal((await row()).pr, null);
   assert.ok(!events().includes("pr"), "no pr event while gh can't read GitHub");
 
@@ -180,7 +191,7 @@ test("a failed read keeps the stored snapshot, and the next good read clears the
   kit.github.failure = Object.assign(new Error("Command failed"), { code: 1, stdout: "", stderr: 'Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host\n' });
   await minute();
   assert.deepEqual(kit.store.prOfBranch(coordinatorId, branch)?.snapshot, stored);
-  assert.equal((await board()).prUnavailable, "couldn't reach GitHub");
+  assert.deepEqual((await board()).prUnavailable, { forge: "github", reason: "couldn't reach GitHub" });
   assert.equal((await row()).pr, "#41 open CI pending", "the row keeps what was read last");
 
   kit.github.failure = null;
@@ -196,7 +207,7 @@ test("an answer gh gives that isn't the pull requests asked for overwrites nothi
   pr({ state: "MERGED", head: "not-a-commit" });
   await minute();
   assert.deepEqual(kit.store.prOfBranch(coordinatorId, branch)?.snapshot, stored);
-  assert.equal((await board()).prUnavailable, "GitHub's answer wasn't the pull requests the plugin asked for");
+  assert.deepEqual((await board()).prUnavailable, { forge: "github", reason: "GitHub's answer wasn't the pull requests the plugin asked for" });
 });
 
 test("a merged pull request moves the row to Done, and the coordinating thread hears it merged", async () => {
@@ -240,15 +251,19 @@ test("a repository is read every tick while CI runs or a verdict waits for it, e
   assert.equal(runs(), 6, "a closed issue is never read");
 });
 
-test("an agent whose project isn't on GitHub is not read; a verdict that waits on its pull request passes with CI not checked", async () => {
-  const { kit, row, minute, verified } = await agentOnGitHub();
-  kit.github.remote = "https://gitlab.com/acme/webhooks.git";
+test("on a github.com remote the watch runs gh with exactly the arguments it ran before GitLab was read, with no --hostname, and never runs glab", async () => {
+  const { kit, branch, pr, minute } = await agentOnGitHub();
+  pr();
   await minute();
-  await verified();
-  assert.equal((await row()).lane, "verifying");
   await minute();
-  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: null });
-  assert.equal(kit.github.runs.length, 0);
+  // The fields and query as 0.22.0 sent them, copied here so a change to either fails this test.
+  const fields = `number url state isDraft reviewDecision
+  commits(last: 1) { nodes { commit { oid statusCheckRollup { state contexts(first: 100) { nodes {
+    __typename ... on CheckRun { name conclusion } ... on StatusContext { context state } } } } } } }`;
+  const query = `query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) {\nb0: pullRequests(headRefName: $b0, first: 1, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { ${fields} } }\n} }`;
+  const asOn022 = ["api", "graphql", "-f", `query=${query}`, "-f", "owner=acme", "-f", "name=webhooks", "-f", `b0=${branch}`];
+  assert.deepEqual(kit.github.runs, [asOn022, asOn022]);
+  assert.deepEqual(kit.gitlab.runs, [], "glab never runs for github.com");
 });
 
 test("a newer done handoff replaces a verdict still waiting for CI, so only the newer one is ever announced", async () => {
@@ -303,7 +318,7 @@ test("zero checks, then the read past the window fails: the verdict keeps waitin
   kit.github.failure = ghSaid('Post "https://api.github.com/graphql": dial tcp: lookup api.github.com: no such host');
   await minute();
   assert.deepEqual(await row(), { lane: "verifying", headline: "Waiting for CI on #41: Retries land with backoff", pr: "#41 open CI none" }, "a failed read past the window says nothing about CI");
-  assert.equal((await board()).prUnavailable, "couldn't reach GitHub");
+  assert.deepEqual((await board()).prUnavailable, { forge: "github", reason: "couldn't reach GitHub" });
   kit.github.failure = null;
   await minute();
   assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, no CI checks: Retries land with backoff", pr: "#41 open CI none" });
@@ -328,7 +343,7 @@ test("a verdict waiting for CI keeps waiting through every transient gh failure,
     fail();
     await minute();
     assert.deepEqual(await row(), waiting, name);
-    reasons.push((await board()).prUnavailable);
+    reasons.push((await board()).prUnavailable?.reason);
   }
   assert.deepEqual(reasons, ["couldn't reach GitHub", "couldn't reach GitHub", "couldn't reach GitHub", "GitHub is limiting requests right now", "Something went wrong while executing your query. (HTTP 502)"]);
 
@@ -336,7 +351,7 @@ test("a verdict waiting for CI keeps waiting through every transient gh failure,
   pr({ rollup: "SUCCESS", head: "not-a-commit" });
   await minute();
   assert.deepEqual(await row(), waiting, "an answer that isn't the pull requests asked for");
-  assert.equal((await board()).prUnavailable, "GitHub's answer wasn't the pull requests the plugin asked for");
+  assert.deepEqual((await board()).prUnavailable, { forge: "github", reason: "GitHub's answer wasn't the pull requests the plugin asked for" });
 
   pr({ rollup: "SUCCESS" });
   await minute();
@@ -361,7 +376,7 @@ test("after a transient gh failure, a read that finds CI failed fails the verdic
   assert.deepEqual(verdict?.state === "returned" ? verdict.settlement : null, {
     kind: "sent-back",
     round: 1,
-    ci: { kind: "fail", number: 41, failedChecks: ["test (node 22)"] },
+    ci: { kind: "fail", forge: "github", number: 41, failedChecks: ["test (node 22)"] },
   });
   assert.equal((await row()).lane, "in-progress");
 });
@@ -381,7 +396,7 @@ test("a verdict waiting through a transient gh failure settles as CI not checked
 
     kit.github.failure = recorded(name);
     await minute();
-    assert.equal((await board()).prUnavailable, reason, name);
+    assert.deepEqual((await board()).prUnavailable, { forge: "github", reason }, name);
     assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified, CI not checked: Retries land with backoff", pr: "#41 open CI pending" }, name);
     const verdict = kit.store.latestHandoff(coordinatorId, a1)?.check?.verdict;
     assert.deepEqual(verdict?.state === "returned" ? verdict.settlement : null, {

@@ -709,7 +709,7 @@ const knownClose = (db: ReturnType<typeof freshStore>["db"], followUp: string) =
 /** Every issue of MANAGER viewed as the board would with no agent placing it, WEB-1's pull request `#41` merged when `merged`. */
 const viewsWith = (store: Store, merged: boolean) =>
   issueViews(store.issues(MANAGER).map((issue) => ({ issue, holder: null, ended: null, accepted: null, pr: merged && issue.id === "WEB-1" ? MERGED_41 : null, openDecisions: [], finalCheck: null, verifierAsks: false })));
-const MERGED_41: PrSnapshot = { number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] };
+const MERGED_41: PrSnapshot = { forge: "github", number: 41, url: "https://github.com/acme/webhooks/pull/41", state: "merged", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] };
 const unblockedEvents = (store: Store) => events(store).filter(({ kind }) => kind === "unblocked");
 
 test("a pass settled on a merged pull request files its follow-up knowing the origin closed by that merge, so recordUnblocked announces nothing; one settled before the merge is announced once when it merges", () => {

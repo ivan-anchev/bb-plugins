@@ -9,6 +9,7 @@ import { coordinatorContract as contract, type Board as BoardData } from "../../
 import type { Decision } from "../../model/decision.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { statusLabel } from "../../model/verdict/pr.ts";
 import { ReadFailure } from "../ui/read-failure.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { shortTime } from "../ui/time.ts";
@@ -29,7 +30,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
         <>
           <VerifySwitch coordinatorId={coordinatorId} verify={data.verify} />
           {data.ownEdits !== null && <OwnEdits {...data.ownEdits} />}
-          {data.prUnavailable !== null && <PrUnavailable reason={data.prUnavailable} />}
+          {data.prUnavailable !== null && <PrUnavailable {...data.prUnavailable} />}
           <IssueBoard
             decisions={data.decisions}
             issues={data.issues}
@@ -103,15 +104,15 @@ function OwnEdits({ fileCount, at }: NonNullable<BoardData["ownEdits"]>) {
 }
 
 /**
- * Why the plugin can't read its issues' pull requests now. Rows keep the PR and CI it read last, and a
- * pass it couldn't check CI for says so.
+ * Why the plugin can't read its issues' pull requests or merge requests now, under its forge's label.
+ * Rows keep the PR and CI it read last, and a pass it couldn't check CI for says so.
  */
-function PrUnavailable({ reason }: { reason: string }) {
+function PrUnavailable({ forge, reason }: NonNullable<BoardData["prUnavailable"]>) {
   return (
     <p className="flex items-start gap-2 px-2 text-xs text-muted-foreground">
       <Icon name="AlertTriangle" aria-hidden className="mt-px size-3.5 shrink-0 text-warning-text" />
       <span className="min-w-0">
-        <span className="font-medium text-foreground">PR status unavailable:</span> {reason}. Rows show what was read last.
+        <span className="font-medium text-foreground">{statusLabel(forge)}:</span> {reason}. Rows show what was read last.
       </span>
     </p>
   );

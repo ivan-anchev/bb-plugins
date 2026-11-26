@@ -18,7 +18,7 @@ import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
 import { capChoice, choiceText, mergeStandsText, type AnsweredAt, type FollowUp } from "../../model/verdict/rounds/cap-choice.ts";
 import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion, mergeAnswer, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
-import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
+import { checkNamesText, FORGE, PR_CHANGE_WORDS, prName, prRef, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { defectText, findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
 import { acceptableAsIs, checkInFlight, type PrOfBranch, ciVerdictOf, failurePhrases, failureReasons, heldFindings, mayHaveReachedAgent, outcome, verifierFindingText, type Verdict } from "../../model/verdict/verdict.ts";
 import { onlyNits, unfiledAtMerge } from "../../model/verdict/rounds/follow-up.ts";
@@ -116,7 +116,7 @@ function eventText({ event, at }: StoredEvent, lookups: Lookups): string {
       return `### ${on} is waiting on the user in its thread\n\n${when} Only the user can answer it there; tell them in your reply. It asks, in its own words:\n\n${event.question.trim()}`;
     case "pr": {
       const unfiled = event.changes.includes("merged") ? unfiledLine(lookups.record(event.issueId)) : "";
-      return `### ${on} PR #${event.pr.number}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.${unfiled}`;
+      return `### ${on} ${prName(event.pr)}: ${event.changes.map((change) => PR_CHANGE_WORDS[change]).join(", ")}\n\n${when} ${prText(event.pr)} A done handoff's verdict that waits for CI settles on its own; you hear of it then.${unfiled}`;
     }
     case "returned-to-todo":
       return `### ${on} returned to Todo\n\n${when} ${event.agentId} was ${event.how} before its work reached Reviewing, Verifying, In review or Done, so ${event.issueId} rests in Todo with no agent. ${restingNextStep(event.issueId, lookups)}`;
@@ -239,9 +239,9 @@ function answeredAt(issueId: IssueId, answeredAt: number, { record, view, agents
   const pr = view(issueId)?.pr ?? null;
   const branch = issueBranch(agents().filter((agent) => agent.issueId === issueId), () => null, record(issueId))?.branch ?? null;
   const followUp = followUpOf(lastFailure);
-  if (pr?.state === "merged") return { branch, merge: { kind: "merged", pr: pr.number, followUp } };
+  if (pr?.state === "merged") return { branch, merge: { kind: "merged", pr, followUp } };
   const acceptable = followUp.kind === "by-hand" && lastFailure !== null && acceptableAsIs(lastFailure, prOf);
-  return { branch, merge: { kind: "unmerged", pr: pr?.number ?? null, followUp: acceptable ? { kind: "accept" } : followUp } };
+  return { branch, merge: { kind: "unmerged", pr, followUp: acceptable ? { kind: "accept" } : followUp } };
 }
 
 /**
@@ -332,7 +332,7 @@ function failedNextStep(check: Check, askedId: DecisionId | null, lookups: Pick<
   // why first: a closed issue takes no agent, and its question no longer waits for the user.
   if (closed !== null) return `${led}${closedText(check.issueId, closed, asked)}`;
   const merge = mergeAnswer(lookups.capQuestions(check.issueId));
-  if (merge !== null) return `${led}${mergeStandsText(check.issueId, merge.id, lookups.view(check.issueId)?.pr?.number ?? null)}`;
+  if (merge !== null) return `${led}${mergeStandsText(check.issueId, merge.id, lookups.view(check.issueId)?.pr ?? null)}`;
   const open = lockOf(check.issueId, lookups);
   if (open === null) {
     const offer = acceptOffer(check, lookups);
@@ -442,7 +442,7 @@ function reportFileText(issueId: IssueId, file: MemoryFile): string {
   return `Saved in your memory as ${file}.${kept} The plugin gives it to no agent: name the file in the brief of an agent that needs it, which reads it with crew_memory_read.`;
 }
 
-/** A pull request as the plugin read it from GitHub. Check names are GitHub's, as the repository's CI names them. */
+/** A pull request or merge request as the plugin read it from its forge. Check names are the forge's, as the repository's CI names them. */
 function prText(pr: PrSnapshot): string {
   const state = pr.state === "open" && pr.draft ? "open, as a draft" : pr.state;
   const review = { approved: "approved", "changes-requested": "changes requested", none: "no approval or change request" }[pr.review];
@@ -450,7 +450,8 @@ function prText(pr: PrSnapshot): string {
     none: "no checks reported",
     pending: "still running",
     pass: "passed",
-    fail: `failed${pr.failedChecks.length === 0 ? "" : ` (${pr.failedChecks.map((name) => `\`${name}\``).join(", ")})`}`,
+    fail: `failed${pr.failedChecks.length === 0 ? "" : ` (${checkNamesText(pr.failedChecks)})`}`,
+    blocked: "blocked on a manual job nobody has played",
   }[pr.ci];
   return `It is ${state} (${pr.url}), with ${review}; CI on its head ${pr.headSha.slice(0, 7)}: ${ci}.`;
 }
@@ -465,11 +466,11 @@ function ciLine(verdict: Extract<Verdict, { state: "returned" }>, ci: CiVerdict 
     case "none":
       return "CI: no pull request to wait for.";
     case "no-checks":
-      return `CI: no checks; GitHub reported none on #${ci.number} at this commit, after the wait for them.`;
+      return `CI: no checks; ${FORGE[ci.forge].name} reported none on ${prRef(ci)} at this commit, after the wait for them.`;
     case "pass":
-      return `CI: passed on #${ci.number} at this commit.`;
+      return `CI: passed on ${prRef(ci)} at this commit.`;
     case "fail":
-      return `CI: failed on #${ci.number} at this commit${ci.failedChecks.length === 0 ? "" : `; failed checks, as GitHub names them: ${ci.failedChecks.join(", ")}`}.`;
+      return `CI: failed on ${prRef(ci)} at this commit${ci.failedChecks.length === 0 ? "" : `; failed checks, as ${FORGE[ci.forge].name} names them: ${checkNamesText(ci.failedChecks)}`}.`;
     case "not-checked":
       return `CI: not checked (${ci.reason}).`;
     default:

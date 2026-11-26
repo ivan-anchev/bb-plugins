@@ -15,6 +15,7 @@ import type { Comment } from "../../model/feed/comment.ts";
 import { checkOnRecordInFlight, commentsText, finalCheckText, handoffText, type Lookups } from "../tools/inbox-text.ts";
 import { fenced } from "../verify/findings.ts";
 import type { FinalCheck } from "../../model/verdict/check.ts";
+import { prName } from "../../model/verdict/pr.ts";
 import type { Accepted } from "./issues.ts";
 import { recipientsText, type Withdrawn } from "./quiet.ts";
 import type { IssueRead } from "./views/issue-facts.ts";
@@ -119,7 +120,7 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
           return `${started} ${joinedText(carried)}, ${runs}. It continues ${carried.from}'s work there: its commits, its uncommitted files and its pull request are ${agentId}'s now. ${earlier} ${ends}`;
         case "cut": {
           const { from, head, pr } = carried;
-          const opens = pr === null ? "" : ` ${from}'s PR #${pr} stays on its branch, and ${agentId} doesn't push to it.`;
+          const opens = pr === null ? "" : ` ${from}'s ${prName(pr)} stays on its branch, and ${agentId} doesn't push to it.`;
           // why a check, and the failure: bb cuts the branch after it answers the spawn, so the ref may have moved by then, and a base it can't resolve fails the thread then (bb-facts P2a).
           const checks = head === null ? `No commit of ${from}'s is on record for ${agentId} to check its branch against.` : `${agentId} checks that commit is on its branch before it changes anything, and hands off blocked if it isn't.`;
           return `${started} ${cutText(carried)}, ${runs}. ${checks} Nothing ${from} left uncommitted comes with it; if bb can't cut that branch, its thread fails and you are woken.${opens} ${earlier} ${ends}`;
@@ -138,9 +139,9 @@ export function startText(issueId: Issue["id"], outcome: Exclude<StartOutcome, {
   }
 }
 
-/** Where a joined agent works, in words: `in a1's worktree, on its branch `x`, with PR #44`. */
+/** Where a joined agent works, in words: `in a1's worktree, on its branch `x`, with PR #44` (or `MR !44`). */
 function joinedText({ from, placement, branch, pr }: Extract<Carried, { kind: "joined" }>): string {
-  return `in ${from}'s ${placementName(placement)}${branch === null ? "" : `, on its branch \`${branch}\``}${pr === null ? "" : `, with PR #${pr}`}`;
+  return `in ${from}'s ${placementName(placement)}${branch === null ? "" : `, on its branch \`${branch}\``}${pr === null ? "" : `, with ${prName(pr)}`}`;
 }
 
 /** Where a cut agent works, in words: `in a new worktree, on a new branch cut from a1's `origin/x` expecting 4be0a17`. */

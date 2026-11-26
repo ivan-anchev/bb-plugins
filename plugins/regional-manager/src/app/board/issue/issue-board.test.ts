@@ -41,7 +41,7 @@ const ISSUES: IssueRow[] = [
     status: "in-review",
     headline: "✓ Verified: added the hello note",
     agent: { id: agentIdSchema.parse("a2"), threadId: "thr_two" },
-    pr: { number: 41, url: "https://github.com/acme/notes/pull/41", state: "open", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] },
+    pr: { forge: "github", number: 41, url: "https://github.com/acme/notes/pull/41", state: "open", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] },
   }),
   issue("WEB-3", { status: "verifying", headline: "Waiting for CI on #43" }),
   issue("WEB-4", { status: "in-progress", headline: "Working" }),
@@ -204,8 +204,19 @@ test("a row's pull request links it, apart from opening the issue", () => {
   const { view } = mount(ISSUES);
   const pr = view.getByRole("link", { name: "Pull request 41, open, CI passing" });
   assert.equal(pr.getAttribute("href"), "https://github.com/acme/notes/pull/41");
+  assert.equal(pr.textContent, "41", "GitHub's number bare, as Activity Sidebar's badge");
   fireEvent.click(pr);
   assert.deepEqual(view.experimental_panelCalls, [], "and opens no tab");
+});
+
+test("a row's merge request on GitLab reads !41 and links it; a pipeline blocked on a manual job shows the running dot and says so", () => {
+  const url = "https://gitlab.corp.test/frontend/station-ws/-/merge_requests/41";
+  const { view } = mount([issue("WEB-2", { status: "in-review", pr: { forge: "gitlab", number: 41, url, state: "open", draft: false, review: "none", ci: "blocked", headSha: SHA, failedChecks: [] } })]);
+  const mr = view.getByRole("link", { name: "Merge request !41, open, CI blocked on a manual job" });
+  assert.equal(mr.getAttribute("title"), "Merge request !41, open, CI blocked on a manual job", "the tooltip reads the number as the badge shows it");
+  assert.equal(mr.getAttribute("href"), url);
+  assert.equal(mr.textContent, "!41");
+  assert.equal(mr.querySelector(".rmi-ci")?.getAttribute("data-ci"), "blocked");
 });
 
 test("a focused row whose issue moves to another lane keeps focus there", () => {
