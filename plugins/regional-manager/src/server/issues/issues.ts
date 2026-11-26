@@ -11,6 +11,7 @@ import { blockedBy, closesOf, newlyReady, relationsOf, type Related } from "../.
 import { headlineText, latestChecked, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import type { CoordinatorId } from "../../model/role.ts";
 import type { Check, CheckId } from "../../model/verdict/check.ts";
+import { prRef } from "../../model/verdict/pr.ts";
 import { capMovesText } from "../../model/verdict/rounds/cap.ts";
 import { checkedPr, ciFailedAt, failedOnReviewOnly, type PrOfBranch, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
 import { executionText } from "../agents/agents.ts";
@@ -221,7 +222,7 @@ function acceptProblem(latest: Check, id: IssueId, prOf: PrOfBranch): string | n
   if (verdict.state !== "returned") throw new Error(`${id}'s failed verdict hasn't returned.`);
   if (!failedOnReviewOnly(verdict)) return `${id}'s latest verdict failed on more than review findings (${notReviewOnly(verdict)}), so it can't be accepted as it is: only a failure on review findings alone can. ${FIX_IT}`;
   const pr = checkedPr(subject, prOf);
-  return pr !== null && ciFailedAt(subject, pr) ? `CI failed on #${pr.number} at ${verdict.headSha.slice(0, 7)}, the commit ${id}'s latest verdict checked, so it can't be accepted as it is. ${FIX_IT}` : null;
+  return pr !== null && ciFailedAt(subject, pr) ? `CI failed on ${prRef(pr)} at ${verdict.headSha.slice(0, 7)}, the commit ${id}'s latest verdict checked, so it can't be accepted as it is. ${FIX_IT}` : null;
 }
 
 /** Why a verdict that failed didn't fail on review findings alone: its reasons besides those findings, in the order every surface reads them. */

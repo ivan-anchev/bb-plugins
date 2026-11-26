@@ -4,7 +4,7 @@ import { agentIdSchema } from "../../../model/agent/agent.ts";
 import type { PrSnapshot } from "../../../model/verdict/pr.ts";
 import { failWrites, filedIssue, freshStore, MANAGER, newIssue, startAgent } from "../test-store.ts";
 
-const pr = (over: Partial<PrSnapshot> = {}): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state: "open", draft: false, review: "none", ci: "pending", headSha: "a".repeat(40), failedChecks: [], ...over });
+const pr = (over: Partial<PrSnapshot> = {}): PrSnapshot => ({ forge: "github", number: 12, url: "https://github.com/o/r/pull/12", state: "open", draft: false, review: "none", ci: "pending", headSha: "a".repeat(40), failedChecks: [], ...over });
 
 test("a branch's pull request is one snapshot, whichever agent's read finds it, and each meaningful change is announced naming that agent", () => {
   const { store } = freshStore();
@@ -33,8 +33,8 @@ test("a failed read records why and keeps the snapshot; a read that finds none v
   const on = { issueId, agentId: startAgent(store, issueId, "agent-1") };
   store.savePrRead(MANAGER, "bb/retries", on, pr(), null, 3_000);
 
-  store.markPrUnavailable(MANAGER, "bb/retries", { kind: "persistent", reason: "gh is not signed in" }, 3_100);
-  assert.deepEqual(store.prOfBranch(MANAGER, "bb/retries"), { snapshot: pr(), headSeenAt: 3_000, readAt: 3_000, handoffAtRead: null, unavailable: { kind: "persistent", reason: "gh is not signed in" }, polledAt: 3_100 });
+  store.markPrUnavailable(MANAGER, "bb/retries", { kind: "persistent", reason: "gh is not signed in", forge: "github" }, 3_100);
+  assert.deepEqual(store.prOfBranch(MANAGER, "bb/retries"), { snapshot: pr(), headSeenAt: 3_000, readAt: 3_000, handoffAtRead: null, unavailable: { kind: "persistent", reason: "gh is not signed in", forge: "github" }, polledAt: 3_100 });
 
   store.savePrRead(MANAGER, "bb/retries", on, null, null, 3_200);
   assert.deepEqual(store.prOfBranch(MANAGER, "bb/retries"), { snapshot: pr(), headSeenAt: 3_000, readAt: 3_000, handoffAtRead: null, unavailable: null, polledAt: 3_200 });

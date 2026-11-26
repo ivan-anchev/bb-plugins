@@ -5,7 +5,7 @@ import { agentIdSchema, endedHowSchema, type EndedHow } from "../agent/agent.ts"
 import { issueDecisionSchema } from "../decision.ts";
 import { issueIdSchema } from "../issue/issue.ts";
 import { issueStatusSchema } from "../issue/status.ts";
-import { prChangeSchema } from "../verdict/pr.ts";
+import { prChangeSchema, prNumberSchema } from "../verdict/pr.ts";
 import { filedWhenSchema } from "../verdict/rounds/follow-up.ts";
 import { commentSchema, type CommentAuthor } from "./comment.ts";
 import { lineEventSchema } from "./log-event.ts";
@@ -28,8 +28,8 @@ export const entrySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("decision"), decision: issueDecisionSchema, moved }),
   /** A comment on the issue, at when it was posted. why no `moved`: a comment moves no status, so none is shown on it. */
   z.object({ kind: z.literal("comment"), comment: commentSchema }),
-  /** The issue's pull request changed: what changed, on which number. */
-  z.object({ kind: z.literal("pr"), at, number: z.number().int(), changes: z.array(prChangeSchema), moved }),
+  /** The issue's pull request or merge request changed: what changed, on which one. */
+  z.object({ kind: z.literal("pr"), at, pr: prNumberSchema, changes: z.array(prChangeSchema), moved }),
   /** The agent's thread said something the plugin told its manager of: it ended a turn with no handoff, failed, or waits on a person. */
   z.object({
     kind: z.literal("thread"),

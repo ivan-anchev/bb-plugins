@@ -27,12 +27,12 @@ const rowOf = ({ view, agent, threadId }: IssueRead): IssueRow => ({
 });
 
 export function createBoard(bb: FactsBb, store: BoardStore) {
-  /** Why the latest read of an open issue's pull request failed, the first one's; null when none did. */
-  function prUnavailable(id: CoordinatorId, reads: readonly IssueRead[]): string | null {
+  /** Why the latest read of an open issue's change request failed, and of which forge, the first one's; null when none did. */
+  function prUnavailable(id: CoordinatorId, reads: readonly IssueRead[]): Board["prUnavailable"] {
     for (const { view, branch } of reads) {
       if (view.issue.closed !== null || branch === null) continue;
       const unavailable = store.prOfBranch(id, branch)?.unavailable ?? null;
-      if (unavailable !== null) return unavailable.reason;
+      if (unavailable !== null) return { forge: unavailable.forge, reason: unavailable.reason };
     }
     return null;
   }

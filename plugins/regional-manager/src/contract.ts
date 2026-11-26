@@ -15,7 +15,7 @@ import { descriptionSchema, doneCriteriaSchema, issueIdSchema, type IssueId } fr
 import { kindSchema } from "./model/issue/kind.ts";
 import { issueStatusSchema } from "./model/issue/status.ts";
 import { memoryContentSchema, memoryFileSchema, memorySnapshotSchema, memoryVersionSchema, writeOutcomeSchema } from "./model/memory-file.ts";
-import { prSnapshotSchema } from "./model/verdict/pr.ts";
+import { prSnapshotSchema, prUnavailableSchema } from "./model/verdict/pr.ts";
 import { newProfileSchema, profileSchema } from "./model/profile/profile.ts";
 import { coordinatorIdSchema, type CoordinatorId } from "./model/role.ts";
 
@@ -118,7 +118,7 @@ export type IssueRow = z.infer<typeof issueRowSchema>;
 const boardSchema = z.object({
   verify: z.boolean(),
   ownEdits: z.object({ fileCount: z.number().int().min(1), at: z.number() }).nullable(),
-  prUnavailable: z.string().nullable(),
+  prUnavailable: prUnavailableSchema.pick({ forge: true, reason: true }).nullable(),
   decisions: z.array(decisionSchema),
   issues: z.array(issueRowSchema),
 });

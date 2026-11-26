@@ -1,21 +1,23 @@
-// An issue's pull request, Activity Sidebar's badge (src/ui/row/pr-badge.tsx): its glyph and number
-// in its state's token on a 10% wash of it (issue-board.css `.rmi-pr`), then a dot for CI on its
-// head commit, as the plugin last read them. It links to the pull request.
+// An issue's pull request or merge request, Activity Sidebar's badge (src/ui/row/pr-badge.tsx): its
+// glyph and number in its state's token on a 10% wash of it (issue-board.css `.rmi-pr`), then a dot
+// for CI on its head commit, as the plugin last read them. It links to the change request. A
+// GitLab number reads `!41`, as GitLab writes it; GitHub's stays bare, as Activity Sidebar's does.
 import type { ReactNode } from "react";
-import type { PrSnapshot } from "../../../model/verdict/pr.ts";
+import { FORGE, prRef, type PrSnapshot } from "../../../model/verdict/pr.ts";
 
 type BadgeState = "open" | "draft" | "merged" | "closed";
 
-const CI_NAME: Record<PrSnapshot["ci"], string | null> = { none: null, pending: "CI running", pass: "CI passing", fail: "CI failing" };
+const CI_NAME: Record<PrSnapshot["ci"], string | null> = { none: null, pending: "CI running", pass: "CI passing", fail: "CI failing", blocked: "CI blocked on a manual job" };
 
 export function PrBadge({ pr }: { pr: PrSnapshot }) {
   const state: BadgeState = pr.state === "open" && pr.draft ? "draft" : pr.state;
   const ci = CI_NAME[pr.ci];
-  const said = [`Pull request ${pr.number}, ${state}`, ci, pr.failedChecks.length > 0 ? `failed: ${pr.failedChecks.join(", ")}` : null].filter((part) => part !== null).join(", ");
+  const noun = FORGE[pr.forge].noun;
+  const said = [`${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${pr.number}, ${state}`, ci, pr.failedChecks.length > 0 ? `failed: ${pr.failedChecks.join(", ")}` : null].filter((part) => part !== null).join(", ");
   return (
     <a className="rmi-pr" data-state={state} href={pr.url} target="_blank" rel="noreferrer" title={said} aria-label={said}>
       {GLYPH[state]}
-      <span>{pr.number}</span>
+      <span>{pr.forge === "gitlab" ? prRef(pr) : pr.number}</span>
       {ci !== null && <i className="rmi-ci" data-ci={pr.ci} aria-hidden />}
     </a>
   );

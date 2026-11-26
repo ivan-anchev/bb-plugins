@@ -35,7 +35,7 @@ import type { Related } from "../../model/issue/relations.ts";
 import { acceptedOf, headlineText, keepsPlaceAfterEnd, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import type { PrRead } from "../../model/verdict/pr.ts";
+import type { PrNumber, PrRead } from "../../model/verdict/pr.ts";
 import { capMovesText, capQuestionsOf, mergeAnswer, unansweredCapQuestion } from "../../model/verdict/rounds/cap.ts";
 import type { FollowUpOrigin } from "../../model/verdict/rounds/follow-up.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
@@ -115,11 +115,11 @@ type Taken = { issue: Issue; brief: string; blockedBy: Related[]; spot: Spot; ag
  * What a new agent carries over from the previous one, `from`: `joined`, its environment, made by
  * `placement`, on its branch; `cut`, a new environment of `placement` on a new branch cut from its
  * branch, `via` origin or the local branch, expecting `head` there (null: none known). `pr`: the
- * number of the branch's pull request while open as last read (null: none known).
+ * branch's pull request or merge request while open as last read (null: none known).
  */
 export type Carried =
-  | { kind: "joined"; from: AgentId; placement: Placement; branch: string | null; pr: number | null }
-  | (Extract<Base, { kind: "cut" }> & { placement: Placement; pr: number | null });
+  | { kind: "joined"; from: AgentId; placement: Placement; branch: string | null; pr: PrNumber | null }
+  | (Extract<Base, { kind: "cut" }> & { placement: Placement; pr: PrNumber | null });
 
 /**
  * Where a start stands in its issue's succession of agents: `after`, the issue's previous agent (null: the first);
@@ -436,11 +436,11 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
     return latest !== null && handoffIsCurrent(latest.handoff, turnSeq) ? latest.handoff.id : null;
   }
 
-  /** What a start carries over from the previous agent, with its branch's pull request's number while open as last read; null for a clean start. */
+  /** What a start carries over from the previous agent, with its branch's change request while open as last read; null for a clean start. */
   function carriedOf(coordinatorId: CoordinatorId, { base, placement, checkout }: Spot): Carried | null {
-    const openPr = (branch: string | null): number | null => {
+    const openPr = (branch: string | null): PrNumber | null => {
       const pr = branch === null ? null : (store.prOfBranch(coordinatorId, branch)?.snapshot ?? null);
-      return pr?.state === "open" ? pr.number : null;
+      return pr?.state === "open" ? { forge: pr.forge, number: pr.number } : null;
     };
     switch (base.kind) {
       case "default":

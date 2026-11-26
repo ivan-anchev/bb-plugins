@@ -96,6 +96,7 @@ const prNodeSchema = z
     const rollup = commit.statusCheckRollup;
     const ci = rollup === null ? "none" : CI[rollup.state];
     return {
+      forge: "github",
       number: pr.number,
       url: pr.url,
       state: STATE[pr.state],

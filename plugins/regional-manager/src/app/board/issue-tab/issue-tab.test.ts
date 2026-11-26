@@ -21,7 +21,7 @@ const related = (relations: Record<string, Pick<IssueFeed, "dependsOn" | "blocks
 
 test("the tab shows the issue's head, its title and headline whole with its status, id, kind, pull request and agent, then its own feed: its description, Done when and Activity", async () => {
   const title = "Retry failed webhook deliveries with exponential backoff, capped at five attempts, and record each one";
-  const pr: PrSnapshot = { number: 41, url: "https://github.com/acme/notes/pull/41", state: "open", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] };
+  const pr: PrSnapshot = { forge: "github", number: 41, url: "https://github.com/acme/notes/pull/41", state: "open", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] };
   const { view, feedReads, tab } = await opened("WEB-1", [issue("WEB-1", { title, status: "in-review", headline: "✓ Verified: Retries land", agent: agent("a1"), pr }), issue("WEB-2", {})]);
   assert.deepEqual(feedReads, [{ coordinatorId: COORDINATOR.id, issueId: "WEB-1" }], "only its own issue is read");
 

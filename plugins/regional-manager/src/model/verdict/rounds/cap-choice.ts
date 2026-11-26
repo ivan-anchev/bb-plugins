@@ -6,6 +6,7 @@
 // doorbell may hold them.
 import type { Decision } from "../../decision.ts";
 import type { IssueId } from "../../issue/issue.ts";
+import { FORGE, prRef, type PrNumber } from "../pr.ts";
 import { findingText, type Triaged } from "../review.ts";
 
 const CHOICES = ["merge", "round", "cancel"] as const;
@@ -42,7 +43,7 @@ export type AnsweredAt = { branch: string | null; merge: MergeGuidance };
  * only the follow-up; else `unmerged` (`pr` as last read, null: none read), to be merged, with the
  * follow-up, or the accept that files it.
  */
-type MergeGuidance = { kind: "merged"; pr: number; followUp: FollowUp } | { kind: "unmerged"; pr: number | null; followUp: FollowUp | { kind: "accept" } };
+type MergeGuidance = { kind: "merged"; pr: PrNumber; followUp: FollowUp } | { kind: "unmerged"; pr: PrNumber | null; followUp: FollowUp | { kind: "accept" } };
 
 /**
  * The one follow-up the merge answer files, of the issue's last failed verdict before the answer:
@@ -87,7 +88,7 @@ export function choiceText(issueId: IssueId, choice: CapChoice | null, at: Answe
  * leaves to do: nothing new. why no follow-up: that answer's update ordered the one follow-up, with
  * the findings open when the user answered.
  */
-export const mergeStandsText = (issueId: IssueId, questionId: string, pr: number | null): string =>
+export const mergeStandsText = (issueId: IssueId, questionId: string, pr: PrNumber | null): string =>
   `Nothing went back to an agent: the user chose to merge ${issueId} as it is (${questionId}), which allows no further round, so this failure files no follow-up of its own. ${mergeMoves(issueId, pr)}`;
 
 /**
@@ -98,7 +99,7 @@ export const mergeStandsText = (issueId: IssueId, questionId: string, pr: number
 function mergeStepsText(issueId: IssueId, merge: MergeGuidance): string {
   switch (merge.kind) {
     case "merged":
-      return `Its pull request #${merge.pr} has merged since, which made ${issueId} Done, so nothing is left to merge. ${followUpText(issueId, merge.followUp)}`;
+      return `Its ${prText(merge.pr)} has merged since, which made ${issueId} Done, so nothing is left to merge. ${followUpText(issueId, merge.followUp)}`;
     case "unmerged":
       return merge.followUp.kind === "accept" ? `${acceptFirst(issueId)} ${mergeMoves(issueId, merge.pr)}` : `${mergeMoves(issueId, merge.pr)} ${followUpText(issueId, merge.followUp)}`;
     default:
@@ -107,8 +108,8 @@ function mergeStepsText(issueId: IssueId, merge: MergeGuidance): string {
 }
 
 /** How the pull request gets merged while the merge answer stands, and that the merge makes the issue Done. */
-function mergeMoves(issueId: IssueId, pr: number | null): string {
-  const it = pr === null ? "its pull request, if it has one," : `its pull request #${pr}`;
+function mergeMoves(issueId: IssueId, pr: PrNumber | null): string {
+  const it = pr === null ? "its pull request, if it has one," : `its ${prText(pr)}`;
   return `Have ${it} merged without another review or verifier: ask its agent to merge it with agent_message, or, when no agent holds ${issueId}, start one with agent_start, with no from or placement, so it continues in its last agent's environment on that pull request's branch. agent_start on a new branch is refused while this answer stands, as that pull request would be left behind. Never merge it yourself; its merge makes ${issueId} Done.`;
 }
 
@@ -133,9 +134,17 @@ function followUpText(issueId: IssueId, followUp: FollowUp): string {
   }
 }
 
-/** How to close the issue's pull request: by its number, else by its branch, which gh resolves to its pull request. */
-function closeText(pr: number | null, branch: string | null): string {
-  if (pr !== null) return `close its pull request #${pr} with \`gh pr close ${pr}\``;
-  if (branch !== null) return `close its pull request, if one is open on its branch, with \`gh pr close ${branch}\``;
-  return "close its pull request, if it has one, with `gh pr close` and its number";
+/**
+ * How to close the issue's pull request or merge request: by its number, with its forge's command;
+ * else by its branch, which each forge's CLI resolves to its change request, naming both forges'
+ * commands, as no read says which forge it is on.
+ */
+function closeText(pr: PrNumber | null, branch: string | null): string {
+  if (pr !== null) return `close its ${prText(pr)} with \`${FORGE[pr.forge].close} ${pr.number}\``;
+  const { github, gitlab } = FORGE;
+  if (branch !== null) return `close its pull request or merge request, if one is open on its branch, with \`${github.close} ${branch}\` on GitHub or \`${gitlab.close} ${branch}\` on GitLab`;
+  return `close its pull request or merge request, if it has one, with \`${github.close}\` on GitHub or \`${gitlab.close}\` on GitLab, and its number`;
 }
+
+/** A known change request in words: "pull request #41", "merge request !41". */
+const prText = (pr: PrNumber): string => `${FORGE[pr.forge].noun} ${prRef(pr)}`;

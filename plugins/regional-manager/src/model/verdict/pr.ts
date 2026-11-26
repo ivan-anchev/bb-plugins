@@ -1,15 +1,45 @@
-// The pull request of an agent's branch and its CI, as the plugin last read them from GitHub, and the one rule for
-// what CI says about the commit a done handoff claims. Pure: the watch writes the reading, and
-// settling a verdict, the board and the texts read it.
+// The pull request or merge request of an agent's branch and its CI, as the plugin last read them
+// from its forge, the words each forge uses for them, and the one rule for what CI says about the
+// commit a done handoff claims. Pure: the watch writes the reading, and settling a verdict, the
+// board and the texts read it.
 import { z } from "zod";
 import { commitSchema, type HandoffId } from "../agent/handoff.ts";
 
-/** A pull request's checks on its head commit, rolled up as GitHub's merge box rolls them. `none`: it reports no checks. */
-const ciSchema = z.enum(["none", "pending", "pass", "fail"]);
+/** The forges the PR watch reads. */
+export const forgeSchema = z.enum(["github", "gitlab"]);
+export type Forge = z.infer<typeof forgeSchema>;
 
-/** A branch's pull request as one successful read of GitHub found it. `failedChecks`: the name of each failed check, while CI fails. */
+/** How each forge names a change request and its parts, as people and agents read them: the one home of `#`, `!`, PR, MR and the command that closes one. */
+export const FORGE = {
+  github: { name: "GitHub", short: "PR", noun: "pull request", sigil: "#", close: "gh pr close" },
+  gitlab: { name: "GitLab", short: "MR", noun: "merge request", sigil: "!", close: "glab mr close" },
+} as const satisfies Record<Forge, { name: string; short: string; noun: string; sigil: string; close: string }>;
+
+/**
+ * A change request's number and the forge it is on. why a default: a row stored before GitLab was
+ * read is GitHub's, and the store adds a field to stored JSON this way (inbox-event.ts `asked`,
+ * verdict.ts `blocking`), so no migration rewrites old rows.
+ */
+const prNumberShape = { forge: forgeSchema.default("github"), number: z.number().int().positive() };
+export const prNumberSchema = z.object(prNumberShape);
+export type PrNumber = z.infer<typeof prNumberSchema>;
+
+/** The number in its forge's notation: "#41" on GitHub, "!41" on GitLab. */
+export const prRef = (pr: PrNumber): string => `${FORGE[pr.forge].sigil}${pr.number}`;
+
+/** The number with its forge's short word: "PR #41", "MR !41". */
+export const prName = (pr: PrNumber): string => `${FORGE[pr.forge].short} ${prRef(pr)}`;
+
+/**
+ * A change request's checks on its head commit, rolled up as its forge's merge box rolls them.
+ * `none`: it reports no checks. `blocked`: GitLab's pipeline stopped at a manual job that doesn't
+ * allow failure, which runs only once a person plays it.
+ */
+const ciSchema = z.enum(["none", "pending", "pass", "fail", "blocked"]);
+
+/** A branch's change request as one successful read of its forge found it. `failedChecks`: each failed check or job by name, while CI fails, as the forge gave them. */
 export const prSnapshotSchema = z.object({
-  number: z.number().int().positive(),
+  ...prNumberShape,
   url: z.url(),
   state: z.enum(["open", "merged", "closed"]),
   draft: z.boolean(),
@@ -30,13 +60,19 @@ export type PrSnapshot = z.infer<typeof prSnapshotSchema>;
 type PrFound = { snapshot: PrSnapshot; headSeenAt: number; readAt: number; handoffAtRead: HandoffId | null };
 
 /**
- * Why a read of a branch's pull request failed, in the words the board shows, and whether it lasts.
- * `persistent`: no read can succeed until someone acts, as when gh is missing, GitHub rejects its
- * credentials or the repository isn't on GitHub. `transient`: the next read may, as after a
- * timeout, a dropped connection, a rate limit or a failure nothing explains.
+ * Why a read of a branch's change request failed, in the words the board shows, and whether it
+ * lasts. `persistent`: no read can succeed until someone acts, as when the CLI is missing, the
+ * forge rejects its credentials or the project is on no forge the plugin reads. `transient`: the
+ * next read may, as after a timeout, a dropped connection, a rate limit or a failure nothing
+ * explains. `forge`: the forge the read was of; null when the project's remote is on none the
+ * plugin reads. why default null: a reason stored before forges were told apart reads with the
+ * label it had, and the next poll rewrites it.
  */
-export const prUnavailableSchema = z.object({ kind: z.enum(["persistent", "transient"]), reason: z.string() });
+export const prUnavailableSchema = z.object({ kind: z.enum(["persistent", "transient"]), reason: z.string(), forge: forgeSchema.nullable().default(null) });
 export type PrUnavailable = z.infer<typeof prUnavailableSchema>;
+
+/** The label a failed read is shown under: "MR status unavailable" on GitLab, "PR status unavailable" otherwise. */
+export const statusLabel = (forge: Forge | null): string => `${FORGE[forge ?? "github"].short} status unavailable`;
 
 /** One read of a branch's pull request: what it found (null: none), or why GitHub couldn't be read. */
 export type PrRead = { kind: "read"; pr: PrSnapshot | null } | { kind: "unread"; reason: string };
@@ -75,7 +111,7 @@ export function meaningfulChanges(before: PrSnapshot | null, after: PrSnapshot):
   return changes;
 }
 
-/** Whether a pull request's CI is still running, so the watch reads it again on the next tick. */
+/** Whether a change request's CI is still running, so the watch reads it again on the next tick. why not `blocked`: nothing runs until a person plays the job. */
 export const ciRunning = (pr: PrSnapshot): boolean => pr.state === "open" && pr.ci === "pending";
 
 /** What CI says about a commit: a verdict that passed all but CI is judged with it. */
@@ -83,11 +119,11 @@ export const ciVerdictSchema = z.discriminatedUnion("kind", [
   /** There is no pull request to check. */
   z.object({ kind: z.literal("none") }),
   /** The pull request reported no checks at this commit, still none once GitHub had time to attach them. */
-  z.object({ kind: z.literal("no-checks"), number: z.number().int() }),
+  z.object({ kind: z.literal("no-checks"), ...prNumberShape }),
   /** CI on the pull request passed at this commit. */
-  z.object({ kind: z.literal("pass"), number: z.number().int() }),
+  z.object({ kind: z.literal("pass"), ...prNumberShape }),
   /** CI on the pull request failed at this commit; each failed check by name. */
-  z.object({ kind: z.literal("fail"), number: z.number().int(), failedChecks: z.array(z.string()) }),
+  z.object({ kind: z.literal("fail"), ...prNumberShape, failedChecks: z.array(z.string()) }),
   /** The plugin couldn't read CI for this commit, and why. */
   z.object({ kind: z.literal("not-checked"), reason: z.string() }),
 ]);
@@ -117,8 +153,8 @@ export function ciOf({ id, headSha, prUrl }: Claim, status: PrStatus | null): Ci
   if (found === null && prUrl === null) return { kind: "none" };
   const finished = found !== null && found.snapshot.headSha === headSha ? finishedOnHead(found) : null;
   if (finished !== null) return finished;
-  if (status?.unavailable?.kind === "persistent") return { kind: "not-checked", reason: `PR status unavailable: ${status.unavailable.reason}` };
-  if (found !== null && found.snapshot.state !== "open" && found.handoffAtRead === id) return { kind: "not-checked", reason: `#${found.snapshot.number} was ${found.snapshot.state} before CI finished on this commit` };
+  if (status?.unavailable?.kind === "persistent") return { kind: "not-checked", reason: `${statusLabel(status.unavailable.forge)}: ${status.unavailable.reason}` };
+  if (found !== null && found.snapshot.state !== "open" && found.handoffAtRead === id) return { kind: "not-checked", reason: `${prRef(found.snapshot)} was ${found.snapshot.state} before CI finished on this commit` };
   return { kind: "waiting", number: found?.snapshot.number ?? null };
 }
 
@@ -129,16 +165,45 @@ export function ciOf({ id, headSha, prUrl }: Claim, status: PrStatus | null): Ci
  * says nothing about what GitHub has now.
  */
 function finishedOnHead({ snapshot: pr, headSeenAt, readAt }: PrFound): CiVerdict | null {
+  const { forge, number } = pr;
   switch (pr.ci) {
     case "pass":
-      return { kind: "pass", number: pr.number };
+      return { kind: "pass", forge, number };
     case "fail":
-      return { kind: "fail", number: pr.number, failedChecks: pr.failedChecks };
+      return { kind: "fail", forge, number, failedChecks: pr.failedChecks };
+    // why settle now: a blocked pipeline waits on a person, never on time, so waiting would hold the
+    // issue in Verifying for as long as nobody plays the job. Not checked passes the verdict and
+    // says why; the merge still needs the job played.
+    case "blocked":
+      return { kind: "not-checked", reason: `${prRef(pr)}'s pipeline is blocked on a manual job nobody has played` };
     case "pending":
       return null;
     case "none":
-      return readAt - headSeenAt >= CHECKS_GRACE_MS ? { kind: "no-checks", number: pr.number } : null;
+      return readAt - headSeenAt >= CHECKS_GRACE_MS ? { kind: "no-checks", forge, number } : null;
     default:
       return pr.ci satisfies never;
   }
+}
+
+/** The longest a check or job name's code span runs, its backticks included. */
+const NAME_SPAN_CAP = 100;
+
+// Characters that would break a name out of its line or its code span, or hide or reorder what it
+// says, and the whitespace around them: line breaks and other C0 and C1 controls, zero-width characters and joiners, line and
+// paragraph separators, bidi embeddings, overrides and isolates, and the byte-order mark.
+const UNQUOTABLE = /[\s\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]+/g;
+
+/**
+ * Failed check or job names as text a manager or agent reads: each in a code span of its own, on
+ * one line, at most 100 characters. why every name goes through here: they come from the branch's
+ * own CI config, which an agent can write, so none may close its span, break its line, or read as
+ * Markdown or an instruction around it. The names are stored as the forge gave them.
+ */
+export const checkNamesText = (names: readonly string[]): string => names.map((name) => `\`${quotable(name)}\``).join(", ");
+
+/** A name with backticks made quotes and every run of whitespace and unquotable characters one space, cut to fit its span with an ellipsis. */
+function quotable(name: string): string {
+  const flat = [...name.replaceAll("`", "'").replace(UNQUOTABLE, " ").trim()];
+  const room = NAME_SPAN_CAP - 2;
+  return flat.length <= room ? flat.join("") : `${flat.slice(0, room - 1).join("")}…`;
 }

@@ -8,7 +8,7 @@ import { headline } from "../one-line.ts";
 import type { Check, CheckSubject } from "./check.ts";
 import { blockingDefectSchema, holds, severitySchema, MAX_FINDING_TITLE, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
-import { ciVerdictSchema, type Ci, type CiVerdict, type PrSnapshot } from "./pr.ts";
+import { ciVerdictSchema, prRef, type Ci, type CiVerdict, type PrNumber, type PrSnapshot } from "./pr.ts";
 
 /** One done-criterion as the verifier judged it. why three: a criterion it couldn't check is not a pass. */
 export const criterionResultSchema = z.enum(["pass", "fail", "unverifiable"]);
@@ -288,7 +288,7 @@ export type FailureReason =
   | { kind: "criteria"; failed: number; of: number }
   | { kind: "must-fix"; count: number }
   | { kind: "defect"; count: number }
-  | { kind: "ci"; number: number };
+  | ({ kind: "ci" } & PrNumber);
 
 /**
  * Why a returned verdict failed, in the order every surface reads them, CI as `ci` says (by
@@ -302,7 +302,7 @@ export function failureReasons(verdict: Returned, ci: CiVerdict | null = ciVerdi
   if (failed > 0) reasons.push({ kind: "criteria", failed, of: verdict.criteria.length });
   if (mustFix > 0) reasons.push({ kind: "must-fix", count: mustFix });
   if (verdict.blocking.length > 0) reasons.push({ kind: "defect", count: verdict.blocking.length });
-  if (ci?.kind === "fail") reasons.push({ kind: "ci", number: ci.number });
+  if (ci?.kind === "fail") reasons.push({ kind: "ci", forge: ci.forge, number: ci.number });
   return reasons;
 }
 
@@ -382,7 +382,7 @@ export function failureText(reason: ReasonBesidesCriteria, judged: Judged): stri
     case "defect":
       return reason.count === 1 ? "a blocking defect the verifier found" : `${reason.count} blocking defects the verifier found`;
     case "ci":
-      return `CI failed on #${reason.number}`;
+      return `CI failed on ${prRef(reason)}`;
     default:
       return reason satisfies never;
   }

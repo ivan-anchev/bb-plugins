@@ -11,6 +11,7 @@ const RECORDED_BRANCHES = ["fix-pr-reviews-sticky-gap", "release-pr-reviews-0.2.
 test("a real answer parses into each branch's pull request, and null for a branch with none", () => {
   const prs = parsePrs(RECORDED, RECORDED_BRANCHES);
   assert.deepEqual(prs?.get("fix-pr-reviews-sticky-gap"), {
+    forge: "github",
     number: 142,
     url: "https://github.com/ivan-anchev/bb-plugins/pull/142",
     state: "merged",

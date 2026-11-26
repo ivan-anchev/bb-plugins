@@ -4,7 +4,7 @@
 // import another's.
 import { experimental_execHostFile as execHostFile, experimental_hostToolchain as hostToolchain } from "@get-bb/plugin-sdk/process";
 import { z } from "zod";
-import type { PrUnavailable } from "../../model/verdict/pr.ts";
+import type { Forge, PrUnavailable } from "../../model/verdict/pr.ts";
 
 /** The forge CLIs the PR watch runs. */
 export type Cli = "gh" | "glab";
@@ -69,8 +69,8 @@ const TRANSPORT = [
 /** Whether a CLI's message says the connection failed before its forge answered. */
 const connectionFailed = (text: string): boolean => TRANSPORT.some((pattern) => pattern.test(text));
 
-/** A CLI's words for each failure it can prove, as the board shows them after its label. */
-export type CliWords = { cli: Cli; notInstalled: string; signedOut: string; rejected: string; unreachable: string; rateLimited: string };
+/** A CLI's words for each failure it can prove, as the board shows them after its forge's label. */
+export type CliWords = { cli: Cli; forge: Forge; notInstalled: string; signedOut: string; rejected: string; unreachable: string; rateLimited: string };
 
 /**
  * Why a run of a CLI failed, in its words, and whether it lasts. It says only what the failure
@@ -79,8 +79,8 @@ export type CliWords = { cli: Cli; notInstalled: string; signedOut: string; reje
  * first line for anything else may pass by the next read.
  */
 export function cliFailure(words: CliWords, { code, stderr, killed }: HostCommandFailure): PrUnavailable {
-  const persistent = (reason: string): PrUnavailable => ({ kind: "persistent", reason });
-  const transient = (reason: string): PrUnavailable => ({ kind: "transient", reason });
+  const persistent = (reason: string): PrUnavailable => ({ kind: "persistent", reason, forge: words.forge });
+  const transient = (reason: string): PrUnavailable => ({ kind: "transient", reason, forge: words.forge });
   if (code === "ENOENT") return persistent(words.notInstalled);
   // why a timeout is a connection failure: the CLI waits on nothing else.
   if (killed || connectionFailed(stderr)) return transient(words.unreachable);

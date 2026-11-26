@@ -74,7 +74,7 @@ const returned = (results: CriterionResult[], settlement: Extract<Verdict, { sta
   mustFixFails: true,
   settlement,
 });
-const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
+const pr = (state: PrSnapshot["state"]): PrSnapshot => ({ forge: "github", number: 12, url: "https://github.com/o/r/pull/12", state, draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] });
 
 const thread = (status: HolderThread["status"], hasPendingInteraction = false): HolderThread => ({ status, hasPendingInteraction });
 const facts = (over: Partial<IssueFacts>): IssueFacts => ({ issue, holder: null, ended: null, accepted: null, pr: null, openDecisions: [], finalCheck: null, verifierAsks: false, ...over });

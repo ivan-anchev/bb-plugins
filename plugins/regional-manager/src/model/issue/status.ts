@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { Agent, EndedHow } from "../agent/agent.ts";
 import type { Handoff, HandoffId } from "../agent/handoff.ts";
 import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
-import type { CiVerdict, PrSnapshot } from "../verdict/pr.ts";
+import { prRef, type CiVerdict, type PrSnapshot } from "../verdict/pr.ts";
 import { reviewPending } from "../verdict/review.ts";
 import type { Decision } from "../decision.ts";
 import { capLock, capQuestionsOf, capText, stillWaits, type CapQuestion } from "../verdict/rounds/cap.ts";
@@ -290,7 +290,7 @@ function restingHeadline(rest: Issue["rest"], endedHow: EndedHow | null): string
  */
 function finalOf(issue: Issue, pr: PrSnapshot | null): Pick<IssueView, "status" | "headline" | "closedBy"> | null {
   if (issue.closed !== null) return { ...CLOSED[issue.closed.as], closedBy: { by: "manager", as: issue.closed.as } };
-  return pr?.state === "merged" ? { status: "done", headline: `Merged #${pr.number}`, closedBy: { by: "merge", number: pr.number } } : null;
+  return pr?.state === "merged" ? { status: "done", headline: `Merged ${prRef(pr)}`, closedBy: { by: "merge", number: pr.number } } : null;
 }
 
 /**
@@ -403,7 +403,7 @@ const STAGES: Record<Stage, (evidence: Evidence) => Placing | "left"> = {
       case "pending":
         return { status: "verifying", headline: `Verifying${asking(verdict, verifierAsks)}: ${summary}`, needsYou: null };
       case "waiting-for-ci":
-        return { status: "verifying", headline: `Waiting for CI${pr === null ? "" : ` on #${pr.number}`}: ${summary}`, needsYou: null };
+        return { status: "verifying", headline: `Waiting for CI${pr === null ? "" : ` on ${prRef(pr)}`}: ${summary}`, needsYou: null };
       case "pass":
       case "unverified":
         return "left";

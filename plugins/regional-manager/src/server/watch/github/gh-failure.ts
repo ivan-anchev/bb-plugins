@@ -6,6 +6,7 @@ import { cliFailure, type CliWords, type HostCommandFailure } from "../host-comm
 
 const GH_WORDS: CliWords = {
   cli: "gh",
+  forge: "github",
   notInstalled: "gh, the GitHub CLI, isn't installed on the machine running bb",
   signedOut: "gh isn't signed in on the machine running bb: run gh auth login there",
   rejected: "GitHub rejected gh's credentials on the machine running bb (HTTP 401): check gh auth status there",
@@ -16,4 +17,4 @@ const GH_WORDS: CliWords = {
 export const ghFailure = (failure: HostCommandFailure): PrUnavailable => cliFailure(GH_WORDS, failure);
 
 /** Why an answer gh gave could not be read as pull requests. why transient: the next answer may be. */
-export const UNREADABLE_ANSWER: PrUnavailable = { kind: "transient", reason: "GitHub's answer wasn't the pull requests the plugin asked for" };
+export const UNREADABLE_ANSWER: PrUnavailable = { kind: "transient", reason: "GitHub's answer wasn't the pull requests the plugin asked for", forge: "github" };

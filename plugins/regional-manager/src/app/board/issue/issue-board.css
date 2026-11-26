@@ -82,7 +82,8 @@
   border-radius: 999px;
 }
 .rmi-ci[data-ci="pass"] { background: var(--success); }
-.rmi-ci[data-ci="pending"] { background: var(--warning-text); }
+.rmi-ci[data-ci="pending"],
+.rmi-ci[data-ci="blocked"] { background: var(--warning-text); }
 .rmi-ci[data-ci="fail"] { background: var(--destructive-text); }
 
 /* --- A thread named in an issue's tab: quiet words and an arrow, brighter under the pointer ------- */

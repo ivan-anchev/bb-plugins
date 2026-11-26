@@ -6,7 +6,7 @@
 // fix round. And what an earlier agent's
 // verdict found, whole and in the past tense, for the agent that takes its issue over.
 import { checkoutText } from "../../model/verdict/checkout.ts";
-import type { CiVerdict } from "../../model/verdict/pr.ts";
+import { checkNamesText, FORGE, prRef, type CiVerdict } from "../../model/verdict/pr.ts";
 import type { Check } from "../../model/verdict/check.ts";
 import { defectText, findingText, FOLLOW_UP_RULE, triageText, type Review } from "../../model/verdict/review.ts";
 import { ciVerdictOf, heldFindings, failedCheckout, failureReasons, failureText, verifierFindingText, type CriterionResult, type FailureReason, type Verdict } from "../../model/verdict/verdict.ts";
@@ -80,7 +80,7 @@ function returnedText(review: Review, verdict: Returned): string {
   const result = [
     reasons.length === 0 ? `Passed ${at}: every done-criterion was met.` : `Failed ${at}: ${notPassed(reasons)}.`,
     ...(failed === null ? [] : [checkoutText(verdict.headSha, failed)]),
-    ...(ci?.kind === "fail" ? [`CI failed on #${ci.number}. ${ciFailure(ci.failedChecks)}`] : []),
+    ...(ci?.kind === "fail" ? [`CI failed on ${prRef(ci)}. ${ciFailure(ci)}`] : []),
     ...(verdict.settlement.kind === "superseded" ? ["CI was still to finish on this commit when a newer handoff or the handover replaced it, so it was never judged."] : []),
   ].join(" ");
   const criteria = verdict.criteria.map(({ criterion, result, shows, evidence }, i) => `${i + 1}. ${criterion}: ${PAST[result]}. What the run showed, then the verifier's evidence:\n\n${fenced(`${shows}\n\n${evidence}`)}`);
@@ -119,7 +119,7 @@ function whatFailed(verdict: Returned, ci: CiVerdict | null): string[] {
       ? []
       : [`### The commit and the tree\n\n${checkoutText(verdict.headSha, failed)} Commit what belongs to the work and remove what doesn't, so the commit you hand off is checked out on a clean tree.`];
   const checks = verdict.criteria.flatMap((check, i) => (check.result === "pass" ? [] : [`### ${i + 1}. ${check.criterion}\n\n**${RESULT[check.result]}.** What the run showed, then the verifier's evidence:\n\n${fenced(`${check.shows}\n\n${check.evidence}`)}`]));
-  const failedCi = ci?.kind === "fail" ? [`### CI failed on #${ci.number}\n\n${ciFailure(ci.failedChecks)} Read the runs on the pull request, fix the cause, and push.`] : [];
+  const failedCi = ci?.kind === "fail" ? [`### CI failed on ${prRef(ci)}\n\n${ciFailure(ci)} Read the runs on the ${FORGE[ci.forge].noun}, fix the cause, and push.`] : [];
   const blocking =
     verdict.blocking.length === 0
       ? []
@@ -128,9 +128,9 @@ function whatFailed(verdict: Returned, ci: CiVerdict | null): string[] {
   return [...checkout, ...checks, ...failedCi, ...blocking, ...findings];
 }
 
-/** The failed checks, by the names GitHub gives them. */
-const ciFailure = (failedChecks: readonly string[]): string =>
-  failedChecks.length === 0 ? "GitHub reports CI as failed on this commit, and names no failed check." : `Failed checks on this commit: ${failedChecks.map((name) => `\`${name}\``).join(", ")}.`;
+/** The failed checks, by the names the forge gives them. */
+const ciFailure = ({ forge, failedChecks }: Extract<CiVerdict, { kind: "fail" }>): string =>
+  failedChecks.length === 0 ? `${FORGE[forge].name} reports CI as failed on this commit, and names no failed check.` : `Failed checks on this commit: ${checkNamesText(failedChecks)}.`;
 
 const RESULT: Record<Exclude<CriterionResult, "pass">, string> = { fail: "Failed", unverifiable: "Couldn't be checked" };
 

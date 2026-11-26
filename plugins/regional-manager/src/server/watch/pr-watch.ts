@@ -23,7 +23,7 @@ import { parseGitHubRepo, parsePrHead, parsePrs, parsePrUrl, prHeadQueryArgs, pr
 const QUIET_POLL_MS = 5 * 60_000;
 
 /** Why an issue whose project has no GitHub remote has no pull request the plugin can read. */
-const NOT_ON_GITHUB: PrUnavailable = { kind: "persistent", reason: "its project's git remote isn't on github.com" };
+const NOT_ON_GITHUB: PrUnavailable = { kind: "persistent", reason: "its project's git remote isn't on github.com", forge: null };
 
 /** An agent's thread as the watch reads it. */
 type ListedThread = { id: string; environmentBranchName: string | null };

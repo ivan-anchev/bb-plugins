@@ -95,7 +95,7 @@ test("a verdict the plugin's checkout read or CI failed leads with that, before 
   assert.match(
     handoffText(checkedWith(dirty), agentOn(CODEX)),
     new RegExp(`#### Verdict\\n\\nFailed verification: not the claimed commit on a clean tree\\. 1 of 1 criteria passed, checked at ${SHA} by a verifier on codex gpt-default\\. bb's git plugin read the agent's environment as it handed off: the working tree had 1 changed file: \\?\\? scratch\\.txt\\.`),
-  );  const ciFailed: Verdict = { ...dirty, settlement: { kind: "checked", refused: null, ci: { kind: "fail", number: 41, failedChecks: ["test"] } } };
+  );  const ciFailed: Verdict = { ...dirty, settlement: { kind: "checked", refused: null, ci: { kind: "fail", forge: "github", number: 41, failedChecks: ["test"] } } };
   assert.match(handoffText(checkedWith(ciFailed), agentOn(CODEX)), /#### Verdict\n\nFailed verification: not the claimed commit on a clean tree, and CI failed on #41\. 1 of 1 criteria passed, /);
 });
 
@@ -199,7 +199,7 @@ test("catch-up's pass line names the follow-up its settling filed, and the round
 });
 
 test("catch-up's merge line says how many held findings no follow-up collected, and says nothing when a follow-up collected them all", () => {
-  const pr: PrSnapshot = { number: 41, url: "https://github.com/o/r/pull/41", state: "merged", draft: false, review: "none", ci: "pass", failedChecks: [], headSha: SHA };
+  const pr: PrSnapshot = { forge: "github", number: 41, url: "https://github.com/o/r/pull/41", state: "merged", draft: false, review: "none", ci: "pass", failedChecks: [], headSha: SHA };
   const merged: StoredEvent = { id: 2, at: 6_000, event: { kind: "pr", issueId, agentId, pr, changes: ["merged"] } };
   const failedEarlier = confirmedAll([LOG_IT, NAME_IT], "fail");
   const nitLeft = confirmedAll([NAME_IT], "pass");
@@ -212,7 +212,7 @@ test("catch-up's merge line says how many held findings no follow-up collected, 
 });
 
 test("catch-up's merge line counts a held finding that failed the latest verdict, when nothing fixed it before the merge", () => {
-  const pr: PrSnapshot = { number: 41, url: "https://github.com/o/r/pull/41", state: "merged", draft: false, review: "none", ci: "pass", failedChecks: [], headSha: SHA };
+  const pr: PrSnapshot = { forge: "github", number: 41, url: "https://github.com/o/r/pull/41", state: "merged", draft: false, review: "none", ci: "pass", failedChecks: [], headSha: SHA };
   const merged: StoredEvent = { id: 2, at: 6_000, event: { kind: "pr", issueId, agentId, pr, changes: ["merged"] } };
   const blocker = { title: "No cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "No cap.", origin: "new" } as const;
   const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [blocker], earlier: [], model: { providerId: "claude-code", model: "sonnet" } };

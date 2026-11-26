@@ -56,7 +56,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-type Read = Pick<BoardData, "decisions" | "issues">;
+type Read = Pick<BoardData, "decisions" | "issues"> & Partial<Pick<BoardData, "prUnavailable">>;
 
 /**
  * The board reading `data`; each lane's name and the text of each of its rows, once drawn; `reread`,
@@ -140,6 +140,16 @@ test("a research row names no kind, as no row does, and has no pull request", as
   const row = view.getByRole("button", { name: /^WEB-2: Title of WEB-2, Done,/ });
   assert.doesNotMatch(`${row.getAttribute("aria-label")} ${row.closest(".rmi-rowbox")?.textContent}`, /Research/);
   assert.equal(view.queryByRole("link", { name: /^Pull request/ }), null);
+});
+
+test("a read that failed shows its forge's label before its reason: MR on GitLab, PR on GitHub and on no forge the plugin reads", async () => {
+  const reason = "glab isn't signed in to gitlab.corp.test on the machine running bb: run glab auth login --hostname gitlab.corp.test there";
+  const { view, reread } = await mount({ decisions: [], issues: [issue("WEB-1", { status: "in-progress", headline: "Working", agent: agent("a1") })], prUnavailable: { forge: "gitlab", reason } });
+  assert.equal(view.getByText("MR status unavailable:").parentElement?.textContent, `MR status unavailable: ${reason}. Rows show what was read last.`);
+  await reread({ decisions: [], issues: [], prUnavailable: { forge: "github", reason: "couldn't reach GitHub" } });
+  assert.ok(view.getByText("PR status unavailable:"));
+  await reread({ decisions: [], issues: [], prUnavailable: { forge: null, reason: "its project has no git remote" } });
+  assert.ok(view.getByText("PR status unavailable:"));
 });
 
 test("a board with no issues says so", async () => {
