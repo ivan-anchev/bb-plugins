@@ -2,8 +2,8 @@
 // `gh api graphql` call, each as an aliased pullRequests(headRefName:) field, and its answer parsed
 // at this boundary into snapshots; and the branch a pull request named by its URL is from.
 import { z } from "zod";
-import { commitSchema } from "../../model/agent/handoff.ts";
-import type { PrSnapshot } from "../../model/verdict/pr.ts";
+import { commitSchema } from "../../../model/agent/handoff.ts";
+import type { PrSnapshot } from "../../../model/verdict/pr.ts";
 
 /** A repository on github.com, as `owner/name`. why a brand: only parsing a remote mints one. */
 const repoSchema = z.string().regex(/^[\w.-]+\/[\w.-]+$/).brand<"Repo">();

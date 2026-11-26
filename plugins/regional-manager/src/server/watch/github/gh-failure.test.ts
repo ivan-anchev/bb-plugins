@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ghFailure } from "./gh-failure.ts";
-import { parseHostCommandFailure } from "./host-command.ts";
+import { parseHostCommandFailure } from "../host-command.ts";
 
 // Each fixture is the rejection of a real gh run, saved field for field. not-signed-in,
 // bad-credentials-401 and network ran this watch's own query against ivan-anchev/bb-plugins with

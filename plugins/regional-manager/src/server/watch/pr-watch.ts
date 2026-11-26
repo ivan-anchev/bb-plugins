@@ -15,9 +15,9 @@ import { ciRunning, type PrRead, type PrSnapshot, type PrUnavailable } from "../
 import { threadsById } from "../agents/threads.ts";
 import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
-import { ghFailure, UNREADABLE_ANSWER } from "./gh-failure.ts";
-import { parseHostCommandFailure } from "./host-command.ts";
-import { parseGitHubRepo, parsePrHead, parsePrs, parsePrUrl, prHeadQueryArgs, prQueryArgs, type Repo } from "./pr-query.ts";
+import { ghFailure, UNREADABLE_ANSWER } from "./github/gh-failure.ts";
+import { parseHostCommandFailure, type RunCli } from "./host-command.ts";
+import { parseGitHubRepo, parsePrHead, parsePrs, parsePrUrl, prHeadQueryArgs, prQueryArgs, type Repo } from "./github/pr-query.ts";
 
 /** How often a repository with no CI running and no verdict waiting for it is read. */
 const QUIET_POLL_MS = 5 * 60_000;
@@ -41,8 +41,8 @@ type Deps = {
   bb: WatchBb;
   store: Pick<Store, "coordinator" | "coordinators" | "issues" | "issue" | "agents" | "prOfBranch" | "waitingForCi" | "latestHandoff" | "record">;
   inbox: Pick<Inbox, "prRead" | "prUnavailable">;
-  /** Runs gh with these arguments and resolves to its stdout; rejects as Node's execFile does. */
-  gh(args: string[]): Promise<string>;
+  /** Runs gh or glab with these arguments and resolves to its stdout; rejects as Node's execFile does. */
+  run: RunCli;
   /** The time a read outside the tick is saved at. */
   now(): number;
 };
@@ -52,7 +52,7 @@ type Watched = { coordinatorId: CoordinatorId; agent: Agent; branch: string; rep
 
 export type PrWatch = ReturnType<typeof createPrWatch>;
 
-export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
+export function createPrWatch({ bb, store, inbox, run, now }: Deps) {
   // why: a tick that outlasts the minute must not overlap the next, or one read could save over a newer one.
   let running = false;
   let disposed = false;
@@ -135,7 +135,7 @@ export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
   async function read(repo: Repo, branches: readonly string[]): Promise<{ kind: "read"; prs: Map<string, PrSnapshot | null> } | { kind: "unavailable"; unavailable: PrUnavailable }> {
     let stdout: string;
     try {
-      stdout = await gh(prQueryArgs(repo, branches));
+      stdout = await run("gh", prQueryArgs(repo, branches));
     } catch (error) {
       return { kind: "unavailable", unavailable: ghFailure(parseHostCommandFailure(error)) };
     }
@@ -220,7 +220,7 @@ export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
         const repo = await repoOf(coordinatorId);
         // why lower case: GitHub matches an owner and a name in any case.
         if (repo === null || named.repo.toLowerCase() !== repo.toLowerCase()) return null;
-        return parsePrHead(await gh(prHeadQueryArgs(repo, named.number)));
+        return parsePrHead(await run("gh", prHeadQueryArgs(repo, named.number)));
       } catch {
         // why caught: bb can't say the project's remote, gh is missing, signed out or offline, or GitHub has no such pull request; the handoff keeps the branch it can name without it.
         return null;

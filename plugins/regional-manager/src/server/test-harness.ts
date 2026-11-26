@@ -58,6 +58,7 @@ import { createFinalChecks } from "./verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
 import { createVerify } from "./verify/verify.ts";
 import { createPrWatch } from "./watch/pr-watch.ts";
+import type { Cli } from "./watch/host-command.ts";
 import { submissionIdSchema, type SubmissionId } from "../model/feed/comment.ts";
 
 const PLUGIN_ID = "regional-manager";
@@ -764,7 +765,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       return answer;
     },
   };
-  async function gh(args: string[]): Promise<string> {
+  /** gh and glab on the machine running bb: gh answers as the fake GitHub; glab isn't installed. */
+  async function run(cli: Cli, args: string[]): Promise<string> {
+    if (cli === "glab") throw Object.assign(new Error("spawn glab ENOENT"), { code: "ENOENT" });
     github.runs.push(args);
     if (github.failure !== null) throw github.failure;
     const answer = args.some((arg) => arg.startsWith("number=")) ? headAnswer(args, github.prs) : graphqlAnswer(args, github.prs);
@@ -822,7 +825,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const viewWatch = watchViews({ bb, store, views, inbox, publish: (id) => issueTags.publish(id), now: () => clock.now });
     written.tell((id) => viewWatch.changed(id));
     const turns = heldWhileTaken(turnWaitMs === null ? issueTurns(instance.signal) : issueTurns(instance.signal, turnWaitMs));
-    const prWatch = createPrWatch({ bb, store, inbox, gh, now: () => clock.now });
+    const prWatch = createPrWatch({ bb, store, inbox, run, now: () => clock.now });
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, views, onChange });
     const review = createReview({ bb, store, spawner, memory, turns, now: () => clock.now });

@@ -21,7 +21,7 @@ const PASSES = {
 const MINUTE = 60_000;
 
 /** The rejection of a real gh run, recorded in fixtures/gh-failures. */
-const recorded = (name: string) => Object.assign(new Error("Command failed: gh api graphql"), JSON.parse(readFileSync(new URL(`./fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
+const recorded = (name: string) => Object.assign(new Error("Command failed: gh api graphql"), JSON.parse(readFileSync(new URL(`./github/fixtures/gh-failures/${name}.json`, import.meta.url), "utf8")));
 /** A gh run that failed with this on stderr. */
 const ghSaid = (stderr: string) => Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stdout: "", stderr: `${stderr}\n` });
 
