@@ -243,7 +243,7 @@ test("focus on an option of the plugin's question at the cap moves to the questi
   const card = () => tab().getByRole("article", { name: "Question d4" });
   const option = within(card()).getByRole("button", { name: "Ship now" });
   option.focus();
-  assert.equal(document.activeElement?.textContent, "Ship now", "focus is on the option");
+  assert.equal(document.activeElement, option, "focus is on the option");
 
   await reread([issue("WEB-1", { status: "done", headline: "Merged #41" })]);
   await waitFor(() => assert.equal(within(card()).queryAllByRole("button").length, 0, "the issue's close took the options"));

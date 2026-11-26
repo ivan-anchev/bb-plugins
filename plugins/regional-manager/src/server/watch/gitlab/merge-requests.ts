@@ -1,6 +1,7 @@
-// The GitLab read the PR watch makes: each watched branch's newest merge request and its head
-// pipeline, in one `glab api graphql --hostname H` call per five branches, its answer parsed at
-// this boundary into snapshots. Every value goes as a `-f` variable, never into the query's text.
+// The GitLab read the PR watch makes: each watched branch's newest merge request, its head
+// pipeline and its review feedback, in one `glab api graphql --hostname H` call per five branches,
+// its answer parsed at this boundary into snapshots. Every value goes as a `-f` variable, never
+// into the query's text.
 import { z } from "zod";
 import { commitSchema } from "../../../model/agent/handoff.ts";
 import type { BranchesRead, PrSnapshot, PrUnavailable } from "../../../model/verdict/pr.ts";
@@ -22,25 +23,60 @@ const BRANCHES_PER_CALL = 5;
 const MR_FIELDS = `iid webUrl state draft approved approvedBy(first: 1) { nodes { id } } diffHeadSha
   headPipeline { status jobs(statuses: [FAILED, CANCELED], retried: false, first: 10) { nodes { name allowFailure } } }`;
 
-/** Every branch's newest merge request on the project (null: none), read five branches a call, or why it couldn't be. why all or nothing: a failure is the host's, as one gh call's is. */
-export async function readGitLab(run: RunCli, repo: GitLabRepo, branches: readonly string[]): Promise<BranchesRead> {
-  const prs = new Map<string, PrSnapshot | null>();
-  for (const chunk of chunksOf(branches, BRANCHES_PER_CALL)) {
-    const read = await readChunk(run, repo, chunk);
-    if (read.kind === "unavailable") return read;
-    for (const [branch, pr] of read.prs) prs.set(branch, pr);
+/**
+ * The fields review feedback is read from, which a GitLab may lack: nobody has confirmed every host
+ * the plugin reads has them (detailedMergeStatus came in GitLab 15.3). why the counts and not
+ * DetailedMergeStatus alone: GitLab reports only the first failing check, and its draft check comes
+ * before its discussions check, so a draft merge request would hide its unresolved discussions.
+ */
+const FEEDBACK_FIELDS = "detailedMergeStatus resolvableDiscussionsCount resolvedDiscussionsCount";
+
+// GitLab's GraphQL error for a feedback field its schema doesn't have, as glab prints it on stderr.
+const FEEDBACK_GAP = /Field '(?:detailedMergeStatus|resolvableDiscussionsCount|resolvedDiscussionsCount)' doesn't exist on type/;
+
+/** Reads a GitLab project's branches: every branch's newest merge request (null: none), or why it couldn't be read. */
+type ReadGitLab = (repo: GitLabRepo, branches: readonly string[]) => Promise<BranchesRead>;
+
+/**
+ * The GitLab reader of one plugin instance. A host whose GitLab lacks a feedback field is read
+ * without them from then on, its merge requests still read, CI gate and merges included, with no
+ * review feedback but approval. why remembered for the plugin's life: a GitLab gains a field only
+ * by an upgrade, and asking for it each tick would fail one call a minute.
+ */
+export function createGitLabReader(run: RunCli): ReadGitLab {
+  const withoutFeedback = new Set<string>();
+
+  /** Every branch's newest merge request, read five branches a call. why all or nothing: a failure is the host's, as one gh call's is. */
+  async function read(repo: GitLabRepo, branches: readonly string[]): Promise<BranchesRead> {
+    const prs = new Map<string, PrSnapshot | null>();
+    for (const chunk of chunksOf(branches, BRANCHES_PER_CALL)) {
+      const chunkRead = await readChunk(repo, chunk);
+      if (chunkRead.kind === "unavailable") return chunkRead;
+      for (const [branch, pr] of chunkRead.prs) prs.set(branch, pr);
+    }
+    return { kind: "read", prs };
   }
-  return { kind: "read", prs };
+
+  /** One call's branches; once more without the feedback fields when GitLab says it lacks one. */
+  async function readChunk(repo: GitLabRepo, branches: readonly string[]): Promise<BranchesRead> {
+    const feedback = !withoutFeedback.has(repo.host);
+    let stdout: string;
+    try {
+      stdout = await run("glab", queryArgs(repo, branches, feedback));
+    } catch (error) {
+      const failure = parseHostCommandFailure(error);
+      if (!feedback || !FEEDBACK_GAP.test(failure.stderr)) return unavailable(glabFailure(repo.host, failure));
+      withoutFeedback.add(repo.host);
+      return readChunk(repo, branches);
+    }
+    return answerRead(repo, parseAnswer(stdout, branches));
+  }
+
+  return read;
 }
 
-async function readChunk(run: RunCli, repo: GitLabRepo, branches: readonly string[]): Promise<BranchesRead> {
-  let stdout: string;
-  try {
-    stdout = await run("glab", queryArgs(repo, branches));
-  } catch (error) {
-    return unavailable(glabFailure(repo.host, parseHostCommandFailure(error)));
-  }
-  const answer = parseAnswer(stdout, branches);
+/** A parsed answer as the read it makes, a project GitLab doesn't show or an answer it can't read saying why. */
+function answerRead(repo: GitLabRepo, answer: Answer): BranchesRead {
   switch (answer.kind) {
     case "read":
       return answer;
@@ -54,9 +90,10 @@ async function readChunk(run: RunCli, repo: GitLabRepo, branches: readonly strin
   }
 }
 
-function queryArgs({ host, path }: GitLabRepo, branches: readonly string[]): string[] {
+function queryArgs({ host, path }: GitLabRepo, branches: readonly string[], feedback: boolean): string[] {
   const variables = branches.map((_, i) => `$b${i}: String!`).join(", ");
-  const fields = branches.map((_, i) => `b${i}: mergeRequests(sourceBranches: [$b${i}], sort: CREATED_DESC, first: 1) { nodes { ${MR_FIELDS} } }`).join("\n");
+  const selection = feedback ? `${MR_FIELDS}\n  ${FEEDBACK_FIELDS}` : MR_FIELDS;
+  const fields = branches.map((_, i) => `b${i}: mergeRequests(sourceBranches: [$b${i}], sort: CREATED_DESC, first: 1) { nodes { ${selection} } }`).join("\n");
   const query = `query($path: ID!, ${variables}) { project(fullPath: $path) {\n${fields}\n} }`;
   return ["api", "graphql", "--hostname", host, "-f", `query=${query}`, "-f", `path=${path}`, ...branches.flatMap((branch, i) => ["-f", `b${i}=${branch}`])];
 }
@@ -66,33 +103,49 @@ const PIPELINE_CI: Partial<Record<string, PrSnapshot["ci"]>> = { SUCCESS: "pass"
 // why locked is open: GitLab locks a merge request only while it merges it.
 const STATE = { opened: "open", locked: "open", merged: "merged", closed: "closed" } as const;
 
-const mrNodeSchema = z
-  .object({
-    iid: z.string().regex(/^\d+$/),
-    webUrl: z.url(),
-    state: z.enum(["opened", "locked", "merged", "closed"]),
-    draft: z.boolean(),
-    approved: z.boolean(),
-    approvedBy: z.object({ nodes: z.array(z.unknown()) }),
-    diffHeadSha: commitSchema,
-    headPipeline: z.object({ status: z.string(), jobs: z.object({ nodes: z.array(z.object({ name: z.string(), allowFailure: z.boolean() })) }) }).nullable(),
-  })
-  .transform((mr): PrSnapshot => {
-    const ci = mr.headPipeline === null ? "none" : (PIPELINE_CI[mr.headPipeline.status] ?? "pending");
-    return {
-      forge: "gitlab",
-      number: Number(mr.iid),
-      url: mr.webUrl,
-      state: STATE[mr.state],
-      draft: mr.draft,
-      // why an approver too: `approved` is true when no approval is required at all.
-      review: mr.approved && mr.approvedBy.nodes.length > 0 ? "approved" : "none",
-      ci,
-      headSha: mr.diffHeadSha,
-      // why allowFailure jobs left out: they fail inside pipelines that pass (review.md: integration-tests, pages).
-      failedChecks: ci === "fail" && mr.headPipeline !== null ? mr.headPipeline.jobs.nodes.filter((job) => !job.allowFailure).map((job) => job.name) : [],
-    };
-  });
+/** A merge request node as GitLab answers the selection, the feedback fields null when it left them out. */
+const mrFieldsSchema = z.object({
+  iid: z.string().regex(/^\d+$/),
+  webUrl: z.url(),
+  state: z.enum(["opened", "locked", "merged", "closed"]),
+  draft: z.boolean(),
+  approved: z.boolean(),
+  approvedBy: z.object({ nodes: z.array(z.unknown()) }),
+  diffHeadSha: commitSchema,
+  // why a default: the read leaves them out on a GitLab that lacks one (createGitLabReader).
+  detailedMergeStatus: z.string().nullable().default(null),
+  resolvableDiscussionsCount: z.number().int().nullable().default(null),
+  resolvedDiscussionsCount: z.number().int().nullable().default(null),
+  headPipeline: z.object({ status: z.string(), jobs: z.object({ nodes: z.array(z.object({ name: z.string(), allowFailure: z.boolean() })) }) }).nullable(),
+});
+type MrNode = z.output<typeof mrFieldsSchema>;
+
+const mrNodeSchema = mrFieldsSchema.transform((mr): PrSnapshot => {
+  const ci = mr.headPipeline === null ? "none" : (PIPELINE_CI[mr.headPipeline.status] ?? "pending");
+  return {
+    forge: "gitlab",
+    number: Number(mr.iid),
+    url: mr.webUrl,
+    state: STATE[mr.state],
+    draft: mr.draft,
+    review: reviewOf(mr),
+    ci,
+    headSha: mr.diffHeadSha,
+    // why allowFailure jobs left out: they fail inside pipelines that pass (review.md: integration-tests, pages).
+    failedChecks: ci === "fail" && mr.headPipeline !== null ? mr.headPipeline.jobs.nodes.filter((job) => !job.allowFailure).map((job) => job.name) : [],
+  };
+});
+
+/**
+ * A merge request's review feedback, the blocking first. why an approver too: `approved` is true
+ * when no approval is required at all. Neither a discussion's text nor its author is read: the
+ * counts are enough.
+ */
+function reviewOf(mr: MrNode): PrSnapshot["review"] {
+  if (mr.detailedMergeStatus === "REQUESTED_CHANGES") return "changes-requested";
+  if ((mr.resolvableDiscussionsCount ?? 0) > (mr.resolvedDiscussionsCount ?? 0)) return "unresolved-discussions";
+  return mr.approved && mr.approvedBy.nodes.length > 0 ? "approved" : "none";
+}
 
 const responseSchema = z.object({ data: z.object({ project: z.record(z.string(), z.object({ nodes: z.array(mrNodeSchema).max(1) })).nullable() }) });
 

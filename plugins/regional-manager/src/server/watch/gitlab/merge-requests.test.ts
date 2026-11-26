@@ -2,42 +2,66 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { PrSnapshot } from "../../../model/verdict/pr.ts";
 import type { Cli } from "../host-command.ts";
-import { readGitLab } from "./merge-requests.ts";
+import { createGitLabReader } from "./merge-requests.ts";
 
 const HOST = "gitlab.corp.test";
 const REPO = { forge: "gitlab", host: HOST, path: "frontend/station-ws" } as const;
 const HEAD = "a".repeat(40);
 
-type Node = { iid?: string; state?: string; draft?: boolean; approved?: boolean; approvers?: number; pipeline?: { status: string; jobs?: { name: string; allowFailure: boolean }[] } | null };
+type Node = {
+  iid?: string;
+  state?: string;
+  draft?: boolean;
+  approved?: boolean;
+  approvers?: number;
+  mergeStatus?: string | null;
+  discussions?: { resolvable: number | null; resolved: number | null };
+  pipeline?: { status: string; jobs?: { name: string; allowFailure: boolean }[] } | null;
+};
 
-/** GitLab's merge request node, as GitLab's GraphQL answers the watch's selection: iid a string, the state lower case. */
-const node = ({ iid = "41", state = "opened", draft = false, approved = false, approvers = 0, pipeline = null }: Node) => ({
+/** The fields a merge request's review feedback is read from, as GitLab names them. */
+const FEEDBACK = ["detailedMergeStatus", "resolvableDiscussionsCount", "resolvedDiscussionsCount"];
+
+/** GitLab's merge request node, as GitLab's GraphQL answers the watch's selection: iid a string, the state lower case, the feedback fields only when `asked`. */
+const node = ({ iid = "41", state = "opened", draft = false, approved = false, approvers = 0, mergeStatus = "MERGEABLE", discussions = { resolvable: 0, resolved: 0 }, pipeline = null }: Node, asked: boolean) => ({
   iid,
   webUrl: `https://${HOST}/frontend/station-ws/-/merge_requests/${iid}`,
   state,
   draft,
   approved,
   approvedBy: { nodes: approvers > 0 ? [{ id: "gid://gitlab/User/7" }] : [] },
+  ...(asked ? { detailedMergeStatus: mergeStatus, resolvableDiscussionsCount: discussions.resolvable, resolvedDiscussionsCount: discussions.resolved } : {}),
   diffHeadSha: HEAD,
   headPipeline: pipeline === null ? null : { status: pipeline.status, jobs: { nodes: pipeline.jobs ?? [] } },
 });
 
-/** glab answering each `api graphql` run with each aliased branch's node from `nodes` (absent: no merge request); every run's arguments. */
-function glabAnswering(nodes: ReadonlyMap<string, Node>) {
+/**
+ * glab answering each `api graphql` run with each aliased branch's node from `nodes` (absent: no
+ * merge request), on a GitLab whose schema lacks the fields in `lacks`, refused as glab prints
+ * GitLab's errors; every run's arguments.
+ */
+function glabAnswering(nodes: ReadonlyMap<string, Node>, lacks: readonly string[] = []) {
   const runs: string[][] = [];
   const run = async (cli: Cli, args: string[]) => {
     assert.equal(cli, "glab");
     runs.push(args);
+    const query = args.find((arg) => arg.startsWith("query=")) ?? "";
+    const lacking = lacks.filter((field) => query.includes(field));
+    if (lacking.length > 0) throw Object.assign(new Error("Command failed: glab api graphql"), { code: 1, stdout: "", stderr: `glab: ${lacking.map((field) => `Field '${field}' doesn't exist on type 'MergeRequest'`).join("\n")}\n` });
+    const asked = FEEDBACK.every((field) => query.includes(field));
     const branches = args.flatMap((arg) => {
       const match = /^(b\d+)=(.*)$/s.exec(arg);
       return match === null ? [] : [[match[1] ?? "", match[2] ?? ""] as const];
     });
-    return JSON.stringify({ data: { project: Object.fromEntries(branches.map(([alias, branch]) => [alias, { nodes: nodes.has(branch) ? [node(nodes.get(branch) ?? {})] : [] }])) } });
+    return JSON.stringify({ data: { project: Object.fromEntries(branches.map(([alias, branch]) => [alias, { nodes: nodes.has(branch) ? [node(nodes.get(branch) ?? {}, asked)] : [] }])) } });
   };
   return { run, runs };
 }
 
-/** The merge request readGitLab read for one branch whose node is `fields`. */
+/** A fresh plugin instance's GitLab read of these branches, glab run as `run`. */
+const readGitLab = (run: (cli: Cli, args: string[]) => Promise<string>, repo: typeof REPO, branches: readonly string[]) => createGitLabReader(run)(repo, branches);
+
+/** The merge request a GitLab read found for one branch whose node is `fields`. */
 async function one(fields: Node): Promise<PrSnapshot | null> {
   const read = await readGitLab(glabAnswering(new Map([["feat", fields]])).run, REPO, ["feat"]);
   return read.kind === "read" ? (read.prs.get("feat") ?? null) : assert.fail(read.unavailable.reason);
@@ -56,6 +80,34 @@ test("a GitLab merge request is approved only with an approver: approved alone m
   assert.equal((await one({ approved: true, approvers: 1 }))?.review, "approved");
   assert.equal((await one({ approved: true, approvers: 0 }))?.review, "none");
   assert.equal((await one({ approved: false, approvers: 1 }))?.review, "none", "an approver with more approvals still required");
+});
+
+test("discussions: a draft merge request whose status is DRAFT_STATUS, with 2 resolvable discussions and 1 resolved, reads unresolved discussions", async () => {
+  const pr = await one({ draft: true, mergeStatus: "DRAFT_STATUS", discussions: { resolvable: 2, resolved: 1 } });
+  assert.deepEqual([pr?.draft, pr?.review], [true, "unresolved-discussions"]);
+});
+
+test("discussions: review feedback reads the blocking first: changes requested, then unresolved discussions, then approved with an approver", async () => {
+  const cases: [string, Node, PrSnapshot["review"]][] = [
+    ["changes requested", { mergeStatus: "REQUESTED_CHANGES" }, "changes-requested"],
+    ["changes requested with unresolved discussions", { mergeStatus: "REQUESTED_CHANGES", discussions: { resolvable: 3, resolved: 0 } }, "changes-requested"],
+    ["unresolved discussions on an approved one", { approved: true, approvers: 1, mergeStatus: "DISCUSSIONS_NOT_RESOLVED", discussions: { resolvable: 1, resolved: 0 } }, "unresolved-discussions"],
+    ["approved, every discussion resolved", { approved: true, approvers: 1, discussions: { resolvable: 2, resolved: 2 } }, "approved"],
+    ["approved with no approver", { approved: true, approvers: 0, discussions: { resolvable: 2, resolved: 2 } }, "none"],
+    ["no counts", { mergeStatus: null, discussions: { resolvable: null, resolved: null } }, "none"],
+  ];
+  for (const [name, fields, review] of cases) assert.equal((await one(fields))?.review, review, name);
+});
+
+test("discussions: an older GitLab lacking a discussion count is read again without the feedback fields, on that host only, from then on, still reading its merge requests and their CI", async () => {
+  const feedbackAsked = (args: readonly string[]) => FEEDBACK.some((field) => args.some((arg) => arg.startsWith("query=") && arg.includes(field)));
+  const nodes = new Map<string, Node>([["feat", { approved: true, approvers: 1, discussions: { resolvable: 2, resolved: 0 }, pipeline: { status: "FAILED", jobs: [{ name: "unit-tests", allowFailure: false }] } }]]);
+  const glab = glabAnswering(nodes, ["resolvableDiscussionsCount", "resolvedDiscussionsCount"]);
+  const read = createGitLabReader(glab.run);
+  for (let i = 0; i < 2; i++) assert.deepEqual(await read(REPO, ["feat"]), { kind: "read", prs: new Map([["feat", { forge: "gitlab", number: 41, url: `https://${HOST}/frontend/station-ws/-/merge_requests/41`, state: "open", draft: false, review: "approved", ci: "fail", headSha: HEAD, failedChecks: ["unit-tests"] }]]) });
+  assert.deepEqual(glab.runs.map(feedbackAsked), [true, false, false], "asked once, then never again on that host");
+  await read({ ...REPO, host: "gitlab.com" }, ["feat"]);
+  assert.deepEqual(glab.runs.slice(3).map(feedbackAsked), [true, false], "another host is asked for them on its own");
 });
 
 test("a GitLab head pipeline's status is the merge request's CI: a manual job blocks it, an unknown status is pending, skipped or none is no checks", async () => {
@@ -98,6 +150,18 @@ test("GitLab is read five branches a call with --hostname, the project and every
     const query = args.find((arg) => arg.startsWith("query=")) ?? assert.fail("no query");
     assert.ok(!query.includes("quoted") && !query.includes("station-ws"), "no value in the query's text");
     assert.doesNotMatch(query, /\bsha\b/, "no pipeline sha: a merged-results pipeline runs on another");
+  }
+});
+
+test("discussions: GitLab's query names detailedMergeStatus and both discussion counts, and 6 watched branches take two calls", async () => {
+  const branches = ["a", "b", "c", "d", "e", "f"];
+  const glab = glabAnswering(new Map(branches.map((branch, i) => [branch, { iid: String(i + 1) }])));
+  const read = await readGitLab(glab.run, REPO, branches);
+  assert.equal(read.kind, "read");
+  assert.equal(glab.runs.length, 2);
+  for (const args of glab.runs) {
+    const query = args.find((arg) => arg.startsWith("query=")) ?? assert.fail("no query");
+    for (const field of FEEDBACK) assert.equal(query.split(field).length - 1, args.filter((arg) => /^b\d+=/.test(arg)).length, `${field} once per branch`);
   }
 });
 

@@ -114,6 +114,19 @@ test("review decisions and draft state", async () => {
   assert.equal((await one({ state: "CLOSED" }))?.state, "closed");
 });
 
+test("discussions: a github.com pull request's review still reads only approved or changes requested, from gh's query as issue 01 sent it", async () => {
+  const reviews = await Promise.all([null, "APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"].map(async (reviewDecision) => (await one({ reviewDecision }))?.review));
+  assert.deepEqual(reviews, ["none", "approved", "changes-requested", "none"]);
+  const gh = ghAnswering(RECORDED);
+  await readGitHub(gh.run, "octo-org/widgets", ["feat"]);
+  const query = `query($owner: String!, $name: String!, $b0: String!) { repository(owner: $owner, name: $name) {
+b0: pullRequests(headRefName: $b0, first: 1, orderBy: {field: CREATED_AT, direction: DESC}) { nodes { number url state isDraft reviewDecision
+  commits(last: 1) { nodes { commit { oid statusCheckRollup { state contexts(first: 100) { nodes {
+    __typename ... on CheckRun { name conclusion } ... on StatusContext { context state } } } } } } } } }
+} }`;
+  assert.deepEqual(gh.runs, [["gh", ["api", "graphql", "-f", `query=${query}`, "-f", "owner=octo-org", "-f", "name=widgets", "-f", "b0=feat"]]]);
+});
+
 test("an answer that isn't the pull requests asked for is not read as data, and says so as GitHub's, for now", async () => {
   const unreadable = { kind: "unavailable", unavailable: { kind: "transient", reason: "GitHub's answer wasn't the pull requests the plugin asked for", forge: "github" } };
   assert.deepEqual(await readGitHub(ghAnswering("not json").run, "o/r", ["feat"]), unreadable);

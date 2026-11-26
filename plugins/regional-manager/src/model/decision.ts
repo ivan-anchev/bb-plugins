@@ -63,6 +63,7 @@ export const issueDecisionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("recorded"), text: z.string(), at: z.number() }),
 ]);
 export type IssueDecision = z.infer<typeof issueDecisionSchema>;
+export type AskedDecision = Extract<IssueDecision, { kind: "asked" }>;
 export type RecordedDecision = Extract<IssueDecision, { kind: "recorded" }>;
 
 /** The issue's decisions, its one list, oldest first: every question put to the user naming it, answered or not, and every decision recorded on it. */
