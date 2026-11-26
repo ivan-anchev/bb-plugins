@@ -16,7 +16,7 @@ import type { MemoryFile } from "../../model/memory-file.ts";
 import { intervalText, type Reminder } from "../../model/reminder.ts";
 import { checkedAgents, type Check, type CheckId, type FinalCheck } from "../../model/verdict/check.ts";
 import { checkoutText, worktreeText } from "../../model/verdict/checkout.ts";
-import { capChoice, choiceText, mergeStandsText, type AnsweredAt } from "../../model/verdict/rounds/cap-choice.ts";
+import { capChoice, choiceText, mergeStandsText, type AnsweredAt, type FollowUp } from "../../model/verdict/rounds/cap-choice.ts";
 import { askedQuestion, askedText, capMovesText, countedFailures, isCapQuestion, mergeAnswer, unansweredCapQuestion, type CapQuestion } from "../../model/verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS, type CiVerdict, type PrSnapshot } from "../../model/verdict/pr.ts";
 import { defectText, findingText, holds, triageText, type Review, type Triaged } from "../../model/verdict/review.ts";
@@ -226,21 +226,36 @@ function answeredText(decision: Decision, when: string, lookups: Pick<Lookups, "
 }
 
 /**
- * Where the issue stood for an answer at its cap given at `answeredAt`: its pull request as its view
- * places it; its branch as its agents' handoffs recorded it (agent.ts issueBranch, with no thread
- * read, as catch-up reads none); and the must-fix findings of its last counted failure returned
- * before the answer (rounds/cap.ts countedFailures), with whether the manager may accept it as it
- * is (verdict.ts acceptableAsIs: on review findings alone, CI not failed on its commit), never once
- * its pull request merged. why before: the follow-up files what the user
+ * Where the issue stood for an answer at its cap given at `answeredAt`: its branch as its agents'
+ * handoffs recorded it (agent.ts issueBranch, with no thread read, as catch-up reads none), and its
+ * pull request as its view places it, with the follow-up of its last counted failure returned
+ * before the answer (rounds/cap.ts countedFailures). why before: the follow-up files what the user
  * chose to merge past, never a later round's findings.
  */
 function answeredAt(issueId: IssueId, answeredAt: number, { record, view, agents }: Pick<Lookups, "record" | "view" | "agents">): AnsweredAt {
-  const lastFailure = countedFailures(record(issueId)).filter(({ verdict }) => verdict.state === "returned" && verdict.at <= answeredAt).at(-1);
-  const last = lastFailure?.verdict;
+  const lastFailure = countedFailures(record(issueId)).filter(({ verdict }) => verdict.state === "returned" && verdict.at <= answeredAt).at(-1) ?? null;
   const pr = view(issueId)?.pr ?? null;
-  const merged = pr?.state === "merged";
-  const branch = issueBranch(agents().filter((agent) => agent.issueId === issueId), () => null)?.branch ?? null;
-  return { pr: pr?.number ?? null, branch, mustFix: last?.state === "returned" ? heldFindings(last).failing : [], merged, acceptable: !merged && lastFailure !== undefined && acceptableAsIs(lastFailure, pr) };
+  const branch = issueBranch(agents().filter((agent) => agent.issueId === issueId), () => null, record(issueId))?.branch ?? null;
+  const followUp = followUpOf(lastFailure);
+  if (pr?.state === "merged") return { branch, merge: { kind: "merged", pr: pr.number, followUp } };
+  const acceptable = followUp.kind === "by-hand" && lastFailure !== null && acceptableAsIs(lastFailure, pr);
+  return { branch, merge: { kind: "unmerged", pr: pr?.number ?? null, followUp: acceptable ? { kind: "accept" } : followUp } };
+}
+
+/**
+ * The merge answer's follow-up of the failure it answered (null: none returned): once the manager
+ * accepted it, the one that accept filed; else its must-fix findings, to file by hand. why accepted
+ * only: a pass's follow-up collects a failed round too, but leaves out the must-fix findings that
+ * failed it. why throw: an accept files its follow-up in the transaction that stamps it
+ * (issues-store.ts updateIssue), and its unfixed must-fixes always warrant one.
+ */
+function followUpOf(failure: Check | null): FollowUp {
+  if (failure === null) return { kind: "by-hand", mustFix: [] };
+  if (failure.acceptedAt !== null) {
+    if (failure.followUpId === null) throw new Error(`The accepted check ${failure.id} filed no follow-up.`);
+    return { kind: "filed", id: failure.followUpId };
+  }
+  return { kind: "by-hand", mustFix: failure.verdict.state === "returned" ? heldFindings(failure.verdict).failing : [] };
 }
 
 /** The decisions section of a catch-up: every decision still waiting for the user, oldest first. */

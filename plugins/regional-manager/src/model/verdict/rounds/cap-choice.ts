@@ -32,13 +32,25 @@ export function capChoice({ options, answer }: Pick<Decision, "options" | "answe
 }
 
 /**
- * Where the issue stood when the user answered: its pull request's number as last read (null: none
- * read), its branch as its agents' handoffs recorded it (null: none recorded), the must-fix
- * findings its last failed verdict before the answer upheld, whether that pull request has merged
- * since, and whether the manager may accept that verdict as it is (verdict.ts acceptableAsIs: on
- * review findings alone, CI not failed on its commit; never once merged).
+ * Where the issue stood when the user answered: its branch as its agents' handoffs recorded it
+ * (null: none recorded), and what the merge answer leaves to do about its pull request (`merge`).
  */
-export type AnsweredAt = { pr: number | null; branch: string | null; mustFix: readonly Triaged[]; merged: boolean; acceptable: boolean };
+export type AnsweredAt = { branch: string | null; merge: MergeGuidance };
+
+/**
+ * What the merge answer leaves to do, by its pull request: `merged` since, by its number, leaving
+ * only the follow-up; else `unmerged` (`pr` as last read, null: none read), to be merged, with the
+ * follow-up, or the accept that files it.
+ */
+type MergeGuidance = { kind: "merged"; pr: number; followUp: FollowUp } | { kind: "unmerged"; pr: number | null; followUp: FollowUp | { kind: "accept" } };
+
+/**
+ * The one follow-up the merge answer files, of the issue's last failed verdict before the answer:
+ * `filed` already as `id`, as the manager's accept of that verdict filed it (issues.ts acceptEdit);
+ * else `by-hand`, its must-fix findings, for the manager to file. `accept`, in MergeGuidance: the
+ * manager may still accept that verdict as it is (verdict.ts acceptableAsIs), which files it.
+ */
+export type FollowUp = { kind: "filed"; id: IssueId } | { kind: "by-hand"; mustFix: readonly Triaged[] };
 
 /** The choice in a phrase, as a doorbell gives it after the question's id: "merge it as is, with no further round, and file its open must-fix findings as a follow-up". */
 export function choicePhrase(choice: CapChoice): string {
@@ -58,11 +70,11 @@ export function choicePhrase(choice: CapChoice): string {
 export function choiceText(issueId: IssueId, choice: CapChoice | null, at: AnsweredAt): string {
   switch (choice) {
     case "merge":
-      return `They chose to merge ${issueId} as it is, so it gets no further round. ${mergeStepsText(issueId, at)}`;
+      return `They chose to merge ${issueId} as it is, so it gets no further round. ${mergeStepsText(issueId, at.merge)}`;
     case "round":
       return `They chose one more round for ${issueId}: tell its agent what to fix with agent_message, or hand ${issueId} to a fresh agent with agent_start. If that round fails verification too, the plugin asks them again.`;
     case "cancel":
-      return `They chose to cancel ${issueId}: stop its agent with agent_stop, if one holds it; ${closeText(at)}; and cancel ${issueId} with issue_update (status "canceled").`;
+      return `They chose to cancel ${issueId}: stop its agent with agent_stop, if one holds it; ${closeText(at.merge.pr, at.branch)}; and cancel ${issueId} with issue_update (status "canceled").`;
     case null:
       return `Their answer allows one more round for ${issueId}, as any answer in their own words does: read it for what they want.`;
     default:
@@ -81,11 +93,17 @@ export const mergeStandsText = (issueId: IssueId, questionId: string, pr: number
 /**
  * What the merge answer leaves to do: once its pull request merged, only the follow-up, as the
  * merge made the issue Done; while the accept goes through, the accept first, which files the
- * follow-up, then the merge; else the merge and the follow-up, filed by hand.
+ * follow-up, then the merge; else the merge and the follow-up, already filed or filed by hand.
  */
-function mergeStepsText(issueId: IssueId, at: AnsweredAt): string {
-  if (at.merged) return `Its pull request${at.pr === null ? "" : ` #${at.pr}`} has merged since, which made ${issueId} Done, so nothing is left to merge. ${followUpText(at.mustFix)}`;
-  return at.acceptable ? `${acceptFirst(issueId)} ${mergeMoves(issueId, at.pr)}` : `${mergeMoves(issueId, at.pr)} ${followUpText(at.mustFix)}`;
+function mergeStepsText(issueId: IssueId, merge: MergeGuidance): string {
+  switch (merge.kind) {
+    case "merged":
+      return `Its pull request #${merge.pr} has merged since, which made ${issueId} Done, so nothing is left to merge. ${followUpText(issueId, merge.followUp)}`;
+    case "unmerged":
+      return merge.followUp.kind === "accept" ? `${acceptFirst(issueId)} ${mergeMoves(issueId, merge.pr)}` : `${mergeMoves(issueId, merge.pr)} ${followUpText(issueId, merge.followUp)}`;
+    default:
+      return merge satisfies never;
+  }
 }
 
 /** How the pull request gets merged while the merge answer stands, and that the merge makes the issue Done. */
@@ -102,14 +120,21 @@ function mergeMoves(issueId: IssueId, pr: number | null): string {
 const acceptFirst = (issueId: IssueId): string =>
   `Its last failure was on review findings alone, so first accept it as it is: issue_update { id: "${issueId}", status: "in-review", decision: "<their answer, and why>" } puts it In review until its pull request merges, and files the findings it leaves, its open must-fix findings among them, as one follow-up. File no other follow-up.`;
 
-/** The one follow-up the merge answer files: the open must-fix findings, listed; none to file when there are none. */
-function followUpText(mustFix: readonly Triaged[]): string {
-  if (mustFix.length === 0) return "Its last failed verdict upheld no must-fix finding, so there is no follow-up to file.";
-  return `File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n${mustFix.map((finding) => `- ${findingText(finding)}`).join("\n")}`;
+/** The one follow-up the merge answer files: named, when the manager's accept filed it; else the open must-fix findings, listed, to file; none to file when there are none. */
+function followUpText(issueId: IssueId, followUp: FollowUp): string {
+  switch (followUp.kind) {
+    case "filed":
+      return `Your accept of ${issueId}'s last failure filed its open must-fix findings as ${followUp.id}, the one follow-up this answer files, so file no other.`;
+    case "by-hand":
+      if (followUp.mustFix.length === 0) return "Its last failed verdict upheld no must-fix finding, so there is no follow-up to file.";
+      return `File the open must-fix findings of its last failed verdict as one follow-up issue with issue_create, listing each:\n\n${followUp.mustFix.map((finding) => `- ${findingText(finding)}`).join("\n")}`;
+    default:
+      return followUp satisfies never;
+  }
 }
 
 /** How to close the issue's pull request: by its number, else by its branch, which gh resolves to its pull request. */
-function closeText({ pr, branch }: Pick<AnsweredAt, "pr" | "branch">): string {
+function closeText(pr: number | null, branch: string | null): string {
   if (pr !== null) return `close its pull request #${pr} with \`gh pr close ${pr}\``;
   if (branch !== null) return `close its pull request, if one is open on its branch, with \`gh pr close ${branch}\``;
   return "close its pull request, if it has one, with `gh pr close` and its number";

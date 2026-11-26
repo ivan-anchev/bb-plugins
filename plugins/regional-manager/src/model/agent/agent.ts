@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Execution } from "./execution.ts";
 import type { HandoffId } from "./handoff.ts";
 import type { IssueId } from "../issue/issue.ts";
+import { acceptedOf, type Handed } from "../issue/status.ts";
 import { shipsCode, type Kind } from "../issue/kind.ts";
 import type { CoordinatorId } from "../role.ts";
 import type { CheckoutRead } from "../verdict/checkout.ts";
@@ -371,11 +372,20 @@ export const placementName = (placement: Placement): string => (placement.kind =
 /**
  * An issue's branch: that of its latest agent with one (`own`: its agents in the order started;
  * `threadOf`: each one's thread as bb lists it, null for none), with that agent; null when none has
- * one. Its pull request is the issue's, read on it. why not the latest agent alone: one whose spawn
- * failed has no branch, and the work before it still has its pull request.
+ * one. While the manager's accept of a check stands (`record`: the issue's handoffs with their
+ * checks, oldest first; status.ts acceptedOf), only the agent whose work that check judged counts.
+ * Its pull request is the issue's, read on it. why not the latest agent alone: one whose spawn
+ * failed has no branch, and the work before it still has its pull request; and an agent started
+ * clean before the accept works on a branch the accepted work isn't on.
  */
-export function issueBranch<A extends Pick<Agent, "checkout">>(own: readonly A[], threadOf: (agent: A) => { environmentBranchName: string | null } | null): { agent: A; branch: string } | null {
-  for (const agent of [...own].reverse()) {
+export function issueBranch<A extends Pick<Agent, "id" | "checkout">>(
+  own: readonly A[],
+  threadOf: (agent: A) => { environmentBranchName: string | null } | null,
+  record: readonly Handed[],
+): { agent: A; branch: string } | null {
+  const accepted = acceptedOf(record)?.handoff.agentId ?? null;
+  const counted = accepted === null ? own : own.filter(({ id }) => id === accepted);
+  for (const agent of [...counted].reverse()) {
     const branch = branchOf(agent, threadOf(agent));
     if (branch !== null) return { agent, branch };
   }

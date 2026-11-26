@@ -310,6 +310,33 @@ test("while an accept stands, agent_start on a new branch is refused naming why,
   assert.match(textOf(joined), /^Started a2 on WEB-1 as @thread:\w+ in a1's worktree/);
 });
 
+test("an issue accepted on its first agent's pull request, after a clean start gave a new agent another branch, follows that pull request: its merge makes it Done and unblocks what depends on it", async () => {
+  const { kit, coordinatorId, call, update, row, agentThreadId } = await failedOnce();
+  await call("issue_create", { ...ISSUE, title: "Dead letters", dependsOn: ["WEB-1"] });
+  const accepted = kit.thread(agentThreadId).environmentBranchName ?? assert.fail("no branch");
+  kit.github.prs.set(accepted, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  const fresh = threadIn(textOf(await call("agent_start", { issue: "WEB-1", from: "default" })));
+  const other = kit.thread(fresh).environmentBranchName ?? assert.fail("no branch");
+  assert.notEqual(other, accepted, "the clean start works on a branch of its own");
+  kit.github.prs.set(other, { number: 42, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+
+  assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
+  await call("agent_stop", { agent: "a2" });
+  kit.clock.now += 6 * 60_000;
+  await kit.tick();
+  await settled();
+  const pr = async () => (await kit.rpc.board({ coordinatorId })).issues.find(({ id }) => id === "WEB-1")?.pr?.number;
+  assert.equal(await pr(), 41, "the board shows the accepted work's pull request");
+
+  kit.github.prs.set(accepted, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
+  kit.clock.now += 6 * 60_000;
+  await kit.tick();
+  await settled();
+  assert.equal((await row()).lane, "done");
+  const dependent = (await kit.rpc.board({ coordinatorId })).issues.find(({ id }) => id === "WEB-2") ?? assert.fail("no dependent");
+  assert.deepEqual([laneOf(dependent), dependent.blockedBy], ["todo", []], "what depended on it is ready");
+});
+
 test("an accept is refused leading with the reason when a criterion failed, when CI failed on the checked commit as its pull request was last read, and when the latest verdict didn't fail", async () => {
   const criterion = await failedOnce("criterion");
   assert.deepEqual(await criterion.update({ status: "in-review", decision: REASON }), {
