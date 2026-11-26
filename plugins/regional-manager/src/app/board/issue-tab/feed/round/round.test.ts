@@ -77,7 +77,7 @@ test("an open round shows its steps: the handoff and its report, the reviewer's 
 test("a finding reads as its place, severity, origin and claim, its path byte for byte as the reviewer wrote it, a leading space, a zero-width character and a bidi mark kept; a rejected claim is struck, and each triage gives its word and reason: what an anchored one breaks, a downgraded one's new severity", async () => {
   const path = " src/\u200bretry\u200f\u202e.ts";
   const findings = [
-    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "brief", reason: "Seen: it grows without bound." } },
+    { file: path, line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "brief", steps: null, reason: "Seen: it grows without bound." } },
     { file: path, line: null, severity: "nit", claim: "The padding differs from the row's.", origin: "missed", triage: { result: "rejected", reason: "It matches the row." } },
     { file: path, line: 9, severity: "must-fix", claim: "The helper's name says nothing.", origin: "unfixed", triage: { result: "downgraded", to: "nit", reason: "Breaks none of the five." } },
     { file: path, line: 12, severity: "should-fix", claim: "The jitter is computed twice.", origin: "new", triage: { result: "confirmed", reason: "Both calls on line 12." } },
@@ -111,7 +111,7 @@ test("a finding reads as its place, severity, origin and claim, its path byte fo
   );
   assert.deepEqual(
     items.map((item) => item.querySelector(".rmi-triage")?.textContent),
-    ["Anchored, as it breaks the issue's brief. Seen: it grows without bound.", "Rejected. It matches the row.", "Downgraded to nit. Breaks none of the five.", "Confirmed. Both calls on line 12."],
+    ["Anchored, as it breaks a requirement the issue's brief states explicitly. Seen: it grows without bound.", "Rejected. It matches the row.", "Downgraded to nit. Breaks none of the five.", "Confirmed. Both calls on line 12."],
   );
 });
 
@@ -350,6 +350,20 @@ test("a round whose criteria all passed but whose must-fix finding the verifier 
   );
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: mustFix }) });
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldMust-fix upheld");
+});
+
+test("a round whose criteria all passed but whose verifier found a blocking defect of its own leads with that reason, and its verdict lists the defect with its steps", async () => {
+  const defect: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "defect" } } } } : entry,
+  );
+  const body = bodyOf(3);
+  const blocking = [{ claim: "cli.js crashes on an empty counts.json.", anchor: "bug", steps: "1. Kill a run mid-save. 2. Run it again." }] as const;
+  const verdict = body.verdict?.state === "returned" ? { ...body.verdict, blocking: [...blocking] } : assert.fail("no returned verdict");
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: defect }), bodies: () => ({ ...body, verdict }) });
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldBlocking defect found");
+  const three = rounds(tab()).card(3);
+  assert.ok(await three.findByText("Blocking defects the verifier found"));
+  assert.ok(three.getByText("Blocks, as a bug hit in normal use, reached by: 1. Kill a run mid-save. 2. Run it again.: cli.js crashes on an empty counts.json."));
 });
 
 test("a final check whose own worktree was dirty says so, never that a claimed commit was missing", async () => {

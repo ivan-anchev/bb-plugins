@@ -113,12 +113,14 @@ function HandoffStatus({ status }: { status: Extract<Round["by"], { kind: "agent
 }
 
 /** What failed a round whose criteria all passed, leading its line: the reason, never "n of n". why by the round: a final check claims no commit, so its checkout fails only by a dirty tree. */
-function failedByText(by: "checkout" | "must-fix" | "ci", round: Round["by"]): string {
+function failedByText(by: "checkout" | "must-fix" | "defect" | "ci", round: Round["by"]): string {
   switch (by) {
     case "ci":
       return "CI failed";
     case "must-fix":
       return "Must-fix upheld";
+    case "defect":
+      return "Blocking defect found";
     case "checkout":
       return round.kind === "final" ? NOT_CLEAN_TREE : NOT_CLEAN;
     default:

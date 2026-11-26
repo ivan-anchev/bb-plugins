@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
 import type { Check, CheckSubject } from "./check.ts";
-import { holds, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
+import { blockingDefectSchema, holds, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict } from "./pr.ts";
 
@@ -77,6 +77,8 @@ const returnedSchema = z.object({
   checkout: checkoutSchema,
   criteria: z.array(z.object({ criterion: z.string(), result: criterionResultSchema, evidence: z.string() })).min(1),
   findings: z.array(z.string()),
+  /** The defects the verifier found itself, outside the criteria, that meet a blocking anchor: each one fails the verdict. why the default: a verdict stored before d68 reported none. */
+  blocking: z.array(blockingDefectSchema).default([]),
   /** The verifier's triage of each of the review's findings, in their order: only its triage, as the findings are the review's. */
   triage: z.array(triageSchema).default([]),
   mustFixFails: z.boolean(),
@@ -227,7 +229,8 @@ type EitherReturned = Extract<ShownVerdict, { state: "returned" }>;
 
 /**
  * The one rule for pass or fail: the claimed commit was checked out on a clean tree, every
- * criterion passed, no finding of the reviewer's fails it (failsVerdict), and CI on the
+ * criterion passed, no finding of the reviewer's fails it (failsVerdict), the verifier found no
+ * blocking defect of its own, and CI on the
  * commit didn't fail. It waits while CI is still to come; CI that couldn't be checked, or that
  * reported no checks, is not a failure.
  */
@@ -239,9 +242,15 @@ export function judge(verdict: Returned, ci: Ci): "pass" | "fail" | "waiting-for
 /**
  * Why a returned verdict failed: its checkout wasn't the claimed commit on a clean tree; `failed`
  * of its `of` criteria didn't pass; `count` of the reviewer's findings fail it on their own
- * (failsVerdict); CI failed on pull request `number`.
+ * (failsVerdict); `count` defects the verifier found itself meet a blocking anchor; CI failed on
+ * pull request `number`.
  */
-export type FailureReason = { kind: "checkout" } | { kind: "criteria"; failed: number; of: number } | { kind: "must-fix"; count: number } | { kind: "ci"; number: number };
+export type FailureReason =
+  | { kind: "checkout" }
+  | { kind: "criteria"; failed: number; of: number }
+  | { kind: "must-fix"; count: number }
+  | { kind: "defect"; count: number }
+  | { kind: "ci"; number: number };
 
 /**
  * Why a returned verdict failed, in the order every surface reads them, CI as `ci` says (by
@@ -254,6 +263,7 @@ export function failureReasons(verdict: Returned, ci: CiVerdict | null = ciVerdi
   if (failedCheckout(verdict) !== null) reasons.push({ kind: "checkout" });
   if (failed > 0) reasons.push({ kind: "criteria", failed, of: verdict.criteria.length });
   if (mustFix > 0) reasons.push({ kind: "must-fix", count: mustFix });
+  if (verdict.blocking.length > 0) reasons.push({ kind: "defect", count: verdict.blocking.length });
   if (ci?.kind === "fail") reasons.push({ kind: "ci", number: ci.number });
   return reasons;
 }
@@ -297,6 +307,8 @@ export function failureText(reason: ReasonBesidesCriteria, judged: Judged): stri
       return judged === "handoff" ? NOT_CLEAN.toLowerCase() : "the verifier's worktree wasn't clean";
     case "must-fix":
       return reason.count === 1 ? "a must-fix review finding upheld" : `${reason.count} must-fix review findings upheld`;
+    case "defect":
+      return reason.count === 1 ? "a blocking defect the verifier found" : `${reason.count} blocking defects the verifier found`;
     case "ci":
       return `CI failed on #${reason.number}`;
     default:

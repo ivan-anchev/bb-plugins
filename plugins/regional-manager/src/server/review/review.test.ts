@@ -14,7 +14,7 @@ import type { Verdict } from "../../model/verdict/verdict.ts";
 import { memoryStorage } from "../memory-storage.ts";
 import { MIGRATIONS } from "../store/migrations.ts";
 import { failWrites } from "../store/test-store.ts";
-import { coordinating, HEAD, isRefusal, levels, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
+import { ANCHOR_RULE_TEXT, coordinating, HEAD, isRefusal, levels, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
 
 const a1 = agentIdSchema.parse("a1");
 const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
@@ -35,7 +35,7 @@ const FINDINGS = [
 function shownPassing(stored: Verdict, settlement: object) {
   if (stored.state !== "returned") return assert.fail("not returned");
   const criteria = PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence }));
-  return { state: "returned", verifierThreadId: stored.verifierThreadId, headSha: HEAD, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 }, criteria, findings: [], sameModel: false, settlement };
+  return { state: "returned", verifierThreadId: stored.verifierThreadId, headSha: HEAD, checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 }, criteria, findings: [], blocking: [], sameModel: false, settlement };
 }
 
 /** What a round's verdict says it judged: its outcome, its criteria's results and its fix round (its step's time and status are the feed's, feed.test.ts). */
@@ -144,7 +144,7 @@ test("a reviewer is a hidden, read-only child of the agent in its environment, a
   assert.doesNotMatch(prompt, /trust me|Retries land with backoff/);
 });
 
-test("the reviewer's first message, its role's rules and issue_review's instructions each state the five anchors, that the brief is the issue's brief text, and that CREW.md says what to look for while the rule alone says what blocks", async () => {
+test("the reviewer's first message, its role's rules and issue_review's instructions each state the four blocking anchors, list principle violations and contrived-setup bugs as should-fix, and say CREW.md says what to look for while the rule alone says what blocks", async () => {
   const { kit, reviewer, handOff } = await withAgent();
   await handOff();
   const tool = kit.tools().find(({ name }) => name === "issue_review") ?? assert.fail("no issue_review");
@@ -153,21 +153,16 @@ test("the reviewer's first message, its role's rules and issue_review's instruct
     "role's rules": kit.configurationFor(reviewer(), {}).instructions ?? assert.fail("no rules"),
     "issue_review's instructions": tool.instructions ?? assert.fail("no instructions"),
   };
-  assert.match(places["first message"], /Report each finding at the severity CREW\.md gives it, a must-fix that breaks none of the five included: the verifier anchors or downgrades it, never you\./);
-  assert.match(places["role's rules"], /report each finding at the severity it gives, a must-fix that breaks none of the five below included/);
+  assert.match(places["first message"], /Report each finding at the severity CREW\.md gives it: the verifier anchors or downgrades a must-fix, never you\. For a must-fix, say in its claim which anchor it meets, with the normal-use steps that reach it when it is a bug, or that it meets none\./);
+  assert.match(places["role's rules"], /report each finding at the severity it gives\. The anchor rule alone says what blocks/);
   assert.match(
     JSON.stringify(z.toJSONSchema(tool.parameters)),
-    /must-fix: the severity CREW\.md gives a finding\. Report it as must-fix even when it breaks none of the five things below, and say in the claim which it breaks, or that it breaks none: the verifier anchors or downgrades it, never you\./,
-    "issue_review's severity field keeps a CREW.md must-fix a must-fix",
+    /should-fix: worth fixing, but never blocking: a principle or REVIEW\.md violation, a missing test, unclear text, or a bug that needs a contrived setup\./,
+    "issue_review's severity field names what is should-fix",
   );
   for (const [place, text] of Object.entries(places)) {
     assert.match(text, /CREW\.md says what to look for[^\n]*(this|the anchor|The anchor) rule alone says what blocks/, place);
-    assert.ok(
-      text.includes(
-        "A must-fix blocks the work only when it breaks one of five things: a done-criterion, the issue's brief, a recorded decision, safety (data loss, a crash or a security hole), or existing behaviour, as a regression. The brief is the issue's brief text: a CREW.md or REVIEW.md rule blocks only when the brief or a done-criterion names it. Work that follows a recorded decision is never a finding.",
-      ),
-      place,
-    );
+    for (const claim of Object.values(ANCHOR_RULE_TEXT)) assert.ok(text.includes(claim), `${place}: ${claim}`);
   }
 });
 
@@ -313,7 +308,7 @@ test("the verifier's brief lists the review's findings; its verdict triages each
   assert.match(await catchUp(), /the verifier anchored 1, downgraded 0, confirmed 0 and rejected 1\. The ones that held went back to the agent with the failed verdict\./);
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.triage, [
-    { ...FINDINGS[0], origin: "new", result: "anchored", anchor: "criterion", reason: triage[0]?.reason },
+    { ...FINDINGS[0], origin: "new", result: "anchored", anchor: "criterion", steps: null, reason: triage[0]?.reason },
     { ...FINDINGS[1], origin: "new", result: "rejected", reason: triage[1]?.reason },
   ]);
 });
@@ -340,7 +335,7 @@ test("a verdict that passes every criterion but anchors a must-fix finding fails
   assert.match(sent, /^## Verifier findings: a must-fix review finding upheld, though every done-criterion passed\n/);
   assert.match(
     sent,
-    /### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: Anchored, as it breaks the issue's brief\. It never caps: 20 failures wait 17 minutes\.$/m,
+    /### Must-fix review findings the verifier upheld\n\nEach of these fails the verdict on its own, whatever the done-criteria say\.\n\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\. It never caps: 20 failures wait 17 minutes\.$/m,
   );
   assert.match(
     sent,
@@ -357,7 +352,7 @@ test("a verdict that passes every criterion but anchors a must-fix finding fails
   assert.match(update, /handed off: done, failed verification, a must-fix review finding upheld, findings sent back to it\n/);
   assert.match(update, /Failed verification: a must-fix review finding upheld\. 2 of 2 criteria passed/);
   assert.match(update, /the verifier anchored 1, downgraded 1, confirmed 0 and rejected 1\. The ones that held went back to the agent with the failed verdict\./);
-  assert.match(update, /\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps[^\n]*\n {2}Anchored, as it breaks the issue's brief: It never caps: 20 failures wait 17 minutes\.\n- `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\.\n {2}Rejected: Taste\./);
+  assert.match(update, /\n- `src\/retry\.ts:42` \(must-fix\): The backoff never caps[^\n]*\n {2}Anchored, as it breaks a requirement the issue's brief states explicitly: It never caps: 20 failures wait 17 minutes\.\n- `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\.\n {2}Rejected: Taste\./);
 
   const { round, body } = await opened();
   assert.deepEqual(judged(round), { outcome: { kind: "fail", by: "must-fix" }, results: ["pass", "pass"], fixRound: { round: 1, delivery: "sent" } }, "its round names the anchored must-fix finding as what failed it");
@@ -368,12 +363,17 @@ test("a verdict that fails on a must-fix finding while CI is still to come says 
   const { check, handOff, reported, returned, catchUp } = await withAgent();
   await handOff({ ...DONE, prUrl: "https://github.com/acme/webhooks/pull/7" });
   await reported([FINDINGS[0]]);
-  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "safety", reason: "It never caps." }] });
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "safety", steps: "1. Point a webhook at a dead endpoint.\n2. It retries forever, filling the queue.", reason: "It never caps." }] });
   await settled();
 
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.settlement, { kind: "sent-back", round: 1, ci: { kind: "not-checked", reason: "CI hadn't finished when the verdict failed" } });
-  assert.match(await catchUp(), /Failed verification: a must-fix review finding upheld\. 2 of 2 criteria passed[^\n]*CI: not checked \(CI hadn't finished when the verdict failed\)\./);
+  const update = await catchUp();
+  assert.match(update, /Failed verification: a must-fix review finding upheld\. 2 of 2 criteria passed[^\n]*CI: not checked \(CI hadn't finished when the verdict failed\)\./);
+  assert.ok(
+    update.includes("\n  Anchored, as a safety bug: one hit in normal use that loses data or does something irreversible, reached by: 1. Point a webhook at a dead endpoint. 2. It retries forever, filling the queue.: It never caps."),
+    "a bug's anchor carries its normal-use steps, on the finding's own line",
+  );
 });
 
 test("confirmed should-fix and nit findings, a downgraded must-fix and a rejected one leave a verdict that passes every criterion passed, and nothing goes back to the agent", async () => {
@@ -706,7 +706,7 @@ test("a verdict that fails only on anchored must-fix findings after the agent's 
 
   await handOff();
   await reported([FINDINGS[0], { file: "src/retry.ts", line: 9, severity: "must-fix", claim: "A 4xx is retried." }]);
-  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "criterion", reason: "It never caps." }, { finding: 2, result: "anchored", anchor: "regression", reason: "A 404 is retried 5 times." }] });
+  await returned({ ...PASSES, triage: [{ finding: 1, result: "anchored", anchor: "criterion", reason: "It never caps." }, { finding: 2, result: "anchored", anchor: "regression", steps: "1. Deliver to an endpoint that answers 404.\n2. Watch the log: it retries 5 times.", reason: "A 404 is retried 5 times." }] });
   await settled();
 
   assert.equal(kit.delivered(agentThreadId).length, sentBefore, "its one fix round is spent: nothing more goes back");

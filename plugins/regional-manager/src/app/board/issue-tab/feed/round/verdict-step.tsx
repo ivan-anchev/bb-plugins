@@ -3,6 +3,7 @@
 // evidence, and the passes folded; or, with no verdict returned, where its check stands.
 import type { Round } from "../../../../../model/feed/round.ts";
 import { checkoutText, NOT_CLEAN, NOT_CLEAN_TREE, worktreeText } from "../../../../../model/verdict/checkout.ts";
+import { defectText } from "../../../../../model/verdict/review.ts";
 import { ciVerdictOf, failedCheckout, type CriterionResult, type ShownVerdict } from "../../../../../model/verdict/verdict.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { RESULT_WORD, ResultGlyph } from "./result-glyph.tsx";
@@ -83,6 +84,16 @@ function Returned({ verdict, judged }: { verdict: ReturnedVerdict; judged: Judge
             ))}
           </ol>
         </details>
+      )}
+      {verdict.blocking.length > 0 && (
+        <section className="rmi-reported">
+          <h4>Blocking defects the verifier found</h4>
+          <ul>
+            {verdict.blocking.map((defect, i) => (
+              <li key={i}>{defectText(defect)}</li>
+            ))}
+          </ul>
+        </section>
       )}
       {verdict.findings.length > 0 && (
         <section className="rmi-reported">

@@ -10,7 +10,7 @@ import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
-import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, failsVerification, levels, settled, startedAgent, textOf, threadIn, toCap, withoutLinks, type SendFailure } from "../test-harness.ts";
+import { ANCHOR_RULE_TEXT, bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, failsVerification, levels, settled, startedAgent, textOf, threadIn, toCap, withoutLinks, type SendFailure } from "../test-harness.ts";
 import { takeUnread } from "../store/test-store.ts";
 
 const a1 = agentIdSchema.parse("a1");
@@ -477,6 +477,7 @@ test("an issue opened on the board sends of each verdict only what the board sho
     checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 },
     criteria: FAILS.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
     findings: [],
+    blocking: [],
     sameModel: false,
     settlement,
   });
@@ -551,6 +552,7 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
       checkout: { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 },
       criteria: PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
       findings: [],
+      blocking: [],
       sameModel: false,
       settlement: { kind: "checked", ci: { kind: "none" } },
     },
@@ -1062,9 +1064,9 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
   const downgraded = { finding: 3, result: "downgraded", to: "nit", reason: "A name breaks none of the five." };
   const nit = { finding: 4, result: "confirmed", reason: "Row padding is 8px, this is 6px." };
   const refusals = [
-    [[{ finding: 1, result: "confirmed", reason: anchored.reason }, confirmed, downgraded, nit], "finding 1, the must-fix at `src/retry.ts:42`: a must-fix that holds is anchored, naming what it breaks, or downgraded, never just confirmed."],
+    [[{ finding: 1, result: "confirmed", reason: anchored.reason }, confirmed, downgraded, nit], "finding 1, the must-fix at `src/retry.ts:42`: a must-fix that holds is anchored, naming the anchor it meets, or downgraded, never just confirmed."],
     [[anchored, { ...confirmed, result: "anchored", anchor: "criterion" }, downgraded, nit], "finding 2, the should-fix at `src/retry.ts:7`: only a must-fix is anchored, and this one is a should-fix: confirm it, or downgrade it to nit."],
-    [[anchored, confirmed, { ...downgraded, to: "must-fix" }, nit], "finding 3, the must-fix at `src/retry.ts`: a downgrade goes lower than the reviewer's must-fix, and must-fix isn't: anchor it, naming what it breaks, or downgrade it to should-fix or nit."],
+    [[anchored, confirmed, { ...downgraded, to: "must-fix" }, nit], "finding 3, the must-fix at `src/retry.ts`: a downgrade goes lower than the reviewer's must-fix, and must-fix isn't: anchor it, naming the anchor it meets, or downgrade it to should-fix or nit."],
     [[anchored, confirmed, downgraded, { ...nit, result: "anchored", anchor: "brief" }], "finding 4, the nit at `src/retry.css:2`: only a must-fix is anchored, and this one is a nit: confirm it."],
     [[anchored, confirmed, downgraded, { ...nit, result: "downgraded", to: "nit" }], "finding 4, the nit at `src/retry.css:2`: a downgrade goes lower than the reviewer's nit, and nit isn't: confirm it."],
   ] as const;
@@ -1081,13 +1083,138 @@ test("issue_verdict refuses a must-fix triaged confirmed, an anchored should-fix
   await kit.idle(verifierThreadId, "Verdict returned.");
   const stored = check().verdict;
   assert.deepEqual(stored.state === "returned" && stored.triage, [
-    { ...findings[0], origin: "new", result: "anchored", anchor: "brief", reason: anchored.reason },
+    { ...findings[0], origin: "new", result: "anchored", anchor: "brief", steps: null, reason: anchored.reason },
     { ...findings[1], origin: "new", result: "confirmed", reason: confirmed.reason },
     { ...findings[2], origin: "new", result: "downgraded", to: "nit", reason: downgraded.reason },
     { ...findings[3], origin: "new", result: "confirmed", reason: nit.reason },
   ]);
   const tool = kit.tools().find(({ name }) => name === "issue_verdict") ?? assert.fail("no issue_verdict");
-  assert.match(JSON.stringify(z.toJSONSchema(tool.parameters)), /For a downgrade, why the lower severity fits; for a downgraded must-fix, that it breaks none of the five, or that it is marked missed\./, "a downgrade's reason asks why the lower severity fits, and the no-anchor reason only of a must-fix");
+  assert.match(JSON.stringify(z.toJSONSchema(tool.parameters)), /For a downgrade, why the lower severity fits; for a downgraded must-fix, that it meets no anchor, as a principle violation or a bug that needs a contrived setup, or that it is marked missed\./, "a downgrade's reason asks why the lower severity fits, and the no-anchor reason only of a must-fix");
+});
+
+test("issue_verdict refuses a bug anchored without the normal-use steps that reach it; a principle violation and a contrived race downgraded to should-fix leave a verdict that passes every criterion Verified, with nothing sent back", async () => {
+  const { kit, agentThreadId, row, check, verifier, handOff } = await withAgent();
+  kit.reviewers.reportAtOnce = false;
+  const findings = [
+    { file: "src/server/store/store.ts", line: 88, severity: "must-fix", claim: "REVIEW.md: the handoff writes its report and its row with no test that fails one write. Meets no anchor." },
+    { file: "src/retry.ts", line: 12, severity: "must-fix", claim: "A read held mid-await while a second handoff lands sends the findings twice. A bug." },
+  ];
+  await handOff();
+  const review = check().review;
+  const reviewer = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
+  await kit.call("issue_review", { findings }, reviewer);
+  await kit.idle(reviewer, "Reviewed.");
+  await settled();
+  const principle = { finding: 1, result: "downgraded", to: "should-fix", reason: "It holds, and a REVIEW.md rule meets no anchor: the brief doesn't state it." };
+
+  const race = { finding: 2, result: "anchored", anchor: "bug", reason: "It holds when the read is held by hand." };
+  const refused = await kit.call("issue_verdict", { ...PASSES, triage: [principle, race] }, verifier());
+  assert.ok(isRefusal(refused));
+  assert.equal(
+    textOf(refused),
+    "issue_verdict is refused and nothing was saved: finding 2, the must-fix at `src/retry.ts:12`: a bug anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: downgrade it to should-fix.",
+  );
+  assert.equal(check().verdict.state, "running", "nothing was saved");
+  const briefWithSteps = { finding: 1, result: "anchored", anchor: "brief", steps: "1. Read the brief.", reason: "The brief names REVIEW.md." };
+  assert.equal(
+    textOf(await kit.call("issue_verdict", { ...PASSES, triage: [briefWithSteps, race] }, verifier())),
+    "issue_verdict is refused and nothing was saved: finding 1, the must-fix at `src/server/store/store.ts:88`: a brief anchor takes no steps, as it is no bug: pass steps as null.",
+    "only a bug's anchor carries steps",
+  );
+
+  // The refusal's way forward, followed: the race needs a read held mid-await, a contrived setup.
+  const verifierThreadId = verifier();
+  const downgraded = { finding: 2, result: "downgraded", to: "should-fix", reason: "Reached only with a read held mid-await by hand: a contrived setup." };
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, triage: [principle, downgraded] }, verifierThreadId)), /^Verdict recorded: 2 of 2 criteria passed/);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+  const passed = await row();
+  assert.deepEqual([passed.lane, passed.headline], ["in-review", "✓ Verified: Retries land with backoff"]);
+  assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "a passed verdict sends nothing back");
+});
+
+test("a defect the verifier finds itself outside the criteria, hit in normal use, fails a verdict whose criteria all pass: refused without its steps, it goes back to the agent, and the manager and the board name it; findings beside it never fail it", async () => {
+  const { kit, threadId, agentThreadId, opened, verifier, handOff } = await withAgent();
+  await handOff();
+  const crash = { claim: "`node cli.js` crashes on an empty counts.json, which a first run leaves when it is killed.", anchor: "bug" };
+  const advisory = ["A read held mid-await by hand loses an update (should-fix: a contrived setup)."];
+
+  const refused = await kit.call("issue_verdict", { ...PASSES, findings: advisory, blocking: [crash] }, verifier());
+  assert.equal(
+    textOf(refused),
+    "issue_verdict is refused and nothing was saved: blocking defect 1: a bug anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: report it in findings instead.",
+  );
+  const steps = "1. Run node cli.js signup and kill it while it saves. 2. Run node cli.js signup again: it throws SyntaxError.";
+  const verifierThreadId = verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, findings: advisory, blocking: [{ ...crash, steps }] }, verifierThreadId)), /^Verdict recorded: 2 of 2 criteria passed/);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+
+  const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
+  assert.match(sent, /^## Verifier findings: a blocking defect the verifier found, though every done-criterion passed\n/);
+  assert.ok(
+    sent.includes(`### Blocking defects the verifier found\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n- Blocks, as a bug hit in normal use, reached by: ${steps}: ${crash.claim}`),
+    "the agent gets the defect with its anchor and steps",
+  );
+  assert.ok(sent.includes(`### Other findings\n\n- ${advisory[0]}`), "the advisory finding goes beside it");
+  const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(catchUp, /Failed verification: a blocking defect the verifier found\. 2 of 2 criteria passed/);
+  assert.ok(catchUp.includes(`Blocking defects it found, each failing the verdict:\n- Blocks, as a bug hit in normal use, reached by: ${steps}: ${crash.claim}`));
+  const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");
+  assert.deepEqual(round.round.verdict?.outcome, { kind: "fail", by: "defect" });
+  const shown = round.body.verdict;
+  assert.deepEqual(shown?.state === "returned" && [shown.blocking, shown.findings], [[{ ...crash, steps }], advisory], "the board lists the defect and the finding");
+});
+
+test("blocking defects an earlier verifier found carry into the next round's first message: each needs an answer, and one still blocking fails that round though its own verifier found nothing new", async () => {
+  const { kit, threadId, verifier, handOff, check } = await withAgent();
+  await handOff();
+  const crash = { claim: "`node cli.js` crashes on an empty counts.json.", anchor: "bug", steps: "1. Kill a run mid-save. 2. Run node cli.js signup: SyntaxError." } as const;
+  const lost = { claim: "A count written twice in one run is lost.", anchor: "regression", steps: "1. Run node cli.js a b. 2. counts.json holds only b." } as const;
+  const first = verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, blocking: [crash, lost] }, first)), /^Verdict recorded/);
+  await kit.idle(first, "Verdict returned.");
+  await settled();
+
+  // Round 2 fixes only the lost count.
+  await handOff();
+  const second = verifier();
+  const prompt = kit.thread(second).spawnedWith.prompt ?? assert.fail("no prompt");
+  assert.ok(
+    prompt.includes(`## Blocking defects an earlier verifier found\n\nAn earlier verifier of this issue found these itself, outside the done-criteria, and each failed its verdict. Run each one's steps again on this commit, and answer every one in issue_verdict's earlierDefects by its number: fixed only when its steps no longer reach it. One you answer not fixed stays blocking, and fails this verdict too.\n\n1. Blocks, as a bug hit in normal use, reached by: ${crash.steps}: ${crash.claim}\n2. Blocks, as a regression: existing behaviour that breaks in normal use, reached by: ${lost.steps}: ${lost.claim}`),
+    "the second verifier's first message lists both defects, numbered, with their anchors and steps",
+  );
+  const skipped = await kit.call("issue_verdict", PASSES, second);
+  assert.ok(isRefusal(skipped));
+  assert.equal(textOf(skipped), "issue_verdict is refused and nothing was saved: answer every earlier blocking defect; missing 1, 2 of 1 to 2.", "no verdict passes that leaves an earlier defect unanswered");
+  assert.equal(check().verdict.state, "running", "nothing was saved");
+
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, earlierDefects: [{ defect: 1, fixed: false }, { defect: 2, fixed: true }] }, second)), /^Verdict recorded: 2 of 2 criteria passed/);
+  await kit.idle(second, "Verdict returned.");
+  await settled();
+  const round2 = check().verdict;
+  assert.deepEqual(round2.state === "returned" && round2.blocking, [crash], "the crash stays blocking; the fixed one is gone");
+  assert.match(textOf(await kit.call("crew_catch_up", {}, threadId)), /Failed verification: a blocking defect the verifier found\. 2 of 2 criteria passed/, "round 2 does not pass");
+});
+
+test("a verifier's first message and its role's rules state the four blocking anchors, list principle violations and contrived-setup bugs as should-fix, and say a creed-qa defect outside the criteria fails the verdict only when it meets a blocking anchor", async () => {
+  const { kit, verifier, handOff } = await withAgent();
+  await handOff();
+  const tool = kit.tools().find(({ name }) => name === "issue_verdict") ?? assert.fail("no issue_verdict");
+  const places = {
+    "first message": kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt"),
+    "role's rules": kit.configurationFor(verifier(), {}).instructions ?? assert.fail("no rules"),
+    "issue_verdict's instructions": tool.instructions ?? assert.fail("no instructions"),
+  };
+  for (const [place, text] of Object.entries(places)) {
+    for (const claim of Object.values(ANCHOR_RULE_TEXT)) assert.ok(text.includes(claim), `${place}: ${claim}`);
+  }
+  const qa =
+    "When you run creed-qa, a defect its checks of the surrounding code turn up outside the done-criteria fails the verdict only if it meets a blocking anchor. Report one that does in issue_verdict's blocking, with its anchor and, for a bug, the normal-use steps that reach it: each one fails the verdict, as a failed criterion does. Report every other one in findings, with the severity CREW.md's Reviewers section gives it: findings never fail the verdict. A defect that meets no anchor, as a REVIEW.md or principle violation or a bug that needs a contrived setup, never fails a criterion and never makes your verdict NOT_VERIFIED.";
+  assert.ok(places["first message"].includes(`## What blocks\n\nThe anchor rule: ${ANCHOR_RULE_TEXT.anchors}`), "a review with no findings still gives the anchor rule");
+  assert.ok(places["first message"].includes(qa), "first message: the creed-qa rule");
+  assert.ok(places["role's rules"].includes(qa), "role's rules: the creed-qa rule");
+  assert.match(places["issue_verdict's instructions"], /name it as its anchor: bug, safety or regression for a bug hit in normal use, with steps, the normal-use steps that reach it; criterion, brief or decision/);
 });
 
 test("a verifier's first message holds the issue's decisions under a Decisions heading, a recorded one and an answered question, never the plugin's own answered question at the cap; one with no decisions has no such heading", async () => {
@@ -1224,12 +1351,12 @@ test("after a failed round, a round whose review was missed gives its verifier t
   await kit.idle(verifierThreadId, "Verdict returned.");
   await settled();
   const stored = verdict();
-  assert.deepEqual(stored.state === "returned" && stored.triage, [{ ...CAP_FINDING, origin: "unfixed", result: "anchored", anchor: "brief", reason: "retry.ts:42 still doubles with no ceiling." }]);
+  assert.deepEqual(stored.state === "returned" && stored.triage, [{ ...CAP_FINDING, origin: "unfixed", result: "anchored", anchor: "brief", steps: null, reason: "retry.ts:42 still doubles with no ceiling." }]);
   const issue = await row();
   assert.deepEqual([issue.lane, issue.headline], ["needs-you", "✗ A must-fix review finding upheld after its fix round: Retries land with backoff"], "every criterion passed, and the unfixed blocker failed it");
   assert.match(
     textOf(await kit.call("crew_catch_up", {}, threadId)),
-    /Review: no review was had, as its reviewer ended its turn without reporting, so the verifier triaged the 1 earlier blocking finding as unfixed; the verifier anchored 1, downgraded 0, confirmed 0 and rejected 0\. None of them went to the agent\.\n\n- `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n {2}Anchored, as it breaks the issue's brief: retry\.ts:42 still doubles with no ceiling\./,
+    /Review: no review was had, as its reviewer ended its turn without reporting, so the verifier triaged the 1 earlier blocking finding as unfixed; the verifier anchored 1, downgraded 0, confirmed 0 and rejected 0\. None of them went to the agent\.\n\n- `src\/retry\.ts:42` \(must-fix, unfixed\): The backoff never caps\.\n {2}Anchored, as it breaks a requirement the issue's brief states explicitly: retry\.ts:42 still doubles with no ceiling\./,
     "the manager reads the unfixed finding that failed it",
   );
   const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");
