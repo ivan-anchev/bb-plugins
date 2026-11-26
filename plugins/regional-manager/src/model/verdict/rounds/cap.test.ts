@@ -8,7 +8,8 @@ import { issueIdSchema } from "../../issue/issue.ts";
 import { coordinatorIdSchema } from "../../role.ts";
 import { checkIdSchema, type Check, type CheckSubject } from "../check.ts";
 import type { Verdict } from "../verdict.ts";
-import { capAsks, capLock, countedFailures, mayGoBack, stillWaits, type CapQuestion } from "./cap.ts";
+import { capChoice } from "./cap-choice.ts";
+import { capAsks, capLock, countedFailures, mayGoBack, mergeAnswer, stillWaits, type CapQuestion } from "./cap.ts";
 
 const ISSUE = issueIdSchema.parse("WEB-1");
 const A1 = agentIdSchema.parse("a1");
@@ -57,7 +58,7 @@ function handed(verdict: Verdict, subject: CheckSubject = handoffBy(A1)): { chec
   };
 }
 
-/** A cap question about WEB-1, asked at `cap`, answered or not. */
+/** A cap question about WEB-1, asked at `cap` with the options questions had before the merge choice, answered "One more round" or not. */
 const question = (n: number, cap: number, answered: boolean): CapQuestion => ({
   id: decisionIdSchema.parse(`d${n}`),
   issueId: ISSUE,
@@ -66,6 +67,13 @@ const question = (n: number, cap: number, answered: boolean): CapQuestion => ({
   askedAt: 6_000,
   answer: answered ? { text: "One more round", at: 7_000 } : null,
   cap,
+});
+
+/** A cap question about WEB-1, asked at `cap` with today's options, answered `text`. */
+const answeredAs = (n: number, cap: number, text: string): CapQuestion => ({
+  ...question(n, cap, false),
+  options: ["Merge as is, file follow-ups", "One more round", "Cancel the issue"],
+  answer: { text, at: 7_000 },
 });
 
 /** What settling one more failure on this record asks at (null: nothing), as the settle transaction counts it, the failure included. */
@@ -128,5 +136,23 @@ test("an unanswered cap question locks its issue only while the issue is open, a
     [stillWaits(open, false), stillWaits(open, true), stillWaits(asked, true), stillWaits(question(1, 3, true), false)],
     [true, false, true, false],
     "a cap question leaves once its issue closes; the manager's own question on a closed issue still waits; an answered one never does",
+  );
+});
+
+test("while the latest answer at the cap is to merge as is, no failure goes back to an agent and none asks again; any other latest answer allows one more round", () => {
+  const merged = [question(1, 3, true), answeredAs(2, 4, "Merge as is, file follow-ups")];
+  assert.equal(mergeAnswer(merged)?.id, "d2");
+  assert.deepEqual([capAsks(5, merged), mayGoBack(5, merged)], [null, false], "the 5th failure goes back to nobody and asks nothing");
+  for (const text of ["One more round", "Cancel the issue", "Ship it after lunch"]) {
+    const other = [answeredAs(1, 3, text)];
+    assert.equal(mergeAnswer(other), null, `"${text}" is no merge answer`);
+    assert.deepEqual([capAsks(4, other), mayGoBack(4, other)], [4, false], `after "${text}", the next failure asks again`);
+  }
+});
+
+test("an answer reads as the choice of the option it names, a question's from before the merge choice included; an answer in the user's own words makes none", () => {
+  assert.deepEqual(
+    ["Merge as is, file follow-ups", "One more round", "Cancel the issue", "Cancel it", "Merge it, but fix the cap first"].map(capChoice),
+    ["merge", "round", "cancel", "cancel", null],
   );
 });

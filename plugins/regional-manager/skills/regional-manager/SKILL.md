@@ -594,16 +594,32 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     rule included, and a handover doesn't reset the count. At the 3rd, and at
     each later failure the user hasn't allowed, nothing goes back to any
     agent, and the plugin itself asks the user on the board, leading with
-    why the last round failed, with One more round and Cancel it. The issue
+    why the last round failed, then naming its three options: Merge as is,
+    file follow-ups; One more round; and Cancel the issue. The issue
     is under Needs you, its reason led by "At its cap of 3 failed
     verifications". While that question is open, `agent_start` and
     `agent_message` on the issue are refused, naming it: wait for the
     answer, reply on the issue with `issue_comment` pointing the user at its
     id, or stop the agent with `agent_stop` and cancel the issue (not while a
-    sub-issue of it is open, which a cancel refuses). Any answer
-    allows one more round: read their words for what they want. A failure
-    made while the question is open (a person woke the agent) goes back to
-    nobody and asks nothing. Once the issue closes, as by a merge or a
+    sub-issue of it is open, which a cancel refuses). Their answer reaches
+    you with what it leaves to do:
+    - **Merge as is, file follow-ups**: the issue gets no further round.
+      Have its pull request merged without another review or verifier: ask
+      its agent with `agent_message` to merge it, or start one with
+      `agent_start` to do only that (both are allowed again); never merge it
+      yourself. File the last verdict's open must-fix findings, which the
+      update lists, as one follow-up issue with `issue_create`. While that
+      answer stands, a failed done handoff on the issue goes back to no
+      agent and asks the user nothing. The merge makes the issue Done.
+    - **One more round**: tell the agent what to fix, or hand the issue to a
+      fresh agent. If that round fails too, the plugin asks again.
+    - **Cancel the issue**: stop its agent with `agent_stop`, close its pull
+      request with `gh pr close`, and cancel it with `issue_update`.
+    - An answer in their own words allows one more round: read it for what
+      they want.
+
+    A failure made while the question is open (a person woke the agent)
+    goes back to nobody and asks nothing. Once the issue closes, as by a merge or a
     cancel, the question leaves Needs you and takes no answer, and a failure
     you read after that says the issue is closed and needs nothing from you.
     When a failure at the cap was being sent back as the plugin stopped, its
@@ -645,6 +661,9 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   on are checked, or reach you unverified.
 - **your reminder r1: <note>**: do what the note says. The update says
   whether it repeats; the reminders list in the catch-up says when next.
+- **the user answered d1, the plugin's question at BBP-2's cap: <their
+  choice>**: the update in `crew_catch_up` says what that choice leaves you
+  to do, as under failed verification above.
 - **the user answered your question d1: <question>**: the update in
   `crew_catch_up` has their answer, an option you offered or their own words.
   Act on it. A question naming an issue already keeps its answer among that

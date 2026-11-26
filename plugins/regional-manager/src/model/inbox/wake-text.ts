@@ -4,12 +4,13 @@
 // handoff's status, a memory file's name) and text the regional manager itself wrote: the titles it
 // gave its issues, the notes of its reminders and the questions it asked the user. Anything an agent
 // or a verifier wrote, and the user's answers, are read through crew_catch_up, as a tool result,
-// never here.
+// never here; but for an answer at an issue's cap, the choice it makes, in the plugin's own words.
 import type { AgentId } from "../agent/agent.ts";
 import type { Decision, DecisionId } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
 import type { Check, CheckId } from "../verdict/check.ts";
-import { askedQuestion, askedText, type CapQuestion } from "../verdict/rounds/cap.ts";
+import { capChoice, choicePhrase } from "../verdict/rounds/cap-choice.ts";
+import { askedQuestion, askedText, isCapQuestion, type CapQuestion } from "../verdict/rounds/cap.ts";
 import { PR_CHANGE_WORDS } from "../verdict/pr.ts";
 import { ciVerdictOf, failurePhrases, failureReasons, mayHaveReachedAgent, outcome } from "../verdict/verdict.ts";
 import { DISPLAY_NAME } from "../../name.ts";
@@ -34,7 +35,7 @@ function line(event: InboxEvent, lookups: Lookups): string {
   if (event.kind === "memory-edited") return `The user edited ${event.file}`;
   if (event.kind === "verification-toggled") return `The user turned verification of done handoffs ${event.verify ? "on" : "off"}`;
   if (event.kind === "reminder") return `Your reminder ${event.reminderId}: ${event.note}`;
-  if (event.kind === "decision-answered") return `The user answered your question ${event.decisionId}: ${askedOf(decision(event.decisionId)).question}`;
+  if (event.kind === "decision-answered") return answeredLine(askedOf(decision(event.decisionId)));
   if (event.kind === "coordinator-edited-files") return `Your own environment has ${filesText(event.fileCount)} changed after your turn: hand the change to an agent`;
   if (event.kind === "coordinator-tree-clean") return "Your own environment is clean again";
   if (event.kind === "checked") return checkedLine(checkedOf(check(event.checkId)), event.asked === null ? null : askedQuestion(decision(event.asked)), titles);
@@ -61,6 +62,18 @@ function line(event: InboxEvent, lookups: Lookups): string {
     default:
       return event satisfies never;
   }
+}
+
+/**
+ * A question the user answered: the manager's own, with its words; one the plugin asked at an
+ * issue's cap, with the choice the answer makes (cap-choice.ts), or as the question when they
+ * answered in their own words, which only crew_catch_up gives.
+ */
+function answeredLine(decision: Decision): string {
+  const asWords = `The user answered your question ${decision.id}: ${decision.question}`;
+  if (!isCapQuestion(decision) || decision.answer === null) return asWords;
+  const choice = capChoice(decision.answer.text);
+  return choice === null ? asWords : `The user answered ${decision.id}, the plugin's question at ${decision.issueId}'s cap: ${choicePhrase(choice)}`;
 }
 
 /** An issue as a wake line names it: its id, its title, and the agent the line is about, as `BBP-1 "Add retries" (a1)`. */

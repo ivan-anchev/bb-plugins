@@ -556,7 +556,7 @@ test("while a cap question is open, agent_start and agent_message on its issue a
   const { kit, threadId, coordinatorId, start } = await filed();
   const a2Thread = await toCap(kit, threadId, coordinatorId, "WEB-1", threadIn(textOf(await start())));
   const moves = "Wait for their answer, which crew_catch_up brings you; or reply on WEB-1 with issue_comment, pointing them at d1 on the board; or stop its agent with agent_stop and cancel WEB-1 with issue_update.";
-  const why = `WEB-1 failed verification 3 times, so the plugin asked the user (d1) whether it gets another round, and until they answer no agent starts on WEB-1 and none is messaged on it. ${moves}`;
+  const why = `WEB-1 failed verification 3 times, so the plugin asked the user (d1) whether to merge it as is, give it another round or cancel it, and until they answer no agent starts on WEB-1 and none is messaged on it. ${moves}`;
   const sentBefore = kit.sent().length;
 
   const message = await kit.call("agent_message", { agent: "a2", text: "Try once more." }, threadId);
@@ -611,7 +611,7 @@ test("a capped issue that became a parent is refused by its cap first, with no c
   assert.match(textOf(await kit.call("agent_stop", { agent: "a2" }, threadId)), /^a2 is stopped; it no longer holds WEB-1\./);
   assert.ok(!isRefusal(await kit.call("issue_create", { ...ISSUE, title: "Split out the retry budget", parent: "WEB-1" }, threadId)));
   const why =
-    "WEB-1 failed verification 3 times, so the plugin asked the user (d1) whether it gets another round, and until they answer no agent starts on WEB-1 and none is messaged on it. Wait for their answer, which crew_catch_up brings you; or reply on WEB-1 with issue_comment, pointing them at d1 on the board. WEB-1 can't be canceled while sub-issues of it are open.";
+    "WEB-1 failed verification 3 times, so the plugin asked the user (d1) whether to merge it as is, give it another round or cancel it, and until they answer no agent starts on WEB-1 and none is messaged on it. Wait for their answer, which crew_catch_up brings you; or reply on WEB-1 with issue_comment, pointing them at d1 on the board. WEB-1 can't be canceled while sub-issues of it are open.";
 
   assert.equal(textOf(await start()), `agent_start is refused: ${why}`);
   assert.equal(textOf(await kit.call("agent_message", { agent: "a2", text: "Try once more." }, threadId)), `agent_message is refused and nothing was sent: ${why}`);

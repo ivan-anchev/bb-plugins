@@ -498,8 +498,8 @@ test("a third failure that settles asks the user at the cap in the same transact
   const [asked = assert.fail("nothing asked"), ...more] = store.decisions(MANAGER);
   assert.deepEqual(more, [], "exactly one question");
   const { question, ...rest } = asked;
-  assert.deepEqual(rest, { id: "d1", issueId: issue.id, options: ["One more round", "Cancel it"], askedAt: 4_600, answer: null, cap: 3 });
-  assert.match(question, /^✗ Failed verification, 0 of 1 criteria passed\. WEB-1 has failed verification 3 times, its cap: /, "it leads with the failure's reason and how many criteria passed, then the count");
+  assert.deepEqual(rest, { id: "d1", issueId: issue.id, options: ["Merge as is, file follow-ups", "One more round", "Cancel the issue"], askedAt: 4_600, answer: null, cap: 3 });
+  assert.match(question, /^✗ Failed verification, 0 of 1 criteria passed\. WEB-1 has failed verification 3 times, its cap, /, "it leads with the failure's reason and how many criteria passed, then the count");
   assert.ok(question.length < 500);
 });
 

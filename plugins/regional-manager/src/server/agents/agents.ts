@@ -615,7 +615,7 @@ export function createAgents({ bb, store, spawner, inbox, memory, turns, prs, pl
 function capRefusal(view: IssueView): string | null {
   const { issue: { id }, capLock } = view;
   if (capLock === null) return null;
-  return `${id} failed verification ${capLock.cap} times, so the plugin asked the user (${capLock.id}) whether it gets another round, and until they answer no agent starts on ${id} and none is messaged on it. ${capMovesText(id, capLock.id, view)}`;
+  return `${id} failed verification ${capLock.cap} times, so the plugin asked the user (${capLock.id}) whether to merge it as is, give it another round or cancel it, and until they answer no agent starts on ${id} and none is messaged on it. ${capMovesText(id, capLock.id, view)}`;
 }
 
 function finalText(issue: Issue, view: IssueView): string | null {
