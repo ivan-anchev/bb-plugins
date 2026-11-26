@@ -6,7 +6,7 @@ import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
 import { ONE_LINE } from "../../model/one-line.ts";
-import { ANCHOR_RULE, anchorProblem, anchorSchema, numberedText, placeText, RECHECK_RULE, severitySchema, TITLE_CHARS, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, anchorProblem, anchorSchema, numberedText, placeText, RECHECK_RULE, severitySchema, MAX_FINDING_TITLE, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, SHOWS_CHARS, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
@@ -21,7 +21,7 @@ const lineSchema = (max: number, what: string) =>
   z.string().regex(ONE_LINE, "must be one line, with no line break").trim().min(1).max(max).describe(what);
 
 /** A title like a reviewer's, the feed's row for a defect or finding. */
-const titleSchema = lineSchema(TITLE_CHARS, `What goes wrong, as a user or agent meets it, in one line of at most ${TITLE_CHARS} characters (aim for 60). No fix, no severity words.`);
+const titleSchema = lineSchema(MAX_FINDING_TITLE, `What goes wrong, as a user or agent meets it, in one line of at most ${MAX_FINDING_TITLE} characters (aim for 60). No fix, no severity words.`);
 
 /** A bug anchor's steps, as issue_verdict takes them: at most six, one action each, each a line. */
 const stepsInputSchema = z

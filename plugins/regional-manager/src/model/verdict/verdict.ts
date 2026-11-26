@@ -6,7 +6,7 @@ import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
 import { headline } from "../one-line.ts";
 import type { Check, CheckSubject } from "./check.ts";
-import { blockingDefectSchema, holds, severitySchema, TITLE_CHARS, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
+import { blockingDefectSchema, holds, severitySchema, MAX_FINDING_TITLE, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
 import { checkoutProblems, checkoutSchema, NOT_CLEAN, type Checkout, type CheckoutRead } from "./checkout.ts";
 import { ciVerdictSchema, type Ci, type CiVerdict, type PrSnapshot } from "./pr.ts";
 
@@ -52,7 +52,7 @@ const verifierFindingSchema = z.union([verifierFindingShape, z.string().min(1).t
  */
 function legacyFinding(text: string): VerifierFinding {
   const named = /\b(must-fix|should-fix|nit)\b/i.exec(text)?.[1];
-  return { severity: named === undefined ? "should-fix" : severitySchema.parse(named.toLowerCase()), title: headline(text, TITLE_CHARS), detail: text };
+  return { severity: named === undefined ? "should-fix" : severitySchema.parse(named.toLowerCase()), title: headline(text, MAX_FINDING_TITLE), detail: text };
 }
 
 /** A verifier's own finding in a line, as catch-up, the agent's fix round and the follow-up give it: its title and severity, then its detail, the detail's later lines indented by `indent`. */

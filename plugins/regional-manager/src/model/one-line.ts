@@ -13,10 +13,12 @@ export function clipped(text: string, max: number): string {
 
 /**
  * A headline for text written before it had one, as a stored record's parse derives it once: its
- * first sentence (to the first full stop, question or exclamation mark before a space or a line
- * break, else its first line), cut to `max` characters (clipped).
+ * first sentence (to the first full stop, question or exclamation mark before a space or its end),
+ * cut to `max` characters (clipped). why its whitespace collapsed first: text wrapped
+ * mid-sentence keeps its whole first sentence, on one line.
  */
 export function headline(text: string, max: number): string {
-  const sentence = /^\s*(.+?[.!?])(?=\s|$)/u.exec(text)?.[1] ?? text.trim().split(/[\r\n\u2028\u2029]/)[0] ?? "";
-  return clipped(sentence, max);
+  const line = text.replaceAll(/\s+/g, " ").trim();
+  const end = line.search(/[.!?]( |$)/);
+  return clipped(end === -1 ? line : line.slice(0, end + 1), max);
 }

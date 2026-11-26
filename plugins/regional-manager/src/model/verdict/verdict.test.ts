@@ -137,7 +137,7 @@ test("a verdict stored before headlines parses once at the boundary: free-prose 
     sameModel: false,
   });
   assert.ok(stored.state === "returned");
-  assert.deepEqual(stored.criteria.map(({ shows }) => shows), ["$ npm test", "CI on #271 passed under Node 22."], "its first sentence, else its first line");
+  assert.deepEqual(stored.criteria.map(({ shows }) => shows), ["$ npm test # pass 13", "CI on #271 passed under Node 22."], "its first sentence, else the whole text on one line");
   assert.deepEqual(stored.findings, [
     { severity: "should-fix", title: "A read held mid-await loses an update.", detail: "A read held mid-await loses an update. Should-Fix: a contrived setup." },
     { severity: "nit", title: "Name the constant (nit).", detail: "Name the constant (nit)." },

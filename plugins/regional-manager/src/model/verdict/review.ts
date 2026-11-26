@@ -50,19 +50,7 @@ export type ReviewFinding = z.infer<typeof reviewFindingSchema>;
  */
 const storedFindingSchema = reviewFindingSchema
   .extend({ title: reviewFindingSchema.shape.title.optional() })
-  .transform(({ title, ...finding }): ReviewFinding => ({ ...finding, title: title ?? titleOf(finding.claim) }));
-
-/**
- * A claim's first sentence, cut to MAX_FINDING_TITLE with an ellipsis: the title of a finding
- * stored without one. why its whitespace collapsed first: a claim wrapped mid-sentence keeps its
- * whole first sentence, on one line.
- */
-function titleOf(claim: string): string {
-  const text = claim.trim().replace(/\s+/g, " ");
-  const end = text.search(/[.!?]( |$)/);
-  const sentence = end === -1 ? text : text.slice(0, end + 1);
-  return sentence.length <= MAX_FINDING_TITLE ? sentence : `${sentence.slice(0, MAX_FINDING_TITLE - 1).trimEnd()}…`;
-}
+  .transform(({ title, ...finding }): ReviewFinding => ({ ...finding, title: title ?? headline(finding.claim, MAX_FINDING_TITLE) }));
 
 /**
  * How many findings a reviewer reports at most, its own, in one review. why only its own: the
@@ -145,9 +133,6 @@ export const MISSED_RULE =
 export const RECHECK_RULE =
   "Recheck each by its anchor: for a bug, safety or regression anchor, rerun its steps here, fixed only when they no longer reach it; for a criterion, brief or decision anchor, which has no steps, recheck the requirement it names, fixed when the work now meets it or the current brief and decisions no longer require it.";
 
-/** How long a finding's title is at most, as the feed shows it on one row; the length a record stored before titles derives its own to (headline). */
-export const TITLE_CHARS = 80;
-
 /**
  * What a blocking anchor carries besides its name, as a stored triage or defect has it: for a bug,
  * the normal-use steps that reach it, in order; null for any other anchor (anchorProblem). why the
@@ -184,7 +169,7 @@ function legacySteps(line: string): string[] {
  */
 export const blockingDefectSchema = z
   .object({ title: z.string().min(1).optional(), claim: z.string().min(1), anchor: anchorSchema, steps: storedStepsSchema })
-  .transform(({ title, ...defect }) => ({ title: title ?? headline(defect.claim, TITLE_CHARS), ...defect }));
+  .transform(({ title, ...defect }) => ({ title: title ?? headline(defect.claim, MAX_FINDING_TITLE), ...defect }));
 export type BlockingDefect = z.output<typeof blockingDefectSchema>;
 
 /** A bug anchor's steps as one line, numbered: "1. … 2. …". */

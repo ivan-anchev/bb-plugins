@@ -1161,7 +1161,7 @@ test("issue_verdict refuses a criterion without shows or over 140 characters, a 
   await handOff();
   const review = check().review;
   const reviewer = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
-  await kit.call("issue_review", { findings: [{ file: "src/retry.ts", line: 42, severity: "must-fix", claim: "A dead endpoint is retried forever." }] }, reviewer);
+  await kit.call("issue_review", { findings: [{ title: "A dead endpoint is retried forever", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." }] }, reviewer);
   await kit.idle(reviewer, "Reviewed.");
   await settled();
 
