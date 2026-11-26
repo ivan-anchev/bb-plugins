@@ -7,6 +7,7 @@ import { createElement } from "react";
 import type { IssueRow } from "../../../../contract.ts";
 import { agentIdSchema } from "../../../../model/agent/agent.ts";
 import { issueIdSchema } from "../../../../model/issue/issue.ts";
+import { coordinatorIdSchema } from "../../../../model/role.ts";
 
 // A row's hover card on the board, driven as the user drives it: keyboard focus opens it at once and
 // Escape closes it wherever focus is; the pointer resting on a row opens it after half a second, and
@@ -28,6 +29,7 @@ afterEach(() => {
 });
 
 const id = (raw: string) => issueIdSchema.parse(raw);
+const COORDINATOR = coordinatorIdSchema.parse("6f1c2b0e-8d4a-4c1e-9f3b-2a7d5e8c9b10");
 
 function issue(raw: string, fields: Partial<IssueRow>): IssueRow {
   return { id: id(raw), kind: "build", parentId: null, subIssues: null, blockedBy: [], blocks: [], title: `Issue ${raw}`, status: "todo", needsYou: null, headline: "Not started", agent: null, pr: null, ...fields };
@@ -45,7 +47,7 @@ const ISSUES: IssueRow[] = [
 ];
 
 function mount() {
-  const view = renderSlot({ component: IssueBoard }, { decisions: [], issues: ISSUES, decisionRow: () => null }, { experimental_panel: { openTab: () => true } });
+  const view = renderSlot({ component: IssueBoard }, { decisions: [], issues: ISSUES, coordinatorId: COORDINATOR }, { experimental_panel: { openTab: () => true } });
   const row = (raw: string, lane: RegExp) => within(view.getByRole("region", { name: lane })).getByRole("button", { name: new RegExp(`^${raw}:`) });
   /** The card shown, as its lines read; null: none. */
   const card = () => {
@@ -125,7 +127,7 @@ test("a focused row that leaves the board takes its card's hold with it: hoverin
   assert.equal(card()?.on, "WEB-4");
 
   const without = ISSUES.filter(({ id: issueId }) => issueId !== "WEB-4").map((row) => (row.id === "WEB-5" ? { ...row, blockedBy: [] } : row));
-  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: without, decisionRow: () => null }));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: without, coordinatorId: COORDINATOR }));
   assert.equal(card(), null, "its card went with it");
 
   mock.timers.enable({ apis: ["setTimeout"] });
@@ -143,7 +145,7 @@ test("a hovered row that moves lanes leaves its card behind for good: blurring a
   assert.equal(card()?.on, "WEB-5");
 
   const moved = ISSUES.map((issue) => (issue.id === "WEB-5" ? { ...issue, status: "in-progress" as const } : issue));
-  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: moved, decisionRow: () => null }));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: moved, coordinatorId: COORDINATOR }));
   act(() => row("WEB-4", /^In review/).focus());
   act(() => row("WEB-4", /^In review/).blur());
   act(() => mock.timers.tick(5_000));
@@ -156,7 +158,7 @@ test("a focused row that moves lanes keeps its card in its new lane", async () =
   assert.equal(card()?.on, "WEB-5");
 
   const moved = ISSUES.map((issue) => (issue.id === "WEB-5" ? { ...issue, status: "in-progress" as const } : issue));
-  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: moved, decisionRow: () => null }));
+  view.lifecycle.rerender(createElement(IssueBoard, { decisions: [], issues: moved, coordinatorId: COORDINATOR }));
   await act(async () => {});
   assert.ok(document.activeElement === row("WEB-5", /^In progress/), "focus landed on the row in its new lane");
   assert.equal(card()?.on, "WEB-5", "and its card with it");
@@ -209,7 +211,7 @@ function laidOut({ panel, row, height }: { panel: { top: number; bottom: number 
 
 /** The board inside a panel that scrolls, as the Board tab mounts it. */
 function mountInPanel() {
-  const Panel = () => createElement("div", { "data-panel": "", style: { overflowY: "auto" } }, createElement(IssueBoard, { decisions: [], issues: ISSUES, decisionRow: () => null }));
+  const Panel = () => createElement("div", { "data-panel": "", style: { overflowY: "auto" } }, createElement(IssueBoard, { decisions: [], issues: ISSUES, coordinatorId: COORDINATOR }));
   const view = renderSlot({ component: Panel }, {}, { experimental_panel: { openTab: () => true } });
   const shown = () => {
     const card = view.container.querySelector<HTMLElement>(".rmi-card");

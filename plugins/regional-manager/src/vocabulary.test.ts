@@ -22,8 +22,8 @@ const PLUGIN = join(import.meta.dirname, "..");
 
 const MEANING = `"crew" means all of one regional manager's agents. One delegated thread is an agent (a1, agent_start); one piece of work is an issue (WEB-1, issue_create).`;
 
-/** The tools about every agent at once: catching up, memory, reminders, asking the user, ending a quiet turn. The only tools named crew_. */
-const FLEET_TOOLS = new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn"]);
+/** The tools about every agent at once: catching up, memory, reminders, asking the user and recording an answer they gave in the thread, ending a quiet turn. The only tools named crew_. */
+const FLEET_TOOLS = new Set(["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_record_answer", "crew_end_turn"]);
 
 /** What each retired single-thread tool and skill became, keyed by the part of its old name after "crew". */
 const RETIRED_NAMES = new Map([
@@ -44,7 +44,7 @@ test(`no retired single-thread name, no "crew" given one thread's things, and no
   assert.equal(misuses.length, 0, `${MEANING} Rename these:\n${misuses.join("\n")}`);
 });
 
-test("the only tools named crew_ are the six about every agent at once", async () => {
+test("the only tools named crew_ are the seven about every agent at once", async () => {
   const loaded = harness().load(plugin);
   const { coordinatorId } = coordinatorContract.createCoordinator.output.parse(await loaded.callRpc("createCoordinator", { profile: profileNamed("Webhooks") }));
   const { threadId } = coordinatorContract.startCoordinator.output.parse(await loaded.callRpc("startCoordinator", { coordinatorId, request: newThreadRequest("Migrate the webhook service") }));

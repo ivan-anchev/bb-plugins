@@ -1,6 +1,6 @@
 // The board of one regional manager: its verification switch, a warning while its own working
-// tree has changed files and why PR status is unavailable when it is, then the decisions waiting
-// for the user and its issues in lanes (issue/issue-board.tsx), each issue opening in its own tab
+// tree has changed files and why PR status is unavailable when it is, then its issues in lanes
+// (issue/issue-board.tsx), with any question on no issue under Needs you, each issue opening in its own tab
 // beside the Board (issue-tab/issue-tab.tsx). Its thread's Board tab draws it, in the scrolling root
 // the tab gives it (board-tab.tsx).
 import { experimental_Icon as Icon, experimental_useRpcMutation, experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
@@ -14,7 +14,6 @@ import { ReadFailure } from "../ui/read-failure.tsx";
 import { Switch } from "../ui/switch.tsx";
 import { shortTime } from "../ui/time.ts";
 import { useAnsweredDraftsDropped } from "./answer-draft.ts";
-import { DecisionRow } from "./decision-row.tsx";
 import { IssueBoard } from "./issue/issue-board.tsx";
 
 export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
@@ -31,11 +30,7 @@ export function Board({ coordinatorId }: { coordinatorId: CoordinatorId }) {
           <VerifySwitch coordinatorId={coordinatorId} verify={data.verify} />
           {data.ownEdits !== null && <OwnEdits {...data.ownEdits} />}
           {data.prUnavailable !== null && <PrUnavailable {...data.prUnavailable} />}
-          <IssueBoard
-            decisions={data.decisions}
-            issues={data.issues}
-            decisionRow={(decision) => <DecisionRow coordinatorId={coordinatorId} decision={decision} />}
-          />
+          <IssueBoard coordinatorId={coordinatorId} decisions={data.decisions} issues={data.issues} />
           {data.issues.length === 0 && <p className="px-2 text-sm text-muted-foreground">No issues yet.</p>}
         </>
       )}

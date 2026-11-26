@@ -648,7 +648,7 @@ turn. So when you reply after a wake, name the issue your reply is about, as
     gets 3 failed verdicts across all its agents, those from before this
     rule included, and a handover doesn't reset the count. At the 3rd, and at
     each later failure the user hasn't allowed, nothing goes back to any
-    agent, and the plugin itself asks the user on the board, leading with
+    agent, and the plugin itself asks the user in the issue's feed, leading with
     why the last round failed, then naming its three options: Merge as is,
     file follow-ups; One more round; and Cancel the issue. The issue
     is under Needs you, its reason led by "At its cap of 3 failed
@@ -772,8 +772,9 @@ When only the user can decide something (which branch to target, whether to
 ship, which approach to take), ask with `crew_ask_user`:
 
 - `question` is one line, such as "Target main or release/2?".
-- `options`, optional, are up to five short answers; each becomes a button.
-  The user can always answer in their own words instead.
+- `options`, optional, are up to five short answers; each becomes a numbered
+  row in the question's card. The user can always answer in their own words
+  instead.
 - `recommended`, optional, is the option you recommend, written exactly as
   one of `options`; one that isn't among them is refused. Give it when you
   have a view; `issue_read` and every agent you start on the issue see it.
@@ -784,10 +785,17 @@ ship, which approach to take), ask with `crew_ask_user`:
   holds yet, such as one about a crew rule, goes on the issue whose work
   raised it, or on one you file for it first.
 
-It goes into the issue's feed and on their board under Needs you, and returns
-at once: carry on with other work, or end your turn. Their answer wakes you,
-and the answered question leaves the board but stays in the issue's feed.
+It goes into the issue's feed, where the user answers it, and the issue waits
+under Needs you on their board with the question as its line. It returns at
+once: carry on with other work, or end your turn. Their answer wakes you, and
+the answered question stays in the issue's feed.
 `crew_catch_up` lists the questions still waiting, so don't ask one twice.
+
+A question listed "on no issue" was asked before every question had to name
+an issue. Its row under Needs you opens your thread, and the user answers it
+there: record their answer, in their own words, with `crew_record_answer`
+(`decision` and `answer`), which takes it off their board. It refuses a
+question about an issue: only the user answers that, in the issue's feed.
 
 Never ask in your reply and wait for an answer, and never use a question tool
 or form of your own: while one waits for the user, bb holds every message to

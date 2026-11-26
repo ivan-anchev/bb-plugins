@@ -1,7 +1,7 @@
 // An answer to an open decision that the user typed and hasn't sent, in its question's card in the
-// issue's feed or on the Board's row. The browser keeps it, by regional manager and decision, so bb
-// redrawing either (a resize across its mobile breakpoint remounts it) or a reload loses none of it,
-// and both show the same words, until the board reads the decision answered, by it or from elsewhere.
+// issue's feed. The browser keeps it, by regional manager and decision, so bb redrawing the card (a
+// resize across its mobile breakpoint remounts it) or a reload loses none of it, until the board
+// reads the decision answered, from the card or from another window.
 import { useEffect, type KeyboardEvent } from "react";
 import { z } from "zod";
 import { MAX_ANSWER_CHARS, type Decision, type DecisionId } from "../../model/decision.ts";
@@ -10,8 +10,7 @@ import { useHoldEscape } from "../ui/hold-escape.ts";
 import { useStored, writeStored } from "../ui/stored.ts";
 
 /**
- * The answer typed to one decision, from wherever its field shows (the question's card in its issue's
- * feed, the Board's row): what is typed, how to change it, and the field's keys, where Enter sends it
+ * The answer typed to one decision, in its question's card in its issue's feed: what is typed, how to change it, and the field's keys, where Enter sends it
  * and Shift+Enter breaks the line, as in bb's composer. While it holds text, Esc never leaves the page
  * and loses it.
  */
@@ -38,8 +37,8 @@ export const answerDraftSchema = z.string().min(1).max(MAX_ANSWER_CHARS);
 
 /**
  * Drops what the browser keeps for each decision the board reads answered: an answered decision takes
- * no answer again. why here, not in the decision's row: answered, the row leaves the board, and a
- * failed send must keep what was typed, so only the board's read tells it landed.
+ * no answer again. why from the board's read, not the card: a failed send must keep what was typed,
+ * so only a read tells it landed, and the board reads every decision while no issue's tab may be open.
  */
 export function useAnsweredDraftsDropped(coordinatorId: CoordinatorId, decisions: readonly Decision[]): void {
   // why an effect: the drafts live in the browser's storage, outside React.

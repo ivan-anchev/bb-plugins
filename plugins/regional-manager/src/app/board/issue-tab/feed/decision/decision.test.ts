@@ -173,3 +173,24 @@ test("an answered card draws its rows as the open card did: none chosen for an a
   await answered("Eight");
   await waitFor(() => assert.deepEqual(drawn(card()), NONE_CHOSEN));
 });
+
+test("the words kept for a question are its regional manager's and its own: another decision's, or another manager's d9, fill none in", async () => {
+  const another = "0d3b8f5e-1c2a-4e6f-8a9b-7c5d3e1f2a40";
+  localStorage.setItem(`coordinator-decision-answer:${COORDINATOR.id}:d1`, JSON.stringify("For d1"));
+  localStorage.setItem(`coordinator-decision-answer:${another}:d9`, JSON.stringify("For another manager's d9"));
+  const { field } = await openQuestion();
+  assert.equal(field().value, "");
+  fireEvent.change(field(), { target: { value: "Four" } });
+  fireEvent.change(field(), { target: { value: "" } });
+  assert.equal(localStorage.getItem(`coordinator-decision-answer:${COORDINATOR.id}:d9`), null, "an emptied field keeps none");
+});
+
+test("what the browser holds for a question that isn't an answer fills nothing in", async () => {
+  const key = `coordinator-decision-answer:${COORDINATOR.id}:d9`;
+  for (const stored of ["{not json", JSON.stringify(""), JSON.stringify(42), JSON.stringify("x".repeat(5_001))]) {
+    localStorage.setItem(key, stored);
+    const { field } = await openQuestion();
+    assert.equal(field().value, "", stored);
+    cleanup();
+  }
+});

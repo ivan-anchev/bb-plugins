@@ -10,7 +10,7 @@ import type { Check, CheckId, FinalCheck } from "../verdict/check.ts";
 import { prRef, type CiVerdict, type PrSnapshot } from "../verdict/pr.ts";
 import { reviewPending } from "../verdict/review.ts";
 import type { Decision } from "../decision.ts";
-import { capLock, capQuestionsOf, capText, stillWaits, type CapQuestion } from "../verdict/rounds/cap.ts";
+import { capLock, capQuestionsOf, capText, questionWaitedOn, type CapQuestion } from "../verdict/rounds/cap.ts";
 import { ciVerdictOf, failureHeadline, mayHaveReachedAgent, outcome, type Verdict } from "../verdict/verdict.ts";
 import type { Issue, IssueId } from "./issue.ts";
 import { isVerified, PIPELINES, shipsCode, type Kind, type Stage } from "./kind.ts";
@@ -129,13 +129,11 @@ export function issueViews(all: readonly IssueFacts[]): IssueView[] {
  * plugin's question there locks it (`lock`, null: nothing does). why after placement: every place an
  * open issue can take, its own reason or a decision's, then reads the cap by one rule.
  */
-const ledByCap = (lock: CapQuestion | null, needsYou: string | null): string | null => (lock === null ? needsYou : `${capText(lock.cap)}: ${needsYou ?? ASKED}`);
+const ledByCap = (lock: CapQuestion | null, needsYou: string | null): string | null => (lock === null ? needsYou : `${capText(lock.cap)}: ${needsYou ?? lock.question}`);
 
 /** The open issues that depend on `id` themselves, in the order filed. why not through a parent: a parent's dependent is the parent, as issue_read's relations name it. */
 const openDependents = (placed: readonly Placed[], id: IssueId): Related[] =>
   placed.filter(({ issue, status }) => issue.dependsOn.includes(id) && !isClosed(status)).map(({ issue, status }) => ({ id: issue.id, status }));
-
-const ASKED = "Waiting on your answer to its decision";
 
 /** How the manager's two closing acts place an issue. */
 const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepted: { status: "done", headline: "Accepted" } } as const;
@@ -143,33 +141,41 @@ const CLOSED = { canceled: { status: "canceled", headline: "Canceled" }, accepte
 function issueView({ issue, holder, ended, accepted, pr, openDecisions, verifierAsks }: IssueFacts): Placed {
   const base = { issue, holder: holder?.agent ?? null, pr, placing: null, subIssues: null, finalCheckDue: null };
   const final = finalOf(issue, pr);
-  if (final !== null) return { ...base, ...final, needsYou: null };
+  if (final !== null) return { ...base, ...final, needsYou: waitingOn({ status: final.status, needsYou: null }, openDecisions) };
   // why before its agents: the manager took the work as it is, whatever its agent's thread does next or whichever agent holds the issue, until a newer handoff replaces it.
   if (accepted !== null) {
     const placed = byHandoff(issue.kind, accepted, { pr, verifierAsks, fixRounds: 0 });
-    return { ...base, ...placed, placing: accepted.check, needsYou: waitingOn(issue, placed, openDecisions), closedBy: handedOffClose(placed, accepted) };
+    return { ...base, ...placed, placing: accepted.check, needsYou: waitingOn(placed, openDecisions), closedBy: handedOffClose(placed, accepted) };
   }
   if (holder !== null) {
     const placed = held(issue.kind, holder, { pr, verifierAsks });
-    return { ...base, ...placed, needsYou: waitingOn(issue, placed, openDecisions), closedBy: handedOffClose(placed, holder.current) };
+    return { ...base, ...placed, needsYou: waitingOn(placed, openDecisions), closedBy: handedOffClose(placed, holder.current) };
   }
   const left = ended?.left ?? null;
   const after = left === null ? null : placedByLeft(issue.kind, left, { pr, verifierAsks });
-  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: waitingOn(issue, after, openDecisions), closedBy: handedOffClose(after, left) };
-  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: waitingOn(issue, { status: issue.rest, needsYou: null }, openDecisions), closedBy: null };
+  if (left !== null && after !== null) return { ...base, ...after, placing: left.check, needsYou: waitingOn(after, openDecisions), closedBy: handedOffClose(after, left) };
+  return { ...base, status: issue.rest, headline: restingHeadline(issue.rest, ended?.how ?? null), needsYou: waitingOn({ status: issue.rest, needsYou: null }, openDecisions), closedBy: null };
 }
 
 /**
- * Why the issue, placed at `status`, waits on the user: its own reason (`needsYou`, null: none),
- * else a decision of `open` that still waits (rounds/cap.ts stillWaits, so never a cap question
- * once the issue is closed). null: it doesn't wait. The cap leads it after placement (ledByCap);
- * why the headline never carries the cap: only the Needs you reason leads with it.
+ * Why the issue, placed at `status`, waits on the user: the regional manager's question it waits on
+ * (askedNow), in its own words, which say what the user decides; else its own reason (`needsYou`,
+ * null: none), such as its agent blocked, which its headline still says; else the plugin's question
+ * at its cap. null: it doesn't wait. A closed issue waits only on the manager's questions
+ * (rounds/cap.ts stillWaits). The cap leads it after placement (ledByCap); why the headline never
+ * carries the cap: only the Needs you reason leads with it.
  */
-const waitingOn = (issue: Issue, { status, needsYou }: Pick<Placing, "status" | "needsYou">, open: readonly Decision[]): string | null =>
-  asksNow(issue, status, open) ? (needsYou ?? ASKED) : needsYou;
+const waitingOn = ({ status, needsYou }: Pick<Placing, "status" | "needsYou">, open: readonly Decision[]): string | null => {
+  const asked = askedNow(status, open);
+  return asked === null || (asked.cap !== null && needsYou !== null) ? needsYou : asked.question;
+};
 
-/** Whether a decision of `open` still waits for the user on the issue placed at `status` (rounds/cap.ts stillWaits). */
-const asksNow = (issue: Issue, status: IssueStatus, open: readonly Decision[]): boolean => open.some((decision) => stillWaits(decision, isClosed(status)));
+/** The question of `open` the issue placed at `status` waits on the user for (rounds/cap.ts questionWaitedOn); null: none. */
+const askedNow = (status: IssueStatus, open: readonly Decision[]): Decision | null =>
+  questionWaitedOn(
+    [...open].sort((a, b) => a.askedAt - b.askedAt),
+    isClosed(status),
+  );
 
 /** The cap question of `open` that locks the issue placed at `status` (rounds/cap.ts capLock). */
 const lockAt = (open: readonly Decision[], { issue, status }: Pick<Placed, "issue" | "status">): CapQuestion | null => capLock(capQuestionsOf(open, issue.id), isClosed(status));
@@ -194,18 +200,18 @@ function parentView({ issue, openDecisions, finalCheck, verifierAsks }: IssueFac
   const counted = subIssues.filter(({ status }) => status !== "canceled");
   const base = { issue, holder: null, pr: null, placing: null, subIssues: { done: done.length, total: counted.length }, finalCheckDue: null };
   const final = finalOf(issue, null);
-  if (final !== null) return { ...base, ...final, needsYou: null };
+  if (final !== null) return { ...base, ...final, needsYou: waitingOn({ status: final.status, needsYou: null }, openDecisions) };
   if (done.length > 0 && subIssues.every(({ status }) => isClosed(status))) {
     if (!isVerified(issue.kind)) return { ...base, status: "done", headline: null, needsYou: null, closedBy: closedBySubIssues(subIssues) };
     const builds = done.filter(({ issue: sub }) => shipsCode(sub.kind));
     const unmerged = builds.filter(({ pr }) => pr?.state !== "merged").map(({ issue: sub }) => sub.id);
     if (unmerged.length > 0) return { ...base, ...flagged(`${unmerged.join(", ")} ${unmerged.length === 1 ? "isn't" : "aren't"} merged, so ${issue.id}'s work isn't all on the default branch`), closedBy: null };
     const placed = finalCheckPlaces(issue, finalCheck, builds.map(({ issue: sub }) => sub.id), verifierAsks);
-    return { ...base, ...placed, needsYou: waitingOn(issue, placed, openDecisions) };
+    return { ...base, ...placed, needsYou: waitingOn(placed, openDecisions) };
   }
   const started = subIssues.some(({ status }) => status !== "backlog" && status !== "todo" && status !== "canceled");
   const status = started ? "in-progress" : subIssues.some(({ status }) => status === "todo") ? "todo" : issue.rest;
-  return { ...base, status, headline: asksNow(issue, status, openDecisions) ? ASKED : null, needsYou: waitingOn(issue, { status, needsYou: null }, openDecisions), closedBy: null };
+  return { ...base, status, headline: askedNow(status, openDecisions)?.question ?? null, needsYou: waitingOn({ status, needsYou: null }, openDecisions), closedBy: null };
 }
 
 /**

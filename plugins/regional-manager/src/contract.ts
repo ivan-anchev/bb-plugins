@@ -262,8 +262,8 @@ export const privateContract = defineRpcContract({
     output: z.object({}),
   },
   /**
-   * What sits under Needs you on each of these regional managers' boards, counted from what its
-   * board reads. Each one reads again when its board does.
+   * How many issues sit under Needs you on each of these regional managers' boards, counted from
+   * what its board reads. Each one reads again when its board does.
    */
   needsYou: {
     input: z.object({ keys: z.array(coordinatorIdSchema) }),

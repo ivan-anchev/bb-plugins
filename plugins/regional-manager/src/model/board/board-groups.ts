@@ -1,7 +1,7 @@
-// A board's lanes: the decisions waiting for the user and the issues, each issue placed by its
-// status, or under Needs you while it waits on the user, and each sub-issue under its parent. The
-// board draws them, crew_catch_up lists them and the panel's badge counts their Needs you, so the
-// three never disagree.
+// A board's lanes: the issues, each placed by its status, or under Needs you while it waits on the
+// user, and each sub-issue under its parent; and, under Needs you, the questions asked before every
+// question had to name an issue. The board draws them, crew_catch_up lists them and the panel's badge
+// counts the issues under Needs you, so the three never disagree.
 import { z } from "zod";
 import { isOpen, type Decision, type OpenDecision } from "../decision.ts";
 import type { IssueId } from "../issue/issue.ts";
@@ -44,33 +44,36 @@ function byLane<Row extends { lane: Lane }>(rows: readonly Row[]): { lane: Lane;
   });
 }
 
+/** A question waiting for the user that names no issue: one asked before crew_ask_user required one. No new one can be asked. */
+export type UnfiledQuestion = OpenDecision & { issueId: null };
+const isUnfiled = (decision: OpenDecision): decision is UnfiledQuestion => decision.issueId === null;
+
 /**
- * A row on the board: a decision waiting for the user's answer; a top-level issue, with its
+ * A row on the board: a question waiting for the user that names no issue; a top-level issue, with its
  * sub-issues under it but its canceled ones (none: it has none), whatever their own lanes; a
  * sub-issue that waits on the user, listed flat under Needs you as well as under its parent; or a
  * canceled sub-issue, which lives under Canceled, apart from its parent.
  */
 export type BoardItem<Issue> =
-  | { kind: "decision"; lane: "needs-you"; decision: OpenDecision }
+  | { kind: "unfiled-question"; lane: "needs-you"; decision: UnfiledQuestion }
   | { kind: "issue"; lane: Lane; issue: Issue; subIssues: Issue[] }
   | { kind: "flagged-sub-issue"; lane: "needs-you"; issue: Issue }
   | { kind: "canceled-sub-issue"; lane: "canceled"; issue: Issue };
 
 /**
- * The board's rows in each lane that has any, in the board's order. A decision sits under Needs you
- * until the user answers it (or, for a cap question, its issue closes; see waitingDecisions), first there,
- * and then leaves the board: it stays among its issue's
- * decisions (issue-detail.tsx, issue_read). A top-level issue sits in its own lane, its sub-issues
- * under it; a flagged issue sits under Needs you only, never also in its status's lane, and a
- * flagged sub-issue under its parent too. A canceled sub-issue sits under Canceled, never under its
- * parent: nothing of it is left to do or was done, so its parent doesn't count it either
- * (status.ts parentView).
+ * The board's rows in each lane that has any, in the board's order. A question that names no issue
+ * sits under Needs you, first there, until the user answers it, then leaves the board. A question
+ * that names an issue has no row of its own: it flags its issue, whose Needs you line says it
+ * (status.ts waitingOn). A top-level issue sits in its own lane, its sub-issues under it; a flagged
+ * issue sits under Needs you only, never also in its status's lane, and a flagged sub-issue under
+ * its parent too. A canceled sub-issue sits under Canceled, never under its parent: nothing of it
+ * is left to do or was done, so its parent doesn't count it either (status.ts parentView).
  * A lane counts its rows: its sub-issues are counted by their parent.
  */
 export function boardGroups<Issue extends Nested>(decisions: readonly Decision[], issues: readonly Issue[]): { lane: Lane; rows: BoardItem<Issue>[] }[] {
   const subIssuesOf = (id: IssueId): Issue[] => issues.filter(({ parentId, status }) => parentId === id && status !== "canceled");
   return byLane<BoardItem<Issue>>([
-    ...waitingDecisions(decisions, issues).map((decision) => ({ kind: "decision", lane: "needs-you", decision }) as const),
+    ...waitingDecisions(decisions, issues).filter(isUnfiled).map((decision) => ({ kind: "unfiled-question", lane: "needs-you", decision }) as const),
     ...issues.flatMap((issue): BoardItem<Issue>[] => {
       if (issue.parentId === null) return [{ kind: "issue", lane: laneOf(issue), issue, subIssues: subIssuesOf(issue.id) }];
       return [
@@ -81,11 +84,11 @@ export function boardGroups<Issue extends Nested>(decisions: readonly Decision[]
   ]);
 }
 
-/** What waits for the user on one board: how many of its decisions and its issues sit under Needs you. */
-export const needsYouSchema = z.object({ decisions: z.number().int().nonnegative(), issues: z.number().int().nonnegative() });
-export type NeedsYou = z.infer<typeof needsYouSchema>;
+/**
+ * How many issues wait for the user on one board: each issue under Needs you once, a flagged
+ * sub-issue as its own row. why issues only: a question on an issue flags that issue, so counting
+ * the question too would count it twice.
+ */
+export const needsYouSchema = z.number().int().nonnegative();
 
-/** What sits under Needs you: each decision waiting there (waitingDecisions) and each issue there once, a flagged sub-issue as its own row. */
-export function needsYou(decisions: readonly Decision[], issues: readonly (Placed & Pick<Nested, "id">)[]): NeedsYou {
-  return { decisions: waitingDecisions(decisions, issues).length, issues: issues.filter((issue) => laneOf(issue) === "needs-you").length };
-}
+export const needsYou = (issues: readonly Placed[]): number => issues.filter((issue) => laneOf(issue) === "needs-you").length;

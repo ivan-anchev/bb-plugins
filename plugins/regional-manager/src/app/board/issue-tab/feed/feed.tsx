@@ -1,17 +1,22 @@
 // An issue's feed in its tab: the criteria × rounds grid, then Activity, every entry in the order it
 // happened, each drawn by its kind, under a filter: All, Rounds or Discussion. The entries are the
 // issueFeed read's; the filter and which rounds are open are the reader's own choices, kept in state
-// across reads and never seeded from one.
+// across reads and never seeded from one. Asked from the issue's row under Needs you, it shows the
+// question that row names, focused on its first row (question-reveal.ts).
 import "./feed.css";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { IssueFeed, IssueRow } from "../../../../contract.ts";
 import { shownIn, type Entry, type Filter } from "../../../../model/feed/entry.ts";
 import type { Round, RoundKey } from "../../../../model/feed/round.ts";
 import { isVerified } from "../../../../model/issue/kind.ts";
+import { isClosed } from "../../../../model/issue/relations.ts";
+import type { IssueStatus } from "../../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import type { FeedAgents } from "./byline.tsx";
 import type { Comment, CommentId } from "../../../../model/feed/comment.ts";
 import type { DecisionId } from "../../../../model/decision.ts";
+import { questionWaitedOn } from "../../../../model/verdict/rounds/cap.ts";
+import { useQuestionReveal } from "../question-reveal.ts";
 import { CommentCard } from "./comment-card.tsx";
 import { CommentComposer } from "./comment-composer.tsx";
 import { DecisionCard } from "./decision/decision-card.tsx";
@@ -40,6 +45,17 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
   const isOpen = (round: Round): boolean => chosen.get(round.key) ?? round.key === latest;
   const toggle = (round: Round) => setChosen((now) => new Map(now).set(round.key, !isOpen(round)));
   const engage = (round: Round) => setChosen((now) => (now.has(round.key) ? now : new Map(now).set(round.key, true)));
+  const { asked, taken } = useQuestionReveal(coordinatorId, issue.id);
+  const revealing = asked ? waitedOn(feed.entries, issue.status) : null;
+  // why during render: a reveal asked while Rounds hides the questions shows them all.
+  if (revealing !== null && filter === "rounds") setFilter("all");
+  useEffect(
+    function takeRevealOfNone() {
+      // why an effect: the request lives outside React, in the app's memory the Board shares.
+      if (asked && revealing === null) taken();
+    },
+    [asked, taken, revealing],
+  );
   const shown = feed.entries.filter((entry) => shownIn(filter, entry));
   const comments = commentsIn(feed.entries);
   return (
@@ -64,7 +80,7 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
           <ol className="rmi-entries">
             {shown.map((entry, i) => (
               <li key={keyOf(entry, i)}>
-                <EntryView coordinatorId={coordinatorId} issue={issue} agents={feed.agents} comments={comments} entry={entry} isOpen={isOpen} onToggle={toggle} onEngage={engage} />
+                <EntryView coordinatorId={coordinatorId} issue={issue} agents={feed.agents} comments={comments} entry={entry} revealing={revealing} onRevealed={taken} isOpen={isOpen} onToggle={toggle} onEngage={engage} />
               </li>
             ))}
           </ol>
@@ -75,15 +91,27 @@ export function Feed({ coordinatorId, issue, feed }: FeedProps) {
   );
 }
 
-type EntryViewProps = { coordinatorId: CoordinatorId; issue: IssueRow; agents: FeedAgents; comments: ReadonlyMap<CommentId, Comment>; entry: Entry; isOpen(round: Round): boolean; onToggle(round: Round): void; onEngage(round: Round): void };
+type EntryViewProps = {
+  coordinatorId: CoordinatorId;
+  issue: IssueRow;
+  agents: FeedAgents;
+  comments: ReadonlyMap<CommentId, Comment>;
+  entry: Entry;
+  /** The question asked to be shown, null for none; `onRevealed` once it showed. */
+  revealing: DecisionId | null;
+  onRevealed(): void;
+  isOpen(round: Round): boolean;
+  onToggle(round: Round): void;
+  onEngage(round: Round): void;
+};
 
 /** One entry, by its kind: a round, a decision or a comment as its card, anything else as a quiet row. */
-function EntryView({ coordinatorId, issue, agents, comments, entry, isOpen, onToggle, onEngage }: EntryViewProps) {
+function EntryView({ coordinatorId, issue, agents, comments, entry, revealing, onRevealed, isOpen, onToggle, onEngage }: EntryViewProps) {
   switch (entry.kind) {
     case "round":
       return <RoundCard coordinatorId={coordinatorId} issueId={issue.id} round={entry.round} agents={agents} open={isOpen(entry.round)} onToggle={() => onToggle(entry.round)} onEngage={() => onEngage(entry.round)} />;
     case "decision":
-      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} status={issue.status} />;
+      return <DecisionCard coordinatorId={coordinatorId} decision={entry.decision} status={issue.status} onRevealed={entry.decision.kind === "asked" && entry.decision.id === revealing ? onRevealed : null} />;
     case "comment": {
       const { replyTo } = entry.comment;
       return <CommentCard coordinatorId={coordinatorId} entry={entry} answered={replyTo === null ? null : (comments.get(replyTo) ?? null)} agents={agents} />;
@@ -112,6 +140,13 @@ const commentsIn = (entries: readonly Entry[]): Map<CommentId, Comment> => new M
 /** Each cap question among the entries, by its id, with the count it was asked at (score.tsx CapCounts). */
 const capCountsIn = (entries: readonly Entry[]): ReadonlyMap<DecisionId, number> =>
   new Map(entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" && entry.decision.cap !== null ? [[entry.decision.id, entry.decision.cap] as const] : [])));
+
+/** The question among the entries the issue waits on the user for, as its row under Needs you names it (rounds/cap.ts questionWaitedOn); null: none. why in their order: the entries are in the order they happened. */
+const waitedOn = (entries: readonly Entry[], status: IssueStatus): DecisionId | null =>
+  questionWaitedOn(
+    entries.flatMap((entry) => (entry.kind === "decision" && entry.decision.kind === "asked" ? [entry.decision] : [])),
+    isClosed(status),
+  )?.id ?? null;
 
 const roundsIn = (entries: readonly Entry[]): Round[] => entries.flatMap((entry) => (entry.kind === "round" ? [entry.round] : []));
 

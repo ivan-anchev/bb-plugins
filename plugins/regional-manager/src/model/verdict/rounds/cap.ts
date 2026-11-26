@@ -71,6 +71,18 @@ export const capLock = (questions: readonly CapQuestion[], closed: boolean): Cap
  */
 export const stillWaits = ({ answer, cap }: Pick<Decision, "answer" | "cap">, issueClosed: boolean): boolean => answer === null && !(cap !== null && issueClosed);
 
+/**
+ * The question an issue waits on the user for, of its `questions` in the order asked: the first of
+ * the regional manager's own that still waits, else the plugin's at its cap while it waits
+ * (stillWaits); null when none does. why the manager's first: its words say what the user decides,
+ * where the cap's own reason already leads the issue's Needs you line. The board's line and the
+ * question its row opens the issue's tab at both read this, so the two never differ.
+ */
+export function questionWaitedOn<Question extends Pick<Decision, "answer" | "cap">>(questions: readonly Question[], issueClosed: boolean): Question | null {
+  const waiting = questions.filter((question) => stillWaits(question, issueClosed));
+  return waiting.find(({ cap }) => cap === null) ?? waiting[0] ?? null;
+}
+
 /** Whether a failure about to settle as the issue's `failed`th may go back to its agent: never while a cap question is unanswered or an answer to merge as is stands, nor when it asks one. */
 export const mayGoBack = (failed: number, questions: readonly CapQuestion[]): boolean =>
   unansweredCapQuestion(questions) === null && mergeAnswer(questions) === null && capAsks(failed, questions) === null;
@@ -95,7 +107,7 @@ const pastCap = (cap: number): string => (cap === MAX_FAILED_VERDICTS ? "its cap
  * that holds it, if one does.
  */
 export function capMovesText(issueId: IssueId, questionId: DecisionId, view: Pick<IssueView, "holder" | "subIssues"> | null): string {
-  const wait = `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} on the board`;
+  const wait = `Wait for their answer, which crew_catch_up brings you; or reply on ${issueId} with issue_comment, pointing them at ${questionId} in ${issueId}'s feed`;
   const openSubIssues = view?.subIssues != null && view.subIssues.done < view.subIssues.total;
   if (openSubIssues) return `${wait}. ${issueId} can't be canceled while sub-issues of it are open.`;
   return `${wait}; or ${view?.holder === null ? "" : "stop its agent with agent_stop and "}cancel ${issueId} with issue_update.`;

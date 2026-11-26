@@ -8,7 +8,7 @@ import { DISPLAY_NAME } from "../name.ts";
 import { coordinating, harness, HEAD, isRefusal, startedAgent, textOf } from "./test-harness.ts";
 import { finalCheckBrief } from "./verify/verifier-brief.ts";
 
-const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "issue_comment"];
+const COORDINATOR_TOOLS = ["crew_catch_up", "crew_memory_read", "crew_memory_write", "crew_remind", "crew_ask_user", "crew_record_answer", "crew_end_turn", "issue_create", "issue_update", "issue_read", "agent_start", "agent_message", "agent_stop", "issue_comment"];
 
 test("a regional manager is offered its tools, its skill and rules naming the product", async () => {
   const kit = harness();

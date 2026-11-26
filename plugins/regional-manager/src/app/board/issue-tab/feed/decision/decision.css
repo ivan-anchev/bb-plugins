@@ -159,3 +159,23 @@ button.rmi-q-row:focus-visible,
   padding-top: 8px;
   border-top: 1px solid var(--border);
 }
+
+/* Shown from its issue's row under Needs you (decision-card.tsx): a ring around the card that fades
+   out over 1.4s; under Reduce motion it holds still for that time, then goes. The ring sits outside
+   the card's own 1px edge, which it keeps. */
+.rmi-decision[data-revealed] {
+  animation: rmi-q-revealed 1.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes rmi-q-revealed {
+  from {
+    box-shadow: 0 0 0 1px var(--border), 0 0 0 3px var(--ring);
+  }
+  to {
+    box-shadow: 0 0 0 1px var(--border), 0 0 0 3px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rmi-decision[data-revealed] {
+    animation-timing-function: steps(1, jump-end);
+  }
+}

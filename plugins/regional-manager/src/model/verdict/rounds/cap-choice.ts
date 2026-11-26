@@ -12,7 +12,7 @@ import { findingText, type Triaged } from "../review.ts";
 const CHOICES = ["merge", "round", "cancel"] as const;
 type CapChoice = (typeof CHOICES)[number];
 
-/** Each choice's option, a button on the board; each says what it does. */
+/** Each choice's option, a numbered row in its question's card; each says what it does. */
 const OPTION: Record<CapChoice, string> = { merge: "Merge as is, file follow-ups", round: "One more round", cancel: "Cancel the issue" };
 
 /** The options a cap question offers, in the order the board shows them. */

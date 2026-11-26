@@ -3,7 +3,7 @@
 // its title fading out; then its pills and its pull request. Under Needs you alone a second line
 // carries what it waits on the user for, as that is what the user acts on; everywhere else the
 // headline is the hover card's (hover-card/), and the issue's own tab's. Pressing the row opens the
-// issue's tab beside the Board, or focuses it (issue-tab/open-issue.ts). Its pull request sits
+// issue's tab beside the Board, or focuses it (`onOpen`). Its pull request sits
 // outside the row's button, its own control, and so does a parent's count of its sub-issues, which
 // folds them (pills.tsx). A sub-issue's row away from its parent names the parent ahead of its id.
 import "./issue-row.css";
@@ -11,7 +11,6 @@ import type { HTMLAttributes, ReactNode, Ref } from "react";
 import type { IssueRow as Row } from "../../../../contract.ts";
 import type { IssueId } from "../../../../model/issue/issue.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../../model/issue/status.ts";
-import { useOpenIssue } from "../../issue-tab/open-issue.ts";
 import { PrBadge } from "../pr-badge.tsx";
 import { IssueGlyph } from "../status-glyph.tsx";
 import { FadingText } from "./fading-text.tsx";
@@ -26,14 +25,15 @@ type IssueRowProps = {
   ask: string | null;
   /** On a parent's row with sub-issues under it, what its count folds; else null. */
   toggle: SubIssueToggle | null;
+  /** Opens the issue's tab, as pressing the row does. */
+  onOpen(): void;
   /** The pointer and focus events that open and close its hover card, on the whole row. */
   hover: HTMLAttributes<HTMLDivElement>;
   /** Its hover card, while it shows. */
   children?: ReactNode;
 };
 
-export function IssueRow({ ref, issue, under, ask, toggle, hover, children }: IssueRowProps) {
-  const open = useOpenIssue();
+export function IssueRow({ ref, issue, under, ask, toggle, onOpen, hover, children }: IssueRowProps) {
   return (
     <div className="rmi-rowbox" data-asks={ask !== null || undefined} {...hover}>
       <button
@@ -43,7 +43,7 @@ export function IssueRow({ ref, issue, under, ask, toggle, hover, children }: Is
         data-strong={issue.needsYou !== null || undefined}
         data-quiet={QUIET.has(issue.status) || undefined}
         aria-label={spoken(issue)}
-        onClick={() => open(issue)}
+        onClick={onOpen}
       >
         <span className="rmi-slot"><IssueGlyph issue={issue} /></span>
         <span className="rmi-row-id">

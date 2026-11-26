@@ -39,10 +39,10 @@ export function boardText(reads: readonly IssueRead[] | { error: string }, plugi
   return ["## Board", ...lanes, readyLine(reads.map(({ view }) => view), pluginId)].join("\n\n");
 }
 
-/** A row's lines in its lane: an issue's, each of its sub-issues indented under it; a sub-issue apart from its parent names it. why no decision: catch-up lists them in their own section. */
+/** A row's lines in its lane: an issue's, each of its sub-issues indented under it; a sub-issue apart from its parent names it. why no question on no issue: catch-up lists every waiting question in its own section. */
 function laneLines(item: BoardItem<IssueRead>, pluginId: string): string[] {
   switch (item.kind) {
-    case "decision":
+    case "unfiled-question":
       return [];
     case "issue":
       return [rowLine(item.issue, pluginId), ...item.subIssues.map((sub) => `  ${rowLine(sub, pluginId)}`)];
@@ -59,8 +59,11 @@ function rowLine({ view, agent, threadId, branch }: IssueRead, pluginId: string)
   const held = view.subIssues !== null ? "parent" : agent === null ? "no agent" : `${agent.id}${agent.ended === null ? "" : ` (${agent.ended.how})`}, ${threadLink(threadId)}`;
   const link = linksOf(pluginId, issue);
   const under = issue.parentId === null ? "" : `, under ${link(issue.parentId)}`;
-  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${blockedText(view.blockedBy, "; blocked by ", link)}${blockedText(view.blocks, "; blocks ", link)}; link: ${link(issue.id)}`;
+  return `- ${issue.id} "${issue.title}" (${PIPELINES[issue.kind].label}; ${held}${under}${branch === null ? "" : `, on branch \`${branch}\``}): ${headlineText(view)}${askText(view)}${blockedText(view.blockedBy, "; blocked by ", link)}${blockedText(view.blocks, "; blocks ", link)}; link: ${link(issue.id)}`;
 }
+
+/** What the issue waits on the user for, as its Needs you line on the board says it, when its headline doesn't already: its question, or its cap leading its reason. */
+const askText = ({ needsYou, headline }: Pick<IssueView, "needsYou" | "headline">): string => (needsYou === null || needsYou === headline ? "" : `; needs you: ${needsYou}`);
 
 /** The ready issues (relations.ts isReady), by their links: those an agent can start on without waiting. */
 function readyLine(views: readonly IssueView[], pluginId: string): string {
