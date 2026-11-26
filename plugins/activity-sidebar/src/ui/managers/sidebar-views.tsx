@@ -2,8 +2,8 @@
 // left, the shown view's options at its right) over a panel per tab, the chosen one shown; with none,
 // the threads' list alone, its options on Activity's title. Each list stays mounted in one place in the
 // tree, the other tab's hidden, so neither a tab switch nor a manager started or archived remounts one:
-// its scroll and its focus stay. A first manager arriving never hides the threads, nor moves their
-// options, from a reader at work in them.
+// its scroll and its focus stay. A first manager arriving never hides the threads, nor closes a menu
+// of theirs, from a reader at work in them.
 import { useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { View } from "../../data/local-choice/choices.ts";
 import { OUT3 } from "../../list/motion-plan.ts";
@@ -36,8 +36,9 @@ export function SidebarViews({ managers, managersCompact, underWaySince, view, o
   const root = useRef<HTMLDivElement>(null);
   const hasManagers = managers.pinned.length + managers.unpinned.length > 0;
   const focus = useFocusInside();
-  const { shown, settled, choose } = useShownView(hasManagers, view, onView, focus.inside);
+  const { shown, optionsOnTitle, choose } = useShownView(hasManagers, view, onView, focus);
   useFocusKeptWhenManagersGo(root, hasManagers, focus.inside);
+  useFocusFollowsOptions(root, optionsOnTitle, focus.inside);
   const keepOutOfHidden = useFocusOutOfHiddenPanels(id, shown, focus.inside);
   // why: a hidden panel is out of the tab order, so the sidebar keeps one keyboard stop, the shown scroller.
   const panel = (of: View) => (hasManagers ? { role: "tabpanel", id: panelId(id, of), "aria-labelledby": tabId(id, of), hidden: shown !== of } : {});
@@ -48,7 +49,7 @@ export function SidebarViews({ managers, managersCompact, underWaySince, view, o
       className="as-views"
       style={MOTION}
       onFocus={(e) => {
-        focus.entered();
+        focus.entered(e.target);
         keepOutOfHidden(e.target);
       }}
       onBlur={focus.left}
@@ -57,7 +58,7 @@ export function SidebarViews({ managers, managersCompact, underWaySince, view, o
         <div className="as-controls">
           <ViewSegment id={id} view={shown} onChange={choose} />
           {/* why keyed: each view's menu is its own, so one open closes as the other view is chosen. */}
-          {settled && <span key={shown} className="as-controls-end">{options[shown]}</span>}
+          {!optionsOnTitle && <span key={shown} className="as-controls-end">{options[shown]}</span>}
         </div>
       )}
       {/* why: each panel tells what it holds whether it shows, so a hidden one's overlays close (portal-scope.ts). */}
@@ -70,7 +71,7 @@ export function SidebarViews({ managers, managersCompact, underWaySince, view, o
       )}
       <PanelShown.Provider value={shown === "threads"}>
         <div className="as-panel" {...panel("threads")}>
-          {threads(settled ? null : options.threads)}
+          {threads(optionsOnTitle ? options.threads : null)}
         </div>
       </PanelShown.Provider>
     </div>
@@ -81,41 +82,68 @@ export function SidebarViews({ managers, managersCompact, underWaySince, view, o
 
 /**
  * Whether focus is in the sidebar, a menu it opened included: React bubbles a portal's focus here,
- * though the DOM doesn't hold it.
+ * though the DOM doesn't hold it. `inMenu`: in such a menu, which is open while it holds focus.
  */
 function useFocusInside() {
   const [inside, setInside] = useState(false);
+  const [inMenu, setInMenu] = useState(false);
   return {
     inside,
-    entered: () => setInside(true),
+    inMenu,
+    entered: (target: EventTarget) => {
+      setInside(true);
+      setInMenu(target instanceof Element && target.closest('[role="menu"]') !== null);
+    },
     left: (e: { currentTarget: HTMLElement; relatedTarget: EventTarget | null }) => {
-      if (!(e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget))) setInside(false);
+      if (e.relatedTarget instanceof Node && e.currentTarget.contains(e.relatedTarget)) return;
+      setInside(false);
+      setInMenu(false);
     },
   };
 }
+
+type FocusInside = ReturnType<typeof useFocusInside>;
 
 /**
  * The view on screen: the chosen one, but the threads while there are no managers, and still the
  * threads when the first manager arrives while the reader works in them (focus there, or in a menu
  * they opened), so the list isn't swapped out from under them. The chosen view returns with the next
- * pick of a tab, or the next time the sidebar opens. `settled`: the control row holds the options;
- * until then (no managers, or the threads kept) they stay on Activity's title, a menu open there too.
+ * pick of a tab, or the next time the sidebar opens.
+ * `optionsOnTitle`: the threads' options sit on Activity's title, not the control row: while there
+ * are no managers, and while a menu open as the first manager arrives stays open, so it isn't pulled
+ * from under the reader. They join the row as it closes.
  */
-function useShownView(hasManagers: boolean, view: View, onView: (view: View) => void, focusInside: boolean) {
+function useShownView(hasManagers: boolean, view: View, onView: (view: View) => void, focus: FocusInside) {
   const [had, setHad] = useState(hasManagers);
   const [keptThreads, setKeptThreads] = useState(false);
+  const [heldMenu, setHeldMenu] = useState(false);
   // why: React's "adjust state when a prop changes": decided in the render the first manager arrives in, before anything is hidden.
   if (had !== hasManagers) {
     setHad(hasManagers);
-    setKeptThreads(hasManagers && focusInside);
+    setKeptThreads(hasManagers && focus.inside);
+    setHeldMenu(hasManagers && focus.inMenu);
+  } else if (heldMenu && !focus.inMenu) {
+    setHeldMenu(false);
   }
-  const settled = hasManagers && !keptThreads;
-  const shown: View = settled ? view : "threads";
+  const shown: View = hasManagers && !keptThreads ? view : "threads";
   const choose = (next: View) => {
     setKeptThreads(false);
     onView(next);
   };
-  return { shown, settled, choose };
+  return { shown, optionsOnTitle: !hasManagers || heldMenu, choose };
+}
+
+/**
+ * The threads' options leaving Activity's title for the control row (their menu, held open on the
+ * title as the first manager arrived, closed): focus handed back to their button there follows them.
+ */
+function useFocusFollowsOptions(root: RefObject<HTMLDivElement | null>, optionsOnTitle: boolean, focusInside: boolean) {
+  useLayoutEffect(() => {
+    if (optionsOnTitle || !focusInside) return;
+    const active = document.activeElement;
+    const dropped = active === null || active === document.body || !active.isConnected;
+    if (dropped) root.current?.querySelector<HTMLElement>(".as-controls-end button")?.focus({ preventScroll: true });
+  }, [root, optionsOnTitle, focusInside]);
 }
 
 /**

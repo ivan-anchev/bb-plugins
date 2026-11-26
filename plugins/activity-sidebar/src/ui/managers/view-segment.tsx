@@ -6,7 +6,7 @@ import { experimental_Icon as Icon } from "@get-bb/plugin-sdk/app";
 import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { VIEW_NAMES, type View } from "../../data/local-choice/choices.ts";
 import type { Avatar } from "../../model/manager-look.ts";
-import { Tooltip } from "../tooltip.tsx";
+import { Tooltip } from "./tooltip.tsx";
 import { ManagerAvatar } from "./avatar/manager-avatar.tsx";
 
 /** The look a regional manager has before one is chosen for it: a white round blob, its face neutral. */

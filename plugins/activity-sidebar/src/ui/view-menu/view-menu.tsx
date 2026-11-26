@@ -5,10 +5,10 @@
 import { experimental_Icon as Icon, type PluginSidebarProject } from "@get-bb/plugin-sdk/app";
 import { CheckboxItem, Content, ItemIndicator, Portal, RadioGroup, RadioItem, Root, Separator, Trigger } from "@radix-ui/react-dropdown-menu";
 import type { ReactNode } from "react";
-import { VIEW_NAMES, type View } from "../data/local-choice/choices.ts";
-import { hueOf } from "../model/project-hue.ts";
-import { PORTAL_SCOPE, useOverlayOpen } from "./portal-scope.ts";
-import { ProjectTile } from "./project-tile.tsx";
+import { VIEW_NAMES, type View } from "../../data/local-choice/choices.ts";
+import { hueOf } from "../../model/project-hue.ts";
+import { PORTAL_SCOPE, useOverlayOpen } from "../portal-scope.ts";
+import { ProjectTile } from "../project-tile.tsx";
 
 const ALL = "";
 

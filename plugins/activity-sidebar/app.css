@@ -179,7 +179,7 @@
   }
 }
 
-/* --- A control's name under it (src/ui/tooltip.tsx): the theme's tooltip, Zeron's lifted charcoal at 11px.
+/* --- A control's name under it (src/ui/managers/tooltip.tsx): the theme's tooltip, Zeron's lifted charcoal at 11px.
    The gap above the bubble is padding inside the hover area, so the pointer never crosses a dead gap. */
 .as-tip-area {
   position: relative;

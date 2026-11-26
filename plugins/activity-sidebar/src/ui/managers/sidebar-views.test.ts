@@ -13,7 +13,7 @@ import { project, thread } from "../../model/fixtures.ts";
 // scroller: its own tests are list/items.test.ts and model/activity.test.ts.
 
 const { SidebarViews } = await import("./sidebar-views.tsx");
-const { ViewMenu } = await import("../view-menu.tsx");
+const { ViewMenu } = await import("../view-menu/view-menu.tsx");
 
 afterEach(cleanup);
 
@@ -55,17 +55,17 @@ function mount(shown: Shown) {
   return { slot, show, threads };
 }
 
-test("with no regional managers there is no control row and no tab panel: the threads' list alone, its options on Activity's title", () => {
+// why: where the threads' options sit, on Activity's title or in the row, is checked with the real list (panel-overlays.test.ts).
+test("with no regional managers there is no control row and no tab panel: the threads' list alone", () => {
   const { slot, threads } = mount({ managers: [], view: "managers" });
   assert.equal(slot.queryByRole("tablist"), null);
   assert.equal(slot.queryByRole("tabpanel"), null);
   assert.equal(slot.container.querySelector(".as-controls"), null);
   assert.ok(threads(), "the threads' list shows, whatever view was chosen");
-  assert.ok(threads()?.contains(slot.getByRole("button", { name: "Threads options" })), "the options sit in the list, on its title");
 });
 
-test("with managers, one control row holds the icon tabs, each named, and the shown view's options at its end; the list's title has none", async () => {
-  const { slot, show, threads } = mount({ managers: [PR], view: "threads" });
+test("with managers, one control row holds the icon tabs, each named, and the shown view's options at its end", async () => {
+  const { slot, show } = mount({ managers: [PR], view: "threads" });
   const row = slot.container.querySelector<HTMLElement>(".as-controls");
   assert.ok(row);
   assert.deepEqual(
@@ -77,32 +77,47 @@ test("with managers, one control row holds the icon tabs, each named, and the sh
     "icons only, named for screen readers, no native title",
   );
   assert.ok(row.contains(slot.getByRole("button", { name: "Threads options" })));
-  assert.equal(threads()?.querySelector("button"), null, "nothing on Activity's title");
 
   await show({ managers: [PR], view: "managers" });
   assert.ok(row.contains(slot.getByRole("button", { name: "Managers options" })));
   assert.equal(slot.queryByRole("button", { name: "Threads options" }), null);
 });
 
+/** The tooltip showing, if one is. */
+const tip = (slot: { container: HTMLElement }) => slot.container.querySelector<HTMLElement>("[role=tooltip]:not([hidden] *)");
+
 test("resting the pointer on a tab names it in a tooltip after a moment; pressing it puts the name away", async () => {
   const { slot } = mount({ managers: [PR], view: "threads" });
   const tab = slot.getByRole("tab", { name: "Managers" });
-  const tip = () => slot.container.querySelector<HTMLElement>("[role=tooltip]:not([hidden] *)");
   fireEvent.pointerEnter(tab, { pointerType: "mouse" });
-  assert.equal(tip(), null, "not at once");
+  assert.equal(tip(slot), null, "not at once");
   await act(() => wait(550));
-  assert.equal(tip()?.textContent, "Managers");
+  assert.equal(tip(slot)?.textContent, "Managers");
   fireEvent.pointerDown(tab, { pointerType: "mouse" });
-  assert.equal(tip(), null);
+  assert.equal(tip(slot), null);
 });
 
-test("a tab reached from the keyboard is named at once; the name goes as focus leaves, or on Escape", () => {
+test("a tab reached from the keyboard is named at once, and stays named as the pointer comes and goes; Escape puts it away", async () => {
   const { slot } = mount({ managers: [PR], view: "threads" });
-  const tip = () => slot.container.querySelector<HTMLElement>("[role=tooltip]:not([hidden] *)");
-  act(() => slot.getByRole("tab", { name: "Threads" }).focus());
-  assert.equal(tip()?.textContent, "Threads");
+  const tab = slot.getByRole("tab", { name: "Threads" });
+  act(() => tab.focus());
+  assert.equal(tip(slot)?.textContent, "Threads");
+  fireEvent.pointerEnter(tab, { pointerType: "mouse" });
+  fireEvent.pointerLeave(tab, { pointerType: "mouse" });
+  assert.equal(tip(slot)?.textContent, "Threads", "focus still holds it");
   act(() => fireEvent.keyDown(document, { key: "Escape" }));
-  assert.equal(tip(), null);
+  assert.equal(tip(slot), null);
+});
+
+test("a tab named under the pointer stays named as keyboard focus leaves it", async () => {
+  const { slot } = mount({ managers: [PR], view: "threads" });
+  const tab = slot.getByRole("tab", { name: "Threads" });
+  act(() => tab.focus());
+  fireEvent.pointerEnter(tab, { pointerType: "mouse" });
+  act(() => tab.blur());
+  assert.equal(tip(slot)?.textContent, "Threads", "the pointer still holds it");
+  fireEvent.pointerLeave(tab, { pointerType: "mouse" });
+  assert.equal(tip(slot), null);
 });
 
 test("with managers, each tab controls its own panel, labelled by it; only the chosen one shows, with the one keyboard stop", () => {
@@ -158,24 +173,6 @@ test("the first manager started with Managers chosen, while the reader works in 
 
   act(() => slot.getByRole("tab", { name: "Managers" }).click());
   assert.ok(list.closest("[hidden]"), "picking Managers shows them");
-});
-
-test("the first manager started while the threads' options menu is open: the menu stays open on Activity's title, its focus kept", async () => {
-  const at = (managers: readonly ManagerModel[]) => props({ managers, view: "managers" });
-  const slot = renderSlot({ component: SidebarViews }, at([]));
-  await act(async () => fireEvent.keyDown(slot.getByRole("button", { name: "Threads options" }), { key: "Enter" }));
-  const compact = await slot.findByRole("menuitemcheckbox");
-  act(() => compact.focus());
-  assert.equal(document.activeElement, compact);
-
-  await act(async () => slot.lifecycle.rerender(createElement(SidebarViews, at([PR]))));
-  assert.ok(compact.isConnected, "the menu is still open");
-  assert.equal(document.activeElement, compact);
-  assert.equal(slot.container.querySelector("[data-threads]")?.closest("[hidden]"), null, "over the threads, still shown");
-
-  // why by its selector: the open menu hides everything else from the accessibility tree, as in bb.
-  await act(async () => slot.container.querySelector<HTMLElement>("[role=tab][aria-label=Managers]")?.click());
-  assert.ok(slot.container.querySelector(".as-controls")?.contains(slot.getByRole("button", { name: "Managers options" })), "a tab picked, the options join the row");
 });
 
 test("the first manager started while focus is outside the sidebar: the chosen Managers view shows", async () => {

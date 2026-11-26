@@ -1,10 +1,10 @@
-import "../test-browser.ts";
+import "../../test-browser.ts";
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import type { PluginSidebarProject } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, cleanup, fireEvent } from "@testing-library/react";
-import { project } from "../model/fixtures.ts";
+import { project } from "../../model/fixtures.ts";
 
 // A view's options menu, mounted as bb mounts the sidebar.
 

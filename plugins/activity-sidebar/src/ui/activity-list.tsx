@@ -19,7 +19,7 @@ import { managerProjects, narrowManagers } from "../model/manager-filter.ts";
 import type { ThreadIndex } from "../model/thread-index.ts";
 import { ListViewport } from "./list-viewport.tsx";
 import { SidebarViews } from "./managers/sidebar-views.tsx";
-import { ViewMenu } from "./view-menu.tsx";
+import { ViewMenu } from "./view-menu/view-menu.tsx";
 
 // why: one read for both lifecycles, so the Archived shelf's first page has loaded by the time it opens.
 const LIFECYCLES = { experimental_lifecycles: ["active", "archived"] } as const;

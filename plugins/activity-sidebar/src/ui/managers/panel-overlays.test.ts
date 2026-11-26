@@ -14,13 +14,14 @@ import { buildActivity } from "../../model/activity.ts";
 import { project, thread } from "../../model/fixtures.ts";
 import { installHostThreadMenu, PageResizeObserver } from "../../test-host.ts";
 
+// Where the threads' options sit: on Activity's title with no managers, in the control row with them.
 // A panel hidden takes every overlay it opened with it: the threads' hover card, view menu and a row's
 // thread menu; a manager's hover card and its row's thread menu. Shown again, the threads' list comes
 // back whole. Mounted as bb mounts the sidebar, with the real list.
 
 const { SidebarViews } = await import("./sidebar-views.tsx");
 const { ListViewport } = await import("../list-viewport.tsx");
-const { ViewMenu } = await import("../view-menu.tsx");
+const { ViewMenu } = await import("../view-menu/view-menu.tsx");
 
 before(() => {
   // why: jsdom lays nothing out, so the list would see no height and mount no row. A hidden panel measures 0, as in a browser.
@@ -42,7 +43,13 @@ const THREADS = [
   thread("thr_b", { displayTitle: "Write the docs", latestAttentionAt: 10, projectId: "prj_a" }),
 ];
 
-function mount(view: View, threads: readonly PluginSidebarThread[] = THREADS) {
+const OPTIONS = {
+  threads: createElement(ViewMenu, { view: "threads", projects: PROJECTS, chosen: null, onChoose: () => {}, compact: true, onCompact: () => {} }),
+  managers: createElement(ViewMenu, { view: "managers", projects: [], chosen: null, onChoose: () => {}, compact: false, onCompact: () => {} }),
+};
+
+/** The sidebar as bb mounts it over `threads`, with the real threads' list, showing `view`. */
+function sidebarProps(threads: readonly PluginSidebarThread[], view: View) {
   const model = buildActivity({ threads, projects: PROJECTS, sleeps: new Map(), held: new Set(), now: 100, activeThreadId: null, filter: null, looks: [], lines: [] });
   const list = (viewMenu: ReactNode) =>
     createElement(ListViewport, {
@@ -55,11 +62,11 @@ function mount(view: View, threads: readonly PluginSidebarThread[] = THREADS) {
       onRetry: () => {},
       viewMenu,
     });
-  const options = {
-    threads: createElement(ViewMenu, { view: "threads", projects: PROJECTS, chosen: null, onChoose: () => {}, compact: true, onCompact: () => {} }),
-    managers: createElement(ViewMenu, { view: "managers", projects: [], chosen: null, onChoose: () => {}, compact: false, onCompact: () => {} }),
-  };
-  const props = (shown: View) => ({ managers: model.managers, managersCompact: false, underWaySince: new Map<string, number>(), view: shown, onView: () => {}, onNavigate: () => {}, options, threads: list });
+  return { managers: model.managers, managersCompact: false, underWaySince: new Map<string, number>(), view, onView: () => {}, onNavigate: () => {}, options: OPTIONS, threads: list };
+}
+
+function mount(view: View, threads: readonly PluginSidebarThread[] = THREADS) {
+  const props = (shown: View) => sidebarProps(threads, shown);
   const slot = renderSlot({ component: SidebarViews }, props(view));
   const choose = async (shown: View) => {
     await act(async () => {
@@ -144,4 +151,55 @@ test("the threads' list, shown again after Managers, lays out whole on its first
   await act(() => PageResizeObserver.deliver());
   await choose("threads");
   assert.ok(archived(), "Archived there before the page tells the list its size again");
+});
+
+// ------------------------------------------------------------------ where the threads' options sit
+
+const NO_MANAGER = THREADS.slice(1);
+/** The section title holding the threads' options button, by its heading's name; null in none. */
+const titleHolding = (button: HTMLElement) => button.closest(".as-section-title")?.querySelector(".as-fold-name")?.textContent ?? null;
+const threadsOptions = () => {
+  const button = document.querySelector<HTMLElement>('[aria-label^="Threads options"]');
+  assert.ok(button, "the threads' options button");
+  return button;
+};
+
+test("with no managers, the threads' options sit on Activity's title; with them, in the control row, and on no title", async () => {
+  const slot = renderSlot({ component: SidebarViews }, sidebarProps(NO_MANAGER, "threads"));
+  assert.equal(slot.container.querySelector(".as-controls"), null, "no control row");
+  assert.equal(titleHolding(threadsOptions()), "Activity");
+
+  await act(async () => slot.lifecycle.rerender(createElement(SidebarViews, sidebarProps(THREADS, "threads"))));
+  assert.equal(titleHolding(threadsOptions()), null);
+  assert.ok(threadsOptions().closest(".as-controls"));
+});
+
+test("the first manager started while the reader is in the threads' list, its menu closed: the options join the row at once", async () => {
+  const slot = renderSlot({ component: SidebarViews }, sidebarProps(NO_MANAGER, "managers"));
+  const list = slot.container.querySelector<HTMLElement>(".as-scroller");
+  assert.ok(list);
+  act(() => list.focus());
+
+  await act(async () => slot.lifecycle.rerender(createElement(SidebarViews, sidebarProps(THREADS, "managers"))));
+  assert.ok(threadsOptions().closest(".as-controls"), "in the row");
+  assert.equal(titleHolding(threadsOptions()), null, "not on Activity's title");
+  assert.equal(document.activeElement, list, "focus stays in the threads' list, still shown");
+  assert.equal(list.closest("[hidden]"), null);
+});
+
+test("the first manager started while the threads' menu is open: it stays open on the title, then its button joins the row as it closes, with focus", async () => {
+  const slot = renderSlot({ component: SidebarViews }, sidebarProps(NO_MANAGER, "threads"));
+  await act(async () => fireEvent.keyDown(threadsOptions(), { key: "Enter" }));
+  const compact = await slot.findByRole("menuitemcheckbox");
+  act(() => compact.focus());
+
+  await act(async () => slot.lifecycle.rerender(createElement(SidebarViews, sidebarProps(THREADS, "threads"))));
+  assert.ok(compact.isConnected, "the menu is still open");
+  assert.equal(titleHolding(threadsOptions()), "Activity");
+
+  await act(async () => fireEvent.keyDown(compact, { key: "Escape" }));
+  await act(() => wait(0));
+  assert.equal(menus(), 0, "closed");
+  assert.ok(threadsOptions().closest(".as-controls"), "in the row");
+  assert.equal(document.activeElement, threadsOptions(), "focus on its button there");
 });

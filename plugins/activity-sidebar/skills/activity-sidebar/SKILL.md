@@ -116,7 +116,9 @@ button. Each side owns the whole list under it.
 - With no open managers there is no row: the sidebar is the threads' list
   alone, and their options button sits at the end of Activity's title. When
   the first one starts while you're working in that list, Threads stays on
-  screen, its options still on the title, until you pick a tab.
+  screen until you pick Managers, and the options button moves to the row. A
+  menu you have open then stays open on the title, and its button joins the
+  row as it closes.
 - The avatar comes from the Regional Manager plugin. It is read again when a
   manager's thread is created, renamed or archived, and every minute, so an
   edit shows within about a minute. If the plugin can't be read, each manager
