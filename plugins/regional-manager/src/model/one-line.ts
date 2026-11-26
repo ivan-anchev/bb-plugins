@@ -13,12 +13,26 @@ export function clipped(text: string, max: number): string {
 
 /**
  * A headline for text written before it had one, as a stored record's parse derives it once: its
- * first sentence (to the first full stop, question or exclamation mark before a space or its end),
- * cut to `max` characters (clipped). why its whitespace collapsed first: text wrapped
- * mid-sentence keeps its whole first sentence, on one line.
+ * first sentence (firstSentence), on one line, cut to `max` characters (clipped).
  */
 export function headline(text: string, max: number): string {
-  const line = text.replaceAll(/\s+/g, " ").trim();
-  const end = line.search(/[.!?]( |$)/);
-  return clipped(end === -1 ? line : line.slice(0, end + 1), max);
+  return clipped(firstSentence(text).sentence, max);
 }
+
+/**
+ * Text split after its first sentence, as written: the sentence, then the rest (null: none). A
+ * sentence ends at a full stop, question or exclamation mark, with any closing quotes or brackets
+ * right after it (”, ’, ", ', ), ]), before whitespace or the text's end. why only those: a line
+ * break mid-sentence, as in text wrapped by hand, ends no sentence.
+ */
+export function firstSentence(text: string): { sentence: string; rest: string | null } {
+  const trimmed = text.trim();
+  const end = SENTENCE_END.exec(trimmed);
+  if (end === null) return { sentence: trimmed, rest: null };
+  const cut = end.index + end[0].length;
+  const rest = trimmed.slice(cut).trim();
+  return { sentence: trimmed.slice(0, cut), rest: rest === "" ? null : rest };
+}
+
+/** A sentence's last mark and the closing quotes and brackets after it, then whitespace or the end. */
+const SENTENCE_END = /[.!?][”’"')\]]*(?=\s|$)/;

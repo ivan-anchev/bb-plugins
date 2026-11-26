@@ -3,18 +3,33 @@
    class carries the `rmi-` prefix, since bb does not scope a plugin's stylesheet. Result text uses
    the theme's text tokens (--destructive-text, --warning-text), which read on the page and on --card. */
 
-/* --- A section's head: its title, a quiet count, and controls at its end ---------------------- */
+/* --- A section's head: its title, a count, and controls at its end ---------------------------- */
 .rmi-section-head {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 24px;
 }
-.rmi-section-sub {
-  font-size: 11px;
-  color: var(--subtle-foreground);
+/* The latest round's marks counted, as a diff stat counts lines: each result's glyph and number in its colour. */
+.rmi-tally {
+  display: inline-flex;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
   font-variant-numeric: tabular-nums;
 }
+.rmi-tally > [data-result] {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.rmi-tally .rmi-result-glyph {
+  width: 12px;
+  height: 12px;
+}
+.rmi-tally > [data-result="pass"] { color: var(--success); }
+.rmi-tally > [data-result="fail"] { color: var(--destructive-text); }
+.rmi-tally > [data-result="unverifiable"] { color: var(--warning-text); }
 .rmi-filter {
   display: flex;
   gap: 2px;
@@ -43,6 +58,7 @@
   }
 }
 .rmi-decision:focus-visible,
+.rmi-clamp-press:focus-visible,
 .rmi-filter button:focus-visible,
 .rmi-grid-cell:focus-visible,
 .rmi-finding-place:focus-visible,
@@ -197,21 +213,56 @@
   display: inline-flex;
   vertical-align: -3px;
 }
-/* A quiet line: a machine event. */
+/* Text cut to --rmi-lines lines (clamp.tsx), whole once opened; cut, it sits in a button that opens it. */
+.rmi-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--rmi-lines);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.rmi-clamp[data-open] {
+  display: block;
+}
+.rmi-clamp-press {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  min-width: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+/* A quiet row: a machine moment's words, then its time at the row's end. why baseline: opened, the
+   words wrap, and the time stays on their first line. */
 .rmi-line {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
   padding: 4px 0;
   color: var(--muted-foreground);
-  text-wrap: pretty;
 }
-.rmi-line-quote {
-  margin-top: 2px;
-  padding-left: 8px;
-  border-left: 2px solid var(--border);
-  white-space: pre-wrap;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+/* why it gives way only after the text: the head names the agent or the pull request the row is about. */
+.rmi-line-head {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rmi-line > .rmi-clamp,
+.rmi-line > .rmi-clamp-press {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.rmi-line > .rmi-when {
+  flex: none;
+  margin-left: auto;
+}
+@media (hover: hover) {
+  .rmi-clamp-press:hover .rmi-line-text,
+  .rmi-clamp-press:hover .rmi-decision-rest {
+    color: var(--foreground);
+  }
 }
 
 /* --- Cards: a round, a decision, a comment ----------------------------------------------------- */
@@ -241,6 +292,15 @@
   font-size: 13px;
   line-height: 18px;
   color: var(--foreground);
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}
+/* A recorded decision's words after its first sentence, muted under it. */
+.rmi-decision-rest {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--muted-foreground);
   white-space: pre-wrap;
   text-wrap: pretty;
 }

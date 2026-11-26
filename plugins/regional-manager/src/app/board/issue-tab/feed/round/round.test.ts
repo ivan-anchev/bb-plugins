@@ -176,7 +176,6 @@ test("a round the reader is reading in stays open, with their focus, when a read
 test("a criterion's cell opens to that round's evidence for it, read with the round's body, and closes again", async () => {
   const { tab } = await opened("WEB-1", WEB_1);
   const grid = within(tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when"));
-  assert.equal(grid.getByText(/^3 rounds · latest/).textContent, "3 rounds · latest Passed: 3 of 3", "the latest round's own score, as its line says it");
   const cells = within(grid.getByRole("group", { name: "Criterion 3 by round" })).getAllByRole("button");
   assert.deepEqual(cells.map((cell) => cell.getAttribute("aria-label")), ["Round 1: failed", "Round 2: failed", "Round 3: passed"]);
 
@@ -244,12 +243,12 @@ function cappedAtRound2(): Entry[] {
   });
 }
 
-test("the count of failed verifications is the asking round's head alone: the grid's latest score and the round's verifier step carry none", async () => {
+test("the count of failed verifications is the asking round's head alone: the grid's head and the round's verifier step carry none", async () => {
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: cappedAtRound2() }) });
   const { card, head } = rounds(tab());
   assert.equal(head(2).querySelector(".rmi-score-asked")?.textContent, "· 3rd failed verification: asked you");
-  const grid = tab().getByText(/^2 rounds · latest/);
-  assert.match(grid.textContent ?? "", /Failed: 2 of 3$/, "the grid's latest score, and nothing after it");
+  const grid = tab().getByRole("heading", { name: "Done when" }).closest(".rmi-section-head") ?? assert.fail("no Done when head");
+  assert.doesNotMatch(grid.textContent ?? "", /asked you/);
   await card(2).findByText(/^Not sent back/);
   const verifier = card(2).getByText((_, element) => element?.classList.contains("rmi-step-title") === true && /^Verifier/.test(element.textContent ?? ""));
   assert.doesNotMatch(verifier.textContent ?? "", /asked you/);
@@ -376,13 +375,39 @@ test("a final check whose own worktree was dirty says so, never that a claimed c
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Final check on mainNot a clean tree");
 });
 
-test("the grid's head says the latest round's own score, so one all of whose criteria passed but CI failed reads as failed there too", async () => {
-  const ciFailed: Entry[] = FEED.entries.map((entry) =>
-    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "ci" } } } } : entry,
+/** FEED with two criteria and two rounds: round 1 failed the second, and round 2, the latest, failed it again. */
+function twoCriteriaTwoRounds() {
+  const entries = FEED.entries.flatMap((entry): Entry[] => {
+    if (entry.kind !== "round") return [entry];
+    if (entry.round.number === 3 || entry.round.verdict === null) return [];
+    return [{ ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "criteria" }, results: ["pass", "fail"] } } }];
+  });
+  return { ...FEED, doneCriteria: ["Retries land", "npm test passes"], entries };
+}
+
+test("Done when shows each criterion's mark per round, and beside its heading the latest round's marks counted, ✓ passed and ✗ failed, with nothing else", async () => {
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: twoCriteriaTwoRounds });
+  const section = tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when");
+  const marks = (n: number) => within(within(section).getByRole("group", { name: `Criterion ${n} by round` })).getAllByRole("button").map((cell) => [cell.getAttribute("aria-label"), cell.querySelector("svg")?.dataset.result]);
+  assert.deepEqual(marks(1), [["Round 1: passed", "pass"], ["Round 2: passed", "pass"]]);
+  assert.deepEqual(marks(2), [["Round 1: failed", "fail"], ["Round 2: failed", "fail"]]);
+  const head = section.querySelector(".rmi-section-head") ?? assert.fail("no head");
+  const tally = [...head.querySelectorAll<HTMLElement>(".rmi-tally > [data-result]")].map((count) => [count.querySelector("svg")?.dataset.result, count.textContent]);
+  assert.deepEqual(tally, [["pass", "1"], ["fail", "1"]], "✓ 1 ✗ 1");
+  assert.equal(head.textContent, "Done when11Round 2: 1 passed, 1 failed", "the heading and the count alone, named in words for screen readers");
+});
+
+test("before any verdict Done when shows its heading alone; a criterion the latest round couldn't check adds ⚠ to the count", async () => {
+  const unjudged = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: FEED.entries.filter((entry) => entry.kind !== "round") }) });
+  const head = () => unjudged.tab().getByRole("heading", { name: "Done when" }).closest(".rmi-section-head") ?? assert.fail("no head");
+  assert.equal(head().textContent, "Done when");
+  cleanup();
+  const unchecked: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, results: ["pass", "unverifiable", "fail"] } } } : entry,
   );
-  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: ciFailed }) });
-  const grid = within(tab().getByRole("heading", { name: "Done when" }).closest("section") ?? assert.fail("no Done when"));
-  assert.equal(grid.getByText(/^3 rounds · latest/).textContent, "3 rounds · latest CI failed");
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: unchecked }) });
+  const counted = tab().getByRole("heading", { name: "Done when" }).closest(".rmi-section-head") ?? assert.fail("no head");
+  assert.equal(within(counted as HTMLElement).getByText(/^Round 3:/).textContent, "Round 3: 1 passed, 1 failed, 1 couldn't check");
 });
 
 test("a round nothing verified, as with verification off, shows no reviewer step, no verifier step and no outcome line; its score says it", async () => {

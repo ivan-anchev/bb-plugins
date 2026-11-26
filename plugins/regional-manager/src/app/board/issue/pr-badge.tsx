@@ -3,13 +3,13 @@
 // for CI on its head commit, as the plugin last read them. It links to the change request. A
 // GitLab number reads `!41`, as GitLab writes it; GitHub's stays bare, as Activity Sidebar's does.
 import type { ReactNode } from "react";
-import { FORGE, prRef, type PrSnapshot } from "../../../model/verdict/pr.ts";
+import { FORGE, prRef, type PrBadgeFacts } from "../../../model/verdict/pr.ts";
 
 type BadgeState = "open" | "draft" | "merged" | "closed";
 
-const CI_NAME: Record<PrSnapshot["ci"], string | null> = { none: null, pending: "CI running", pass: "CI passing", fail: "CI failing", blocked: "CI blocked on a manual job" };
+const CI_NAME: Record<PrBadgeFacts["ci"], string | null> = { none: null, pending: "CI running", pass: "CI passing", fail: "CI failing", blocked: "CI blocked on a manual job" };
 
-export function PrBadge({ pr }: { pr: PrSnapshot }) {
+export function PrBadge({ pr }: { pr: PrBadgeFacts }) {
   const state: BadgeState = pr.state === "open" && pr.draft ? "draft" : pr.state;
   const ci = CI_NAME[pr.ci];
   const noun = FORGE[pr.forge].noun;

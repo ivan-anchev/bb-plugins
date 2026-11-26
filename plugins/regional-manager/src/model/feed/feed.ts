@@ -1,5 +1,5 @@
-// An issue's feed: every moment the record holds about it, in the order it happened, each with the
-// status the plugin observed the issue move to after it. Pure: the reader gathers FeedFacts from the
+// An issue's feed: every moment the record holds about it, in the order it happened, a round's steps
+// each with the status the plugin observed the issue move to after it. Pure: the reader gathers FeedFacts from the
 // store (feed-reader.ts), this merges them. A status is only ever as logged (log-store.ts
 // observeStatuses), never derived here from what happened.
 import type { Agent } from "../agent/agent.ts";
@@ -9,6 +9,7 @@ import type { Issue } from "../issue/issue.ts";
 import type { FiledWhen, FollowUpOrigin } from "../verdict/rounds/follow-up.ts";
 import type { Handed, IssueStatus } from "../issue/status.ts";
 import type { FinalCheck } from "../verdict/check.ts";
+import { prBadgeSchema } from "../verdict/pr.ts";
 import { timeOf, type Entry } from "./entry.ts";
 import type { Comment } from "./comment.ts";
 import type { Logged } from "./log-event.ts";
@@ -37,12 +38,12 @@ type FeedFacts = {
 export function feedOf(facts: FeedFacts): Entry[] {
   const { lines, statuses, began } = readLog(facts.log);
   const others: Entry[] = [
-    { kind: "created", at: facts.issue.createdAt, followUpOf: facts.followUpOf, moved: null },
+    { kind: "created", at: facts.issue.createdAt, followUpOf: facts.followUpOf },
     ...facts.agents.flatMap(agentEntries),
     ...roundsOf(facts).map((round): Entry => ({ kind: "round", round })),
-    ...facts.decisions.map((decision): Entry => ({ kind: "decision", decision, moved: null })),
+    ...facts.decisions.map((decision): Entry => ({ kind: "decision", decision })),
     ...facts.comments.map((comment): Entry => ({ kind: "comment", comment })),
-    ...facts.followUps.map(({ id, createdAt, when }): Entry => ({ kind: "follow-up", at: createdAt, issueId: id, when, moved: null })),
+    ...facts.followUps.map(({ id, createdAt, when }): Entry => ({ kind: "follow-up", at: createdAt, issueId: id, when })),
     ...facts.events.flatMap(({ at, event }) => eventEntries(at, event)),
   ];
   const placed = inOrder([...others.map((entry) => ({ at: timeOf(entry), seq: NOT_LOGGED, entry })), ...lines]);
@@ -80,17 +81,19 @@ function readLog(log: readonly Logged[]): { lines: Placed[]; statuses: Observed[
   });
   const marker = rows.find(({ event }) => event.kind === "log-began") ?? null;
   const statuses = rows.flatMap(({ at, seq, placedAt, event }) => (event.kind === "status" && (marker === null || seq > marker.seq) ? [{ at: placedAt, seq, shownAt: at, status: event.status }] : []));
-  const lines = rows.flatMap(({ at, seq, placedAt, event }): Placed[] => (event.kind === "status" ? [] : [{ at: placedAt, seq, entry: { kind: "logged", at, event, moved: null } }]));
+  const lines = rows.flatMap(({ at, seq, placedAt, event }): Placed[] => (event.kind === "status" ? [] : [{ at: placedAt, seq, entry: { kind: "logged", at, event } }]));
   return { lines, statuses, began: marker === null ? null : { at: marker.placedAt, seq: marker.seq } };
 }
 
-/** A moment a status can be shown on: an entry, or one step of a round, the `entry`th placed. */
-type Moment = Point & { entry: number; step: "handed" | "review" | "verdict" | "outcome" | null };
+/** A moment a status can follow: an entry, or one step of a round, the `entry`th placed, `of` that entry. */
+type Moment = Point & { entry: number; of: Entry; step: "handed" | "review" | "verdict" | "outcome" | null };
 
 /**
  * Each observed status on the latest moment after the status before it (and after the log began)
- * and not after itself: the moment it followed. A status no such moment explains, as a parent
- * rolling up or a turn ending, is a `moved` entry of its own. `placed` in order.
+ * and not after itself: the moment it followed. A round's step shows it; any other moment shows
+ * none, so it explains only a status its words say (saysStatus). A status no moment explains, as a
+ * parent rolling up, a turn ending or a sub-issue starting after an edit, is a `moved` entry of its
+ * own. `placed` in order.
  */
 function attachStatuses(placed: readonly Placed[], statuses: readonly Observed[], began: Point | null): Placed[] {
   // why only the moments of entries below the marker: one above it, as a round begun before the log,
@@ -103,7 +106,8 @@ function attachStatuses(placed: readonly Placed[], statuses: readonly Observed[]
   let since = began;
   for (const observed of statuses) {
     const moment = latestFirst.find((candidate) => (since === null || isAfter(candidate, since)) && !isAfter(candidate, observed));
-    if (moment === undefined) unexplained.push({ at: observed.at, seq: observed.seq, entry: { kind: "moved", at: observed.shownAt, status: observed.status } });
+    const explained = moment !== undefined && (moment.step !== null || saysStatus(moment.of, observed.status));
+    if (!explained) unexplained.push({ at: observed.at, seq: observed.seq, entry: { kind: "moved", at: observed.shownAt, status: observed.status } });
     else shown.set(momentKey(moment.entry, moment.step), observed.status);
     since = observed;
   }
@@ -112,13 +116,46 @@ function attachStatuses(placed: readonly Placed[], statuses: readonly Observed[]
 
 const momentKey = (entry: number, step: Moment["step"]): string => `${entry}:${step}`;
 
+/**
+ * Whether an entry's own words say the status observed after it (entry-line.tsx), so a row of its
+ * own would say it twice: "Filed" its first rest, "Started a2" In progress, "Set to rest in Backlog",
+ * "Canceled", "Accepted as Done", "Accepted as it is, into In review", and a merge Done.
+ */
+function saysStatus(entry: Entry, status: IssueStatus): boolean {
+  switch (entry.kind) {
+    case "created":
+      return status === "todo" || status === "backlog";
+    case "agent-started":
+      return status === "in-progress";
+    case "pr":
+      return status === "done" && entry.changes.includes("merged");
+    case "logged":
+      return loggedSays(entry.event, status);
+    default:
+      return false;
+  }
+}
+
+function loggedSays(event: Extract<Entry, { kind: "logged" }>["event"], status: IssueStatus): boolean {
+  switch (event.kind) {
+    case "rested":
+      return status === event.rest;
+    case "closed":
+      return status === (event.as === "canceled" ? "canceled" : "done");
+    case "accepted":
+      return status === "in-review";
+    default:
+      return false;
+  }
+}
+
 /** The moments of the `index`th placed entry: a round's steps that happened, or the entry itself. why not a `moved` entry: it is a status already. */
 function momentsOf({ entry, at, seq }: Placed, index: number): Moment[] {
   switch (entry.kind) {
     case "round": {
       const { handed, review, verdict, outcome } = entry.round;
       const steps: [Moment["step"], Step | null][] = [["handed", handed], ["review", reviewStep(review)], ["verdict", verdict?.step ?? null], ["outcome", outcome]];
-      return steps.flatMap(([step, happened]) => (happened === null ? [] : [{ at: happened.at, seq: NOT_LOGGED, entry: index, step }]));
+      return steps.flatMap(([step, happened]) => (happened === null ? [] : [{ at: happened.at, seq: NOT_LOGGED, entry: index, of: entry, step }]));
     }
     // why none: a status is shown on what moved it, and a comment moves none.
     case "moved":
@@ -133,7 +170,7 @@ function momentsOf({ entry, at, seq }: Placed, index: number): Moment[] {
     case "thread":
     case "follow-up":
     case "unblocked":
-      return [{ at, seq, entry: index, step: null }];
+      return [{ at, seq, entry: index, of: entry, step: null }];
     default:
       return entry satisfies never;
   }
@@ -142,7 +179,7 @@ function momentsOf({ entry, at, seq }: Placed, index: number): Moment[] {
 /** When a round's review was had or missed; null while it is to come, or with none. */
 const reviewStep = (review: Round["review"]): Step | null => (review.state === "missed" || review.state === "reported" ? review.step : null);
 
-/** The entry with the status `movedOf` gives each of its moments. */
+/** The entry with the status `movedOf` gives each of its round's steps; any other entry as it is. */
 function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus | null): Entry {
   switch (entry.kind) {
     case "round": {
@@ -154,7 +191,6 @@ function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus 
     }
     case "moved":
     case "comment":
-      return entry;
     case "created":
     case "logged":
     case "agent-started":
@@ -164,7 +200,7 @@ function withMoved(entry: Entry, movedOf: (step: Moment["step"]) => IssueStatus 
     case "thread":
     case "follow-up":
     case "unblocked":
-      return { ...entry, moved: movedOf(null) };
+      return entry;
     default:
       return entry satisfies never;
   }
@@ -209,23 +245,24 @@ function outcomeTimes(events: readonly StoredEvent[]): Map<string, number> {
 }
 
 function agentEntries({ id, startedAt, ended }: FeedFacts["agents"][number]): Entry[] {
-  const started: Entry = { kind: "agent-started", at: startedAt, agentId: id, moved: null };
-  return ended === null ? [started] : [started, { kind: "agent-ended", at: ended.at, agentId: id, how: ended.how, moved: null }];
+  const started: Entry = { kind: "agent-started", at: startedAt, agentId: id };
+  return ended === null ? [started] : [started, { kind: "agent-ended", at: ended.at, agentId: id, how: ended.how }];
 }
 
 /** The inbox events the feed shows as lines; a round tells the rest of the work (handoff, checked, sent-back), an agent's end its return to Todo. */
 function eventEntries(at: number, event: InboxEvent): Entry[] {
   switch (event.kind) {
     case "pr":
-      return [{ kind: "pr", at, pr: { forge: event.pr.forge, number: event.pr.number }, changes: event.changes, moved: null }];
+      // why parsed: it keeps only what the badge shows of the snapshot the event stored.
+      return [{ kind: "pr", at, pr: prBadgeSchema.parse(event.pr), changes: event.changes }];
     case "idle-without-handoff":
-      return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "reported-back", lastAnswer: event.lastAnswer }, moved: null }];
+      return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "reported-back", lastAnswer: event.lastAnswer } }];
     case "failed":
-      return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "failed", error: event.error }, moved: null }];
+      return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "failed", error: event.error } }];
     case "needs-input":
-      return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "needs-input", question: event.question }, moved: null }];
+      return [{ kind: "thread", at, agentId: event.agentId, event: { kind: "needs-input", question: event.question } }];
     case "unblocked":
-      return [{ kind: "unblocked", at, by: event.by, moved: null }];
+      return [{ kind: "unblocked", at, by: event.by }];
     // why none: a comment is an entry from its own table.
     case "comment-to-you":
     case "comment":

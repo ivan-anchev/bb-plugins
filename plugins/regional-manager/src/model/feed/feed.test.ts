@@ -11,7 +11,7 @@ import { checkIdSchema, type Check, type FinalCheck } from "../verdict/check.ts"
 import type { PrSnapshot } from "../verdict/pr.ts";
 import type { Review, Triaged } from "../verdict/review.ts";
 import type { CriterionResult, Verdict } from "../verdict/verdict.ts";
-import { actorOf, shownIn, timeOf, type Entry, type Filter } from "./entry.ts";
+import { shownIn, timeOf, type Entry, type Filter } from "./entry.ts";
 import { commentIdSchema, type Comment } from "./comment.ts";
 import { feedOf } from "./feed.ts";
 
@@ -195,16 +195,12 @@ test("the criteria grid has a row per criterion and a cell per round with a verd
   );
 });
 
-test("the filters: All shows everything, Rounds only rounds, Discussion only decisions and questions; each entry names who did it", () => {
+test("the filters: All shows everything, Rounds only rounds, Discussion only decisions and questions", () => {
   const entries = feedOf(bbp19());
   const kinds = (filter: "all" | "rounds" | "discussion") => [...new Set(entries.filter((entry) => shownIn(filter, entry)).map(({ kind }) => kind))];
   assert.deepEqual(kinds("all"), ["created", "agent-started", "round", "decision", "agent-ended", "pr"]);
   assert.deepEqual(kinds("rounds"), ["round"]);
   assert.deepEqual(kinds("discussion"), ["decision"]);
-  assert.deepEqual(
-    entries.slice(0, 3).map(actorOf),
-    [{ kind: "manager" }, { kind: "manager" }, { kind: "agent", agentId: "a1" }],
-  );
 });
 
 test("a round whose criteria all passed scores a pass only once it is settled: before, it is verifying or waiting for CI, and one replaced says so; a failed criterion fails it whatever comes", () => {
@@ -246,18 +242,20 @@ test("a verdict failed by its checkout and a criterion names its checkout first,
 /** The issue's log: each status as the plugin observed it, at its time. */
 const observed = (statuses: [number, IssueStatus][]): Logged[] => statuses.map(([at, status]) => ({ at, event: { kind: "status", status } }));
 
-/** Every moment shown with the status it moved the issue to, as [moment, its time, the status]. */
+/** Every round step shown with the status it moved the issue to, as [step, its time, the status]. */
 function glyphsOf(entries: readonly Entry[]): [string, number, IssueStatus][] {
   return entries.flatMap((entry): [string, number, IssueStatus][] => {
-    if (entry.kind === "moved" || entry.kind === "comment") return [];
-    if (entry.kind !== "round") return entry.moved === null ? [] : [[entry.kind, timeOf(entry), entry.moved]];
+    if (entry.kind !== "round") return [];
     const { number, handed: began, review, verdict, outcome } = entry.round;
     const steps: [string, Step | null][] = [["handed", began], ["review", review.state === "missed" || review.state === "reported" ? review.step : null], ["verdict", verdict?.step ?? null], ["outcome", outcome]];
     return steps.flatMap(([name, step]): [string, number, IssueStatus][] => (step === null || step.moved === null ? [] : [[`round ${number} ${name}`, step.at, step.moved]]));
   });
 }
 
-test("each observed status shows on the latest moment before it since the status before: an entry, or a round's handed, review, verdict or outcome step", () => {
+/** The statuses no moment explains, each a line of its own, as [its time, the status]. */
+const movesOf = (entries: readonly Entry[]): [number, IssueStatus][] => entries.flatMap((entry): [number, IssueStatus][] => (entry.kind === "moved" ? [[entry.at, entry.status]] : []));
+
+test("each observed status belongs to the latest moment before it since the status before: a round's handed, review, verdict or outcome step shows it, any other moment says it in its words", () => {
   const entries = feedOf({
     ...bbp19(),
     log: observed([
@@ -271,23 +269,17 @@ test("each observed status shows on the latest moment before it since the status
     ]),
   });
   assert.deepEqual(glyphsOf(entries), [
-    ["created", 1_000, "todo"],
-    ["agent-started", 2_000, "in-progress"],
     ["round 1 handed", 3_000, "reviewing"],
     ["round 1 review", 3_200, "verifying"],
     ["round 1 outcome", 3_600, "in-progress"],
     ["round 4 verdict", 6_400, "in-review"],
-    ["pr", 6_600, "done"],
   ]);
-  assert.equal(entries.filter((entry) => entry.kind === "moved").length, 0);
+  assert.deepEqual(movesOf(entries), [], "the moves the filing, the start and the merge explain are no lines of their own");
 });
 
 test("a second status after the same moment is a line of its own, in its place", () => {
   const entries = feedOf({ ...bbp19(), log: observed([[1_001, "todo"], [1_002, "backlog"], [3_010, "reviewing"], [3_020, "verifying"]]) });
-  assert.deepEqual(glyphsOf(entries), [
-    ["created", 1_000, "todo"],
-    ["round 1 handed", 3_000, "reviewing"],
-  ]);
+  assert.deepEqual(glyphsOf(entries), [["round 1 handed", 3_000, "reviewing"]]);
   assert.deepEqual(
     entries.slice(0, 5).map((entry) => [entry.kind, timeOf(entry)]),
     [
@@ -302,20 +294,18 @@ test("a second status after the same moment is a line of its own, in its place",
 });
 
 test("an issue filed before the log shows where it began, no status on anything above it, and a status logged before it never", () => {
-  const plan: Logged[] = [{ at: 7_100, event: { kind: "edited", fields: ["title"] } }];
+  const plan: Logged[] = [{ at: 7_100, event: { kind: "closed", as: "accepted" } }];
   const log: Logged[] = [...observed([[900, "todo"]]), { at: 7_000, event: { kind: "log-began" } }, ...observed([[7_010, "in-review"]]), ...plan, ...observed([[7_110, "done"]])];
   const entries = feedOf({ ...bbp19(), log });
-  assert.deepEqual(glyphsOf(entries), [["logged", 7_100, "done"]], "only the edit after the marker");
   assert.deepEqual(
     entries.slice(-3),
     [
-      { kind: "logged", at: 7_000, event: { kind: "log-began" }, moved: null },
+      { kind: "logged", at: 7_000, event: { kind: "log-began" } },
       { kind: "moved", at: 7_010, status: "in-review" },
-      { kind: "logged", at: 7_100, event: { kind: "edited", fields: ["title"] }, moved: "done" },
+      { kind: "logged", at: 7_100, event: { kind: "closed", as: "accepted" } },
     ],
   );
-  assert.equal(entries.some((entry) => entry.kind === "moved" && entry.status === "todo"), false);
-  assert.deepEqual([actorOf(entries.at(-3) ?? assert.fail()), actorOf(entries.at(-2) ?? assert.fail()), actorOf(entries.at(-1) ?? assert.fail())], [{ kind: "plugin" }, { kind: "plugin" }, { kind: "manager" }]);
+  assert.deepEqual(movesOf(entries), [[7_010, "in-review"]], "the accept after the marker explains Done; nothing before it was observed");
   const filters = ["all", "rounds", "discussion"] as const satisfies readonly Filter[];
   assert.deepEqual(filters.map((filter) => entries.slice(-3).filter((entry) => shownIn(filter, entry)).length), [3, 0, 0]);
 });
@@ -336,12 +326,12 @@ test("a round begun before the log shows no status on a step after the marker: t
   );
 });
 
-test("rows of the log written in one millisecond keep the order they were written: a status shows only on what came before it", () => {
+test("rows of the log written in one millisecond keep the order they were written: a status belongs only to what came before it", () => {
   const log: Logged[] = [...observed([[2_000, "todo"]]), { at: 2_000, event: { kind: "closed", as: "canceled" } }, ...observed([[2_001, "canceled"]])];
   const entries = feedOf({ issue: { createdAt: 0 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [], followUps: [], followUpOf: null });
   assert.deepEqual(entries, [
-    { kind: "created", at: 0, followUpOf: null, moved: "todo" },
-    { kind: "logged", at: 2_000, event: { kind: "closed", as: "canceled" }, moved: "canceled" },
+    { kind: "created", at: 0, followUpOf: null },
+    { kind: "logged", at: 2_000, event: { kind: "closed", as: "canceled" } },
   ]);
 });
 
@@ -349,24 +339,46 @@ test("a row the log kept after its start sits below the marker even when the clo
   const log: Logged[] = [{ at: 5_000, event: { kind: "log-began" } }, ...observed([[4_500, "todo"]]), { at: 4_600, event: { kind: "edited", fields: ["title"] } }];
   const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [], followUps: [], followUpOf: null });
   assert.deepEqual(entries, [
-    { kind: "created", at: 1_000, followUpOf: null, moved: null },
-    { kind: "logged", at: 5_000, event: { kind: "log-began" }, moved: null },
+    { kind: "created", at: 1_000, followUpOf: null },
+    { kind: "logged", at: 5_000, event: { kind: "log-began" } },
     { kind: "moved", at: 4_500, status: "todo" },
-    { kind: "logged", at: 4_600, event: { kind: "edited", fields: ["title"] }, moved: null },
+    { kind: "logged", at: 4_600, event: { kind: "edited", fields: ["title"] } },
   ]);
 });
 
-test("a status shows only on what was written before it, even when the clock stepped back between them", () => {
-  const log: Logged[] = [...observed([[3_000, "todo"], [5_000, "in-progress"]]), { at: 4_000, event: { kind: "edited", fields: ["title"] } }, ...observed([[4_100, "backlog"]])];
+test("a status belongs only to what was written before it, even when the clock stepped back between them", () => {
+  const log: Logged[] = [...observed([[3_000, "todo"], [5_000, "in-progress"]]), { at: 4_000, event: { kind: "rested", rest: "backlog" } }, ...observed([[4_100, "backlog"]])];
   const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [], followUps: [], followUpOf: null });
   assert.deepEqual(entries, [
-    { kind: "created", at: 1_000, followUpOf: null, moved: "todo" },
+    { kind: "created", at: 1_000, followUpOf: null },
     { kind: "moved", at: 5_000, status: "in-progress" },
-    { kind: "logged", at: 4_000, event: { kind: "edited", fields: ["title"] }, moved: "backlog" },
+    { kind: "logged", at: 4_000, event: { kind: "rested", rest: "backlog" } },
   ]);
 });
 
-test("comments show in the order posted among the other moments, under Discussion, each by its author, and never take a status", () => {
+/** A feed of an issue filed at 1,000 whose log is `log`, and nothing else. */
+const loggedOnly = (log: Logged[]) => feedOf({ issue: { createdAt: 1_000 }, agents: [], handed: [], finalChecks: [], decisions: [], events: [], log, comments: [], followUps: [], followUpOf: null });
+
+test("a status the moment before it doesn't say is a row of its own: a parent's title edited, then its sub-issue starting, reads Moved to In progress", () => {
+  const entries = loggedOnly([...observed([[1_001, "todo"]]), { at: 2_000, event: { kind: "edited", fields: ["title"] } }, ...observed([[2_100, "in-progress"]])]);
+  assert.deepEqual(entries, [
+    { kind: "created", at: 1_000, followUpOf: null },
+    { kind: "logged", at: 2_000, event: { kind: "edited", fields: ["title"] } },
+    { kind: "moved", at: 2_100, status: "in-progress" },
+  ]);
+});
+
+test("a moment whose words say the status after it explains it: set to rest, canceled, accepted as Done, accepted into In review; one saying another status doesn't", () => {
+  const says = (event: Logged["event"], status: IssueStatus) => movesOf(loggedOnly([...observed([[1_001, "todo"]]), { at: 2_000, event }, ...observed([[2_100, status]])]));
+  assert.deepEqual(says({ kind: "rested", rest: "backlog" }, "backlog"), []);
+  assert.deepEqual(says({ kind: "closed", as: "canceled" }, "canceled"), []);
+  assert.deepEqual(says({ kind: "closed", as: "accepted" }, "done"), []);
+  assert.deepEqual(says({ kind: "accepted" }, "in-review"), []);
+  assert.deepEqual(says({ kind: "rested", rest: "backlog" }, "in-progress"), [[2_100, "in-progress"]]);
+  assert.deepEqual(says({ kind: "reopened" }, "todo"), [[2_100, "todo"]], "Reopened names no status");
+});
+
+test("comments show in the order posted among the other moments, under Discussion, and never explain a status", () => {
   const comment = (n: number, at: number, author: Comment["author"], replyTo: number | null): Comment => ({
     id: commentIdSchema.parse(`m${n}`),
     issueId: BBP_19,
@@ -376,7 +388,7 @@ test("comments show in the order posted among the other moments, under Discussio
     author,
   });
   const comments = [comment(1, 1_500, { kind: "user" }, null), comment(2, 1_600, { kind: "manager" }, 1), comment(3, 2_100, { kind: "agent", agentId: A1 }, 1)];
-  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [agent(A1, 2_000, null)], handed: [], finalChecks: [], decisions: [], events: [], log: observed([[1_700, "in-progress"]]), comments, followUps: [], followUpOf: null });
+  const entries = feedOf({ issue: { createdAt: 1_000 }, agents: [agent(A1, 2_000, null)], handed: [], finalChecks: [], decisions: [], events: [], log: observed([[1_700, "todo"]]), comments, followUps: [], followUpOf: null });
 
   assert.deepEqual(
     entries.map((entry) => [entry.kind, timeOf(entry)]),
@@ -388,8 +400,7 @@ test("comments show in the order posted among the other moments, under Discussio
       ["comment", 2_100],
     ],
   );
-  assert.deepEqual(entries[0], { kind: "created", at: 1_000, followUpOf: null, moved: "in-progress" }, "the move after a comment shows on the moment before it");
-  assert.deepEqual(entries.filter((entry) => entry.kind === "comment").map(actorOf), [{ kind: "user" }, { kind: "manager" }, { kind: "agent", agentId: A1 }]);
+  assert.deepEqual(movesOf(entries), [], "the move after a comment belongs to the moment before it");
   assert.deepEqual(entries.filter((entry) => shownIn("discussion", entry)).map((entry) => entry.kind), ["comment", "comment", "comment"]);
   assert.deepEqual(entries.filter((entry) => shownIn("rounds", entry)), []);
 });

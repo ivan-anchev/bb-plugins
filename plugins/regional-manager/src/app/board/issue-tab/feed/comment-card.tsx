@@ -1,10 +1,12 @@
 // A comment in an issue's feed: the user's, posted from the tab and sent to the regional manager, or
-// a reply from the manager or the agent holding the issue, quoting a line of what it answers.
+// a reply from the manager or the agent holding the issue, quoting a line of what it answers. Its
+// text is cut to three lines, opening on press.
 import { firstLine, type Comment, type CommentId } from "../../../../model/feed/comment.ts";
-import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
+import type { Entry } from "../../../../model/feed/entry.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { useManagerName } from "../../../profile/use-manager.ts";
 import { When, Who, type FeedAgents } from "./byline.tsx";
+import { Clamp } from "./clamp.tsx";
 
 type CommentCardProps = {
   coordinatorId: CoordinatorId;
@@ -19,12 +21,14 @@ export function CommentCard({ coordinatorId, entry, answered, agents }: CommentC
   return (
     <article className="rmi-decision" aria-label={`Comment ${comment.id}`}>
       <p className="rmi-decision-head">
-        <Who actor={actorOf(entry)} coordinatorId={coordinatorId} agents={agents} />
+        <Who author={comment.author} coordinatorId={coordinatorId} agents={agents} />
         {comment.replyTo === null ? "commented" : `replied to ${comment.replyTo}`} <When at={comment.at} />
         <span className="rmi-decision-id">{comment.id}</span>
       </p>
       {answered !== null && <p className="rmi-comment-quote">{firstLine(answered.text)}</p>}
-      <p className="rmi-decision-text">{comment.text}</p>
+      <Clamp lines={3} className="rmi-decision-text">
+        {comment.text}
+      </Clamp>
       {comment.author.kind === "user" && <SentTo coordinatorId={coordinatorId} />}
     </article>
   );

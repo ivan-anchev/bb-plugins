@@ -1,10 +1,10 @@
-// Who, when and what it moved the issue to, as every entry of an issue's feed names them: the regional
-// manager by its avatar and name, as its own thread's row draws it; an agent by its id, opening its
-// thread while bb still has it; a moment as the board shows times; and the status observed after it,
-// as the Board draws a status.
+// Who, when and what it moved the issue to, as an issue's feed names them: the regional manager by
+// its avatar and name, as its own thread's row draws it; an agent by its id, opening its thread while
+// bb still has it; a moment as the board shows times; and the status a round's step moved the issue
+// to, as the Board draws a status.
 import type { IssueFeed } from "../../../../contract.ts";
 import type { AgentId } from "../../../../model/agent/agent.ts";
-import type { Actor } from "../../../../model/feed/entry.ts";
+import type { CommentAuthor } from "../../../../model/feed/comment.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../../model/issue/status.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { AvatarBlob } from "../../../profile/avatar.tsx";
@@ -50,15 +50,15 @@ export function MovedTo({ status }: { status: IssueStatus | null }) {
 }
 
 /** A status as the Board draws it: its glyph, then its name. why the name hidden from assistive tech: the glyph's label says it. */
-export const Status = ({ status }: { status: IssueStatus }) => (
+const Status = ({ status }: { status: IssueStatus }) => (
   <span className="rmi-status">
     <StatusGlyph status={status} /> <span aria-hidden>{STATUS_LABELS[status]}</span>
   </span>
 );
 
-/** Who did it, named where the entry names someone; a line by GitHub, bb or the plugin itself names no one. */
-export function Who({ actor, coordinatorId, agents }: { actor: Actor; coordinatorId: CoordinatorId; agents: FeedAgents }) {
-  switch (actor.kind) {
+/** Who wrote a comment. */
+export function Who({ author, coordinatorId, agents }: { author: CommentAuthor; coordinatorId: CoordinatorId; agents: FeedAgents }) {
+  switch (author.kind) {
     case "user":
       return <span className="rmi-actor">You </span>;
     case "manager":
@@ -70,18 +70,12 @@ export function Who({ actor, coordinatorId, agents }: { actor: Actor; coordinato
     case "agent":
       return (
         <>
-          <AgentName agentId={actor.agentId} agents={agents} />{" "}
+          <AgentName agentId={author.agentId} agents={agents} />{" "}
         </>
       );
-    case "verifier":
-      return <span className="rmi-actor">Verifier </span>;
-    case "github":
-    case "bb":
-    case "plugin":
-      return null;
     default:
       // why nothing: the server may be newer than this bundle for a moment after an update.
-      actor satisfies never;
+      author satisfies never;
       return null;
   }
 }

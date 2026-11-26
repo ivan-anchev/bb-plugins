@@ -72,7 +72,7 @@ const TRIAGE = [
   { result: "rejected", reason: "Matches the row." },
 ] as const;
 
-/** WEB-2 with an entry of every kind, the status its round's outcome moved it to, the one it was seen in after its edit and one no moment explains; WEB-1 it depends on, WEB-3 depending on it; and another manager's handoff, the manager then removed. */
+/** WEB-2 with an entry of every kind, the status its round's outcome moved it to, and two after its edit, which says none; WEB-1 it depends on, WEB-3 depending on it; and another manager's handoff, the manager then removed. */
 function seeded() {
   const { store } = freshStore();
   const dependency = filedIssue(store, MANAGER, newIssue(), 1_000).id;
@@ -111,17 +111,17 @@ const byKind = (feed: Fed) => new Map(feed.entries.map((entry): [FedEntry["kind"
 
 /** The keys each entry kind sends: what its tab reads of it. */
 const EXPECTED_KEYS: Record<FedEntry["kind"], string[]> = {
-  created: ["at", "followUpOf", "kind", "moved"],
-  logged: ["at", "event", "kind", "moved"],
-  "agent-started": ["agentId", "at", "kind", "moved"],
-  "agent-ended": ["agentId", "at", "how", "kind", "moved"],
+  created: ["at", "followUpOf", "kind"],
+  logged: ["at", "event", "kind"],
+  "agent-started": ["agentId", "at", "kind"],
+  "agent-ended": ["agentId", "at", "how", "kind"],
   round: ["kind", "round"],
-  decision: ["decision", "kind", "moved"],
+  decision: ["decision", "kind"],
   comment: ["comment", "kind"],
-  pr: ["at", "changes", "kind", "moved", "pr"],
-  thread: ["agentId", "at", "event", "kind", "moved"],
-  "follow-up": ["at", "issueId", "kind", "moved", "when"],
-  unblocked: ["at", "by", "kind", "moved"],
+  pr: ["at", "changes", "kind", "pr"],
+  thread: ["agentId", "at", "event", "kind"],
+  "follow-up": ["at", "issueId", "kind", "when"],
+  unblocked: ["at", "by", "kind"],
   moved: ["at", "kind", "status"],
 };
 
@@ -132,13 +132,13 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   assert.deepStrictEqual([feed.dependsOn, feed.blocks, feed.agents], [["WEB-1"], ["WEB-3"], [{ id: "a1", threadId: "thr_agent-1" }]]);
   assert.deepStrictEqual(
     feed.entries.map(({ kind }) => kind),
-    ["created", "agent-started", "round", "decision", "decision", "pr", "thread", "unblocked", "agent-ended", "logged", "comment", "comment", "moved"],
+    ["created", "agent-started", "round", "decision", "decision", "pr", "thread", "unblocked", "agent-ended", "logged", "comment", "comment", "moved", "moved"],
   );
   const entries = byKind(feed);
   assert.deepStrictEqual([...entries.keys()].sort(), keysOf(EXPECTED_KEYS).filter((kind) => kind !== "follow-up"), "an entry of every kind but a follow-up, which a pass files (the test below)");
   for (const [kind, entry] of entries) assert.deepStrictEqual(keysOf(entry), EXPECTED_KEYS[kind], kind);
   const pr = entries.get("pr");
-  assert.deepStrictEqual(pr?.kind === "pr" ? pr.pr : null, { forge: "github", number: 7 }, "a pr entry names its forge with its number, and nothing else of the snapshot");
+  assert.deepStrictEqual(pr?.kind === "pr" ? pr.pr : null, { forge: "github", number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, ci: "pending", failedChecks: [] }, "a pr entry carries what its badge shows of the snapshot its moment found, never its review or head commit");
   const round = entries.get("round");
   assert.ok(round?.kind === "round");
   assert.deepStrictEqual(keysOf(round.round), ["by", "handed", "inFlight", "key", "number", "outcome", "review", "verdict"]);
@@ -165,10 +165,12 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
       { id: "m2", issueId, at: 4_360, text: "Yes, five.", replyTo: "m1", author: { kind: "manager" } },
     ],
   );
-  assert.deepStrictEqual([entries.get("logged"), entries.get("moved")], [
-    { kind: "logged", at: 4_300, event: { kind: "edited", fields: ["title"] }, moved: "todo" },
+  assert.deepStrictEqual(feed.entries.slice(-5).filter(({ kind }) => kind !== "comment"), [
+    { kind: "logged", at: 4_300, event: { kind: "edited", fields: ["title"] } },
+    { kind: "moved", at: 4_400, status: "todo" },
     { kind: "moved", at: 4_500, status: "backlog" },
-  ]);
+  ], "an edit says no status, so the moves after it are rows of their own");
+  assert.deepStrictEqual(entries.get("pr"), { kind: "pr", at: 3_900, pr: { forge: "github", number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, ci: "pending", failedChecks: [] }, changes: ["opened"] }, "the pull request as its badge shows it, as the read that saw it opened found it");
   const thread = entries.get("thread");
   assert.deepStrictEqual(thread?.kind === "thread" && thread.event, { kind: "reported-back", lastAnswer: "Still on it." });
 });
@@ -285,7 +287,7 @@ test("through the feed RPC, only the round whose failure asked at the cap names 
   assert.deepStrictEqual(verdicts.map(({ asked }) => asked), [null, null, "d1"]);
   const decision = feed.entries.find((entry) => entry.kind === "decision");
   assert.ok(decision?.kind === "decision" && decision.decision.kind === "asked" && decision.decision.id === "d1", "the question shows as the issue's decision entry");
-  assert.deepStrictEqual(keysOf(decision), ["decision", "kind", "moved"]);
+  assert.deepStrictEqual(keysOf(decision), ["decision", "kind"]);
   assert.deepStrictEqual(keysOf(decision.decision), ["answer", "at", "cap", "id", "kind", "options", "question", "recommended"]);
   assert.equal(decision.decision.cap, 3, "the count it was asked at, which tells it from a question the regional manager asked");
   assert.equal(decision.decision.recommended, null, "the plugin's own question recommends no option");
@@ -299,13 +301,13 @@ test("the feed of an issue whose pass filed a follow-up sends one follow-up entr
 
   const feed = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: origin });
   const followUps = feed.entries.filter(({ kind }) => kind === "follow-up");
-  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", when: "passed", moved: null }]);
+  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", when: "passed" }]);
   assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
   const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
-  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: { issueId: "WEB-1", when: "passed" }, moved: null }], "the follow-up's own feed names its origin as it begins");
+  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: { issueId: "WEB-1", when: "passed" } }], "the follow-up's own feed names its origin as it begins");
   assert.match(followUp.brief ?? "", /- Round 1: Log each retry\n {2}`src\/retry\.ts:10` \(should-fix\): Log each retry\.\n {2}The verifier: Confirmed\. Nobody sees a retry\./, "its tab gets the brief that lists the finding, its round and the verifier's reason");
   const own = feed.entries.find(({ kind }) => kind === "created");
-  assert.deepStrictEqual(own, { kind: "created", at: 1_000, followUpOf: null, moved: null });
+  assert.deepStrictEqual(own, { kind: "created", at: 1_000, followUpOf: null });
 });
 
 test("the feed of an issue accepted as it is sends the manager's accept as a logged line and its follow-up entry filed on the accept, with exactly their keys; the follow-up's own feed begins filed on that accept", async () => {
@@ -318,11 +320,11 @@ test("the feed of an issue accepted as it is sends the manager's accept as a log
 
   const { entries } = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: origin });
   const logged = entries.filter((entry) => entry.kind === "logged");
-  assert.deepStrictEqual(logged, [{ kind: "logged", at: 3_000, event: { kind: "accepted" }, moved: null }]);
+  assert.deepStrictEqual(logged, [{ kind: "logged", at: 3_000, event: { kind: "accepted" } }]);
   assert.deepStrictEqual(keysOf(logged[0] ?? assert.fail("no accept")), EXPECTED_KEYS.logged);
   const followUps = entries.filter(({ kind }) => kind === "follow-up");
-  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", when: "accepted", moved: null }]);
+  assert.deepStrictEqual(followUps, [{ kind: "follow-up", at: 3_000, issueId: "WEB-2", when: "accepted" }]);
   assert.deepStrictEqual(keysOf(followUps[0] ?? assert.fail("no follow-up entry")), EXPECTED_KEYS["follow-up"]);
   const followUp = await handlers.issueFeed({ coordinatorId: MANAGER, issueId: issueIdSchema.parse("WEB-2") });
-  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: { issueId: "WEB-1", when: "accepted" }, moved: null }]);
+  assert.deepStrictEqual(followUp.entries, [{ kind: "created", at: 3_000, followUpOf: { issueId: "WEB-1", when: "accepted" } }]);
 });
