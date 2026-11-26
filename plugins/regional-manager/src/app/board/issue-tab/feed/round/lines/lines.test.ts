@@ -189,7 +189,7 @@ test("a round stored before findings had titles renders through the titles deriv
   assert.deepEqual(failed.map((line) => line.querySelector(".rmi-line-title")?.textContent), ["1 failing: caps the backoff."]);
 });
 
-/** The feed laid out as the browser would, in a window `window.innerHeight` tall: each line's box at `line`, a finding card's content `height` tall. why stubs: jsdom lays nothing out. */
+/** The feed laid out as the browser would, in a window `window.innerHeight` tall: each line's box at `line` (as it is when measured, so a test moves it by changing it), a finding card's content `height` tall. why stubs: jsdom lays nothing out. */
 function laidOut(line: { top: number; bottom: number }, height: number): () => void {
   const rect = (top: number, bottom: number) => DOMRect.fromRect({ x: 0, y: top, width: 549, height: bottom - top });
   const boxOf = HTMLElement.prototype.getBoundingClientRect;
@@ -197,7 +197,7 @@ function laidOut(line: { top: number; bottom: number }, height: number): () => v
   HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
     return this.classList.contains("rmi-fold-box") ? rect(line.top, line.bottom) : rect(0, 0);
   };
-  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("rmi-finding-card") ? height : 0; } });
+  Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get(this: HTMLElement) { return this.classList.contains("rmi-finding-card-body") ? height : 0; } });
   return () => {
     HTMLElement.prototype.getBoundingClientRect = boxOf;
     if (scrollHeight !== undefined) Object.defineProperty(HTMLElement.prototype, "scrollHeight", scrollHeight);
@@ -247,4 +247,24 @@ test("what failed a round besides its findings is one row each, a checkout or CI
   assert.match(document.getElementById(checkout.getAttribute("aria-controls") ?? "")?.textContent ?? "", /src\/retry\.ts/, "opened, what bb's git plugin read");
   const score = round.getByRole("button", { name: /^Round 1/ }).querySelector(".rmi-score");
   assert.equal(score?.textContent, "Criteria failed", "open, a word: no glyph, no count");
+});
+
+test("a finding's card follows its line as the panel scrolls: above it once the line nears the panel's foot, and gone once the line can't be seen", async () => {
+  const foot = window.innerHeight;
+  const { round, lines } = await openRound(FINDINGS);
+  const line = { top: 100, bottom: 128 };
+  const restore = laidOut(line, 186);
+  const panel = lines()[0]?.closest("article") ?? assert.fail("no round");
+  try {
+    act(() => lines()[0]?.focus());
+    assert.equal(round.getByRole("tooltip").dataset.side, "below");
+    Object.assign(line, { top: foot - 70, bottom: foot - 42 });
+    fireEvent.scroll(panel);
+    assert.equal(round.getByRole("tooltip").dataset.side, "above", "scrolled to the foot, it moves above its line");
+    Object.assign(line, { top: foot + 40, bottom: foot + 68 });
+    fireEvent.scroll(panel);
+    assert.equal(round.queryAllByRole("tooltip").length, 0, "scrolled out of sight, it goes");
+  } finally {
+    restore();
+  }
 });

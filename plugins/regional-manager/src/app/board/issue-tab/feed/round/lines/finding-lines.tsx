@@ -11,7 +11,7 @@ import type { VerifierFinding } from "../../../../../../model/verdict/verdict.ts
 import { useEscapeToClose } from "../../../../../ui/hold-escape.ts";
 import type { CardPresence } from "../../../../issue/hover-card/card-intent.ts";
 import { capStyle } from "../../../../issue/hover-card/hover-card.tsx";
-import { useRowPlacement } from "../../../../issue/hover-card/placement.ts";
+import { useFollowingRowPlacement } from "../../../../issue/hover-card/placement.ts";
 import type { HoverCards } from "../../../../issue/hover-card/use-hover-card.ts";
 import { FoldLine } from "./fold-line.tsx";
 import { Mark } from "./mark.tsx";
@@ -165,16 +165,17 @@ function FindingLine({ cardKey, cards, severity, effect, title, place, facts, sa
  * A finding's hover card, Activity Sidebar's (hover-card.css): its title whole, its severity and
  * origin, its full place, and the verifier's word. Placed as a board row's card is (placement.ts):
  * under its line, or above it where the panel has no room below, capped and scrolling when it fits
- * on neither side. Escape puts it away, wherever focus is. why no tab stop when capped: its line
+ * on neither side; placed again as the panel scrolls or the window resizes, and put away once its
+ * line can't be seen. Escape puts it away, wherever focus is. why no tab stop when capped: its line
  * opens on press to the same words, whole.
  */
 function FindingCard({ id, presence, title, facts, place, said }: { id: string; presence: CardPresence; title: string; facts: string; place: Place | null; said: ReactNode }) {
   useEffect(() => presence.mounted(), [presence]);
   useEscapeToClose(true, presence.close);
-  const { ref, placement } = useRowPlacement();
+  const { ref, body, placement } = useFollowingRowPlacement(presence.close);
   return (
     <div ref={ref} id={id} role="tooltip" className="rmi-card rmi-finding-card" data-side={placement.side} style={capStyle(placement)}>
-      <div className="rmi-card-body rmi-finding-card-body">
+      <div ref={body} className="rmi-card-body rmi-finding-card-body">
         <p className="rmi-card-title">{title}</p>
         <p className="rmi-fold-facts">{facts}</p>
         {place !== null && (

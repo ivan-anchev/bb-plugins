@@ -418,9 +418,11 @@
   color: var(--foreground);
 }
 /* why a zero basis: the summary takes what the number and the score leave, and gives way first. */
+/* why a floor: what was handed off is the folded line's point, so the score and the time give way to it
+   first, down to a third of the line. */
 .rmi-round-summary {
   flex: 1 1 0;
-  min-width: 0;
+  min-width: 33%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -439,6 +441,19 @@
   white-space: nowrap;
   color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
+}
+/* When it was handed off, at the head's end. why it may shrink, last: a time from another day carries its date. */
+.rmi-round-head > .rmi-when {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A narrow feed: the count goes, so the summary keeps its room; the round's lines count the findings open. */
+@container rmi-feed (max-width: 420px) {
+  .rmi-round-found {
+    display: none;
+  }
 }
 /* why it may shrink: a reason as long as "Not the claimed commit on a clean tree" ends in an ellipsis at
    a 360px panel, its whole words in its title and in the open round's verifier step. */
