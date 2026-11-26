@@ -10,8 +10,11 @@ import type { RunCli } from "./host-command.ts";
 /** A project the watch can read: on github.com as `owner/name`, or on a GitLab host glab is signed in to as `group/…/project`. */
 export type ForgeRepo = { forge: "github"; host: "github.com"; path: string } | { forge: "gitlab"; host: string; path: string };
 
-/** Where a project's remote is: on a forge the watch reads, or off them, with why. */
-export type Located = { kind: "on-forge"; repo: ForgeRepo } | { kind: "off-forge"; unavailable: PrUnavailable };
+/**
+ * Where a project's remote is: on a forge the watch reads; off them, with why, which the board
+ * shows; or nowhere, as its project has no git remote, which stays quiet until CI is asked of it.
+ */
+export type Located = { kind: "on-forge"; repo: ForgeRepo } | { kind: "off-forge"; unavailable: PrUnavailable } | { kind: "no-remote"; unavailable: PrUnavailable };
 
 /** A remote as parsed: its host, lower case, and its project path; `httpPort`: an http(s) remote names a port. */
 type Remote = { host: string; path: string; httpPort: boolean };
@@ -29,7 +32,7 @@ export function createLocator(run: RunCli) {
   const signedIn = new Set<string>();
 
   async function locate(remoteUrl: string | null): Promise<Located> {
-    if (remoteUrl === null) return offForge("its project has no git remote");
+    if (remoteUrl === null) return { kind: "no-remote", unavailable: { kind: "persistent", reason: "its project has no git remote", forge: null } };
     const remote = parseRemote(remoteUrl);
     if (remote === null) return offForge("its project's git remote isn't one the plugin can read");
     const { host, path, httpPort } = remote;
@@ -63,7 +66,22 @@ function parseRemote(remoteUrl: string): Remote | null {
   if (scp !== null) return remoteOf(scp[1] ?? "", scp[2] ?? "", false);
   const url = URL.parse(text);
   if (url === null || !SCHEMES.has(url.protocol)) return null;
-  return remoteOf(url.hostname, url.pathname, url.port !== "" && url.protocol.startsWith("http"));
+  return remoteOf(url.hostname, url.pathname, url.protocol.startsWith("http") && namesPort(text));
+}
+
+// A URL's authority: what lies between `scheme://` and the path.
+const AUTHORITY = /^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i;
+
+/**
+ * Whether a URL's authority names a port, the scheme's default included. why not URL's `port`: it
+ * drops a port that is the scheme's default, as https on 443, which the remote still names.
+ */
+function namesPort(text: string): boolean {
+  const authority = AUTHORITY.exec(text)?.[1] ?? "";
+  const hostAndPort = authority.slice(authority.lastIndexOf("@") + 1);
+  // why past a bracket: an IPv6 host holds colons of its own.
+  const afterHost = hostAndPort.startsWith("[") ? hostAndPort.slice(hostAndPort.indexOf("]") + 1) : hostAndPort;
+  return afterHost.includes(":");
 }
 
 function remoteOf(host: string, rawPath: string, httpPort: boolean): Remote | null {

@@ -192,9 +192,10 @@ function finishedOnHead({ snapshot: pr, headSeenAt, readAt }: PrFound): CiVerdic
 const NAME_SPAN_CAP = 100;
 
 // Characters that would break a name out of its line or its code span, or hide or reorder what it
-// says, and the whitespace around them: line breaks and other C0 and C1 controls, zero-width characters and joiners, line and
-// paragraph separators, bidi embeddings, overrides and isolates, and the byte-order mark.
-const UNQUOTABLE = /[\s\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]+/g;
+// says, and the whitespace around them: every control (C0 and C1, line breaks among them), every
+// format character (zero-width characters and joiners, bidi marks, embeddings, overrides and
+// isolates, the byte-order mark), every other bidi control, and line and paragraph separators.
+const UNQUOTABLE = /[\s\p{Cc}\p{Cf}\p{Bidi_Control}\p{Zl}\p{Zp}]+/gu;
 
 /**
  * Failed check or job names as text a manager or agent reads: each in a code span of its own, on

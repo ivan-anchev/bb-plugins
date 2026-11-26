@@ -54,7 +54,7 @@ export function jsonOrNull(text: string): unknown {
   }
 }
 
-const firstLine = (text: string) => text.split("\n").find((line) => line.trim() !== "");
+export const firstLine = (text: string) => text.split("\n").find((line) => line.trim() !== "");
 
 // Every way a Go CLI, gh or glab, through Go's net, net/http and crypto/tls, reports a connection that failed before its forge answered.
 const TRANSPORT = [

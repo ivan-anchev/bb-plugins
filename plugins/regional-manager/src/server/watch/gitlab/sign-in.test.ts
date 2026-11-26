@@ -43,10 +43,14 @@ test("sign-in: a host glab doesn't know, a missing glab and a glab older than 1.
   for (const [name, answer, reason] of cases) assert.deepEqual(await refusal(answer), { kind: "persistent", forge: null, reason }, name);
 });
 
-test("sign-in: a check glab ran that failed is GitLab's: rejected credentials and any other failure last; a connection that never answered may pass", async () => {
+test("sign-in: a check glab ran that failed is GitLab's: rejected credentials and a sign-in to redo last; a connection that never answered, a rate limit and anything unexplained may pass", async () => {
   const cases: [string, Parameters<typeof glab>[0], "persistent" | "transient", string][] = [
     ["credentials rejected", exited(status("error", `GET https://${HOST}/api/v4/user: 401 {message: 401 Unauthorized}`)), "persistent", `GitLab at ${HOST} rejected glab's credentials (HTTP 401): run glab auth login --hostname ${HOST} on the machine running bb`],
-    ["sign-in failed", exited(status("error", `the token for "${HOST}" is missing from the operating system keyring`)), "persistent", `glab's sign-in to ${HOST} failed on the machine running bb: run glab auth login --hostname ${HOST} there`],
+    ["sign-in failed", exited(status("error", `the token for "${HOST}" is missing from the operating system keyring; run \`glab auth login --hostname ${HOST}\` to re-authenticate`)), "persistent", `glab's sign-in to ${HOST} failed on the machine running bb: run glab auth login --hostname ${HOST} there`],
+    ["a rate limit in the status JSON", exited(status("error", `GET https://${HOST}/api/v4/user: 429 {message: Too Many Requests}`)), "transient", `GitLab at ${HOST} is limiting requests right now`],
+    ["a rate limit on stderr", exited("", "glab: Too Many Requests (HTTP 429)\n"), "transient", `GitLab at ${HOST} is limiting requests right now`],
+    ["anything unexplained in the status JSON", exited(status("error", `GET https://${HOST}/api/v4/user: 502 {message: Bad Gateway}`)), "transient", `glab couldn't read GitLab at ${HOST}: GET https://${HOST}/api/v4/user: 502 {message: Bad Gateway}`],
+    ["anything unexplained on stderr", exited("", "glab: something odd happened\n"), "transient", `glab couldn't read GitLab at ${HOST}: something odd happened`],
     ["a transport error in the status JSON", exited(status("error", `Get "https://${HOST}/api/v4/user": dial tcp: lookup ${HOST}: no such host`)), "transient", `couldn't reach GitLab at ${HOST}`],
     ["a transport error on stderr", exited("", `Get "https://${HOST}/api/v4/user": net/http: TLS handshake timeout\n`), "transient", `couldn't reach GitLab at ${HOST}`],
   ];

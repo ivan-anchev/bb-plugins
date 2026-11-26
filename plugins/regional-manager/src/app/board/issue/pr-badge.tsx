@@ -13,11 +13,13 @@ export function PrBadge({ pr }: { pr: PrSnapshot }) {
   const state: BadgeState = pr.state === "open" && pr.draft ? "draft" : pr.state;
   const ci = CI_NAME[pr.ci];
   const noun = FORGE[pr.forge].noun;
-  const said = [`${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${pr.number}, ${state}`, ci, pr.failedChecks.length > 0 ? `failed: ${pr.failedChecks.join(", ")}` : null].filter((part) => part !== null).join(", ");
+  // why the same in its label: a screen reader and a tooltip read the number as the badge shows it.
+  const number = pr.forge === "gitlab" ? prRef(pr) : String(pr.number);
+  const said = [`${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${number}, ${state}`, ci, pr.failedChecks.length > 0 ? `failed: ${pr.failedChecks.join(", ")}` : null].filter((part) => part !== null).join(", ");
   return (
     <a className="rmi-pr" data-state={state} href={pr.url} target="_blank" rel="noreferrer" title={said} aria-label={said}>
       {GLYPH[state]}
-      <span>{pr.forge === "gitlab" ? prRef(pr) : pr.number}</span>
+      <span>{number}</span>
       {ci !== null && <i className="rmi-ci" data-ci={pr.ci} aria-hidden />}
     </a>
   );

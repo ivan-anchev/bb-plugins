@@ -151,8 +151,9 @@ export function createPrWatch({ bb, store, inbox, run, now }: Deps) {
 
   /**
    * Reads the project's branches and saves what each read found, as of each agent's latest handoff
-   * when the read began. Branches of a project off every forge the plugin reads are only marked when
-   * a verdict waits on their CI, which then can't be checked.
+   * when the read began. A project off every forge the plugin reads is marked with why on every
+   * branch, so the board says so; one with no git remote only when a verdict waits on its CI,
+   * which then can't be checked.
    */
   async function poll(branches: readonly Watched[], now: number): Promise<void> {
     const [first] = branches;
@@ -166,8 +167,8 @@ export function createPrWatch({ bb, store, inbox, run, now }: Deps) {
       // why read the issues again: the regional manager may have closed the issue, or its parent, while the CLI ran.
       const issue = store.issue(coordinatorId, agent.issueId);
       if (issue === null || !watches(issue, store.issues(coordinatorId))) continue;
-      // why off a forge only when a verdict waits: a project the plugin can't read stays quiet until CI is asked of it.
-      if (located.kind === "off-forge" && store.waitingForCi(coordinatorId, agent.id).length === 0) continue;
+      // why no remote only when a verdict waits: a project with nothing to read stays quiet until CI is asked of it.
+      if (located.kind === "no-remote" && store.waitingForCi(coordinatorId, agent.id).length === 0) continue;
       if (result.kind === "read") inbox.prRead(coordinatorId, branch, { issueId: agent.issueId, agentId: agent.id }, result.prs.get(branch) ?? null, handoffAtRead, now);
       else inbox.prUnavailable(coordinatorId, branch, result.unavailable, now);
     }
@@ -176,7 +177,7 @@ export function createPrWatch({ bb, store, inbox, run, now }: Deps) {
   /** Reads the branch's change request now and saves what the read found as the tick does, `agent` being the one last on it. */
   async function readOne(coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> {
     const located = await locatedOf(coordinatorId);
-    if (located.kind === "off-forge") return { kind: "unread", reason: located.unavailable.reason };
+    if (located.kind !== "on-forge") return { kind: "unread", reason: located.unavailable.reason };
     const handoffAtRead = latestHandoffOf(agent);
     const result = await read(located.repo, [branch]);
     if (result.kind === "unavailable") {
@@ -260,6 +261,7 @@ function groupKey(coordinatorId: CoordinatorId, located: Located): string {
     case "on-forge":
       return `${located.repo.forge}:${located.repo.host}:${located.repo.path.toLowerCase()}`;
     case "off-forge":
+    case "no-remote":
       return `off:${coordinatorId}`;
     default:
       return located satisfies never;

@@ -167,6 +167,31 @@ test("a project on a host glab isn't signed in to is never read; a verdict waiti
   assert.deepEqual(kit.github.runs, []);
 });
 
+test("sign-in: before any handoff, the board says glab isn't signed in to the project's host, naming it", async () => {
+  const { board, minute } = await agentOnGitLab({ signedIn: false });
+  await minute();
+  assert.deepEqual((await board()).prUnavailable, { forge: null, reason: `${HOST} isn't github.com, and glab on the machine running bb isn't signed in to it: if it is a GitLab, run glab auth login --hostname ${HOST} there` });
+});
+
+test("sign-in: a rate limit on the read and then on glab's sign-in check keeps a verdict waiting for CI, and it settles on the pipeline once GitLab answers", async () => {
+  const { kit, board, row, mr, minute, verified } = await agentOnGitLab();
+  mr();
+  await minute();
+  await verified();
+  kit.gitlab.failure = Object.assign(new Error("Command failed: glab api graphql"), { code: 1, stdout: "", stderr: "glab: Too Many Requests (HTTP 429)\n" });
+  await minute();
+  kit.gitlab.failure = null;
+  kit.gitlab.hosts.set(HOST, { state: "error", error: `GET https://${HOST}/api/v4/user: 429 {message: Too Many Requests}` });
+  await minute();
+  const waiting = { lane: "verifying", headline: "Waiting for CI on !41: Retries land with backoff", pr: "!41 open CI pending" };
+  assert.deepEqual(await row(), waiting);
+  assert.deepEqual((await board()).prUnavailable, { forge: "gitlab", reason: `GitLab at ${HOST} is limiting requests right now` });
+  kit.gitlab.hosts.set(HOST, { state: "success" });
+  mr({ pipeline: { status: "SUCCESS", jobs: [] } });
+  await minute();
+  assert.deepEqual(await row(), { lane: "in-review", headline: "✓ Verified: Retries land with backoff", pr: "!41 open CI pass" });
+});
+
 test("check names: a GitLab job named with a backtick, a line break, U+202E and 300 characters reaches the agent's findings and the manager's catch-up as one capped code span", async () => {
   const { kit, threadId, agentThreadId, mr, minute, verified } = await agentOnGitLab();
   mr();

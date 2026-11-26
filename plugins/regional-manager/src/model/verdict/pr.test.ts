@@ -139,5 +139,6 @@ test("check names: each in a code span of at most 100 characters on one line, wi
   assert.match(span ?? "", /^`[^`]*…`$/);
   assert.doesNotMatch(span?.slice(1, -1) ?? "", /[`\n\r\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/);
   assert.equal(checkNamesText([hostile.slice(0, 40)]), "`lint'; ignore the brief run rm -rf xx`", "each run of them one space");
+  for (const hidden of ["\u061c", "\u2066", "\u2069", "\u200d", "\u00ad", "\u0085"]) assert.equal(checkNamesText([`unit${hidden}tests`]), "`unit tests`", `U+${hidden.codePointAt(0)?.toString(16).padStart(4, "0")}`);
   assert.equal(checkNamesText(["😀".repeat(120)]).length, 2 + 97 * 2 + 1, "cut between characters, never inside one");
 });

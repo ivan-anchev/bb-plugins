@@ -212,7 +212,8 @@ test("a row's pull request links it, apart from opening the issue", () => {
 test("a row's merge request on GitLab reads !41 and links it; a pipeline blocked on a manual job shows the running dot and says so", () => {
   const url = "https://gitlab.corp.test/frontend/station-ws/-/merge_requests/41";
   const { view } = mount([issue("WEB-2", { status: "in-review", pr: { forge: "gitlab", number: 41, url, state: "open", draft: false, review: "none", ci: "blocked", headSha: SHA, failedChecks: [] } })]);
-  const mr = view.getByRole("link", { name: "Merge request 41, open, CI blocked on a manual job" });
+  const mr = view.getByRole("link", { name: "Merge request !41, open, CI blocked on a manual job" });
+  assert.equal(mr.getAttribute("title"), "Merge request !41, open, CI blocked on a manual job", "the tooltip reads the number as the badge shows it");
   assert.equal(mr.getAttribute("href"), url);
   assert.equal(mr.textContent, "!41");
   assert.equal(mr.querySelector(".rmi-ci")?.getAttribute("data-ci"), "blocked");

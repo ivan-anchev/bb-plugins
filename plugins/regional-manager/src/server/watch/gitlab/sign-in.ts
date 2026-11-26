@@ -5,8 +5,8 @@
 // still on stdout when the check failed (review.md, glab 1.131.0 live; context.md §1.4).
 import { z } from "zod";
 import type { PrUnavailable } from "../../../model/verdict/pr.ts";
-import { connectionFailed, jsonOrNull, parseHostCommandFailure, type HostCommandFailure, type RunCli } from "../host-command.ts";
-import { glabWords } from "./glab-failure.ts";
+import { connectionFailed, firstLine, jsonOrNull, parseHostCommandFailure, type HostCommandFailure, type RunCli } from "../host-command.ts";
+import { glabFailure, glabWords } from "./glab-failure.ts";
 
 type SignIn = { kind: "signed-in" } | { kind: "refused"; unavailable: PrUnavailable };
 
@@ -24,27 +24,38 @@ export async function glabSignIn(run: RunCli, host: string): Promise<SignIn> {
 /**
  * Why an `auth status` that failed doesn't sign the host in. why forge null on some: glab doesn't
  * know the host, so nothing says it is GitLab; where glab has the host and its check failed, it is.
+ * Past the failures only `auth status` has, its stderr reads as a read's does (glabFailure): a
+ * connection that never answered, a rate limit and anything unexplained may pass.
  */
 function whyNot(host: string, failure: HostCommandFailure): PrUnavailable {
-  const gitlab = glabWords(host);
   if (failure.code === "ENOENT") return { kind: "persistent", forge: null, reason: `${host} isn't github.com, and glab, the GitLab CLI, isn't installed on the machine running bb: if ${host} is a GitLab, install glab there and run glab auth login --hostname ${host}` };
   // why transient: the ask got no answer, which says nothing about the sign-in, so a waiting verdict keeps waiting.
   if (failure.killed) return { kind: "transient", forge: null, reason: `glab didn't answer whether it is signed in to ${host} on the machine running bb` };
   if (/unknown flag: --output/.test(failure.stderr)) return { kind: "persistent", forge: null, reason: `glab on the machine running bb is older than 1.122, which reading GitLab at ${host} needs: update it there` };
   const entry = entryOf(failure.stdout, host);
   if (entry?.state === "error") return checkFailed(host, entry.error);
-  if (connectionFailed(failure.stderr)) return { kind: "transient", forge: "gitlab", reason: gitlab.unreachable };
-  return notSignedIn(host);
+  if (NOT_SIGNED_IN.test(failure.stderr)) return notSignedIn(host);
+  return glabFailure(host, failure);
 }
 
-/** Why glab's check of a host it has failed: a connection that never answered may pass; credentials GitLab rejected, and any other failure, last until someone signs in again. */
+// glab's words for a host it has no sign-in for, or for having none at all.
+const NOT_SIGNED_IN = /has not been authenticated|no GitLab instances have been authenticated/;
+
+/**
+ * Why glab's check of a host it has failed, from the entry's error, which reads like
+ * `GET https://H/api/v4/user: 401 {message: 401 Unauthorized}`: credentials GitLab rejected, and
+ * a sign-in glab says to redo, last until someone signs in again; a connection that never
+ * answered, a rate limit and anything unexplained may pass.
+ */
 function checkFailed(host: string, error: string): PrUnavailable {
   const gitlab = glabWords(host);
   // why: glab may word a host it has no sign-in for as an entry, as well as a message alone.
-  if (/has not been authenticated/.test(error)) return notSignedIn(host);
+  if (NOT_SIGNED_IN.test(error)) return notSignedIn(host);
   if (connectionFailed(error)) return { kind: "transient", forge: "gitlab", reason: gitlab.unreachable };
+  if (/\b429\b|rate limit/i.test(error)) return { kind: "transient", forge: "gitlab", reason: gitlab.rateLimited };
   if (/\b401\b/.test(error)) return { kind: "persistent", forge: "gitlab", reason: gitlab.rejected };
-  return { kind: "persistent", forge: "gitlab", reason: `glab's sign-in to ${host} failed on the machine running bb: run glab auth login --hostname ${host} there` };
+  if (error.includes("glab auth login")) return { kind: "persistent", forge: "gitlab", reason: `glab's sign-in to ${host} failed on the machine running bb: run glab auth login --hostname ${host} there` };
+  return { kind: "transient", forge: "gitlab", reason: gitlab.unexplained(firstLine(error) ?? "its check of the sign-in failed with no message") };
 }
 
 const notSignedIn = (host: string): PrUnavailable => ({

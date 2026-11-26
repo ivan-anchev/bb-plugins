@@ -60,14 +60,17 @@ test("forgetting a host asks glab about it again on the next locate", async () =
 test("a remote the plugin can't read says why, naming at most its host, never its userinfo or the whole remote", async () => {
   const glab = glabSignedIn("git.corp.test");
   const { locate } = createLocator(glab.run);
-  const reasonOf = async (remote: string | null) => {
+  const reasonOf = async (remote: string) => {
     const located = await locate(remote);
     return located.kind === "off-forge" ? located.unavailable : assert.fail(`${remote} was located`);
   };
   const ported = await reasonOf("https://user:secret@git.corp.test:8443/g/p.git");
   assert.deepEqual(ported, { kind: "persistent", forge: null, reason: "its project's git remote on git.corp.test names a port, which the plugin doesn't read" });
   assert.ok(!ported.reason.includes("secret") && !ported.reason.includes("user"));
-  assert.deepEqual(await reasonOf(null), { kind: "persistent", forge: null, reason: "its project has no git remote" });
+  for (const remote of ["https://gitlab.corp.test:443/g/p.git", "http://user:secret@git.corp.test:80/g/p.git", "https://git.corp.test:/g/p.git"]) {
+    assert.match((await reasonOf(remote)).reason, /^its project's git remote on git(lab)?\.corp\.test names a port, which the plugin doesn't read$/, `${remote}: a default port is still a port`);
+  }
+  assert.deepEqual(await locate(null), { kind: "no-remote", unavailable: { kind: "persistent", forge: null, reason: "its project has no git remote" } });
   for (const remote of ["/Users/ivan/repos/webhooks", "file:///srv/git/webhooks.git", "https://user:secret@git.corp.test/%zz/p.git"]) {
     assert.deepEqual(await reasonOf(remote), { kind: "persistent", forge: null, reason: "its project's git remote isn't one the plugin can read" }, remote);
   }
