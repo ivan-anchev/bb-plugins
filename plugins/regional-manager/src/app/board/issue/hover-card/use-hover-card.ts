@@ -4,7 +4,7 @@
 import type { FocusEvent, HTMLAttributes, PointerEvent } from "react";
 import { useCardIntent, type CardPresence } from "./card-intent.ts";
 
-type HoverCards = {
+export type HoverCards = {
   /** The key of the row whose card shows; null: none. */
   shown: string | null;
   /** On a row's box: the pointer and focus events that open and close its card. */

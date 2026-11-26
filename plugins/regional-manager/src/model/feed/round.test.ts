@@ -75,18 +75,24 @@ test("a reported review counts its findings and, once the verdict triaged them, 
   assert.deepEqual(
     findings.map(({ triage }) => triage),
     [
-      { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound." },
-      { result: "rejected", reason: "It matches the row." },
-      { result: "confirmed", reason: "Only the first attempt is tested." },
-      { result: "downgraded", to: "nit", reason: "It breaks none of the five." },
+      { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound.", effect: "blocks" },
+      { result: "rejected", reason: "It matches the row.", effect: "rejected" },
+      { result: "confirmed", reason: "Only the first attempt is tested.", effect: "follow-up" },
+      { result: "downgraded", to: "nit", reason: "It breaks none of the five.", effect: "nit" },
     ],
-    "each triage on its own finding, in the review's order",
+    "each triage on its own finding, in the review's order, with what it does to the work: a downgraded must-fix by its new severity",
   );
   assert.deepEqual(
-    findings.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin })),
-    FINDINGS.map(({ file, line, severity, claim, origin }) => ({ file, line, severity, claim, origin })),
-    "each finding as the reviewer wrote it, with its origin; its title stays on the server, as the tab shows none",
+    findings.map(({ title, file, line, severity, claim, origin }) => ({ title, file, line, severity, claim, origin })),
+    FINDINGS,
+    "each finding as the reviewer wrote it, its title and origin included",
   );
+});
+
+test("a must-fix the verifier confirmed before the anchor rule blocks the work only when it failed that verdict, as it did then", () => {
+  const legacy: Triaged = { title: "The backoff has no cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", result: "confirmed", reason: "It holds." };
+  const effects = [true, false].map((mustFixFails) => bodyOf(HANDOFF, handed(REPORTED, { ...RETURNED, triage: [legacy, ...TRIAGE.slice(1)], mustFixFails }).check).findings[0]?.triage?.effect);
+  assert.deepEqual(effects, ["blocks", "follow-up"]);
 });
 
 test("before the verdict returns, the findings show with no triage yet and nothing is counted as held or downgraded", () => {

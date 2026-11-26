@@ -61,11 +61,8 @@
 .rmi-clamp-press:focus-visible,
 .rmi-filter button:focus-visible,
 .rmi-grid-cell:focus-visible,
-.rmi-finding-place:focus-visible,
 .rmi-round-head:focus-visible,
-.rmi-passes > summary:focus-visible,
 .rmi-report-fold > summary:focus-visible,
-.rmi-criterion > summary:focus-visible,
 .rmi-evidence:focus-visible,
 .rmi-report:focus-visible {
   outline: none;
@@ -170,7 +167,11 @@
 .rmi-grid-evidence [data-result="unverifiable"] { color: var(--warning-text); }
 
 /* --- Activity: entries in time order ------------------------------------------------------------ */
+/* why a container: a round's lines drop their places when the feed is narrow, whatever the window.
+   why the feed's, not each round's: a container is a stacking context, and a finding's card must
+   paint over the entries after its round. */
 .rmi-entries {
+  container: rmi-feed / inline-size;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -473,73 +474,44 @@
   margin-top: 0;
 }
 
-/* An open round: its steps on the Board's hairline rail, then its outcome. */
+/* An open round: what was handed off, its lines (round/lines/lines.css), what became of it, and its
+   report. */
 .rmi-round-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 0 10px 10px;
+  gap: 2px;
+  padding: 0 10px 6px 30px;
 }
-.rmi-steps {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  list-style: none;
-}
-.rmi-step {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 4px 0 8px 16px;
-}
-/* The rail: a dot at each step, a hairline trunk down to the next, in the Board's rail colour. */
-.rmi-step::before {
-  content: "";
-  position: absolute;
-  left: 3px;
-  top: 9px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--subtle-foreground);
-}
-.rmi-step::after {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 18px;
-  bottom: -5px;
-  width: 1px;
-  background: var(--border);
-}
-.rmi-step:last-child::after {
-  display: none;
-}
-.rmi-step-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  column-gap: 4px;
-  color: var(--muted-foreground);
-}
-.rmi-step-text {
+.rmi-round-said {
+  margin-bottom: 4px;
   color: var(--foreground);
   text-wrap: pretty;
+  overflow-wrap: anywhere;
 }
+.rmi-round-note {
+  padding: 5px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.rmi-round-note[data-tone="failed"] { color: var(--destructive-text); }
+.rmi-round-note[data-tone="warning"] { color: var(--warning-text); }
+/* What became of it: a quiet row, its words wrapping within themselves, its time after them. */
 .rmi-outcome {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   column-gap: 4px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+  min-height: 28px;
+  padding: 5px 0;
+  font-size: 12px;
+  line-height: 18px;
   color: var(--muted-foreground);
 }
 
-/* A fold inside a step: the handoff's report, a verdict's passes. */
-.rmi-report-fold > summary,
-.rmi-passes > summary {
+/* The handoff's report, folded at the end of an open round. */
+.rmi-report-fold > summary {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -551,20 +523,15 @@
   cursor: pointer;
   color: var(--muted-foreground);
 }
-.rmi-report-fold > summary::-webkit-details-marker,
-.rmi-passes > summary::-webkit-details-marker,
-.rmi-criterion > summary::-webkit-details-marker {
+.rmi-report-fold > summary::-webkit-details-marker {
   display: none;
 }
-.rmi-report-fold > summary > .rmi-disclose,
-.rmi-passes > summary > .rmi-disclose {
+.rmi-report-fold > summary > .rmi-disclose {
   align-self: center;
   margin-top: 0;
 }
 @media (hover: hover) {
-  .rmi-report-fold > summary:hover,
-  .rmi-passes > summary:hover,
-  .rmi-criterion > summary:hover {
+  .rmi-report-fold > summary:hover {
     background: var(--state-hover);
     color: var(--foreground);
   }
@@ -656,87 +623,6 @@
   line-height: 20px;
 }
 
-/* The reviewer's findings: place, severity and claim in a line, then the verifier's triage. */
-.rmi-findings {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0;
-  list-style: none;
-}
-.rmi-finding {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.rmi-finding-line {
-  min-width: 0;
-  text-wrap: pretty;
-}
-/* A finding's severity and origin, in parentheses. why no chip behind it: on --muted, --destructive-text drops below 4.5:1 in the light theme. */
-.rmi-finding-tags {
-  font-size: 11px;
-  color: var(--muted-foreground);
-}
-.rmi-severity {
-  font-weight: 500;
-}
-.rmi-severity[data-severity="must-fix"] { color: var(--destructive-text); }
-.rmi-severity[data-severity="should-fix"] { color: var(--warning-text); }
-/* A finding's place and, hovered or focused, its tooltip. */
-.rmi-finding-slot {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
-  vertical-align: bottom;
-}
-/* why right to left with an ellipsis: a long path is cut at its start, keeping its file and line.
-   why white-space pre: a leading or trailing space is part of the path, and shows. */
-.rmi-finding-place {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: pre;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted-foreground);
-  direction: rtl;
-}
-/* The place whole, left to right, wrapping anywhere, its spaces kept. */
-.rmi-finding-tip {
-  right: auto;
-  left: 0;
-  max-width: 280px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  font-family: var(--font-mono);
-}
-.rmi-finding-claim {
-  color: var(--foreground);
-}
-.rmi-finding[data-triage="rejected"] .rmi-finding-claim {
-  color: var(--muted-foreground);
-}
-.rmi-finding-claim s {
-  text-decoration-color: var(--subtle-foreground);
-}
-.rmi-triage {
-  color: var(--muted-foreground);
-}
-.rmi-triage b {
-  font-weight: 500;
-}
-/* why only an anchored finding in red: it alone fails the verdict; one confirmed, downgraded or rejected doesn't. */
-.rmi-triage[data-triage="anchored"] b { color: var(--destructive-text); }
-.rmi-triage b { color: var(--foreground); }
-
-/* The verdict on a round. */
-.rmi-verdict {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .rmi-verdict-meta {
   font-size: 11px;
   line-height: 14px;
@@ -746,46 +632,6 @@
   font-family: var(--font-mono);
 }
 .rmi-detail [data-tone="warning"] { color: var(--warning-text); }
-.rmi-verdict-meta[data-tone="failed"] { color: var(--destructive-text); }
-.rmi-criteria-checked {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0;
-  list-style: none;
-}
-.rmi-criterion-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 2px 0;
-}
-.rmi-criterion > summary {
-  padding: 2px 6px;
-  margin: 0 -6px;
-  border-radius: 6px;
-  list-style: none;
-  cursor: pointer;
-}
-.rmi-criterion-number {
-  flex: 0 0 auto;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--subtle-foreground);
-}
-.rmi-criterion-text {
-  flex: 1 1 auto;
-  min-width: 0;
-  color: var(--foreground);
-}
-.rmi-result {
-  flex: 0 0 auto;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-}
-.rmi-result[data-result="fail"] { color: var(--destructive-text); }
-.rmi-result[data-result="unverifiable"] { color: var(--warning-text); }
 .rmi-result-glyph {
   flex: 0 0 14px;
   margin-top: 1.5px;
