@@ -274,7 +274,7 @@ test("removing a regional manager removes everything it owns, and nothing of ano
       { kind: "unread", reason: "unused" },
       null,
     );
-    store.insertDecision(manager, { question: "Which queue?", options: [], issueId: id }, 3_000);
+    store.insertDecision(manager, { question: "Which queue?", options: [], recommended: null, issueId: id }, 3_000);
     store.insertReminder(manager, { note: "Look again", dueAt: 9_000, everyMs: null });
     store.memoryRevision(manager, memoryFileSchema.parse("MEMORY.md"), "v1");
     store.savePrRead(manager, "bb/retries", { issueId: id, agentId }, null, null, 3_000);
@@ -375,7 +375,7 @@ test("every write to what an issue's view is read from counts for its regional m
   const done: Handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: i1, agentId, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
   counted("a done handoff", () => store.insertHandoff(done, { kind: "unread", reason: "unused" }, null));
   counted("a pull request read", () => store.savePrRead(MANAGER, "bb/retries", { issueId: i1, agentId }, null, null, 3_000));
-  const decision = counted("a decision asked", () => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: i1 }, 3_000));
+  const decision = counted("a decision asked", () => store.insertDecision(MANAGER, { question: "Which queue?", options: [], recommended: null, issueId: i1 }, 3_000));
   counted("a decision answered", () => store.answerDecision(MANAGER, decision.id, "SQS", 3_100));
   counted("the agent ended", () => store.endAgent({ coordinatorId: MANAGER, id: agentId, issueId: i1 }, "stopped", null, false, 4_000));
 
@@ -489,7 +489,7 @@ test("every write to what an issue's feed reads counts for that issue as it comm
 
   assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" }, null)), [bbp19], "a handoff");
   assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { dependsOn: { add: [bbp7], remove: [] } }, unheld)).sort(), [bbp19, bbp7].sort(), "a dependency");
-  assert.deepEqual(moved(() => store.insertDecision(MANAGER, { question: "Which queue?", options: [], issueId: bbp7 }, 3_100)), [bbp7], "a question about it");
+  assert.deepEqual(moved(() => store.insertDecision(MANAGER, { question: "Which queue?", options: [], recommended: null, issueId: bbp7 }, 3_100)), [bbp7], "a question about it");
   assert.deepEqual(moved(() => store.updateIssue(MANAGER, bbp19, { decision: { text: "SQS", at: 3_200 } }, unheld)), [bbp19], "a decision recorded on it");
   assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "unblocked", issueId: bbp19, by: bbp7, closedAs: "done" }, 3_300)), [bbp19], "an inbox event naming it");
   assert.deepEqual(moved(() => store.insertEvent(MANAGER, { kind: "verification-toggled", verify: false }, 3_400)), [], "an event naming no issue");
@@ -600,7 +600,7 @@ test("a reported review stored before findings had an origin, a title or earlier
 
 test("a check stored before checks kept their work's branch gets its agent's branch as last recorded when the store opens", () => {
   const { db, storage } = memoryStorage();
-  storage.migrate(db, MIGRATIONS.slice(0, -1));
+  storage.migrate(db, MIGRATIONS.slice(0, MIGRATIONS.findIndex((statement) => statement.includes("json_set(subject, '$.branch'"))));
   db.prepare("INSERT INTO roles (ticket, thread_id, role, created_at) VALUES ('ticket-1', 'thr_a', ?, 1000)").run(JSON.stringify({ kind: "coordinator", coordinatorId: MANAGER }));
   db.prepare("INSERT INTO coordinators (id, ticket, project_id, verify, created_at, issue_key) VALUES (?, 'ticket-1', 'prj_1', 1, 1000, 'WEB')").run(MANAGER);
   db.prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, done_criteria, rest, created_at) VALUES (?, 'WEB-1', 'build', 'Retries', 'Lost deliveries.', '[\"npm test passes\"]', 'todo', 1000)").run(MANAGER);

@@ -1,12 +1,13 @@
 // Tests only: a fresh store with one regional manager whose thread is bound, and the steps most
 // store tests take before what they test.
 import type Database from "better-sqlite3";
-import type { z } from "zod";
+import { z } from "zod";
 import type { PluginStorage } from "@get-bb/plugin-sdk";
 import { memoryStorage } from "../memory-storage.ts";
 import { randomUUID } from "node:crypto";
 import type { AgentId } from "../../model/agent/agent.ts";
 import { handoffIdSchema } from "../../model/agent/handoff.ts";
+import { decisionIdSchema, type DecisionId } from "../../model/decision.ts";
 import type { Check } from "../../model/verdict/check.ts";
 import type { ReviewFinding, triageSchema } from "../../model/verdict/review.ts";
 import type { Issue, IssueId, NewIssue } from "../../model/issue/issue.ts";
@@ -72,6 +73,18 @@ export function failWrites(db: Database.Database, op: "INSERT" | "UPDATE" | "DEL
   const trigger = `fail_${op}_${table}`;
   db.exec(`CREATE TRIGGER ${trigger} BEFORE ${op} ON ${table} WHEN ${when} BEGIN SELECT RAISE(ABORT, 'forced failure'); END`);
   return () => db.exec(`DROP TRIGGER ${trigger}`);
+}
+
+/**
+ * Stores a question as a release before crew_ask_user required an issue wrote it: on no issue,
+ * with no recommended option (that column came later), asked by the regional manager at `at`.
+ */
+export function askedOnNoIssue(storage: Pick<PluginStorage, "database">, coordinatorId: CoordinatorId, question: string, options: readonly string[], at: number): DecisionId {
+  const row = storage
+    .database()
+    .prepare("INSERT INTO decisions (coordinator_id, issue_id, question, options, asked_at) VALUES (?, NULL, ?, ?, ?) RETURNING id")
+    .get(coordinatorId, question, JSON.stringify(options), at);
+  return decisionIdSchema.parse(`d${z.object({ id: z.number().int() }).parse(row).id}`);
 }
 
 /** Turns verification off for the regional manager without recording the switch, as for one that never verified. */

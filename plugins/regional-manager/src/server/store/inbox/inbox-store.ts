@@ -1,7 +1,7 @@
 // What the plugin tells a regional manager, and what it waits on the user for: events and the
 // doorbells that announce them, the reminders it set itself, and the decisions it put to the user.
 import { z } from "zod";
-import { decisionIdSchema, type DecisionId, type Decision } from "../../../model/decision.ts";
+import { decisionIdSchema, type DecisionId, type Decision, type NewDecision } from "../../../model/decision.ts";
 import { inboxEventSchema, type InboxEvent, type StoredEvent } from "../../../model/inbox/inbox-event.ts";
 import { ownTreeEventAfter, type OwnTreeEvent } from "../../../model/inbox/own-tree.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
@@ -17,11 +17,11 @@ export function insertEvent(db: Db, coordinatorId: CoordinatorId, event: InboxEv
   db().prepare("INSERT INTO events (coordinator_id, event, at) VALUES (?, ?, ?)").run(coordinatorId, JSON.stringify(event), at);
 }
 
-/** Puts a decision to the user, flagging `issueId` Needs you until answered (null: none), and returns it with its id; `cap` as decision.ts says. Call inside the transaction that decides to ask. */
-export function insertDecision(db: Db, coordinatorId: CoordinatorId, { question, options, issueId, cap }: Pick<Decision, "question" | "options" | "issueId" | "cap">, at: number): Decision {
+/** Puts a decision to the user, flagging `issueId` Needs you until answered, and returns it with its id; `cap` and `recommended` as decision.ts says. Call inside the transaction that decides to ask. */
+export function insertDecision(db: Db, coordinatorId: CoordinatorId, { question, options, recommended, issueId, cap }: NewDecision, at: number): Decision {
   const row = db()
-    .prepare(`INSERT INTO decisions (coordinator_id, issue_id, question, options, asked_at, cap) VALUES (?, ?, ?, ?, ?, ?) RETURNING ${DECISION_COLUMNS}`)
-    .get(coordinatorId, issueId, question, JSON.stringify(options), at, cap);
+    .prepare(`INSERT INTO decisions (coordinator_id, issue_id, question, options, recommended, asked_at, cap) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING ${DECISION_COLUMNS}`)
+    .get(coordinatorId, issueId, question, JSON.stringify(options), recommended, at, cap);
   return toDecision(row);
 }
 
@@ -208,8 +208,8 @@ export function inboxStore(db: Db) {
       })();
     },
 
-    /** Puts the regional manager's question to the user, flagging `issueId` Needs you until answered (null: none), and returns it with its id. */
-    insertDecision: (coordinatorId: CoordinatorId, asked: Pick<Decision, "question" | "options" | "issueId">, at: number): Decision => insertDecision(db, coordinatorId, { ...asked, cap: null }, at),
+    /** Puts the regional manager's question to the user, flagging `issueId` Needs you until answered, and returns it with its id. */
+    insertDecision: (coordinatorId: CoordinatorId, asked: Omit<NewDecision, "cap">, at: number): Decision => insertDecision(db, coordinatorId, { ...asked, cap: null }, at),
 
     /** A decision by its id, answered or not; null when there is none. */
     decision(id: DecisionId): Decision | null {
@@ -250,12 +250,13 @@ const toReminder = (row: unknown): Reminder => reminderRowSchema.parse(row);
 
 /** A decision's row id is its number: `d7` is row 7. */
 const rowIdOfDecision = (id: DecisionId): number => Number(id.slice(1));
-const DECISION_COLUMNS = "id, issue_id AS issueId, question, options, asked_at AS askedAt, answer, answered_at AS answeredAt, cap";
+const DECISION_COLUMNS = "id, issue_id AS issueId, question, options, recommended, asked_at AS askedAt, answer, answered_at AS answeredAt, cap";
 const decisionRowSchema = z.object({
   id: z.number().int().transform((id) => decisionIdSchema.parse(`d${id}`)),
   issueId: issueIdSchema.nullable(),
   question: z.string(),
   options: json(z.array(z.string())),
+  recommended: z.string().nullable(),
   askedAt: z.number(),
   cap: z.number().int().min(1).nullable(),
 });

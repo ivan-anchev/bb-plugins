@@ -3,6 +3,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coordinatorIdSchema } from "../../model/role.ts";
+import { memoryStorage } from "../memory-storage.ts";
+import { askedOnNoIssue } from "../store/test-store.ts";
 import { coordinating, HEAD, ISSUE, settled, startedAgent, textOf, toCap } from "../test-harness.ts";
 
 const REPORT = { summary: "Done", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -13,7 +15,8 @@ const REPORT = { summary: "Done", did: [], evidence: [], concerns: [], deviation
  * issue; in review, and in Todo.
  */
 async function busyBoard() {
-  const started = await coordinating();
+  const { storage } = memoryStorage();
+  const started = await coordinating({ storage });
   const { kit, threadId, coordinatorId } = started;
   const file = async (input: object) => textOf(await kit.call("issue_create", { ...ISSUE, ...input }, threadId));
   const handedOff = async (title: string, status: "done" | "blocked") => {
@@ -31,7 +34,7 @@ async function busyBoard() {
   await file({ title: "Webhook schema" }); // WEB-5: todo, its sub-issue asked about
   await file({ title: "Schema version", parent: "WEB-5" }); // WEB-6
   await kit.call("crew_ask_user", { question: "Keep v1 fields?", options: [], issue: "WEB-6" }, threadId);
-  await kit.call("crew_ask_user", { question: "Ship on Friday?", options: [] }, threadId);
+  askedOnNoIssue(storage, coordinatorId, "Ship on Friday?", [], 1_000);
   await kit.rpc.setVerify({ coordinatorId, verify: false });
   await handedOff("Retry metrics", "done"); // WEB-7: in review, unverified
   await file({ title: "Backoff docs" }); // WEB-8: todo

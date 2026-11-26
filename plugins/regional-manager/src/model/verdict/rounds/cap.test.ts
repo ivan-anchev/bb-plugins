@@ -67,6 +67,7 @@ const question = (n: number, cap: number, answered: boolean): CapQuestion => ({
   issueId: ISSUE,
   question: "Anything",
   options: ["One more round", "Cancel it"],
+  recommended: null,
   askedAt: 6_000,
   answer: answered ? { text: "One more round", at: 7_000 } : null,
   cap,

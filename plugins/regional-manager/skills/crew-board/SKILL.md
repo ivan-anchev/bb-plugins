@@ -109,7 +109,7 @@ and no tool can turn verification on or off.
 | `crew_memory_read` | regional manager, agent, verifier | Reads one memory file, such as `NOTES.md` or `notes/api.md`, with its version. |
 | `crew_memory_write` | regional manager | Writes one memory file whole, naming the version it read (null to create one); a stale write returns the current text instead. |
 | `crew_remind` | regional manager | Sets a reminder (`note`, `at`, optional `every`) or cancels one (`cancel`). |
-| `crew_ask_user` | regional manager | Puts a one-line question, with up to five options, on its board, optionally naming the issue it is about: the question and its answer are then among that issue's decisions. |
+| `crew_ask_user` | regional manager | Puts a one-line question about one of its issues, with up to five options and optionally the one it recommends, into that issue's feed and on its board: the question and its answer are then among that issue's decisions. |
 | `crew_end_turn` | regional manager | Ends a turn that changes nothing for you, with a one-line `reason` and no reply; its result repeats the reason. It doesn't stop the thread. |
 | `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
 | `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`; with `decision`, alone or with the rest, records what was decided about it and why. |
@@ -971,8 +971,9 @@ catch-up without waking it.
 
 When only you can decide something, a regional manager asks with
 `crew_ask_user`: a one-line question (up to 500 characters) and up to five
-options (each one line, up to 80 characters, no two alike), or none, and
-optionally the issue it is about. It returns at once and the thread keeps
+options (each one line, up to 80 characters, no two alike), or none,
+optionally the one it recommends (it must be one of them), and the issue it
+is about, which every new question names. It returns at once and the thread keeps
 working: the question never waits as a form in its thread, where it would
 hold every update meant to wake it. It gets an id: `d1`, `d2`… An id is never
 reused.
@@ -984,7 +985,7 @@ it has text. A send that fails keeps your text, with the error under it. Text
 you haven't sent stays in the browser, through a resize or a reload, until you
 send it or the decision is answered elsewhere. An issue the decision names
 also waits under Needs you until you answer. Your answer takes the decision
-off the board and wakes the thread; a decision that named an issue stays,
+off the board and wakes the thread; a decision that names an issue stays,
 with your answer and when you gave it, in that issue's **Activity**, where an
 open one's options answer it too (see [The board](#the-board)). The thread's
 `crew_catch_up` returns your answer, as the option you chose or in your own

@@ -4,27 +4,53 @@ import { decisionIdSchema } from "../../../model/decision.ts";
 import { closesOf } from "../../../model/issue/relations.ts";
 import { issueViews, type IssueView } from "../../../model/issue/status.ts";
 import type { PrSnapshot } from "../../../model/verdict/pr.ts";
-import { failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, takeUnread } from "../test-store.ts";
+import { askedOnNoIssue, failWrites, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, takeUnread } from "../test-store.ts";
 
-test("a decision may name the issue it flags, and is answered once", () => {
+test("a decision names the issue it flags and the option it recommends, and is answered once", () => {
   const { store } = freshStore();
   const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);
-  const named = store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId }, 3_000);
-  const general = store.insertDecision(MANAGER, { question: "Ship on Friday?", options: [], issueId: null }, 3_100);
+  const named = store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], recommended: "SQS", issueId }, 3_000);
+  const open = store.insertDecision(MANAGER, { question: "Ship on Friday?", options: [], recommended: null, issueId }, 3_100);
 
-  assert.deepEqual(named, { id: "d1", issueId, question: "Which queue?", options: ["SQS", "Redis"], askedAt: 3_000, answer: null, cap: null });
-  assert.equal(general.issueId, null);
+  assert.deepEqual(named, { id: "d1", issueId, question: "Which queue?", options: ["SQS", "Redis"], recommended: "SQS", askedAt: 3_000, answer: null, cap: null });
+  assert.deepEqual(store.decision(named.id), named, "read back as stored");
   assert.equal(store.answerDecision(MANAGER, named.id, "SQS", 4_000), "answered");
   assert.equal(store.answerDecision(MANAGER, named.id, "Redis", 4_100), "already-answered");
-  assert.equal(store.answerDecision(OTHER_MANAGER, general.id, "Yes", 4_100), "unknown", "another manager's decision is not this one's");
+  assert.equal(store.answerDecision(OTHER_MANAGER, open.id, "Yes", 4_100), "unknown", "another manager's decision is not this one's");
   assert.equal(store.answerDecision(MANAGER, decisionIdSchema.parse("d9"), "Yes", 4_100), "unknown");
   assert.deepEqual(store.decisions(MANAGER).map(({ id, answer }) => [id, answer]), [["d1", { text: "SQS", at: 4_000 }], ["d2", null]]);
   assert.deepEqual(store.unannounced(MANAGER).map(({ event }) => event), [{ kind: "decision-answered", decisionId: named.id }]);
 });
 
+test("a question stored before questions named an issue or a recommended option reads back on no issue, recommending none, and is answered", () => {
+  const { storage, store } = freshStore();
+  const id = askedOnNoIssue(storage, MANAGER, "Ship on Friday?", ["Yes", "No"], 3_000);
+
+  assert.deepEqual(store.decisions(MANAGER), [{ id, issueId: null, question: "Ship on Friday?", options: ["Yes", "No"], recommended: null, askedAt: 3_000, answer: null, cap: null }]);
+  assert.equal(store.answerDecision(MANAGER, id, "No", 4_000), "answered");
+  assert.deepEqual(store.decision(id)?.answer, { text: "No", at: 4_000 });
+});
+
+test("a question whose write count fails to write is not stored, and the same call then stores it with its recommended option", () => {
+  const { db, store } = freshStore();
+  const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);
+  const asked = { question: "Which queue?", options: ["SQS", "Redis"], recommended: "Redis", issueId };
+  const writes = store.factWrites(MANAGER);
+  const restore = failWrites(db, "UPDATE", "fact_writes");
+
+  assert.throws(() => store.insertDecision(MANAGER, asked, 3_000), /forced failure/);
+  assert.deepEqual([store.decisions(MANAGER), store.factWrites(MANAGER)], [[], writes], "the question's row was undone with its count");
+
+  restore();
+  const decision = store.insertDecision(MANAGER, asked, 3_100);
+  assert.deepEqual(store.decisions(MANAGER), [{ id: decision.id, issueId, question: "Which queue?", options: ["SQS", "Redis"], recommended: "Redis", askedAt: 3_100, answer: null, cap: null }]);
+  assert.equal(store.factWrites(MANAGER), writes + 1);
+});
+
 test("an answer that fails before the manager is told leaves the decision unanswered, and retried is answered and told once", () => {
   const { db, store } = freshStore();
-  const decision = store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], issueId: null }, 3_000);
+  const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);
+  const decision = store.insertDecision(MANAGER, { question: "Which queue?", options: ["SQS", "Redis"], recommended: null, issueId }, 3_000);
 
   const restore = failWrites(db, "INSERT", "events");
   assert.throws(() => store.answerDecision(MANAGER, decision.id, "SQS", 4_000), /forced failure/);

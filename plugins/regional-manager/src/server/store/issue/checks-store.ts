@@ -173,7 +173,7 @@ export function checksStore(db: Db) {
     const settled = failures.find(({ id }) => id === checkId)?.verdict;
     if (settled?.state !== "returned") return null;
     const cap = capAsks(failures.length, capQuestionsOf(decisionsOf(db, coordinatorId), issueId));
-    return cap === null ? null : insertDecision(db, coordinatorId, { issueId, question: capQuestionText(issueId, settled, cap), options: CAP_OPTIONS, cap }, at).id;
+    return cap === null ? null : insertDecision(db, coordinatorId, { issueId, question: capQuestionText(issueId, settled, cap), options: CAP_OPTIONS, recommended: null, cap }, at).id;
   }
 
   /**

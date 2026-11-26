@@ -107,7 +107,7 @@ test("once the answer lands the question shows it answered, and focus on the opt
 
 /** FEED with a question d9 asking "How many retries?" with these options, answered with `answer`. */
 function answeredWith(options: string[], answer: string) {
-  const asked: Entry = { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d9"), question: "How many retries?", options, at: 6_400, answer: { text: answer, at: 6_500 }, cap: null }, moved: null };
+  const asked: Entry = { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d9"), question: "How many retries?", options, recommended: null, at: 6_400, answer: { text: answer, at: 6_500 }, cap: null }, moved: null };
   return { feedOf: () => ({ ...FEED, entries: [...FEED.entries, asked] }) };
 }
 

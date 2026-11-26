@@ -600,13 +600,14 @@ test("issues stored before reviews, in every status, load with the same status, 
   ]);
 
   // As the release before reviews left it: no review column, no triage or time on a verdict, none of the
-  // issue feed's tables, and every migration from the review column on still to run.
+  // issue feed's tables, no recommended option on a question, and every migration from the review column on still to run.
   for (const { name } of z.array(z.object({ name: z.string() })).parse(db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%issue_writes%'").all())) db.exec(`DROP TRIGGER ${name}`);
   db.exec("DROP TABLE issue_writes");
   db.exec("DROP TABLE issue_log");
   db.exec("DROP TABLE comments");
   db.exec("DROP INDEX events_of_issue");
   db.exec("ALTER TABLE decisions DROP COLUMN cap");
+  db.exec("ALTER TABLE decisions DROP COLUMN recommended");
   db.exec("ALTER TABLE events DROP COLUMN doorbell");
   db.exec("ALTER TABLE checks DROP COLUMN accepted_at");
   db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
@@ -643,10 +644,11 @@ test("a check stores each finding's severity once, on its review; a verdict sett
 
   // As the release before this rule left a verdict that passed with the must-fix finding confirmed: settled, and its last migration still to run.
   db.exec(`UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0].result', 'confirmed'), '$.mustFixFails')`);
-  // why the issue log, comments, the decisions' cap, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
+  // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
   db.exec("DROP TABLE issue_log");
   db.exec("DROP TABLE comments");
   db.exec("ALTER TABLE decisions DROP COLUMN cap");
+  db.exec("ALTER TABLE decisions DROP COLUMN recommended");
   db.exec("ALTER TABLE events DROP COLUMN doorbell");
   db.exec("ALTER TABLE checks DROP COLUMN accepted_at");
   db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
@@ -744,10 +746,11 @@ async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confir
   assert.equal(stored.state === "returned" && stored.settlement.kind, left, "as the release before this rule left it");
   // The release before this rule let a confirmed must-fix finding pass, and stored no mustFixFails.
   before.db.prepare("UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0]', json(?)), '$.mustFixFails')").run(JSON.stringify({ result: triaged, reason: "It never caps." }));
-  // why the issue log, comments, the decisions' cap, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
+  // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
   before.db.exec("DROP TABLE issue_log");
   before.db.exec("DROP TABLE comments");
   before.db.exec("ALTER TABLE decisions DROP COLUMN cap");
+  before.db.exec("ALTER TABLE decisions DROP COLUMN recommended");
   before.db.exec("ALTER TABLE events DROP COLUMN doorbell");
   before.db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
   before.db.exec("ALTER TABLE checks DROP COLUMN accepted_at");

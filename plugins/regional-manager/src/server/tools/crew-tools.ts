@@ -136,18 +136,21 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
   bb.agents.registerTool({
     name: ASK_USER,
     description:
-      "Ask the user to decide something only they can: a one-line question and up to five short options. It goes on their board under Needs you, with a button for each option and a field to answer in their own words, and returns at once: carry on with other work, or end your turn. Their answer wakes you, and crew_catch_up returns it with your question. crew_catch_up lists the questions still waiting, so don't ask one twice. Name the issue the question is about, so the question and its answer are recorded on it: it flags the issue Needs you until the user answers, and stays among the issue's decisions, which issue_read and the agents you start on it see. Answered, it leaves the board; a question on no issue is then kept nowhere but in what you write down, in NOTES.md or an issue. Not for an agent's own question or approval: that waits in the agent's thread, for the user.",
+      "Ask the user to decide something only they can, about one of your issues: a one-line question, up to five short options, and the one you recommend if you have a view. The question goes into that issue's feed, and on their board under Needs you, with a button for each option and a field to answer in their own words; it flags the issue Needs you until they answer. It returns at once: carry on with other work, or end your turn. Their answer wakes you, and crew_catch_up returns it with your question. crew_catch_up lists the questions still waiting, so don't ask one twice. Answered, the question and its answer stay among the issue's decisions, which issue_read and the agents you start on it see. A question no issue holds yet, such as one about a crew rule, goes on the issue whose work raised it, or on one you file for it first. Not for an agent's own question or approval: that waits in the agent's thread, for the user.",
     presentation: { label: { pending: "Asking the user", completed: "Asked the user" }, icon: { glyph: "MessageCircleQuestion" } },
     parameters: z.object({
       question: questionSchema.describe("What the user decides, in one line, such as \"Target main or release/2?\"."),
       options: optionsSchema.default([]).describe("Up to five answers to pick from, each a few words, such as [\"main\", \"release/2\"]. Leave it out when only their own words will do."),
-      issue: issueIdSchema.optional().describe("The issue the question is about, such as BBP-4: it flags the issue Needs you until the user answers, and the question and its answer are recorded among its decisions."),
+      recommended: z.string().trim().optional().describe("The option you recommend, written exactly as one of options, such as \"release/2\". It is recorded with the question, so issue_read and the agents on the issue see it. Leave it out when you have no view."),
+      issue: issueIdSchema.describe("The issue the question is about, such as BBP-4: the question goes into its feed, flags it Needs you until the user answers, and is recorded among its decisions."),
     }),
-    execute: forManager(store, ASK_USER, (id, { question, options, issue }) => {
-      if (issue !== undefined && store.issue(id, issue) === null) return failed(`You have no issue ${issue}. crew_catch_up lists your issues.`);
-      const decision = store.insertDecision(id, { question, options, issueId: issue ?? null }, Date.now());
+    execute: forManager(store, ASK_USER, (id, { question, options, recommended, issue }) => {
+      if (store.issue(id, issue) === null) return failed(`You have no issue ${issue}. crew_catch_up lists your issues.`);
+      const refusal = recommended === undefined ? null : recommendedRefusal(options, recommended);
+      if (refusal !== null) return failed(refusal);
+      const decision = store.insertDecision(id, { question, options, recommended: recommended ?? null, issueId: issue }, Date.now());
       onChange(id);
-      return `Asked the user ${decision.id} on their board, under Needs you. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.`;
+      return `Asked the user ${decision.id} in ${issue}'s feed and on their board, under Needs you. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.`;
     }),
   });
 
@@ -162,6 +165,13 @@ export function registerCrewTools(bb: ToolsBb & { pluginId: string }, { store, i
     parameters: z.object({ reason: z.string().min(1).max(200).describe("Why nothing here needs the user, in one line.") }),
     execute: forManager(store, END_TURN, (_id, { reason }) => `${reason}\n\nYour turn is over. Write nothing more: no text, no whitespace and no other tool call.`),
   });
+}
+
+/** Why `recommended` can't be the question's recommended option, or null when it can: it must be one of the options, as written. */
+function recommendedRefusal(options: readonly string[], recommended: string): string | null {
+  if (options.includes(recommended)) return null;
+  if (options.length === 0) return `${ASK_USER} is refused: recommended "${recommended}" names no option, and the question offers none. Give options, or leave recommended out.`;
+  return `${ASK_USER} is refused: recommended "${recommended}" is not one of the options, ${options.map((option) => `"${option}"`).join(", ")}. Give one of them as written, or leave recommended out.`;
 }
 
 /** Whose memory a role reads. why the return type: a new role kind fails to compile here until it is given one. */

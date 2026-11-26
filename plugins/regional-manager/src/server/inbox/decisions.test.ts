@@ -6,6 +6,8 @@ import { boardGroups, laneOf } from "../../model/board/board-groups.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
+import { memoryStorage } from "../memory-storage.ts";
+import { askedOnNoIssue } from "../store/test-store.ts";
 import { coordinating, doorbellOf, newSubmission, failsVerification, HEAD, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap, holdingThreadLists, turnsUntil } from "../test-harness.ts";
 
 const QUESTION = "Target main or release/2?";
@@ -16,33 +18,64 @@ async function boardOf(kit: Awaited<ReturnType<typeof coordinating>>["kit"], coo
   return coordinatorContract.board.output.parse(await kit.rpc.board({ coordinatorId }));
 }
 
-/** A Coordinator that asked the user QUESTION with two options, its thread idle so a doorbell starts a turn. */
+/**
+ * A Coordinator that asked the user QUESTION with two options before crew_ask_user required an
+ * issue, so it names none, its thread idle so a doorbell starts a turn.
+ */
 async function asked() {
-  const started = await coordinating({ verify: false });
-  const { kit, threadId } = started;
-  const answer = textOf(await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"] }, threadId));
+  const { storage } = memoryStorage();
+  const started = await coordinating({ verify: false, storage });
+  const { kit, threadId, coordinatorId } = started;
+  askedOnNoIssue(storage, coordinatorId, QUESTION, ["main", "release/2"], 1_000);
   kit.thread(threadId).status = "idle";
   return {
     ...started,
-    answer,
+    storage,
     /** Every doorbell that reached the Coordinator, in order. */
     doorbells: () => kit.doorbellsDelivered(threadId),
   };
 }
 
-test("crew_ask_user returns at once, and the decision waits on the board under Needs you with its options", async () => {
-  const { kit, coordinatorId, answer, doorbells } = await asked();
-  assert.equal(answer, "Asked the user d1 on their board, under Needs you. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.");
+test("crew_ask_user returns at once, and the question waits on its issue and on the board under Needs you with its options and the one recommended", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
+  kit.thread(threadId).status = "idle";
+  const answer = textOf(await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], recommended: "release/2", issue: "WEB-1" }, threadId));
+  assert.equal(answer, "Asked the user d1 in WEB-1's feed and on their board, under Needs you. Carry on with other work, or end your turn: their answer wakes you, and crew_catch_up returns it.");
 
   const board = await boardOf(kit, coordinatorId);
   assert.deepEqual(
-    board.decisions.map((decision) => ({ id: decision.id, question: decision.question, options: decision.options, given: decision.answer })),
-    [{ id: d1, question: QUESTION, options: ["main", "release/2"], given: null }],
+    board.decisions.map(({ id, issueId, question, options, recommended, answer }) => ({ id, issueId, question, options, recommended, given: answer })),
+    [{ id: d1, issueId: "WEB-1", question: QUESTION, options: ["main", "release/2"], recommended: "release/2", given: null }],
   );
-  assert.deepEqual(boardGroups(board.decisions, board.issues).map(({ lane, rows }) => [lane, rows.length]), [["needs-you", 1]]);
+  assert.deepEqual(boardGroups(board.decisions, board.issues).map(({ lane, rows }) => [lane, rows.length]), [["needs-you", 2]], "the question and the issue it flags");
   assert.ok(kit.invalidated().includes(boardTag(coordinatorId)), "the board reads it again");
-  assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: { decisions: 1, issues: 0 } });
-  assert.deepEqual(doorbells(), [], "asking wakes nobody");
+  assert.deepEqual(await kit.rpc.needsYou({ keys: [coordinatorId] }), { [coordinatorId]: { decisions: 1, issues: 1 } });
+  assert.deepEqual(kit.doorbellsDelivered(threadId), [], "asking wakes nobody");
+  assert.match(textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId)), /- \S+: asked the user \(d1\): Target main or release\/2\? The recommended option was "release\/2"\. Not answered yet\.$/m);
+});
+
+test("crew_ask_user refuses a recommended option that is not one of its options, naming them, and asks nothing", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
+
+  const unlisted = await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], recommended: "release/3", issue: "WEB-1" }, threadId);
+  assert.ok(isRefusal(unlisted));
+  assert.equal(textOf(unlisted), 'crew_ask_user is refused: recommended "release/3" is not one of the options, "main", "release/2". Give one of them as written, or leave recommended out.');
+  const optionless = await kit.call("crew_ask_user", { question: QUESTION, recommended: "main", issue: "WEB-1" }, threadId);
+  assert.ok(isRefusal(optionless));
+  assert.equal(textOf(optionless), 'crew_ask_user is refused: recommended "main" names no option, and the question offers none. Give options, or leave recommended out.');
+  assert.deepEqual(kit.store.decisions(coordinatorId), []);
+
+  assert.match(textOf(await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], recommended: "main", issue: "WEB-1" }, threadId)), /^Asked the user d1/, "following the refusal's way forward asks it");
+});
+
+test("crew_ask_user refuses a question that names no issue, and asks nothing", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
+
+  await assert.rejects(kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"] }, threadId), /issue/);
+  assert.deepEqual(kit.store.decisions(coordinatorId), []);
 });
 
 test("while a decision waits for the user, an agent's handoff still wakes the regional manager", async () => {
@@ -74,8 +107,8 @@ test("an answer wakes the Coordinator with its own question, and crew_catch_up r
 });
 
 test("the badge counts what each board shows under Needs you: open decisions, and issues blocked, waiting in their thread or failed", async () => {
-  const { kit, threadId, coordinatorId } = await asked();
-  await kit.call("crew_ask_user", { question: "Ship on Friday?", options: [] }, threadId);
+  const { kit, threadId, coordinatorId, storage } = await asked();
+  askedOnNoIssue(storage, coordinatorId, "Ship on Friday?", [], 1_100);
   await kit.rpc.answerDecision({ coordinatorId, decisionId: decisionIdSchema.parse("d2"), answer: "No" });
   const agents = [];
   for (const title of ["Blocked", "Asking", "Failing", "Running", "Stopped"]) agents.push((await startedAgent(kit, threadId, { title, brief: "Do it." })).agentThreadId);
@@ -171,10 +204,11 @@ test("only the Coordinator that asked can be answered: another's decision is ref
 
 test("crew_ask_user refuses more than five options, two alike or a question on two lines, and asks nothing", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  await kit.call("issue_create", { ...ISSUE, status: "backlog" }, threadId);
   for (const input of [
-    { question: QUESTION, options: ["a", "b", "c", "d", "e", "f"] },
-    { question: QUESTION, options: ["main", "main"] },
-    { question: "Target main\nor release/2?", options: [] },
+    { question: QUESTION, options: ["a", "b", "c", "d", "e", "f"], issue: "WEB-1" },
+    { question: QUESTION, options: ["main", "main"], issue: "WEB-1" },
+    { question: "Target main\nor release/2?", options: [], issue: "WEB-1" },
   ]) {
     await assert.rejects(kit.call("crew_ask_user", input, threadId));
   }
@@ -207,8 +241,8 @@ test("a cap question whose issue's pull request merged leaves Needs you, on the 
   assert.deepEqual(await counted(), { decisions: 2, issues: 2 });
   // why the RPC's own answer, unparsed: a parse would drop a key the payload must not carry.
   const raw = await kit.rpc.board({ coordinatorId });
-  assert.deepStrictEqual(raw.decisions.map((decision) => Object.keys(decision).sort()), [0, 1].map(() => ["answer", "askedAt", "cap", "id", "issueId", "options", "question"]));
-  assert.deepStrictEqual(raw.decisions.map(({ cap }) => cap), [3, 3]);
+  assert.deepStrictEqual(raw.decisions.map((decision) => Object.keys(decision).sort()), [0, 1].map(() => ["answer", "askedAt", "cap", "id", "issueId", "options", "question", "recommended"]));
+  assert.deepStrictEqual(raw.decisions.map(({ cap, recommended }) => [cap, recommended]), [[3, null], [3, null]], "the plugin's own question recommends no option");
 
   const web1 = kit.store.agents(coordinatorId).find(({ issueId, ended }) => issueId === "WEB-1" && ended === null) ?? assert.fail("no holder");
   const branch = kit.thread(web1.threadId ?? assert.fail("no thread")).environmentBranchName ?? assert.fail("no branch");
@@ -305,7 +339,7 @@ async function askedWhileBusy() {
   const started = await coordinating({ verify: false });
   const { kit, threadId } = started;
   await startedAgent(kit, threadId);
-  await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"] }, threadId);
+  await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], issue: "WEB-1" }, threadId);
   await kit.call("crew_catch_up", {}, threadId);
   await settled();
   kit.thread(threadId).status = "active";

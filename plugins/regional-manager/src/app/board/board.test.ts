@@ -44,6 +44,7 @@ const decision = (id: string, answered: boolean): Decision => ({
   issueId: null,
   question: `Question ${id}?`,
   options: [],
+  recommended: null,
   askedAt: 1_000,
   cap: null,
   answer: answered ? { text: "Yes", at: 2_000 } : null,
