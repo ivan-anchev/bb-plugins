@@ -560,8 +560,10 @@ test("a follow-up filed on its origin's accept begins its feed saying so", async
   assert.equal(activity(tab()).texts()[0], `Filed as the follow-up of WEB-1, when it was accepted as it was ${shortTime(created.at)}`);
 });
 
-test("discussions: a GitLab merge request's unresolved discussions read as !41 unresolved discussions, in the doorbell's words", async () => {
-  const discussed: Entry = { kind: "pr", at: 6_500, pr: { forge: "gitlab", number: 41 }, changes: ["unresolved-discussions"], moved: null };
-  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, discussed] }) });
-  assert.ok(activity(tab()).texts().some((text) => /^!41 unresolved discussions Jan/.test(text ?? "")), activity(tab()).texts().join("\n"));
+test("discussions: a GitLab merge request's unresolved discussions lead with its !41 badge and read unresolved discussions, in the doorbell's words", async () => {
+  const draft: PrBadgeFacts = { forge: "gitlab", number: 41, url: "https://gitlab.corp.test/frontend/station-ws/-/merge_requests/41", state: "open", draft: true, ci: "pending", failedChecks: [] };
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [{ kind: "pr", at: 6_500, pr: draft, changes: ["unresolved-discussions"] }] }) });
+  const [line] = activity(tab()).lines();
+  assert.equal(within(line ?? assert.fail("no row")).getByRole("link").getAttribute("href"), draft.url);
+  assert.deepEqual(activity(tab()).rows(), [`!41 unresolved discussions ${EARLY}`]);
 });
