@@ -54,6 +54,7 @@ const RETURNED: Verdict = {
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
   criteria: [{ criterion: "npm test passes", result: "fail", evidence: "1 failing" }],
   findings: [],
+  blocking: [],
   triage: TRIAGE,
   mustFixFails: true,
   model: { providerId: "claude-code", model: "sonnet" },

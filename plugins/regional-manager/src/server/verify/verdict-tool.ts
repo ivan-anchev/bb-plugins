@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
-import { ANCHOR_RULE, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
+import { ANCHOR_RULE, anchorProblem, blockingDefectSchema, numberedText, placeText, TRIAGE_RULE, triageProblem, triageVariants, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
 import type { Store } from "../store/store.ts";
@@ -27,7 +27,12 @@ const verdictInputSchema = z.object({
     .min(1)
     .max(MAX_CRITERIA)
     .describe("One entry for every done-criterion, none skipped."),
-  findings: z.array(z.string().trim().min(1).max(2_000)).max(20).describe("Problems you saw that no criterion covers. [] for none."),
+  findings: z.array(z.string().trim().min(1).max(2_000)).max(20).describe("Problems you saw that no criterion covers and that meet no blocking anchor, each with the severity CREW.md's Reviewers section gives it. They never fail the verdict. [] for none."),
+  blocking: z
+    .array(blockingDefectSchema)
+    .max(20)
+    .default([])
+    .describe(`Defects you found yourself, as with creed-qa's checks of the surrounding code, that no criterion covers and that meet a blocking anchor: each with its anchor and, for a bug, the normal-use steps that reach it. Each one fails the verdict. ${ANCHOR_RULE} [] for none.`),
   triage: z
     .array(
       triageVariants({
@@ -102,12 +107,14 @@ function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: re
       ),
       findings,
     ) ??
-    triageRefusal(input.triage, findings);
+    triageRefusal(input.triage, findings) ??
+    blockingRefusal(input.blocking);
   if (refused !== null) return refused;
   const byNumber = new Map(input.criteria.map((check) => [check.criterion, check]));
   const byFinding = new Map(input.triage.map(({ finding, ...triage }) => [finding, triage]));
   return {
     findings: input.findings,
+    blocking: input.blocking,
     criteria: criteria.map((criterion, i) => {
       const check = byNumber.get(i + 1);
       // why throw: missing numbers were refused above.
@@ -145,9 +152,19 @@ function triageRefusal(triage: VerdictInput["triage"], findings: readonly Review
   return null;
 }
 
+/** Why a blocking defect's anchor can't be taken (review.ts anchorProblem), naming the first such defect by its number; null when every one can. */
+function blockingRefusal(blocking: VerdictInput["blocking"]): string | null {
+  for (const [i, defect] of blocking.entries()) {
+    const problem = anchorProblem(defect, "report it in findings instead");
+    if (problem !== null) return `blocking defect ${i + 1}: ${problem}.`;
+  }
+  return null;
+}
+
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or once it refuses because the check no longer waits for your verdict or your worktree couldn't be read. The plugin judges the commit and the tree itself, through bb's git plugin (your first message says when it reads them); you judge the criteria, and triage the reviewer's findings.
+const VERDICT_INSTRUCTIONS = `Returning your verdict: call issue_verdict as your last action. When it refuses what you passed (a criterion or finding skipped, repeated or invented, or a triage the rule refuses), nothing was saved: correct what it names and call it again. Stop once it records your verdict, or once it refuses because the check no longer waits for your verdict or your worktree couldn't be read. The plugin judges the commit and the tree itself, through bb's git plugin ; you judge the criteria, and triage the reviewer's findings.
 - criteria: one entry per done-criterion, by its number in your first message: result pass, fail or unverifiable, and evidence quoting what you ran and what it printed (up to 4,000 characters). ${UNCHECKABLE_RULE}
-- findings: problems no criterion covers, up to 20. [] for none.
+- blocking: defects you found yourself, as with creed-qa, that no criterion covers and that meet a blocking anchor (the anchor rule below), up to 20: each its claim, its anchor and, for a bug, safety or regression anchor, steps. Each fails the verdict, as a failed criterion does. [] for none.
+- findings: every other problem no criterion covers, up to 20, with its severity: they never fail the verdict. [] for none.
 - triage: when your first message lists the reviewer's findings, one entry for each by its number: result rejected, confirmed, anchored with its anchor (and steps for a bug, safety or regression anchor), or downgraded with to, the lower severity. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`;

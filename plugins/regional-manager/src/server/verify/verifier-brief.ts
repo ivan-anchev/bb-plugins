@@ -44,13 +44,13 @@ export function verifierBrief(
 }
 
 /**
- * What a defect a handoff's verifier finds outside the done-criteria does, as when creed-qa's checks
- * of the surrounding code turn one up (CREW.md's Verifiers section). why "in findings": the
- * verifier's own findings never fail a verdict (verdict.ts), so one fails it only through a
- * criterion it breaks; the regional manager reads the rest with the verdict.
+ * What a defect a verifier finds itself outside the done-criteria does, as when creed-qa's checks of
+ * the surrounding code turn one up (CREW.md's Verifiers section): one that meets a blocking anchor
+ * goes in issue_verdict's blocking, and fails the verdict (verdict.ts failureReasons); any other
+ * goes in its findings, which never do.
  */
 export const QA_RULE =
-  "When you run creed-qa, a defect its checks of the surrounding code turn up outside the done-criteria fails the verdict only if it meets a blocking anchor: when it breaks a done-criterion, fail that criterion on your own evidence. Report every other one in findings, with the severity CREW.md's Reviewers section gives it and, for a must-fix, the anchor it meets and the normal-use steps that reach it: your findings reach the regional manager with your verdict, and never fail it themselves. A defect that meets no anchor, as a REVIEW.md or principle violation or a bug that needs a contrived setup, never fails a criterion and never makes your verdict NOT_VERIFIED.";
+  "When you run creed-qa, a defect its checks of the surrounding code turn up outside the done-criteria fails the verdict only if it meets a blocking anchor. Report one that does in issue_verdict's blocking, with its anchor and, for a bug, the normal-use steps that reach it: each one fails the verdict, as a failed criterion does. Report every other one in findings, with the severity CREW.md's Reviewers section gives it: findings never fail the verdict. A defect that meets no anchor, as a REVIEW.md or principle violation or a bug that needs a contrived setup, never fails a criterion and never makes your verdict NOT_VERIFIED.";
 
 /**
  * A final check's verifier's: the parent's own criteria, on the default branch as origin has it,

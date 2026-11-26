@@ -656,7 +656,11 @@ before its verifier starts. The plugin starts a **reviewer**:
   names it. The reviewer's and the verifier's first messages, their rules
   and `issue_review`'s and `issue_verdict`'s instructions say so; the
   verifier's also says a defect its creed-qa run finds outside the criteria
-  fails the verdict only through a criterion it breaks. A reviewer reports
+  fails the verdict only when it meets a blocking anchor: it reports one in
+  `issue_verdict`'s `blocking`, with its anchor and, for a bug, its steps,
+  and each fails the verdict, as "a blocking defect the verifier found",
+  which the agent's fix round, the manager's update and the board's round
+  name; every other defect goes in `findings`, which never fail it. A reviewer reports
   each finding at the severity CREW.md gives it: the verifier, not the
   reviewer, anchors or downgrades a must-fix.
 - **Triage**: the verifier's first message lists the findings, numbered, as

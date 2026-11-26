@@ -17,6 +17,7 @@ const returned = (results: CriterionResult[], settlement: Settlement = { kind: "
   checkout: CLEAN,
   criteria: results.map((result, i) => ({ criterion: `criterion ${i + 1}`, result, evidence: "ran it" })),
   findings: [],
+  blocking: [],
   model: { providerId: "codex", model: "gpt-default" },
   sameModel: false,
   triage: [],
@@ -88,6 +89,26 @@ test("a stored triage the rule refuses for its finding's severity is refused as 
   assert.equal(outcome(readWith([["must-fix", CONFIRMED], ["should-fix", { ...DOWNGRADED, to: "nit" }]])), "fail", "a confirmed must-fix from before the anchor rule still reads, and a valid downgrade beside it");
 });
 
+test("a stored safety or regression anchor with no steps, as before d68, reads and fails its verdict; on a nit or a missed finding it is refused as the store reads it, as any anchor there is", () => {
+  const stepless = (anchor: "safety" | "regression"): Triage => ({ result: "anchored", anchor, steps: null, reason: "It loses deliveries." });
+  assert.equal(outcome(readWith([["must-fix", stepless("safety")], ["must-fix", stepless("regression")]])), "fail");
+  assert.throws(() => readWith([["nit", stepless("safety")]]), /^Error: The verdict's triage of finding 1 breaks the triage rule: only a must-fix is anchored, and this one is a nit: confirm it\.$/);
+  const { triage: _none, ...stored } = returned(["pass", "pass"]);
+  assert.throws(
+    () => withReview({ ...stored, triage: [stepless("regression")] }, [{ ...finding("must-fix"), origin: "missed" }]),
+    /triage of finding 1 breaks the triage rule: a missed finding is never anchored, safety included/,
+  );
+  assert.throws(() => readWith([["must-fix", { result: "anchored", anchor: "bug", steps: null, reason: "It crashes." }]]), /a bug anchor needs steps/, "only safety and regression were stored with no steps");
+});
+
+test("a blocking defect the verifier found itself fails a verdict whose criteria all pass, after any failing review finding; findings never do", () => {
+  const defect = { claim: "`node cli.js` crashes on an empty counts.json.", anchor: "bug", steps: "1. Create an empty counts.json. 2. Run node cli.js signup." } as const;
+  assert.deepEqual(failureReasons({ ...returned(["pass", "pass"]), blocking: [defect, { ...defect, claim: "Another." }] }), [{ kind: "defect", count: 2 }]);
+  assert.deepEqual(failureReasons({ ...readWith([["must-fix", ANCHORED]]), blocking: [defect] }), [{ kind: "must-fix", count: 1 }, { kind: "defect", count: 1 }]);
+  assert.equal(outcome({ ...returned(["pass", "pass"]), findings: ["A read held mid-await loses an update (should-fix)."] }), "pass");
+  assert.deepEqual(shownVerdict({ ...returned(["pass"]), blocking: [defect] }), { ...shownVerdict(returned(["pass"])), blocking: [defect] }, "the board gets the defects it lists");
+});
+
 test("a returned verdict is pending until it is settled: its findings reached the agent, or it is checked", () => {
   const cases: [Settlement, ReturnType<typeof outcome>][] = [
     [{ kind: "pending" }, "pending"],
@@ -101,7 +122,7 @@ test("a returned verdict is pending until it is settled: its findings reached th
 
 test("a verdict stored before settlements existed reads as settled", () => {
   // As migrations.ts left it: no settlement and no triage, and mustFixFails false, as it settled before that rule.
-  const stored = storedVerdictSchema.parse({ state: "returned", at: 5_000, verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], findings: [], mustFixFails: false, model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
+  const stored = storedVerdictSchema.parse({ state: "returned", at: 5_000, verifierThreadId: "thr_v", headSha: "a".repeat(40), checkout: CLEAN, criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ran it" }], blocking: [], findings: [], mustFixFails: false, model: { providerId: "codex", model: "gpt-default" }, sameModel: false });
   assert.equal(outcome(withReview(stored, [])), "pass");
 });
 

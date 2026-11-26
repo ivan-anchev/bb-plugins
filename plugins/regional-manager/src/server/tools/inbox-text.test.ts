@@ -61,6 +61,7 @@ const returned = (results: CriterionResult[], ranOn: Pick<Execution, "providerId
   checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
   criteria: results.map((result) => ({ criterion: "npm test passes", result, evidence: "ran npm test" })),
   findings: [],
+  blocking: [],
   triage: [],
   mustFixFails: true,
   model: { providerId: ranOn.providerId, model: ranOn.model },

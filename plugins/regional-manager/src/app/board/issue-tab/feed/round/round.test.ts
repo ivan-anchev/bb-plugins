@@ -352,6 +352,20 @@ test("a round whose criteria all passed but whose must-fix finding the verifier 
   assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldMust-fix upheld");
 });
 
+test("a round whose criteria all passed but whose verifier found a blocking defect of its own leads with that reason, and its verdict lists the defect with its steps", async () => {
+  const defect: Entry[] = FEED.entries.map((entry) =>
+    entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null ? { ...entry, round: { ...entry.round, verdict: { ...entry.round.verdict, outcome: { kind: "fail", by: "defect" } } } } : entry,
+  );
+  const body = bodyOf(3);
+  const blocking = [{ claim: "cli.js crashes on an empty counts.json.", anchor: "bug", steps: "1. Kill a run mid-save. 2. Run it again." }] as const;
+  const verdict = body.verdict?.state === "returned" ? { ...body.verdict, blocking: [...blocking] } : assert.fail("no returned verdict");
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: defect }), bodies: () => ({ ...body, verdict }) });
+  assert.equal(rounds(tab()).head(3).textContent, "Round 3Round 3: retries land with backoff2 findings, 1 heldBlocking defect found");
+  const three = rounds(tab()).card(3);
+  assert.ok(await three.findByText("Blocking defects the verifier found"));
+  assert.ok(three.getByText("Blocks, as a bug hit in normal use, reached by: 1. Kill a run mid-save. 2. Run it again.: cli.js crashes on an empty counts.json."));
+});
+
 test("a final check whose own worktree was dirty says so, never that a claimed commit was missing", async () => {
   const dirty: Entry[] = FEED.entries.map((entry) =>
     entry.kind === "round" && entry.round.number === 3 && entry.round.verdict !== null

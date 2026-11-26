@@ -178,9 +178,11 @@ regression when existing behaviour breaks); a broken done-criterion; a
 broken requirement the brief states explicitly; or a broken recorded
 decision. A must-fix that meets none, as a principle or REVIEW.md violation
 or a bug that needs a contrived setup to reach, is downgraded to
-should-fix: fix it if you can, but it never fails your verdict. Only an
-anchored must-fix fails your verdict, even when every done-criterion passes;
-a confirmed or downgraded finding never does. Work that follows a recorded
+should-fix: fix it if you can, but it never fails your verdict. The
+verifier holds a defect it finds itself outside the criteria, as with
+creed-qa, to the same anchors. Only an anchored must-fix, or a defect the
+verifier found that meets an anchor, fails your verdict, even when every
+done-criterion passes; a confirmed or downgraded finding never does. Work that follows a recorded
 decision is never a finding.
 
 If your first verdict fails, its findings come back to you, once the verifier

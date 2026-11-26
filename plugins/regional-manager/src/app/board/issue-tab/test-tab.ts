@@ -107,6 +107,7 @@ function verdictOf(n: number, results: readonly CriterionResult[]): ShownVerdict
     checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },
     criteria: results.map((result, i) => ({ criterion: CRITERIA[i] ?? "", result, evidence: `Round ${n}, criterion ${i + 1}: ${result === "pass" ? "ok" : "1 failing: caps the backoff"}` })),
     findings: [],
+    blocking: [],
     sameModel: false,
     settlement: { kind: "checked", ci: { kind: "none" } },
   };

@@ -477,6 +477,7 @@ test("an issue opened on the board sends of each verdict only what the board sho
     checkout: { headSha: HEAD, changedFiles: [], changedFileCount: 0 },
     criteria: FAILS.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
     findings: [],
+    blocking: [],
     sameModel: false,
     settlement,
   });
@@ -551,6 +552,7 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
       checkout: { headSha: "f".repeat(40), changedFiles: [], changedFileCount: 0 },
       criteria: PASSES.criteria.map(({ criterion, result, evidence }) => ({ criterion: CRITERIA[criterion - 1], result, evidence })),
       findings: [],
+      blocking: [],
       sameModel: false,
       settlement: { kind: "checked", ci: { kind: "none" } },
     },
@@ -1113,6 +1115,12 @@ test("issue_verdict refuses a bug anchored without the normal-use steps that rea
     "issue_verdict is refused and nothing was saved: finding 2, the must-fix at `src/retry.ts:12`: a bug anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: downgrade it to should-fix.",
   );
   assert.equal(check().verdict.state, "running", "nothing was saved");
+  const briefWithSteps = { finding: 1, result: "anchored", anchor: "brief", steps: "1. Read the brief.", reason: "The brief names REVIEW.md." };
+  assert.equal(
+    textOf(await kit.call("issue_verdict", { ...PASSES, triage: [briefWithSteps, race] }, verifier())),
+    "issue_verdict is refused and nothing was saved: finding 1, the must-fix at `src/server/store/store.ts:88`: a brief anchor takes no steps, as it is no bug: pass steps as null.",
+    "only a bug's anchor carries steps",
+  );
 
   // The refusal's way forward, followed: the race needs a read held mid-await, a contrived setup.
   const verifierThreadId = verifier();
@@ -1123,6 +1131,39 @@ test("issue_verdict refuses a bug anchored without the normal-use steps that rea
   const passed = await row();
   assert.deepEqual([passed.lane, passed.headline], ["in-review", "✓ Verified: Retries land with backoff"]);
   assert.deepEqual(kit.sent().filter((args) => args.threadId === agentThreadId), [], "a passed verdict sends nothing back");
+});
+
+test("a defect the verifier finds itself outside the criteria, hit in normal use, fails a verdict whose criteria all pass: refused without its steps, it goes back to the agent, and the manager and the board name it; findings beside it never fail it", async () => {
+  const { kit, threadId, agentThreadId, opened, verifier, handOff } = await withAgent();
+  await handOff();
+  const crash = { claim: "`node cli.js` crashes on an empty counts.json, which a first run leaves when it is killed.", anchor: "bug" };
+  const advisory = ["A read held mid-await by hand loses an update (should-fix: a contrived setup)."];
+
+  const refused = await kit.call("issue_verdict", { ...PASSES, findings: advisory, blocking: [crash] }, verifier());
+  assert.equal(
+    textOf(refused),
+    "issue_verdict is refused and nothing was saved: blocking defect 1: a bug anchor needs steps, the normal-use steps that reach it; a bug that needs a contrived setup to reach meets no anchor: report it in findings instead.",
+  );
+  const steps = "1. Run node cli.js signup and kill it while it saves. 2. Run node cli.js signup again: it throws SyntaxError.";
+  const verifierThreadId = verifier();
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, findings: advisory, blocking: [{ ...crash, steps }] }, verifierThreadId)), /^Verdict recorded: 2 of 2 criteria passed/);
+  await kit.idle(verifierThreadId, "Verdict returned.");
+  await settled();
+
+  const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
+  assert.match(sent, /^## Verifier findings: a blocking defect the verifier found, though every done-criterion passed\n/);
+  assert.ok(
+    sent.includes(`### Blocking defects the verifier found\n\nEach of these fails the verdict on its own, whatever the done-criteria say.\n\n- Blocks, as a bug hit in normal use, reached by: ${steps}: ${crash.claim}`),
+    "the agent gets the defect with its anchor and steps",
+  );
+  assert.ok(sent.includes(`### Other findings\n\n- ${advisory[0]}`), "the advisory finding goes beside it");
+  const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.match(catchUp, /Failed verification: a blocking defect the verifier found\. 2 of 2 criteria passed/);
+  assert.ok(catchUp.includes(`Blocking defects it found, each failing the verdict:\n- Blocks, as a bug hit in normal use, reached by: ${steps}: ${crash.claim}`));
+  const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");
+  assert.deepEqual(round.round.verdict?.outcome, { kind: "fail", by: "defect" });
+  const shown = round.body.verdict;
+  assert.deepEqual(shown?.state === "returned" && [shown.blocking, shown.findings], [[{ ...crash, steps }], advisory], "the board lists the defect and the finding");
 });
 
 test("a verifier's first message and its role's rules state the four blocking anchors, list principle violations and contrived-setup bugs as should-fix, and say a creed-qa defect outside the criteria fails the verdict only when it meets a blocking anchor", async () => {
@@ -1138,7 +1179,7 @@ test("a verifier's first message and its role's rules state the four blocking an
     for (const claim of Object.values(ANCHOR_RULE_TEXT)) assert.ok(text.includes(claim), `${place}: ${claim}`);
   }
   const qa =
-    "When you run creed-qa, a defect its checks of the surrounding code turn up outside the done-criteria fails the verdict only if it meets a blocking anchor: when it breaks a done-criterion, fail that criterion on your own evidence. Report every other one in findings, with the severity CREW.md's Reviewers section gives it and, for a must-fix, the anchor it meets and the normal-use steps that reach it: your findings reach the regional manager with your verdict, and never fail it themselves. A defect that meets no anchor, as a REVIEW.md or principle violation or a bug that needs a contrived setup, never fails a criterion and never makes your verdict NOT_VERIFIED.";
+    "When you run creed-qa, a defect its checks of the surrounding code turn up outside the done-criteria fails the verdict only if it meets a blocking anchor. Report one that does in issue_verdict's blocking, with its anchor and, for a bug, the normal-use steps that reach it: each one fails the verdict, as a failed criterion does. Report every other one in findings, with the severity CREW.md's Reviewers section gives it: findings never fail the verdict. A defect that meets no anchor, as a REVIEW.md or principle violation or a bug that needs a contrived setup, never fails a criterion and never makes your verdict NOT_VERIFIED.";
   assert.ok(places["first message"].includes(`## What blocks\n\nThe anchor rule: ${ANCHOR_RULE_TEXT.anchors}`), "a review with no findings still gives the anchor rule");
   assert.ok(places["first message"].includes(qa), "first message: the creed-qa rule");
   assert.ok(places["role's rules"].includes(qa), "role's rules: the creed-qa rule");

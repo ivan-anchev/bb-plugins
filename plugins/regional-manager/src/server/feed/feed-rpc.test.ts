@@ -54,7 +54,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
   checker("verifier");
   const triage = TRIAGE;
   const criteria = [{ criterion: "npm test passes", result: "fail", evidence: "# fail 1" }] as const;
-  store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
+  store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], blocking: [], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
   store.claimFixRound(check.id, { kind: "none" });
   store.settleReturned(check.id, { kind: "sent-back" }, 3_600);
   return handoff;
@@ -181,7 +181,7 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   assert.deepStrictEqual(keysOf(body), ["findings", "handoff", "reviewMissed", "verdict"], "no earlier key: the tab shows no earlier answers, though the review stored one");
   assert.equal(body.reviewMissed, null, "a review was had");
   assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
-  assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["blocking", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepStrictEqual(body.findings.map(keysOf), [
     ["claim", "file", "line", "origin", "severity", "triage"],
     ["claim", "file", "line", "origin", "severity", "triage"],

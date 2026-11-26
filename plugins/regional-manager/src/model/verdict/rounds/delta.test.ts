@@ -45,6 +45,7 @@ const returned = (n: number, triage: Triage[]): StoredVerdict => ({
   checkout: { headSha: sha(n), changedFiles: [], changedFileCount: 0 },
   criteria: [{ criterion: "npm test passes", result: "pass", evidence: "ok" }],
   findings: [],
+  blocking: [],
   triage,
   mustFixFails: true,
   model: { providerId: "codex", model: "gpt-default" },

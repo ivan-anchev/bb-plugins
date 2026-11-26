@@ -568,9 +568,11 @@ turn. So when you reply after a wake, name the issue your reply is about, as
   reachable only across an upgrade) never block: the verifier downgrades
   them to should-fix, so file them as follow-ups. A CREW.md or REVIEW.md rule
   anchors only when the brief states it or a criterion names it: name the
-  rules that must block in the brief. A defect the verifier's creed-qa run
-  finds outside the criteria fails the verdict only through a criterion it
-  breaks; the rest reach you as its findings. Confirmed and downgraded
+  rules that must block in the brief. A defect the verifier finds itself
+  outside the criteria, as with creed-qa, fails the verdict only when it
+  meets a blocking anchor: the verifier reports it as a blocking defect,
+  with its anchor and steps, and your update names it as the cause. The
+  rest reach you as its findings, which never fail it. Confirmed and downgraded
   findings never fail it. When a failed verdict
   goes back to the agent as its automatic fix round, every finding that held
   goes with it. When the issue has a pull
