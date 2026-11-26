@@ -96,7 +96,7 @@ export default function plugin(host: BbPluginApi): void {
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
   registerIssueTools(bb, { store, issues });
   registerAgentTools(bb, { store, agents });
-  registerHandoffTool(bb, { store, verify });
+  registerHandoffTool(bb, { store, verify, prs: prWatch });
   registerCommentTool(bb, { store, inbox, turns });
   registerReviewTool(bb, { store, review });
   registerVerdictTool(bb, { store, verify });

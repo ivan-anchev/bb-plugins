@@ -6,7 +6,7 @@ import { agentIdSchema } from "../../model/agent/agent.ts";
 import { handoffIdSchema } from "../../model/agent/handoff.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
-import { coordinating, failsVerification, HEAD, holdingThreadLists, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap, withoutLinks } from "../test-harness.ts";
+import { coordinating, failsVerification, HEAD, type FakePr, holdingThreadLists, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap, withoutLinks } from "../test-harness.ts";
 
 const ISSUE_ID = issueIdSchema.parse("WEB-1");
 const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
@@ -382,53 +382,71 @@ test("an accept is refused when CI failed on the checked commit's own pull reque
 /** The branch an agent publishes its work on: named apart from the one bb made its environment on. */
 const PUBLISHED = "work/published";
 
+/** Pull request #41 from PUBLISHED, at HEAD, its CI rolled up as `rollup` says. */
+const published = (state: FakePr["state"], rollup: FakePr["rollup"]): FakePr => ({ number: 41, state, isDraft: false, reviewDecision: null, head: HEAD, rollup, failed: rollup === "FAILURE" ? ["test"] : [] });
+
 /**
- * As failedOnce, but its agent first hands off blocked on PUBLISHED, then hands off done with HEAD
- * detached at that published commit, so the done handoff's own read names no branch.
+ * As failedOnce, but its agent publishes its work on PUBLISHED as #41 (`pr`), then hands off done
+ * with HEAD detached at that commit, so the done handoff's read of its checkout names no branch.
+ * What names PUBLISHED: `named` "earlier handoff", a blocked handoff before it with PUBLISHED
+ * checked out; "pull request", only #41's URL in the done handoff.
  */
-async function failedDetachedOnPublished() {
+async function failedDetachedOnPublished(named: "earlier handoff" | "pull request", pr: FakePr) {
   const managed = await managing();
   const { kit, threadId, coordinatorId } = managed;
   const { agentThreadId } = await startedAgent(kit, threadId);
   assert.notEqual(kit.thread(agentThreadId).environmentBranchName, PUBLISHED, "bb made the environment on another branch");
+  kit.github.prs.set(PUBLISHED, pr);
   const environment = kit.environment(agentThreadId);
-  kit.git.checkouts.set(environment, PUBLISHED);
-  await kit.call("agent_handoff", { ...REPORT, status: "blocked", summary: "Published; the backoff cap needs a decision" }, agentThreadId);
-  await kit.idle(agentThreadId, "Handed off.");
+  if (named === "earlier handoff") {
+    kit.git.checkouts.set(environment, PUBLISHED);
+    await kit.call("agent_handoff", { ...REPORT, status: "blocked", summary: "Published; the backoff cap needs a decision" }, agentThreadId);
+    await kit.idle(agentThreadId, "Handed off.");
+  }
   kit.git.checkouts.delete(environment);
-  await failsVerification(kit, coordinatorId, agentThreadId, "review");
+  await failsVerification(kit, coordinatorId, agentThreadId, "review", named === "pull request" ? "https://github.com/acme/webhooks/pull/41" : null);
+  kit.clock.now += 6 * 60_000;
+  await kit.tick();
+  await settled();
   const row = async () => (await kit.rpc.board({ coordinatorId })).issues.find(({ id }) => id === "WEB-1") ?? assert.fail("no row");
   return { ...managed, row };
 }
 
-test("an issue accepted on work handed off with HEAD detached at its published branch, named apart from its environment's, follows that branch's pull request: its merge makes it Done", async () => {
-  const { kit, update, row } = await failedDetachedOnPublished();
-  kit.github.prs.set(PUBLISHED, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
-  assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
-  kit.clock.now += 6 * 60_000;
-  await kit.tick();
-  await settled();
-  assert.deepEqual([laneOf(await row()), (await row()).pr?.number], ["in-review", 41], "the board shows the published branch's pull request");
+for (const named of ["earlier handoff", "pull request"] as const) {
+  test(`an issue accepted on work handed off with HEAD detached at its published branch, named apart from its environment's and known by its ${named}, follows that branch's pull request: its merge makes it Done`, async () => {
+    const { kit, update, row } = await failedDetachedOnPublished(named, published("OPEN", "SUCCESS"));
+    assert.equal((await update({ status: "in-review", decision: REASON })).refused, false);
+    kit.clock.now += 6 * 60_000;
+    await kit.tick();
+    await settled();
+    assert.deepEqual([laneOf(await row()), (await row()).pr?.number], ["in-review", 41], "the board shows the published branch's pull request");
 
-  kit.github.prs.set(PUBLISHED, { number: 41, state: "MERGED", isDraft: false, reviewDecision: null, head: HEAD, rollup: "SUCCESS", failed: [] });
-  kit.clock.now += 6 * 60_000;
-  await kit.tick();
-  await settled();
-  assert.equal(laneOf(await row()), "done");
-});
-
-test("an accept is refused when CI failed on the checked commit's pull request, on the branch published apart from its environment's while HEAD was detached", async () => {
-  const { kit, coordinatorId, update } = await failedDetachedOnPublished();
-  kit.github.prs.set(PUBLISHED, { number: 41, state: "OPEN", isDraft: false, reviewDecision: null, head: HEAD, rollup: "FAILURE", failed: ["test"] });
-  kit.clock.now += 6 * 60_000;
-  await kit.tick();
-  await settled();
-
-  assert.deepEqual(await update({ status: "in-review", decision: REASON }), {
-    refused: true,
-    text: "CI failed on #41 at 0123456, the commit WEB-1's latest verdict checked, so it can't be accepted as it is. Message its agent with agent_message, stop it and start a fresh agent on the issue with agent_start, or ask the user.",
+    kit.github.prs.set(PUBLISHED, published("MERGED", "SUCCESS"));
+    kit.clock.now += 6 * 60_000;
+    await kit.tick();
+    await settled();
+    assert.equal(laneOf(await row()), "done");
   });
-  assert.deepEqual(kit.store.issues(coordinatorId).map(({ id }) => id), ["WEB-1"], "no follow-up filed");
+
+  test(`an accept is refused when CI failed on the checked commit's pull request, on the branch published apart from its environment's while HEAD was detached and known by its ${named}`, async () => {
+    const { kit, coordinatorId, update } = await failedDetachedOnPublished(named, published("OPEN", "FAILURE"));
+    assert.deepEqual(await update({ status: "in-review", decision: REASON }), {
+      refused: true,
+      text: "CI failed on #41 at 0123456, the commit WEB-1's latest verdict checked, so it can't be accepted as it is. Message its agent with agent_message, stop it and start a fresh agent on the issue with agent_start, or ask the user.",
+    });
+    assert.deepEqual(kit.store.issues(coordinatorId).map(({ id }) => id), ["WEB-1"], "no follow-up filed");
+  });
+}
+
+test("a done handoff with HEAD detached whose pull request GitHub can't be asked about still hands off, its check on the branch bb made its environment on", async () => {
+  const { kit, threadId, coordinatorId } = await managing();
+  const { agentThreadId } = await startedAgent(kit, threadId);
+  kit.git.checkouts.delete(kit.environment(agentThreadId));
+  kit.github.failure = Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stderr: "error connecting to api.github.com\n" });
+  const result = await kit.call("agent_handoff", { ...REPORT, status: "done", headSha: HEAD, prUrl: "https://github.com/acme/webhooks/pull/41" }, agentThreadId);
+  assert.match(textOf(result), /^Handed off\./);
+  const check = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check ?? assert.fail("no check");
+  assert.equal(check.subject.kind === "handoff" ? check.subject.branch : null, kit.thread(agentThreadId).environmentBranchName);
 });
 
 test("an accept is refused leading with the reason when a criterion failed, when CI failed on the checked commit as its pull request was last read, and when the latest verdict didn't fail", async () => {

@@ -4,7 +4,7 @@
 // agent's id is its generation token, so an agent that no longer holds its issue can't write to it.
 import { randomUUID } from "node:crypto";
 import type { Agent, AgentCheckout, EndedHow } from "../../model/agent/agent.ts";
-import { handoffFieldsSchema, handoffIdSchema, reportOf } from "../../model/agent/handoff.ts";
+import { handoffFieldsSchema, handoffIdSchema, reportOf, type GivenReport } from "../../model/agent/handoff.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
 import { PIPELINES, shipsCode } from "../../model/issue/kind.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
@@ -13,6 +13,7 @@ import { threadExecution, type ThreadExecutionBb } from "../execution/thread-exe
 import { checkoutReadOf, gitStatusOf, type GitStatus, type GitStatusBb } from "../git-status.ts";
 import type { Store } from "../store/store.ts";
 import type { Verify } from "../verify/verify.ts";
+import type { PrWatch } from "../watch/pr-watch.ts";
 import { agentOf, failed, refusedBusy, type ToolsBb } from "./tool-kit.ts";
 
 export const HANDOFF = "agent_handoff";
@@ -22,14 +23,25 @@ type ListedThread = { id: string; providerId: string; environmentId: string | nu
 /** The parts of bb the handoff uses: registering it, the thread's turns, what it runs on, its environment and bb's git plugin's read of it. */
 type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
 
-type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff"> };
+type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff">; prs: Pick<PrWatch, "headBranchOf"> };
 
-export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): void {
+export function registerHandoffTool(bb: HandoffBb, { store, verify, prs }: Deps): void {
   /** The agent's environment, the branch bb made it on, and bb's git plugin's read of it, once, now, while the agent is awake to hand off; null when its thread has none. */
   async function readEnvironment(threadId: string): Promise<EnvironmentRead | null> {
     const thread = (await listedThreads(bb, [threadId])).get(threadId);
     if (thread === undefined || thread.environmentId === null) return null;
     return { environmentId: thread.environmentId, environmentBranchName: thread.environmentBranchName, status: await gitStatusOf(bb, thread.environmentId) };
+  }
+
+  /**
+   * The branch a done report's pull request is from, read from GitHub only when the read checkout
+   * names no branch, as on a detached HEAD (null: not read, or GitHub couldn't say). why: the pull
+   * request it delivers is then the one thing that names where its work was published.
+   */
+  async function publishedBranch(agent: Agent, environment: EnvironmentRead | null, report: GivenReport): Promise<string | null> {
+    if (environment?.status.kind !== "read" || environment.status.branch !== null) return null;
+    if (report.status !== "done" || report.delivery.kind !== "commit" || report.delivery.prUrl === null) return null;
+    return prs.headBranchOf(agent.coordinatorId, report.delivery.prUrl);
   }
 
   bb.agents.registerTool({
@@ -56,8 +68,9 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify }: Deps): voi
       const report = reportOf(input, issue.kind);
       if ("refused" in report) return failed(`${HANDOFF} is refused and nothing was saved: ${report.refused}`);
       const checkout = reading === null ? NOT_READ : checkoutRead(environment);
+      const published = await publishedBranch(caller, environment, report);
       const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: caller.coordinatorId, issueId: issue.id, agentId: caller.id, at: Date.now(), turnSeq, ...report };
-      const outcome = await verify.handoff({ handoff, checkout, seen: environment === null ? null : checkoutSeen(caller, environment), environmentBranchName: environment?.environmentBranchName ?? null, execution });
+      const outcome = await verify.handoff({ handoff, checkout, seen: environment === null ? null : checkoutSeen(caller, environment, published), environmentBranchName: environment?.environmentBranchName ?? null, execution });
       if ("busy" in outcome) return refusedBusy(HANDOFF, outcome);
       if ("ended" in outcome) return endedText(issue.id, outcome.ended);
       const verdict = outcome.check?.verdict ?? null;
@@ -76,9 +89,13 @@ const NOT_READ: CheckoutRead = { kind: "unread", reason: "its issue ships no cod
 /** An agent's environment, the branch bb made it on (null: none recorded), and bb's git plugin's read of it. */
 type EnvironmentRead = { environmentId: string; environmentBranchName: string | null; status: GitStatus };
 
-/** Where the agent's work is, as read: a field the read can't name keeps what was recorded. */
-function checkoutSeen(agent: Agent, { environmentId, status }: EnvironmentRead): AgentCheckout {
-  return status.kind === "read" ? { environmentId, branch: status.branch ?? agent.checkout.branch, head: status.headSha ?? agent.checkout.head } : { ...agent.checkout, environmentId };
+/**
+ * Where the agent's work is, as read: its branch the one checked out, else the one its delivered
+ * pull request is from (`published`), else as recorded; any other field the read can't name keeps
+ * what was recorded.
+ */
+function checkoutSeen(agent: Agent, { environmentId, status }: EnvironmentRead, published: string | null): AgentCheckout {
+  return status.kind === "read" ? { environmentId, branch: status.branch ?? published ?? agent.checkout.branch, head: status.headSha ?? agent.checkout.head } : { ...agent.checkout, environmentId };
 }
 
 /** The agent's checkout for the verdict, as read (null: its thread has no environment). */

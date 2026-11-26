@@ -17,7 +17,7 @@ import type { Inbox } from "../inbox/inbox.ts";
 import type { Store } from "../store/store.ts";
 import { ghFailure, UNREADABLE_ANSWER } from "./gh-failure.ts";
 import { parseHostCommandFailure } from "./host-command.ts";
-import { parseGitHubRepo, parsePrs, prQueryArgs, type Repo } from "./pr-query.ts";
+import { parseGitHubRepo, parsePrHead, parsePrs, parsePrUrl, prHeadQueryArgs, prQueryArgs, type Repo } from "./pr-query.ts";
 
 /** How often a repository with no CI running and no verdict waiting for it is read. */
 const QUIET_POLL_MS = 5 * 60_000;
@@ -206,6 +206,26 @@ export function createPrWatch({ bb, store, inbox, gh, now }: Deps) {
      * push and call again must not be refused meanwhile. `agent`: the one last on the branch.
      */
     readNow: (coordinatorId: CoordinatorId, agent: Agent, branch: string): Promise<PrRead> => serially(() => readOne(coordinatorId, agent, branch)),
+
+    /**
+     * The branch the pull request at `prUrl` is from, as GitHub has it now: one gh call, saving
+     * nothing. null when the URL isn't a pull request of the regional manager's repository on
+     * GitHub, or gh couldn't say. why its repository only: the watch reads pull requests there, by
+     * branch.
+     */
+    async headBranchOf(coordinatorId: CoordinatorId, prUrl: string): Promise<string | null> {
+      const named = parsePrUrl(prUrl);
+      if (named === null) return null;
+      try {
+        const repo = await repoOf(coordinatorId);
+        // why lower case: GitHub matches an owner and a name in any case.
+        if (repo === null || named.repo.toLowerCase() !== repo.toLowerCase()) return null;
+        return parsePrHead(await gh(prHeadQueryArgs(repo, named.number)));
+      } catch {
+        // why caught: bb can't say the project's remote, gh is missing, signed out or offline, or GitHub has no such pull request; the handoff keeps the branch it can name without it.
+        return null;
+      }
+    },
   };
 }
 

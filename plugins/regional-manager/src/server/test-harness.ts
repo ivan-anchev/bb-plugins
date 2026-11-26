@@ -257,6 +257,17 @@ function graphqlAnswer(args: string[], prs: ReadonlyMap<string, FakePr>): string
   return JSON.stringify({ data: { repository: Object.fromEntries(branches.map(([alias, branch]) => [alias, field(prs.get(branch))])) } });
 }
 
+/**
+ * gh's answer to the handoff's query for the branch a pull request is from, by its number. Like
+ * gh, it fails for a number GitHub has no pull request under.
+ */
+function headAnswer(args: string[], prs: ReadonlyMap<string, FakePr>): string {
+  const number = Number(args.find((arg) => arg.startsWith("number="))?.slice("number=".length));
+  const branch = [...prs].find(([, pr]) => pr.number === number)?.[0];
+  if (branch === undefined) throw Object.assign(new Error("Command failed: gh api graphql"), { code: 1, stderr: `GraphQL: Could not resolve to a PullRequest with the number of ${number}. (repository.pullRequest)\n` });
+  return JSON.stringify({ data: { repository: { pullRequest: { headRefName: branch } } } });
+}
+
 /** Whether a stop leaves the thread idle, or still stopping, as bb's unconfirmed interrupt does. */
 type StopBehaviour = "idle" | "stopping";
 
@@ -756,7 +767,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   async function gh(args: string[]): Promise<string> {
     github.runs.push(args);
     if (github.failure !== null) throw github.failure;
-    const answer = graphqlAnswer(args, github.prs);
+    const answer = args.some((arg) => arg.startsWith("number=")) ? headAnswer(args, github.prs) : graphqlAnswer(args, github.prs);
     await github.pending;
     return answer;
   }
@@ -821,7 +832,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshIssues });
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
-    registerHandoffTool(bb, { store, verify });
+    registerHandoffTool(bb, { store, verify, prs: prWatch });
     registerCommentTool(bb, { store, inbox, turns });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
@@ -1261,13 +1272,13 @@ export async function startedAgent(kit: ReturnType<typeof harness>, threadId: st
 export const MUST_FIX = { file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
 
 /**
- * The agent in `agentThreadId` hands off done (its summary "Retries land with backoff") and ends
- * its turn, and the verdict fails: `on` "criterion", as its verifier fails the first criterion and
+ * The agent in `agentThreadId` hands off done (its summary "Retries land with backoff", naming
+ * `prUrl` when given) and ends its turn, and the verdict fails: `on` "criterion", as its verifier fails the first criterion and
  * passes the rest; `on` "review", as its reviewer reports MUST_FIX and its verifier passes every
  * criterion and anchors that finding to the brief, a failure on review findings alone.
  */
-export async function failsVerification(kit: ReturnType<typeof harness>, coordinatorId: CoordinatorId, agentThreadId: string, on: "criterion" | "review" = "criterion"): Promise<void> {
-  const done = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD };
+export async function failsVerification(kit: ReturnType<typeof harness>, coordinatorId: CoordinatorId, agentThreadId: string, on: "criterion" | "review" = "criterion", prUrl: string | null = null): Promise<void> {
+  const done = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD, ...(prUrl === null ? {} : { prUrl }) };
   kit.reviewers.reportAtOnce = on === "criterion";
   await kit.call("agent_handoff", done, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");

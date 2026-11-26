@@ -528,7 +528,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
         if (agent.ended !== null) return { ended: agent.ended.how };
         if (seen !== null) store.recordCheckout(agent.coordinatorId, agent.id, seen);
         if (execution !== null) store.recordExecution(agent.coordinatorId, agent.id, execution);
-        // why branchOf on the checkout just recorded: it is the branch the board and the PR watch read this work's pull request on, so a detached HEAD keeps the branch an earlier handoff named.
+        // why branchOf on the checkout just recorded: it is the branch the board and the PR watch read this work's pull request on, which on a detached HEAD is its delivered pull request's or an earlier handoff's (handoff-tool.ts checkoutSeen).
         return { check: inbox.handoff(handoff, checkout, branchOf({ checkout: seen ?? agent.checkout }, { environmentBranchName })) };
       }),
 
