@@ -1069,7 +1069,7 @@ test("the fix round sent back to the agent lists each anchored must-fix with wha
   await kit.idle(verifierThreadId, "Verdict returned.");
 
   const sent = kit.delivered(agentThreadId).at(-1) ?? assert.fail("nothing reached the agent");
-  assert.match(sent, /- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks the issue's brief\. The brief says retries back off; this never stops doubling\./);
+  assert.match(sent, /- `src\/retry\.ts:42` \(must-fix\): The backoff never caps\.\n {2}The verifier: Anchored, as it breaks a requirement the issue's brief states explicitly\. The brief says retries back off; this never stops doubling\./);
   assert.doesNotMatch(sent, /jitter is computed twice|Both calls sit/, "no confirmed should-fix");
   assert.doesNotMatch(sent, /REVIEW\.md's order|import order/, "no downgraded finding");
   assert.doesNotMatch(sent, /padding|Taste/, "no rejected finding");
