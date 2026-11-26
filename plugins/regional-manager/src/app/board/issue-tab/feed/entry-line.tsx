@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { actorOf, type Entry } from "../../../../model/feed/entry.ts";
 import { STATUS_LABELS } from "../../../../model/issue/status.ts";
+import type { CoordinatorId } from "../../../../model/role.ts";
 import { PR_CHANGE_WORDS } from "../../../../model/verdict/pr.ts";
 import type { FiledWhen } from "../../../../model/verdict/rounds/follow-up.ts";
 import { AgentName, MovedTo, Status, When, Who, type FeedAgents } from "./byline.tsx";
@@ -11,10 +12,10 @@ import { AgentName, MovedTo, Status, When, Who, type FeedAgents } from "./byline
 /** The entries drawn as lines with a who and a what: everything but rounds, decisions and comments, which are cards, and a status move alone. */
 type LineEntry = Exclude<Entry, { kind: "round" | "decision" | "comment" | "moved" }>;
 
-export function EntryLine({ entry, agents }: { entry: LineEntry; agents: FeedAgents }) {
+export function EntryLine({ coordinatorId, entry, agents }: { coordinatorId: CoordinatorId; entry: LineEntry; agents: FeedAgents }) {
   return (
     <p className="rmi-line">
-      <Who actor={actorOf(entry)} agents={agents} />
+      <Who actor={actorOf(entry)} coordinatorId={coordinatorId} agents={agents} />
       {whatOf(entry, agents)}
       <MovedTo status={entry.moved} /> <When at={entry.at} />
     </p>

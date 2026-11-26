@@ -6,7 +6,8 @@ import { coordinatorContract } from "../../../../contract.ts";
 import { agentIdSchema } from "../../../../model/agent/agent.ts";
 import { commentIdSchema, type Comment } from "../../../../model/feed/comment.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
-import { COORDINATOR, FEED, id, issue, opened } from "../test-tab.ts";
+import { HUES } from "../../../../model/profile/avatar.ts";
+import { COORDINATOR, FEED, id, issue, MANAGER_NAME, opened } from "../test-tab.ts";
 
 // An issue's Activity: every entry of its feed in order, each drawn by its kind, under a filter; and
 // an open question answered from its card.
@@ -32,9 +33,9 @@ test("every entry kind draws as its own: rounds and decisions as cards, the rest
   const lines = items().map((item) => item.querySelector(".rmi-round, .rmi-decision, .rmi-line")?.className.split(" ")[0]);
   assert.deepEqual(lines, ["rmi-line", "rmi-line", "rmi-round", "rmi-decision", "rmi-round", "rmi-decision", "rmi-line", "rmi-line", "rmi-round", "rmi-line", "rmi-line", "rmi-line", "rmi-decision"]);
   for (const text of [
-    /^Regional manager filed the issue/,
-    /^Regional manager started a1/,
-    /^Regional manager handed the issue on from a1/,
+    /^Webhook retries filed the issue/,
+    /^Webhook retries started a1/,
+    /^Webhook retries handed the issue on from a1/,
     /^#219 CI passed, merged/,
     /^a2 ended its turn with no handoff\s*Merged; nothing left\./,
     /^Unblocked: WEB-7, the last of its dependencies, closed/,
@@ -143,9 +144,9 @@ test("an entry that moved the issue shows the status it moved to, as the Board d
   const lines = texts();
   assert.match(lines[0] ?? "", /^Edits and status moves are kept from here; verdict times above are as announced or approximate/);
   assert.ok(lines.some((text) => /^#219 CI passed, merged ·\s+Done/.test(text ?? "")), lines.join("\n"));
-  assert.ok(lines.some((text) => /^Regional manager edited title, criteria Jan/.test(text ?? "")), "an edit names its fields, and moved nothing");
-  assert.ok(lines.some((text) => /^Regional manager made it depend on WEB-7/.test(text ?? "")));
-  assert.ok(lines.some((text) => /^Regional manager set it to rest in Backlog Jan/.test(text ?? "")), "where it rests is a setting: a move is only the status observed");
+  assert.ok(lines.some((text) => /^Webhook retries edited title, criteria Jan/.test(text ?? "")), "an edit names its fields, and moved nothing");
+  assert.ok(lines.some((text) => /^Webhook retries made it depend on WEB-7/.test(text ?? "")));
+  assert.ok(lines.some((text) => /^Webhook retries set it to rest in Backlog Jan/.test(text ?? "")), "where it rests is a setting: a move is only the status observed");
   assert.ok(lines.some((text) => /^Reviewing Jan/.test(text ?? "")), "a move nothing explains: its glyph and name alone");
   const card = within(section.getByRole("article", { name: "Round 3" }));
   assert.match(card.getAllByRole("listitem")[0]?.textContent ?? "", /^a2 handed off ·\s+Verifying/);
@@ -177,8 +178,8 @@ test("comments are cards in Activity and the Discussion: the user's says where i
   const { section } = activity(tab());
   const card = (n: number) => within(section.getByRole("article", { name: `Comment m${n}` }));
   assert.match(card(1).getAllByRole("paragraph")[0]?.textContent ?? "", /^You commented/);
-  assert.ok(card(1).getByText("Sent to the regional manager"), "the user's comment says where it went");
-  assert.match(card(2).getAllByRole("paragraph")[0]?.textContent ?? "", /^Regional manager replied to m1/);
+  assert.ok(card(1).getByText(`Sent to ${MANAGER_NAME}`), "the user's comment says where it went");
+  assert.match(card(2).getAllByRole("paragraph")[0]?.textContent ?? "", /^Webhook retries replied to m1/);
   assert.equal(card(2).getByText("Cap retries at five.").className, "rmi-comment-quote", "a reply quotes the first line of what it answers");
   assert.equal(card(2).queryByText(/And log each/), null, "and no more of it");
   assert.equal(card(2).queryByText(/^Sent to/), null, "only the user's own comments say where they went");
@@ -186,6 +187,26 @@ test("comments are cards in Activity and the Discussion: the user's says where i
   assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_a2" }], "an agent's reply names it, opening its thread");
   fireEvent.click(within(section.getByRole("group", { name: "Show" })).getByRole("button", { name: "Discussion" }));
   assert.deepEqual(section.getAllByRole("article").map((article) => article.getAttribute("aria-label")), ["Question d1", "Decision", "Question d2", "Comment m1", "Comment m2", "Comment m3"]);
+});
+
+/** Who the head of comment m2, the manager's reply, names: by its avatar, as the hue it is drawn in (null: none), and by the name beside it. */
+async function managerReplyByline(options: { managerListed: boolean }) {
+  const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => COMMENTED, ...options });
+  const head = within(activity(tab()).section.getByRole("article", { name: "Comment m2" })).getAllByRole("paragraph")[0] ?? assert.fail("no head");
+  const hue = HUES[COORDINATOR.avatar.hue];
+  return { avatar: head.querySelector(`svg [fill="${hue}"]`) === null ? null : hue, text: head.textContent };
+}
+
+test("the manager's reply names it as its own thread does: by its avatar and its name", async () => {
+  const { avatar, text } = await managerReplyByline({ managerListed: true });
+  assert.equal(avatar, "#895df3", "its purple avatar");
+  assert.match(text ?? "", /^Webhook retries replied to m1/);
+});
+
+test("while bb lists the manager's thread no more, its reply names it by its role, with no avatar", async () => {
+  const { avatar, text } = await managerReplyByline({ managerListed: false });
+  assert.equal(avatar, null);
+  assert.match(text ?? "", /^Regional manager replied to m1/);
 });
 
 test("⌘↵ or Ctrl+↵ sends the comment and Enter breaks the line; the field keeps focus, empties once the server took it, and its card says Sending…, then Sent, until the feed reads it", async () => {

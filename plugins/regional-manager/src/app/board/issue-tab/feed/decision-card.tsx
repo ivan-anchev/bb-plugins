@@ -9,7 +9,7 @@ import { stillWaits } from "../../../../model/verdict/rounds/cap.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { Button } from "../../../ui/button.tsx";
 import { useAnswer } from "../../use-answer.ts";
-import { MovedTo, When } from "./byline.tsx";
+import { ManagerName, MovedTo, When } from "./byline.tsx";
 import { ResultGlyph } from "./round/result-glyph.tsx";
 
 type Asked = Extract<IssueDecision, { kind: "asked" }>;
@@ -23,7 +23,7 @@ export function DecisionCard({ coordinatorId, decision, moved, status }: { coord
       return (
         <article className="rmi-decision" aria-label="Decision">
           <p className="rmi-decision-head">
-            <span className="rmi-actor">Regional manager</span> decided
+            <ManagerName coordinatorId={coordinatorId} /> decided
             <MovedTo status={moved} /> <When at={decision.at} />
           </p>
           <p className="rmi-decision-text">{decision.text}</p>
@@ -60,7 +60,7 @@ function Question({ coordinatorId, decision, moved, status }: { coordinatorId: C
     <article ref={card} tabIndex={-1} className="rmi-decision" aria-label={`Question ${decision.id}`}>
       <p className="rmi-decision-head">
         {/* why by its cap: the plugin itself asks at an issue's cap of failed verifications (rounds/cap.ts), not the regional manager. */}
-        <span className="rmi-actor">{decision.cap === null ? "Regional manager" : "The plugin"}</span> asked you
+        {decision.cap === null ? <ManagerName coordinatorId={coordinatorId} /> : <span className="rmi-actor">The plugin</span>} asked you
         <MovedTo status={moved} /> <When at={decision.at} />
         <span className="rmi-decision-id">{decision.id}</span>
       </p>

@@ -1,10 +1,14 @@
-// Who, when and what it moved the issue to, as every entry of an issue's feed names them: an agent by
-// its id, opening its thread while bb still has it; a moment as the board shows times; and the status
-// observed after it, as the Board draws a status.
+// Who, when and what it moved the issue to, as every entry of an issue's feed names them: the regional
+// manager by its avatar and name, as its own thread's row draws it; an agent by its id, opening its
+// thread while bb still has it; a moment as the board shows times; and the status observed after it,
+// as the Board draws a status.
 import type { IssueFeed } from "../../../../contract.ts";
 import type { AgentId } from "../../../../model/agent/agent.ts";
 import type { Actor } from "../../../../model/feed/entry.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../../model/issue/status.ts";
+import type { CoordinatorId } from "../../../../model/role.ts";
+import { AvatarBlob } from "../../../profile/avatar.tsx";
+import { useManager } from "../../../profile/use-manager.ts";
 import { shortTime } from "../../../ui/time.ts";
 import { StatusGlyph } from "../../issue/status-glyph.tsx";
 import { ThreadLink } from "../../issue/thread-link.tsx";
@@ -14,6 +18,18 @@ export type FeedAgents = IssueFeed["agents"];
 
 export function AgentName({ agentId, agents }: { agentId: AgentId; agents: FeedAgents }) {
   return <ThreadLink name={agentId} threadId={agents.find(({ id }) => id === agentId)?.threadId ?? null} />;
+}
+
+/** The regional manager by its avatar and name; by its role alone before the read, and while bb lists its thread no more. */
+export function ManagerName({ coordinatorId }: { coordinatorId: CoordinatorId }) {
+  const profile = useManager(coordinatorId)?.profile ?? null;
+  if (profile === null) return <span className="rmi-actor">Regional manager</span>;
+  return (
+    <span className="rmi-manager">
+      <AvatarBlob avatar={profile.avatar} size="xs" />
+      <span className="rmi-actor">{profile.name}</span>
+    </span>
+  );
 }
 
 export const When = ({ at }: { at: number }) => (
@@ -41,12 +57,16 @@ export const Status = ({ status }: { status: IssueStatus }) => (
 );
 
 /** Who did it, named where the entry names someone; a line by GitHub, bb or the plugin itself names no one. */
-export function Who({ actor, agents }: { actor: Actor; agents: FeedAgents }) {
+export function Who({ actor, coordinatorId, agents }: { actor: Actor; coordinatorId: CoordinatorId; agents: FeedAgents }) {
   switch (actor.kind) {
     case "user":
       return <span className="rmi-actor">You </span>;
     case "manager":
-      return <span className="rmi-actor">Regional manager </span>;
+      return (
+        <>
+          <ManagerName coordinatorId={coordinatorId} />{" "}
+        </>
+      );
     case "agent":
       return (
         <>
