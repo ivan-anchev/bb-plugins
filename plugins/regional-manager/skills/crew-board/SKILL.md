@@ -1090,12 +1090,12 @@ and ends with its [memory](#read-and-edit-memory):
   the issue.
 - **Sub-issues** hang under their parent's row on rails, a hairline from
   under the parent's glyph bending into each, in the parent's lane whatever
-  their own status, each one line with everything a row has. They show at
-  first; the parent's count pill folds them and their rails away and back:
-  click it, or press Enter or Space on it. It draws no chevron, and a
-  folded parent keeps its pill; the rest of the row still opens the issue.
-  Which parents are folded lasts while the board is open, as its lanes'
-  folds do. While the parent isn't Done, its Done sub-issues fold behind
+  their own status, each one line with everything a row has. They start
+  folded; the parent's count pill unfolds them and their rails and folds
+  them again: click it, or press Enter or Space on it. It draws no chevron,
+  and a folded parent keeps its pill; the rest of the row still opens the
+  issue. Which parents are unfolded lasts while the board is open, as its
+  lanes' folds do. While the parent isn't Done, its Done sub-issues fold behind
   one "+N completed" row at the end of its list, which unfolds them in
   place under it, and folds them again, as the pill does; a Done parent
   lists each. A canceled sub-issue is never listed under its parent: it is

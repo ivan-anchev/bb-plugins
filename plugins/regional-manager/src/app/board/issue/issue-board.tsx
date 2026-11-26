@@ -1,7 +1,7 @@
 // The board's lanes (board-groups.ts): Needs you on top, then a lane per status, each under a header
 // that folds it. Backlog, Done and Canceled start folded. A parent's sub-issues hang under its row on
-// rails (row/sub-issue-tree.tsx), in its lane, shown until its count on its row folds them away
-// (row/pills.tsx), as they always showed before the count could. A flagged sub-issue sits under Needs
+// rails (row/sub-issue-tree.tsx), in its lane, folded until its count on its row unfolds them
+// (row/pills.tsx). A flagged sub-issue sits under Needs
 // you as well, with what it waits on the user for under its title, and a canceled one under Canceled
 // only. A row opens its issue's own tab (row/issue-row.tsx), and resting on it, or focusing it, opens
 // its hover card (hover-card/). A decision waiting for the user keeps its own row, the caller's,
@@ -33,7 +33,7 @@ export function IssueBoard({ decisions, issues, decisionRow }: IssueBoardProps) 
   // why: each header labels its lane by id, and a page may show more than one board.
   const ids = useId();
   const [folded, toggleLane] = useToggledSet(FOLDED_AT_FIRST);
-  const [collapsed, toggleParent] = useToggledSet<IssueId>(NONE);
+  const [parentsOpen, toggleParent] = useToggledSet<IssueId>(NONE);
   const [completedShown, toggleCompleted] = useToggledSet<IssueId>(NONE);
   const groups = boardGroups(decisions, issues);
   // why only the rows an issue lives in: a flagged sub-issue's copy under Needs you is not where it lives, its parent's lane is.
@@ -53,10 +53,10 @@ export function IssueBoard({ decisions, issues, decisionRow }: IssueBoardProps) 
     </IssueRow>
   );
 
-  /** A top-level issue's row and, unless its count folded them, its sub-issues under it; `ask`, under Needs you. */
+  /** A top-level issue's row and, once its count unfolded them, its sub-issues under it; `ask`, under Needs you. */
   function parentRows(issue: Row, subIssues: readonly Row[], ask: string | null): ReactNode {
     const listId = `${ids}-${issue.id}-sub-issues`;
-    const toggle: SubIssueToggle | null = subIssues.length === 0 ? null : { open: !collapsed.has(issue.id), controls: listId, onToggle: () => toggleParent(issue.id) };
+    const toggle: SubIssueToggle | null = subIssues.length === 0 ? null : { open: parentsOpen.has(issue.id), controls: listId, onToggle: () => toggleParent(issue.id) };
     return (
       <>
         {issueRow(issue, issue.id, { ask, toggle })}
@@ -145,7 +145,7 @@ type RowPlace = { ask: string | null; under: IssueId | null; toggle: SubIssueTog
 /** The lanes that start folded: nothing is left to do in them. */
 const FOLDED_AT_FIRST: ReadonlySet<Lane> = new Set(["backlog", "done", "canceled"]);
 
-/** No parent folded, and no completed row unfolded, at first. */
+/** No parent, and no completed row, unfolded at first. */
 const NONE: ReadonlySet<IssueId> = new Set();
 
 /** A set the user folds keys in and out of, starting as `initial`, and the fold of one key. */
