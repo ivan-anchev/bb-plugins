@@ -9,6 +9,7 @@ import { attachmentIdSchema, attachmentUrl, type Attachment } from "../../../../
 import { roundBodyKey } from "../../../../../contract.ts";
 import { decisionIdSchema } from "../../../../../model/decision.ts";
 import type { Entry } from "../../../../../model/feed/entry.ts";
+import type { RoundBody } from "../../../../../model/feed/round.ts";
 import { bodyOf, COORDINATOR, FEED, id, issue, opened, roundKey } from "../../test-tab.ts";
 
 // A round in an issue's feed: folded to a line, the latest open, its body read only while open and
@@ -730,4 +731,24 @@ test("a verdict that attached nothing renders no second strip", async () => {
   await three.findByRole("list", { name: "The agent's attachments" });
   assert.equal(three.queryByRole("list", { name: "The verifier's attachments" }), null);
   assert.equal(tab().getByRole("article", { name: "Round 3" }).querySelectorAll(".rmi-attachments").length, 1);
+});
+
+test("a verifier's image left open while CI passes stays open as the refresh moves its strip from under the verdict lines to under the outcome row", async () => {
+  hostDoubles();
+  const passed = attachedBoth(3, [SHEET], [VERDICT_549])();
+  const verdict = passed.verdict.state === "returned" ? passed.verdict : assert.fail("no returned verdict");
+  let body: RoundBody = { ...passed, verdict: { ...verdict, settlement: { kind: "waiting-for-ci" } } };
+  const { tab, refeed } = await opened("WEB-1", WEB_1, { bodies: () => body });
+  const three = rounds(tab()).card(3);
+  const verifiers = await three.findByRole("list", { name: "The verifier's attachments" });
+  assert.equal(placeOf(verifiers).before, three.getByRole("list", { name: "What failed" }), "under its one line: waiting for CI");
+  fireEvent.click(within(verifiers).getByRole("button"));
+  const screen = within(document.body);
+  await screen.findByRole("dialog", { name: VERDICT_549.about });
+
+  body = passed;
+  await refeed("WEB-1", () => FEED);
+  await waitFor(() => assert.equal(three.queryByRole("list", { name: "What failed" }), null, "CI passed: no lines left"));
+  assert.equal(placeOf(three.getByRole("list", { name: "The verifier's attachments" })).before?.className, "rmi-outcome", "the strip moved under the outcome row");
+  assert.equal(screen.getByRole("dialog").getAttribute("aria-label"), VERDICT_549.about, "and its image is still open");
 });

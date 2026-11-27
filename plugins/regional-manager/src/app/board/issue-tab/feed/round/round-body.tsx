@@ -45,7 +45,8 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
   const loaded = body ?? null;
   const loading = body === undefined && error === null;
   const lines = loaded?.verdict == null ? null : verdictLines(loaded.verdict, round.by, cards);
-  const verifierStrip = loaded?.verdict?.state === "returned" && <Attachments coordinatorId={coordinatorId} attachments={loaded.verdict.attachments} whose="verifier" cards={cards} />;
+  // why the key: a refresh can move the strip across the outcome row (CI passing drops its last line), and the key keeps it, its open lightbox included, mounted through the move.
+  const verifierStrip = loaded?.verdict?.state === "returned" && <Attachments key="verifier-strip" coordinatorId={coordinatorId} attachments={loaded.verdict.attachments} whose="verifier" cards={cards} />;
   return (
     <div className="rmi-round-body" {...cards.board}>
       {error !== null && (

@@ -1161,6 +1161,7 @@ test("issue_verdict's instructions stay within 3,600 characters, and the verifie
   const instructions = kit.tools().find(({ name }) => name === "issue_verdict")?.instructions ?? assert.fail("no instructions");
   assert.ok(instructions.length <= 3_600, `${instructions.length} characters`);
   assert.match(instructions, /result, shows, evidence[\s\S]*title, claim, anchor, steps[\s\S]*severity, title, detail/, "the instructions name the fields only");
+  assert.match(instructions, /- attachments: screenshots or recordings proving a visible criterion, saved in \$BB_THREAD_STORAGE; each about opens "Criterion N:"\./, "what to attach, where, and how its about line opens");
   const skill = readFileSync(join(import.meta.dirname, "..", "..", "..", "skills", "verifying", "SKILL.md"), "utf8").replace(/\s+/g, " ");
   const rules = (kit.configurationFor(verifier(), {}).instructions ?? assert.fail("no rules")).replace(/\s+/g, " ");
   for (const [place, text] of Object.entries({ rules, skill })) {

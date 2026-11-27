@@ -232,10 +232,10 @@ function blockingRefusal(blocking: VerdictInput["blocking"]): string | null {
 
 const NOT_RUNNING = `${VERDICT} is refused and nothing was saved: this check no longer waits for your verdict (a newer handoff or final check replaced it, or it already has one). Stop here.`;
 
-const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves nothing: fix what it names and call again. Stop once it records your verdict or says stop. The plugin judges the commit and tree. Pass [] for an empty list. Write each field as your rules' "How you write your verdict" says.
+const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves nothing: fix it, call again. Stop once it records the verdict or says stop. The plugin judges the commit and tree. Pass [] for an empty list. Write each field as your rules' "How you write your verdict" says.
 - criteria: one per done-criterion, by number: result, shows, evidence. ${UNCHECKABLE_RULE}
-- blocking: up to 20 defects outside the criteria you found yourself, as with creed-qa, that meet an anchor: title, claim, anchor, steps as it takes. Each fails the verdict.
-- earlierDefects: one answer per earlier blocking defect, by number. ${RECHECK_RULE} One not fixed fails it.
+- blocking: up to 20 of your own defects outside the criteria, as with creed-qa, that meet an anchor: title, claim, anchor, steps. Each fails it.
+- earlierDefects: an answer per earlier blocking defect, by number. ${RECHECK_RULE} One not fixed fails it.
 - findings: up to 20 other problems no criterion covers: severity, title, detail; never failing it.
 - triage: one per reviewer's finding, by number, with its reason. ${TRIAGE_RULE} ${ANCHOR_RULE}
-- attachments: files proving a visible criterion, saved under $BB_THREAD_STORAGE.`;
+- attachments: screenshots or recordings proving a visible criterion, saved in $BB_THREAD_STORAGE; each about opens "Criterion N:".`;
