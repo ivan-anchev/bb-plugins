@@ -79,13 +79,42 @@ test("a file in thread storage is read on the storage's host under its root, and
   assert.equal(new Set(copied.map(({ id }) => id)).size, 2, "each gets an id of its own");
 });
 
-test("a .mov recording is kept, served as QuickTime video", async () => {
-  const { bb } = fakeBb({ [`host_bb:${inStorage("flow.MOV")}`]: PNG });
-  const { copied, refused } = await attachmentCopier(bb)(THREAD, [{ path: inStorage("flow.MOV"), about: "The flow, recorded" }]);
+test("a .mov recording and a .md note are kept, served as QuickTime video and as Markdown", async () => {
+  const note = Buffer.from("# Findings\n\n- one\n");
+  const { bb } = fakeBb({ [`host_bb:${inStorage("flow.MOV")}`]: PNG, [`host_bb:${inStorage("findings.md")}`]: note });
+  const { copied, refused } = await attachmentCopier(bb)(THREAD, [
+    { path: inStorage("flow.MOV"), about: "The flow, recorded" },
+    { path: inStorage("findings.md"), about: "What the run found" },
+  ]);
   assert.deepEqual(refused, []);
   assert.deepEqual(
-    copied.map(({ name, type }) => ({ name, type })),
-    [{ name: "flow.MOV", type: "video/quicktime" }],
+    copied.map(({ name, type, bytes }) => ({ name, type, bytes: Buffer.from(bytes) })),
+    [
+      { name: "flow.MOV", type: "video/quicktime", bytes: PNG },
+      { name: "findings.md", type: "text/markdown; charset=utf-8", bytes: note },
+    ],
+  );
+});
+
+test("a file whose about line isn't one line of 1 to 160 characters is refused alone, unread, and the about line kept is trimmed", async () => {
+  const { bb, reads } = fakeBb({ [`host_bb:${inStorage("a.png")}`]: PNG, [`host_bb:${inStorage("b.png")}`]: PNG, [`host_bb:${inStorage("c.png")}`]: PNG, [`host_bb:${inStorage("d.png")}`]: PNG });
+  const { copied, refused } = await attachmentCopier(bb)(THREAD, [
+    { path: inStorage("a.png"), about: "x".repeat(161) },
+    { path: inStorage("b.png"), about: "two\nlines" },
+    { path: inStorage("c.png"), about: "   " },
+    { path: inStorage("d.png"), about: "  Kept, trimmed  " },
+  ]);
+  assert.deepEqual(
+    copied.map(({ name, about }) => ({ name, about })),
+    [{ name: "d.png", about: "Kept, trimmed" }],
+  );
+  assert.deepEqual(
+    refused,
+    ["a.png", "b.png", "c.png"].map((name) => ({ path: inStorage(name), reason: "its about line must be one line of 1 to 160 characters." })),
+  );
+  assert.deepEqual(
+    reads.map(({ path }) => path),
+    [inStorage("d.png")],
   );
 });
 

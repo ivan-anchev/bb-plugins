@@ -555,6 +555,27 @@ test("each thumbnail and chip is named by its name and what it shows; focus show
   assert.equal(card(), null);
 });
 
+test("Escape that closes a card leaves bb's side panel open: a layer that dismisses on an Escape it sees at the document while capturing sees it handled", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG]) });
+  const chip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" })).getByRole("link");
+  // As bb's overlay panel (a Radix dismissable layer) listens: on the document, capturing, dismissing unless the default was prevented.
+  const panel: boolean[] = [];
+  const layer = (event: globalThis.KeyboardEvent) => void (event.key === "Escape" && panel.push(event.defaultPrevented));
+  document.addEventListener("keydown", layer, true);
+  try {
+    act(() => chip.focus());
+    assert.notEqual(document.querySelector(".rmi-attachment-card"), null);
+    fireEvent.keyDown(chip, { key: "Escape" });
+    assert.equal(document.querySelector(".rmi-attachment-card"), null, "the card went");
+    assert.deepEqual(panel, [true], "the panel saw the Escape already handled, so it stays");
+    fireEvent.keyDown(chip, { key: "Escape" });
+    assert.deepEqual(panel, [true, false], "with no card, Escape is bb's again");
+  } finally {
+    document.removeEventListener("keydown", layer, true);
+  }
+});
+
 test("pressing a thumbnail opens bb's lightbox on it, titled with what it shows and paging through the round's images; Escape hands focus back to the thumbnail it closed on", async () => {
   hostDoubles();
   const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG, NARROW]) });

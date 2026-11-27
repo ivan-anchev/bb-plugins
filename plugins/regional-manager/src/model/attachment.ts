@@ -52,23 +52,20 @@ export const ATTACHMENT_LIMITS = `up to ${MAX_ATTACHMENTS} files of at most ${MA
   .map((extension) => `.${extension}`)
   .join(", ")}`;
 
+/** What an attachment shows, as its about line: one line of 1 to 160 characters, trimmed. */
+export const aboutSchema = z.string().trim().min(1).max(160).regex(ONE_LINE);
+
 /**
  * What agent_handoff takes: each file's absolute path in the caller's environment, as its shell sees
  * it, and what it shows. why the path untrimmed: it must reach bb's read byte for byte (REVIEW.md,
- * file paths). why no cap on the count here: a file past the cap is refused alone, as copy-in.ts
- * does, and the handoff still records.
+ * file paths). why neither a cap on the count nor the about line's rules here: a file that breaks
+ * either is refused alone, as copy-in.ts does, and the handoff still records.
  */
 export const givenAttachmentsSchema = z
   .array(
     z.object({
-      path: z.string().min(1).describe("The file's absolute path in your environment, saved under $BB_THREAD_STORAGE."),
-      about: z
-        .string()
-        .trim()
-        .min(1)
-        .max(160)
-        .regex(ONE_LINE, "An about line is one line")
-        .describe('What it shows, in one line of at most 160 characters; open it "Criterion N:" when it proves one.'),
+      path: z.string().describe("The file's absolute path in your environment, saved under $BB_THREAD_STORAGE."),
+      about: z.string().describe('What it shows, in one line of at most 160 characters; open it "Criterion N:" when it proves one.'),
     }),
   )
   .default([])

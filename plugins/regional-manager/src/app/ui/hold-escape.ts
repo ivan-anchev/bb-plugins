@@ -20,21 +20,24 @@ export function useHoldEscape(held: boolean): void {
 }
 
 /**
- * While `active`, Escape anywhere calls `close`, and bb's own Escape skips the press that closed it.
- * For what Escape puts away wherever focus is: a hover card, a tooltip.
+ * While `active`, Escape anywhere calls `close`, and nothing else of bb's acts on the press that
+ * closed it. For what Escape puts away wherever focus is: a hover card, a tooltip.
  */
 export function useEscapeToClose(active: boolean, close: () => void): void {
   const closing = useRef(close);
   closing.current = close;
   useEffect(() => {
     if (!active) return;
-    // why the document, bubbling: what has focus acts on Escape first, and bb's, on the window, after; it skips an Escape whose default was prevented.
+    // why the window, capturing: it runs before every other listener. bb's side panel, an overlay on
+    // a narrow window, dismisses itself on an Escape it sees at the document while capturing, unless
+    // its default was prevented; bb's page-level Escape, on the window, skips one too. So the card
+    // goes and the panel stays.
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       closing.current();
     };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [active]);
 }

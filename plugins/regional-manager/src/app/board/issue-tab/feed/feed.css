@@ -532,7 +532,18 @@
     color: var(--foreground);
   }
 }
+/* On touch each item gets a 44px row of its own, so a wrapped row's targets never overlap the next:
+   the thumbnail and chip keep their size, centred in it, and their ::before fills it (32 + 2×6 and
+   24 + 2×10), reaching 3px into the 6px gap on each side. */
 @media (pointer: coarse) {
+  .rmi-strip {
+    row-gap: 0;
+  }
+  .rmi-strip > li {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
   .rmi-thumb::before,
   .rmi-chip::before {
     content: "";

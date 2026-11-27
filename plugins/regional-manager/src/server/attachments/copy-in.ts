@@ -5,7 +5,7 @@
 // Nothing here stores anything: the store does, in the handoff's transaction.
 import { randomUUID } from "node:crypto";
 import { basename, isAbsolute, relative } from "node:path/posix";
-import { ATTACHMENT_LIMITS, attachmentIdSchema, attachmentType, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, type CopiedAttachment, type GivenAttachment } from "../../model/attachment.ts";
+import { aboutSchema, ATTACHMENT_LIMITS, attachmentIdSchema, attachmentType, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, type CopiedAttachment, type GivenAttachment } from "../../model/attachment.ts";
 import { listedThreads } from "../agents/threads.ts";
 
 /** A file that wasn't attached, by the path it was given, and why, in words the caller can act on. */
@@ -68,8 +68,10 @@ async function placesOf(bb: CopyInBb, threadId: string): Promise<Place[]> {
   return [...workspace, { hostId: storage.hostId, root: storage.storageRootPath }];
 }
 
-/** One file copied in, or why not. Cheapest refusals first: its type and place need no read. */
-async function copyOne(bb: CopyInBb, places: readonly Place[], { path, about }: GivenAttachment): Promise<CopiedAttachment | Refusal> {
+/** One file copied in, or why not. Cheapest refusals first: its about line, type and place need no read. */
+async function copyOne(bb: CopyInBb, places: readonly Place[], { path, about: given }: GivenAttachment): Promise<CopiedAttachment | Refusal> {
+  const about = aboutSchema.safeParse(given);
+  if (!about.success) return { path, reason: "its about line must be one line of 1 to 160 characters." };
   const name = basename(path);
   const type = attachmentType(name);
   if (type === null) return { path, reason: `its type isn't one the plugin keeps (${ATTACHMENT_LIMITS}); convert it, as a screenshot to .png or a recording to .mp4.` };
@@ -81,7 +83,7 @@ async function copyOne(bb: CopyInBb, places: readonly Place[], { path, about }: 
   // why after the read: bb's files API has no stat, so the size is known only once it is read.
   if (bytes.byteLength > MAX_ATTACHMENT_BYTES) return { path, reason: `it is over the ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB cap for one file; trim or compress it.` };
   if (bytes.byteLength === 0) return { path, reason: "it is empty." };
-  return { id: attachmentIdSchema.parse(randomUUID()), name, about, type, size: bytes.byteLength, bytes };
+  return { id: attachmentIdSchema.parse(randomUUID()), name, about: about.data, type, size: bytes.byteLength, bytes };
 }
 
 /**

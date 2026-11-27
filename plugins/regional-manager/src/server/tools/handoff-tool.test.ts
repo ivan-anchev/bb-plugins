@@ -91,6 +91,23 @@ test("a handoff keeps each file it could copy in as its record, and its result n
   assert.ok(result.endsWith(`\n- ${storage}/qa/bundle.zip: its type isn't one the plugin keeps (up to 5 files of at most 10 MB each, of type .png, .jpg, .jpeg, .gif, .webp, .mp4, .webm, .mov, .txt, .log, .md, .json); convert it, as a screenshot to .png or a recording to .mp4.`), result);
 });
 
+test("a sixth file is refused alone even when its about line breaks the rules, and the handoff records its first five", async () => {
+  const { kit, coordinatorId, agentThreadId } = await withAgent({ verify: false });
+  const storage = `/storage/${agentThreadId}`;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+  const shots = [1, 2, 3, 4, 5, 6].map((n) => `${storage}/qa/shot-${n}.png`);
+  for (const path of shots) kit.hostFiles.set(`${LOCAL_HOST}:${path}`, png);
+
+  const attachments = shots.map((path, i) => ({ path, about: i === 5 ? "x".repeat(161) : `Shot ${i + 1}` }));
+  const result = textOf(await kit.call("agent_handoff", { ...DONE, attachments }, agentThreadId));
+
+  assert.deepEqual(
+    kit.store.latestHandoff(coordinatorId, a1)?.handoff.attachments.map(({ name }) => name),
+    ["shot-1.png", "shot-2.png", "shot-3.png", "shot-4.png", "shot-5.png"],
+  );
+  assert.ok(result.endsWith(`Not attached, and recorded without it:\n- ${shots[5]}: it is past the 5-file cap; attach the 5 that matter most.`), result);
+});
+
 test("a handoff given no attachments stores none, and one stored before attachments existed reads back with none", async () => {
   const { db, storage } = memoryStorage();
   const { kit, coordinatorId, agentThreadId } = await withAgent({ verify: false, storage });
