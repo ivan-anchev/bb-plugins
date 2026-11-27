@@ -1,0 +1,126 @@
+/* The Board's verification chip and its menu (verify-chip.tsx): BBP-152's Status chip. The chip sits at
+   the top right, as Activity Sidebar's filter sits at its row's end, in that filter's quiet grammar;
+   off, it takes the board's pills' warning tone on a 10% wash of it. The menu is Activity's .as-menu,
+   bb's popover surface, opening from the chip's corner. Every colour is a bb theme token, and every
+   class carries the `rmi-` prefix, since bb does not scope a plugin's stylesheet. */
+.rmi-verify-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+.rmi-verify-chip {
+  all: unset;
+  position: relative;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+  transition: color 150ms ease-out, background-color 150ms ease-out, opacity 150ms ease-out;
+}
+/* why: a 44 tall target over the 24 chip. */
+.rmi-verify-chip::after {
+  content: "";
+  position: absolute;
+  inset: -10px -4px;
+}
+.rmi-verify-chip > svg,
+.rmi-verify-chip > span {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+}
+.rmi-verify-chip > .rmi-verify-chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--subtle-foreground);
+  transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.rmi-verify-chip[data-state="open"] > .rmi-verify-chevron {
+  transform: rotate(180deg);
+}
+@media (hover: hover) {
+  .rmi-verify-chip:hover {
+    color: var(--foreground);
+    background: var(--state-hover);
+  }
+}
+.rmi-verify-chip[data-state="open"] {
+  color: var(--foreground);
+  background: var(--state-hover);
+}
+.rmi-verify-chip:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--ring);
+}
+/* Off: the pills' warning tone, words and glyph, on a 10% wash of it (issue-row.css .rmi-pill). */
+.rmi-verify-chip[data-off],
+.rmi-verify-chip[data-off]:hover,
+.rmi-verify-chip[data-off][data-state="open"] {
+  color: var(--warning-text);
+  background: color-mix(in srgb, var(--warning-text) 10%, transparent);
+}
+.rmi-verify-chip[aria-disabled="true"] {
+  opacity: 0.7;
+}
+
+/* The menu: bb's popover surface, as Activity's view menu has it, scaling from the chip's corner. */
+.rmi-verify-menu {
+  z-index: 50;
+  box-sizing: border-box;
+  width: min(268px, var(--radix-popover-content-available-width));
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-md);
+  font-family: var(--font-sans);
+  transform-origin: var(--radix-popover-content-transform-origin);
+  outline: none;
+}
+.rmi-verify-menu[data-state="open"] {
+  animation: rmi-verify-menu-in 150ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.rmi-verify-menu[data-state="closed"] {
+  animation: rmi-verify-menu-out 100ms ease-in forwards;
+  pointer-events: none;
+}
+@keyframes rmi-verify-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes rmi-verify-menu-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+.rmi-verify-error {
+  margin: 0;
+  padding: 0 8px 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--destructive-text);
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rmi-verify-chip,
+  .rmi-verify-chip > .rmi-verify-chevron {
+    transition: none;
+  }
+  .rmi-verify-menu[data-state] {
+    animation: none;
+  }
+}
