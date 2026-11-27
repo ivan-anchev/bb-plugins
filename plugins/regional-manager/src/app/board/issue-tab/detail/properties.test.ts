@@ -95,7 +95,7 @@ test("a parent has no Assignee row, and no agent of its sub-issues shows anywher
   const { tab } = await opened("WEB-1", [parent, ...subs], { feedOf: feedWith([]), live: [live("thr_a89", "active")] });
   assert.deepEqual(rows(tab()), ["Status"]);
   const banner = tab().getByRole("banner");
-  assert.equal(banner.querySelector(".rmi-assignee, [data-provider-id], canvas"), null);
+  assert.equal(banner.querySelectorAll(".rmi-assignee, [data-provider-id], canvas").length, 0);
   assert.doesNotMatch(banner.textContent ?? "", /a89|a90/);
   cleanup();
 
@@ -122,7 +122,7 @@ test("a chip is a tab stop naming its id, provider and whether it works, and ope
 
   const gone = chips(tab()).at(-1) ?? assert.fail("no chip");
   assert.deepEqual([gone.tagName, gone.getAttribute("aria-label"), gone.textContent], ["SPAN", "a7, Claude Code, not working", "a7"]);
-  assert.equal(gone.closest("button"), null);
+  assert.ok(gone.closest("button") === null, "inside no button");
 });
 
 test("an agent bb runs a turn of has the ring and one at rest has none; an unknown status counts as at rest", async () => {

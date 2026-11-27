@@ -32,7 +32,7 @@ test("the tab shows the issue's head, its title and headline whole with its id a
   assert.equal(head.getByRole("link", { name: "Pull request 41, open, CI passing" }).getAttribute("href"), pr.url);
   fireEvent.click(head.getByRole("button", { name: "a2, Claude Code, not working. Open its thread" }));
   assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_a2" }]);
-  assert.equal(tab().getByRole("banner").querySelector(".rmi-thread-link"), null, "no link to the latest agent: its chip opens it");
+  assert.equal(tab().getByRole("banner").querySelectorAll(".rmi-thread-link").length, 0, "no link to the latest agent: its chip opens it");
 
   assert.ok(tab().getByText(FEED.description));
   assert.deepEqual(headings(tab()), ["Done when", "Activity"], "no relations, no section for them");
