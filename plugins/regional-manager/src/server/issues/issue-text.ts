@@ -86,7 +86,14 @@ const byId: NameOf = (issueId) => issueId;
 
 /** What issue_create says it filed, what blocks it as it is filed, and its link. */
 export const filedText = (issue: Issue, blockedBy: readonly Related[], pluginId: string): string =>
-  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${linksOf(pluginId, issue)(issue.parentId)}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
+  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${linksOf(pluginId, issue)(issue.parentId)}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${reviewerFiledText(issue)}${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
+
+/** What issue_create says of the reviewer named on what it filed: "" with none named. */
+function reviewerFiledText({ kind, reviewer }: Issue): string {
+  if (reviewer === null) return "";
+  if (!isVerified(kind)) return ` ${executionText(reviewer)} is its reviewer, though nothing reviews a ${PIPELINES[kind].label.toLowerCase()} issue: it reviews only once the issue is build work.`;
+  return ` Its done handoffs are reviewed on ${executionText(reviewer)}.`;
+}
 
 /** What issue_update says it did: anything its change implies, the issues it made ready, by their links, and its own link. */
 export function updatedText(issue: Issue, { note, nowReady, accepted }: { note: string | null; nowReady: readonly IssueId[]; accepted: Accepted | null }, pluginId: string): string {
@@ -213,17 +220,31 @@ export function stopText(agent: Agent, outcome: StopOutcome): string {
   }
 }
 
+/** What the verifier or reviewer change an update made (`changed`) applies to, one sentence each; null when it changed neither. */
+export function checkersNote(issue: Issue, changed: Record<"verifier" | "reviewer", boolean>): string | null {
+  const notes = [...(changed.verifier ? [verifierText(issue)] : []), ...(changed.reviewer ? [reviewerText(issue)] : [])];
+  return notes.length === 0 ? null : notes.join(" ");
+}
+
 /** What a verifier named on an issue applies to, as the first choice (verifier-model.ts): nothing on a kind nothing verifies. */
-export function verifierText(issue: Issue): string {
+function verifierText(issue: Issue): string {
   if (!isVerified(issue.kind)) return `${issue.id} has no verifier: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue.`;
   return issue.verifier === null
     ? `${issue.id}'s verifier is the plugin's pick again.`
     : `${executionText(issue.verifier)} is now ${issue.id}'s first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.`;
 }
 
+/** What a reviewer named on an issue applies to (review.ts reviewerExecution): on a kind nothing reviews, nothing until it is one that is. */
+function reviewerText(issue: Issue): string {
+  if (issue.reviewer === null) return `${issue.id}'s reviewer is the plugin's pick again.`;
+  const named = executionText(issue.reviewer);
+  if (!isVerified(issue.kind)) return `${named} is now ${issue.id}'s reviewer, though nothing reviews a ${PIPELINES[issue.kind].label.toLowerCase()} issue: it reviews only once the issue is build work.`;
+  return `${named} now reviews ${issue.id}'s done handoffs from the next one on, whatever its agent and verifier run on. Where bb can't run it when a review comes, no review is had, and the verdict says why, with what bb can run there. A review already running keeps its own.`;
+}
+
 /**
  * An issue whole: its status and why, what blocks it, its plan, its decisions, its relations, the
- * verifier named, each agent with what it runs on, every handoff of every agent with its verdict, a
+ * reviewer and verifier named, each agent with what it runs on, every handoff of every agent with its verdict, a
  * build parent's final checks, oldest first, whether a check on its record is in flight, its
  * comments whole, and its agent's latest answer (null: none).
  */
@@ -254,7 +275,7 @@ export function issueText(
     criteriaText(issue),
     `### Decisions\n\n${decisions.length === 0 ? "None yet. Record one with issue_update's decision." : decisionsText(decisions)}`,
     `### Relations\n\n${relationsText(relations, linksOf(pluginId, issue))}`,
-    `### Verifier\n\n${verifierLine(issue)}`,
+    `### Review and verification\n\n${checkersLines(issue)}`,
     `### Agents\n\n${agents.length === 0 ? "None started." : agents.map((agent) => agentLine(agent, threadId)).join("\n")}`,
     `### Its record\n\n${record.handed.length === 0 ? "No handoff yet." : record.handed.map((handed) => `#### ${handed.handoff.agentId}'s handoff\n\n${handoffText(handed, lookups)}`).join("\n\n")}`,
     ...(record.finalChecks.length === 0 ? [] : [`### Its final checks\n\n${record.finalChecks.map((check) => `#### ${new Date(check.at).toISOString()}\n\n${finalCheckText(check, lookups)}`).join("\n\n")}`]),
@@ -283,10 +304,16 @@ function relationsText({ parent, subIssues, dependsOn, blocks }: Relations, name
   ].join("\n");
 }
 
-/** Who checks its done handoffs. */
-function verifierLine({ kind, verifier }: Issue): string {
-  if (!isVerified(kind)) return `None: nothing verifies a ${PIPELINES[kind].label.toLowerCase()} issue.`;
-  return verifier === null ? "None named: the plugin picks one independent of its agent." : `Named: ${executionText(verifier)}.`;
+/** Who reviews and who verifies its done handoffs. */
+function checkersLines({ kind, verifier, reviewer }: Issue): string {
+  if (!isVerified(kind)) {
+    const label = PIPELINES[kind].label.toLowerCase();
+    return reviewer === null ? `None: nothing reviews or verifies a ${label} issue.` : `Reviewer: named: ${executionText(reviewer)}, though nothing reviews or verifies a ${label} issue.`;
+  }
+  return [
+    `Reviewer: ${reviewer === null ? "none named: the plugin picks one independent of its agent and its verifier." : `named: ${executionText(reviewer)}.`}`,
+    `Verifier: ${verifier === null ? "none named: the plugin picks one independent of its agent." : `named: ${executionText(verifier)}.`}`,
+  ].join("\n");
 }
 
 /** The text as a sentence: with a full stop, unless an agent's summary ending it already has one. */

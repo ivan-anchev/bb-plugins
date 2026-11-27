@@ -26,7 +26,7 @@ function handoff(issueId: IssueId, agentId: AgentId, status: "done" | "blocked",
 
 function withAgent() {
   const { db, storage, store } = freshStore();
-  const issue = filedIssue(store, MANAGER, newIssue({ doneCriteria: ["npm test passes", "npm run lint passes"], verifier: EXECUTION }), 2_000);
+  const issue = filedIssue(store, MANAGER, newIssue({ doneCriteria: ["npm test passes", "npm run lint passes"], verifier: EXECUTION, reviewer: EXECUTION }), 2_000);
   return { db, storage, store, issue, agentId: startAgent(store, issue.id, "agent-1") };
 }
 
@@ -83,12 +83,12 @@ const CHECKED = { kind: "checked", refused: null, ci: { kind: "none" } } as cons
 
 const events = (store: Store) => store.unannounced(MANAGER).map(({ event }) => event);
 
-test("a done handoff makes a queued check that copies its issue's criteria and verifier as they are then, and tells nobody yet", () => {
+test("a done handoff makes a queued check that copies its issue's criteria, verifier and reviewer as they are then, and tells nobody yet", () => {
   const { store, issue, agentId } = withAgent();
   const done = handoff(issue.id, agentId, "done");
   const check = checkOf(store.insertHandoff(done, CLEAN, "bb/thr_1"));
 
-  store.updateIssue(MANAGER, issue.id, { doneCriteria: ["npm test passes"], verifier: null }, { requireUnheld: false, closes: new Map(), at: 3_000 });
+  store.updateIssue(MANAGER, issue.id, { doneCriteria: ["npm test passes"], verifier: null, reviewer: null }, { requireUnheld: false, closes: new Map(), at: 3_000 });
 
   assert.deepEqual(store.check(check.id), {
     id: check.id,
@@ -97,6 +97,7 @@ test("a done handoff makes a queued check that copies its issue's criteria and v
     at: 3_000,
     criteria: ["npm test passes", "npm run lint passes"],
     verifier: EXECUTION,
+    reviewer: EXECUTION,
     subject: { kind: "handoff", agentId, handoffId: done.id, headSha: SHA, prUrl: null, branch: "bb/thr_1" },
     review: { state: "queued" },
     verdict: { state: "queued", checkout: CLEAN.checkout },
@@ -666,6 +667,7 @@ test("a pass with leftovers in two rounds files one top-level Backlog build issu
     title: "Follow-ups from WEB-1: Add retries",
     doneCriteria: [],
     verifier: null,
+    reviewer: null,
     rest: "backlog",
     parentId: null,
     dependsOn: [issue.id],

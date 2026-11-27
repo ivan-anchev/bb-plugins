@@ -63,6 +63,8 @@ export type Issue = {
   doneCriteria: DoneCriteria;
   /** What checks its done handoffs, as the manager named it; null: the plugin picks. */
   verifier: Execution | null;
+  /** What reviews its done handoffs' diffs, as the manager named it, whatever model that is; null: the plugin picks one independent of its agent and verifier. */
+  reviewer: Execution | null;
   rest: Rest;
   /** The issue it is a sub-issue of, one level deep (plan.ts); null: none. A parent has no agent, and its status rolls up from its sub-issues (status.ts). */
   parentId: IssueId | null;
@@ -73,7 +75,7 @@ export type Issue = {
 };
 
 /** An issue as it is filed: what the manager gives it, or a follow-up the plugin files (rounds/follow-up.ts). */
-export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "parentId" | "dependsOn">;
+export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "reviewer" | "rest" | "parentId" | "dependsOn">;
 
 /** The brief an agent starts from, or why none can start on the issue as it is planned. */
 export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneCriteria">): { brief: string } | { refused: string } {
@@ -86,7 +88,8 @@ export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneC
 /**
  * Why an issue of `kind` can't have a verifier named, or null when it can. why one rule, read on
  * the plan as it would be: filing a research issue with a verifier, naming one on a research issue,
- * and making an issue that names one research would each leave a verifier that never runs.
+ * and making an issue that names one research would each leave a verifier that never runs. A
+ * reviewer has no such rule: one named on a research issue waits, unused, until it is build work.
  */
 export function verifierProblem(kind: Kind, namesVerifier: boolean): string | null {
   if (!namesVerifier || isVerified(kind)) return null;

@@ -275,10 +275,10 @@ export function checksStore(db: Db) {
   }
 
   /** Inserts a check made of the handoff `handoffId` (null: a final check, made of none), with its first verdict. Call inside a transaction. */
-  function insertCheck({ id, coordinatorId, issueId, subject, criteria, verifier, review, verdict, at }: NewCheck<Check>, handoffId: HandoffId | null): void {
+  function insertCheck({ id, coordinatorId, issueId, subject, criteria, verifier, reviewer, review, verdict, at }: NewCheck<Check>, handoffId: HandoffId | null): void {
     db()
-      .prepare("INSERT INTO checks (id, coordinator_id, issue_id, handoff_id, subject, criteria, verifier, review, verdict, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .run(id, coordinatorId, issueId, handoffId, JSON.stringify(subject), JSON.stringify(criteria), jsonOrNull(verifier), JSON.stringify(review), JSON.stringify(verdict), at);
+      .prepare("INSERT INTO checks (id, coordinator_id, issue_id, handoff_id, subject, criteria, verifier, reviewer, review, verdict, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, coordinatorId, issueId, handoffId, JSON.stringify(subject), JSON.stringify(criteria), jsonOrNull(verifier), jsonOrNull(reviewer), JSON.stringify(review), JSON.stringify(verdict), at);
   }
 
   const check = (checkId: CheckId): Check | null => readCheck(db, checkId);
@@ -317,7 +317,7 @@ export function checksStore(db: Db) {
 
     /**
      * An agent's handoff and, when it is done on an issue of a verified kind, its check, together.
-     * The check copies its issue's criteria and verifier as they are now, and starts with the verdict
+     * The check copies its issue's criteria, verifier and reviewer as they are now, and starts with the verdict
      * firstVerdict gives it on `checkout`, the agent's environment as read as it handed off: queued
      * for a verifier and announced with its verdict later, or else announced at once. A done handoff
      * supersedes every earlier check of its issue still waiting. A blocked or gave-up one, and a done
@@ -336,9 +336,9 @@ export function checksStore(db: Db) {
           return null;
         }
         supersedeChecks(db, coordinatorId, issueId);
-        const { kind, criteria, verifier } = z
-          .object({ kind: kindSchema, criteria: json(doneCriteriaSchema), verifier: nullableJson(executionSchema) })
-          .parse(db().prepare("SELECT kind, done_criteria AS criteria, verifier FROM issues WHERE coordinator_id = ? AND id = ?").get(coordinatorId, issueId));
+        const { kind, criteria, verifier, reviewer } = z
+          .object({ kind: kindSchema, criteria: json(doneCriteriaSchema), verifier: nullableJson(executionSchema), reviewer: nullableJson(executionSchema) })
+          .parse(db().prepare("SELECT kind, done_criteria AS criteria, verifier, reviewer FROM issues WHERE coordinator_id = ? AND id = ?").get(coordinatorId, issueId));
         if (!isVerified(kind)) {
           insertEvent(db, coordinatorId, { kind: "handoff", issueId, agentId, handoffId: id, status: stored.status }, at);
           return null;
@@ -354,6 +354,7 @@ export function checksStore(db: Db) {
           at,
           criteria,
           verifier,
+          reviewer,
           subject: { kind: "handoff", agentId, handoffId: id, headSha, prUrl, branch },
           review: firstReview(verdict),
           verdict,
@@ -386,6 +387,7 @@ export function checksStore(db: Db) {
           at,
           criteria,
           verifier,
+          reviewer: null,
           subject: { kind: "final", ...subject },
           review: { state: "none" },
           verdict: firstVerdict(verifies(coordinatorId), null, at),
@@ -617,7 +619,7 @@ const isAt = (verdict: Verdict, from: VerdictFrom): boolean =>
 
 const toCheckId = (row: unknown): CheckId => z.object({ id: checkIdSchema }).parse(row).id;
 
-const CHECK_COLUMNS = "id, coordinator_id AS coordinatorId, issue_id AS issueId, at, criteria, verifier, subject, review, verdict, follow_up_id AS followUpId, accepted_at AS acceptedAt";
+const CHECK_COLUMNS = "id, coordinator_id AS coordinatorId, issue_id AS issueId, at, criteria, verifier, reviewer, subject, review, verdict, follow_up_id AS followUpId, accepted_at AS acceptedAt";
 const checkRowSchema = z.object({
   id: checkIdSchema,
   coordinatorId: coordinatorIdSchema,
@@ -625,6 +627,7 @@ const checkRowSchema = z.object({
   at: z.number(),
   criteria: json(doneCriteriaSchema),
   verifier: nullableJson(executionSchema),
+  reviewer: nullableJson(executionSchema),
   subject: json(checkSubjectSchema),
   review: json(reviewSchema),
   verdict: json(storedVerdictSchema),

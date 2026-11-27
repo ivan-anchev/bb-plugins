@@ -483,7 +483,7 @@ test("issue_read returns the issue's status, plan, agents and its agent's latest
   assert.match(text, /^## WEB-1: Add retries\n\nBuild\. In progress: Working\./);
   assert.match(text, /### What it is about\n\nFailed webhook deliveries are lost\./);
   assert.match(text, /### Done when\n\n1\. npm test passes\n2\. a failed delivery is retried 3 times/);
-  assert.match(text, /### Verifier\n\nNone named: the plugin picks one independent of its agent\./);
+  assert.match(text, /### Review and verification\n\nReviewer: none named: the plugin picks one independent of its agent and its verifier\.\nVerifier: none named: the plugin picks one independent of its agent\./);
   assert.match(text, /### Its record\n\nNo handoff yet\./);
   assert.match(text, /### Its agent's latest answer\n\nDone: npm test passes\./);
 });

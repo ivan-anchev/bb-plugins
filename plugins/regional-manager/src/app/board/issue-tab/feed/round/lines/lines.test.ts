@@ -168,7 +168,7 @@ function legacyCheck(): Check {
   });
   if (review.state !== "reported") return assert.fail("not reported");
   const subject = { kind: "handoff", agentId: agent("a2").id, handoffId: handoffIdSchema.parse("00000000-0000-4000-8000-000000000003"), headSha: SHA, prUrl: null, branch: null } as const;
-  return { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000301"), coordinatorId: COORDINATOR.id, issueId: id("WEB-1"), at: 5_000, criteria: ["npm test passes"], verifier: null, subject, review, verdict: withReview(verdict, review.findings), followUpId: null, acceptedAt: null };
+  return { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000301"), coordinatorId: COORDINATOR.id, issueId: id("WEB-1"), at: 5_000, criteria: ["npm test passes"], verifier: null, reviewer: null, subject, review, verdict: withReview(verdict, review.findings), followUpId: null, acceptedAt: null };
 }
 
 test("a round stored before findings had titles renders through the titles derived from its claims, its criterion through what its evidence first says", async () => {

@@ -534,19 +534,20 @@ type Filed = Pick<Check, "followUpId" | "acceptedAt">;
  * to the agent, then each finding in the review's order with the verifier's word on it (review.ts
  * triageText) and its reason. Nothing for a check with no review stage.
  */
-function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>, filed: Filed): string[] {
+function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>, check: Pick<Check, "reviewer" | "issueId"> & Filed): string[] {
   const all = verdict.triage;
   const held = all.filter(holds).length;
   const each = all.map((finding) => `- ${findingText(finding, "  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n");
-  const triaged = (lead: string): string[] => [[`${lead}; ${triageTotals(all)}.`, ...(held === 0 ? [] : [heldSent(verdict, filed)])].join(" "), each];
+  const triaged = (lead: string, note = ""): string[] => [[`${lead}; ${triageTotals(all)}.${note}`, ...(held === 0 ? [] : [heldSent(verdict, check)])].join(" "), each];
   if (review.state === "missed") {
     const missed = `Review: no review was had, as ${review.reason}`;
     return all.length === 0 ? [`${missed}.`] : triaged(`${missed}, so the verifier triaged the ${all.length} earlier blocking finding${all.length === 1 ? "" : "s"} as unfixed`);
   }
   if (review.state !== "reported") return [];
   const by = `${review.model.providerId} ${review.model.model}`;
-  if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.`];
-  return triaged(`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}`);
+  const named = namedReviewerNote(check);
+  if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.${named}`];
+  return triaged(`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}`, named);
 }
 
 /**
@@ -626,6 +627,9 @@ function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, { verifier
   const why = namedOwner !== null ? `${namedOwner} did the work on it` : `bb can't run it ${whereChecked(subject)}`;
   return `${ran}${own}, not the ${named.providerId} ${named.model} named on ${issueId}: ${why}`;
 }
+
+/** When the issue named a reviewer, that the one that ran is it: a named reviewer runs as named or not at all (review.ts reviewerExecution); "" when none was named. */
+const namedReviewerNote = ({ reviewer: named, issueId }: Pick<Check, "reviewer" | "issueId">): string => (named === null ? "" : ` It ran as named on ${issueId}.`);
 
 /** Where a check's verifier runs, as a place bb can or can't run a model: the agent's environment; for a final check, the regional manager's machine. */
 function whereChecked(subject: Check["subject"]): string {

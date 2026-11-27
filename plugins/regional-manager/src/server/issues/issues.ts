@@ -5,7 +5,7 @@
 // every other status is evidence.
 import type { z } from "zod";
 import type { Agent, AgentId } from "../../model/agent/agent.ts";
-import { sameModel, type Execution, type RequestedExecution } from "../../model/agent/execution.ts";
+import { sameModel, type CatalogRouting, type Execution, type RequestedExecution } from "../../model/agent/execution.ts";
 import { verifierProblem, type Issue, type IssueId, type managerStatusSchema, type NewIssue } from "../../model/issue/issue.ts";
 import { blockedBy, closesOf, newlyReady, relationsOf, type Related } from "../../model/issue/relations.ts";
 import { headlineText, latestChecked, STATUS_LABELS, type IssueView } from "../../model/issue/status.ts";
@@ -15,15 +15,17 @@ import { prRef } from "../../model/verdict/pr.ts";
 import { capMovesText } from "../../model/verdict/rounds/cap.ts";
 import { checkedPr, ciFailedAt, failedOnReviewOnly, type PrOfBranch, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
 import { executionText } from "../agents/agents.ts";
+import type { EnvironmentThread } from "../agents/environments.ts";
+import { listedThreads, type ListBb } from "../agents/threads.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { DependencyChange, IssueEdit } from "../store/issue/issues-store.ts";
 import type { Store } from "../store/store.ts";
 import type { CurrentViews } from "./views/current-views.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./views/issue-facts.ts";
-import { issueText, verifierText } from "./issue-text.ts";
+import { checkersNote, issueText } from "./issue-text.ts";
 
-/** The parts of bb the issues read: their agents' threads and turns, bb's catalog, and an agent's latest answer. */
-type IssuesBb = FactsBb & CatalogBb & { pluginId: string; sdk: { threads: { output(args: { threadId: string }): Promise<{ output: string | null }> } } };
+/** The parts of bb the issues read: their agents' threads, environments and turns, bb's catalog, and an agent's latest answer. */
+type IssuesBb = FactsBb & ListBb<EnvironmentThread> & CatalogBb & { pluginId: string; sdk: { threads: { output(args: { threadId: string }): Promise<{ output: string | null }> } } };
 
 type Deps = {
   bb: IssuesBb;
@@ -33,17 +35,18 @@ type Deps = {
   onChange(id: CoordinatorId): void;
 };
 
-/** What issue_create files: a plan, with the verifier the manager names (left out: the plugin picks). */
-type IssueRequest = Omit<NewIssue, "verifier"> & { verifier?: RequestedExecution };
+/** What issue_create files: a plan, with the verifier and reviewer the manager names (each left out: the plugin picks). */
+type IssueRequest = Omit<NewIssue, "verifier" | "reviewer"> & { verifier?: RequestedExecution; reviewer?: RequestedExecution };
 
 /**
- * What issue_update changes; a field left out stays. `verifier: null` gives the choice back to the plugin; `parentId: null` makes it
+ * What issue_update changes; a field left out stays. `verifier: null` or `reviewer: null` gives that choice back to the plugin; `parentId: null` makes it
  * top-level. `decision`: what was decided and why, recorded among its decisions as of now.
  */
 type IssueChange = Partial<Pick<Issue, "kind" | "title" | "description" | "doneCriteria" | "parentId">> & {
   brief?: string;
   decision?: string;
   verifier?: RequestedExecution | null;
+  reviewer?: RequestedExecution | null;
   status?: z.infer<typeof managerStatusSchema>;
   dependsOn?: DependencyChange;
 };
@@ -60,13 +63,26 @@ export type Issues = ReturnType<typeof createIssues>;
 
 export function createIssues({ bb, store, views: current, onChange }: Deps) {
   /**
-   * The verifier named, resolved against bb's catalog on its primary machine. why there: where a
-   * check runs is the agent's environment, not known yet; a verifier bb can't run there when the
-   * check comes is passed over, and the verdict says so.
+   * Where a checker named now is resolved, and how a refusal names that place: for a reviewer named
+   * on `issue`, the environment of the agent holding it, where its next review runs (review.ts
+   * reviewerExecution); with no agent holding it, none bb lists an environment for, or null (a
+   * verifier, or an issue being filed), bb's primary machine. why the verifier there: a final check
+   * runs on the manager's machine, and a handoff's verifier bb can't run in the agent's environment
+   * is passed over for the plugin's pick (verifier-model.ts), which its verdict says.
    */
-  async function verifierOf(requested: RequestedExecution): Promise<Execution | Refused> {
-    const resolved = await resolvedExecution(bb, {}, requested);
-    return "refused" in resolved ? { refused: `On bb's primary machine: ${resolved.refused}` } : resolved;
+  async function placeOf(issue: Issue | null): Promise<{ routing: CatalogRouting; where: string }> {
+    const holder = issue === null ? null : holderOf(issue);
+    const threadId = holder?.threadId ?? null;
+    const environmentId = threadId === null ? null : ((await listedThreads<EnvironmentThread>(bb, [threadId])).get(threadId)?.environmentId ?? null);
+    return holder === null || environmentId === null ? { routing: {}, where: "On bb's primary machine" } : { routing: { environmentId }, where: `In ${holder.id}'s environment` };
+  }
+
+  /** A change of verifier or reviewer resolved where `placeOf(issue)` says: undefined, unchanged; null, the plugin picks. */
+  async function changedChecker(issue: Issue | null, requested: RequestedExecution | null | undefined): Promise<Execution | Refused | null | undefined> {
+    if (requested === undefined || requested === null) return requested;
+    const { routing, where } = await placeOf(issue);
+    const resolved = await resolvedExecution(bb, routing, requested);
+    return "refused" in resolved ? { refused: `${where}: ${resolved.refused}` } : resolved;
   }
 
   /** The follow-up an accepted check filed, as its row names it. why throw: an accept files one in the transaction that stamps it (issues-store.ts updateIssue). */
@@ -125,18 +141,20 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
   return {
     /**
      * Files an issue, numbered after the regional manager's highest, with what blocks it as it is
-     * filed; refused when its kind has no verifier, bb can't run the one named, or the plan with it
+     * filed; refused when its kind has no verifier and one is named, bb can't run a verifier or reviewer named, or the plan with it
      * can't stand (plan.ts). why on views current as it is written (current-views.ts): a parent
      * closed by its work, or a dependency's close, can change while bb is read, and filing a
      * sub-issue changes its parent's status. Its dependencies are written, and its parent judged
      * open, from what those views say, which is what the manager is told; a failed read files nothing.
      */
-    async create(coordinatorId: CoordinatorId, { verifier: requested, ...plan }: IssueRequest): Promise<{ issue: Issue; blockedBy: Related[] } | Refused> {
-      const problem = verifierProblem(plan.kind, requested !== undefined);
+    async create(coordinatorId: CoordinatorId, { verifier: requestedVerifier, reviewer: requestedReviewer, ...plan }: IssueRequest): Promise<{ issue: Issue; blockedBy: Related[] } | Refused> {
+      const problem = verifierProblem(plan.kind, requestedVerifier !== undefined);
       if (problem !== null) return { refused: `No issue filed: ${problem}. Leave verifier out.` };
-      const verifier = requested === undefined ? null : await verifierOf(requested);
+      const verifier = (await changedChecker(null, requestedVerifier)) ?? null;
       if (verifier !== null && "refused" in verifier) return { refused: `No issue filed. ${verifier.refused}` };
-      const file = (views: IssueView[]) => ({ filed: store.insertIssue(coordinatorId, { ...plan, verifier }, closesOf(views), Date.now()), views });
+      const reviewer = (await changedChecker(null, requestedReviewer)) ?? null;
+      if (reviewer !== null && "refused" in reviewer) return { refused: `No issue filed. ${reviewer.refused}` };
+      const file = (views: IssueView[]) => ({ filed: store.insertIssue(coordinatorId, { ...plan, verifier, reviewer }, closesOf(views), Date.now()), views });
       const written = plan.dependsOn.length === 0 && plan.parentId === null ? { acted: file([]) } : await current.whileCurrent(coordinatorId, file);
       if (written === null) return { refused: `No issue filed: ${OVERTAKEN}` };
       const { filed, views } = written.acted;
@@ -148,16 +166,18 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
 
     /**
      * Applies the change, or says why it can't, changing nothing: a verifier bb can't run or that is
-     * the model of the agent holding the issue, a status the issue as it stands can't take, or a
-     * plan that can't stand (plan.ts). Returns the issue, what a verifier change applies to, the
+     * the model of the agent holding the issue, a reviewer bb can't run (any other is taken, the
+     * agent's or the verifier's model included), a status the issue as it stands can't take, or a
+     * plan that can't stand (plan.ts). Returns the issue, what a verifier or reviewer change applies to, the
      * issues a status, parent or dependency change made ready (a cancel or an accept as Done closes
      * a dependency; a removed dependency may have been the last open one, a parent left the last
      * blocking one), and what an accept into In review did (null: none was made).
      */
-    async update(issue: Issue, { verifier: requested, status, dependsOn, decision, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[]; accepted: Accepted | null } | Refused> {
-      // undefined: unchanged; null: the plugin picks.
-      const verifier = requested === undefined || requested === null ? requested : await verifierOf(requested);
+    async update(issue: Issue, { verifier: requestedVerifier, reviewer: requestedReviewer, status, dependsOn, decision, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[]; accepted: Accepted | null } | Refused> {
+      const verifier = await changedChecker(null, requestedVerifier);
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
+      const reviewer = await changedChecker(issue, requestedReviewer);
+      if (reviewer !== undefined && reviewer !== null && "refused" in reviewer) return reviewer;
       /** Writes the change judged on `before`: every issue viewed, or null when nothing changed is judged by them. */
       const write = (before: IssueView[] | null): { issue: Issue; before: IssueView[] | null; accepted: Accepted | null } | Refused => {
         // why one moment: a close, a decision and the log of what changed tell one edit.
@@ -176,6 +196,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
           ...statusChange,
           ...(dependsOn === undefined ? {} : { dependsOn }),
           ...(verifier === undefined ? {} : { verifier }),
+          ...(reviewer === undefined ? {} : { reviewer }),
           ...(decision === undefined ? {} : { decision: { text: decision, at } }),
         };
         // why an accept may leave its agent holding the issue: it may still be working, and the manager is told to stop it (issue-text.ts updatedText).
@@ -190,7 +211,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
       const { issue: updated, before, accepted } = written.acted;
       onChange(issue.coordinatorId);
       const nowReady = before === null ? [] : newlyReady(before, await viewsOf(issue.coordinatorId));
-      return { issue: updated, note: requested === undefined ? null : verifierText(updated), nowReady, accepted };
+      return { issue: updated, note: checkersNote(updated, { verifier: requestedVerifier !== undefined, reviewer: requestedReviewer !== undefined }), nowReady, accepted };
     },
 
     /** The issue whole, as issue_read returns it, with the issues it depends on and those that depend on it, and its decisions. */

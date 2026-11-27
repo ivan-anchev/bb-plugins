@@ -33,6 +33,7 @@ test("a confirmed should-fix plans one top-level Backlog build issue depending o
     brief: null,
     doneCriteria: [],
     verifier: null,
+    reviewer: null,
     rest: "backlog",
     parentId: null,
     dependsOn: [ORIGIN],

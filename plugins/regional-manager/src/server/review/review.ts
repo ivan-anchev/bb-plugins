@@ -1,6 +1,7 @@
 // The review stage: before a done handoff's verifier starts, the plugin starts a hidden reviewer in
-// the agent's environment, on a model other than the agent's and, when bb runs one, other than the
-// one its verifier will run on, so the verifier's triage of its findings is independent. Its first
+// the agent's environment, on the reviewer named on its issue, or else on a model other than the
+// agent's and, when bb runs one, other than the one its verifier will run on, so the verifier's
+// triage of its findings is independent. Its first
 // message is the diff, the issue's brief and done-criteria, and CREW.md (reviewer-brief.ts); what
 // it runs is CREW.md's. It reports through issue_review (review-tool.ts). A review never holds an
 // issue up: a reviewer bb won't start, or that is gone, idle without findings, stalled, or asking
@@ -12,9 +13,11 @@ import { sameModel, type Execution } from "../../model/agent/execution.ts";
 import type { HandoffCheck, CheckId } from "../../model/verdict/check.ts";
 import { numberedText } from "../../model/verdict/review.ts";
 import { unfixed } from "../../model/verdict/rounds/delta.ts";
+import type { AgentId } from "../../model/agent/agent.ts";
+import type { IssueId } from "../../model/issue/issue.ts";
 import { handingAgent } from "../agents/handing-agent.ts";
 import { isRunning, listedThreads, stopThreads, type StopBb } from "../agents/threads.ts";
-import type { CatalogBb } from "../execution/catalog.ts";
+import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import type { Busy, IssueTurns } from "../issues/issue-turns.ts";
 import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
@@ -78,10 +81,10 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
     const environmentId = (await listedThreads(bb, [agent.threadId])).get(agent.threadId)?.environmentId ?? null;
     if (environmentId === null) throw new Error("the agent's thread has no environment to review");
     const [execution, { defaultBranch }] = await Promise.all([
-      reviewerExecution(bb, { named: check.verifier, manager: await threadExecution(bb, coordinator.threadId), theirs: [agent.execution], routing: { environmentId } }),
+      reviewerExecution(bb, { named: check.reviewer, issueId: check.issueId, agentId: agent.id }, { named: check.verifier, manager: await threadExecution(bb, coordinator.threadId), theirs: [agent.execution], routing: { environmentId } }),
       bb.sdk.environments.get({ environmentId }),
     ]);
-    if (execution === null) return { none: `no independent reviewer model: bb can run none there but ${agent.id}'s own` };
+    if ("none" in execution) return execution;
     // why read here, after every await: the brief and the decisions it gives must agree (checkedIssue).
     const issue = checkedIssue(store, check.coordinatorId, check.issueId);
     return {
@@ -182,16 +185,28 @@ export function createReview({ bb, store, spawner, memory, turns, now }: Deps) {
 }
 
 /**
- * What a reviewer runs on: never the model of the agent whose work it reviews, nor, while bb runs
- * another there, the one the check's verifier is chosen on now, so the verifier's triage is
- * independent of it. The same order as a verifier's, with the verifier's model kept away from as
- * the agent's is; when bb runs nothing else, the verifier's model. null when bb runs nothing there
- * but the agent's own model: a review on it would be no independent review.
+ * What a reviewer runs on: the reviewer named on its issue (`named`), as named, whatever model the
+ * agent or the verifier runs on: the manager's call. When bb can't run it where the review runs,
+ * none, saying so with what bb can run there, as any execution is refused. With none named, the
+ * plugin's pick: never the model of the agent whose work it reviews, nor, while bb runs another
+ * there, the one the check's verifier is chosen on now, so the verifier's triage is independent of
+ * it. The same order as a verifier's, with the verifier's model kept away from as the agent's is;
+ * when bb runs nothing else, the verifier's model; none when bb runs nothing there but the agent's
+ * own model, as a review it picks on that would be no independent review.
  */
-async function reviewerExecution(bb: CatalogBb, choice: VerifierChoice): Promise<Execution | null> {
+async function reviewerExecution(
+  bb: CatalogBb,
+  { named, issueId, agentId }: { named: Execution | null; issueId: IssueId; agentId: AgentId },
+  choice: VerifierChoice,
+): Promise<Execution | { none: string }> {
+  if (named !== null) {
+    const resolved = await resolvedExecution(bb, choice.routing, named);
+    // why the stop dropped: the reason is read inside a sentence (inbox-text.ts reviewText, verifier-brief.ts).
+    return "refused" in resolved ? { none: `bb can't run the ${named.providerId} ${named.model} named on ${issueId} as its reviewer in ${agentId}'s environment: ${resolved.refused.replace(/\.$/, "")}` } : resolved;
+  }
   const verifier = await verifierExecution(bb, choice);
   const reviewer = await verifierExecution(bb, { ...choice, named: null, theirs: [verifier, ...choice.theirs] });
-  return choice.theirs.some((their) => sameModel(their, reviewer)) ? null : reviewer;
+  return choice.theirs.some((their) => sameModel(their, reviewer)) ? { none: `no independent reviewer model: bb can run none there but ${agentId}'s own` } : reviewer;
 }
 
 /**

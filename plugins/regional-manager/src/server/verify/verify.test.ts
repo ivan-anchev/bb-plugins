@@ -1468,7 +1468,7 @@ test("issue_verdict refuses an anchored finding the reviewer marked missed, with
   const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
   assert.match(
     brief,
-    new RegExp(`An independent reviewer read the diff before you and claims these\\. It was asked to review only the change since round 1, the last round reviewed, at \`${HEAD}\`, in the files this branch changes; or, when that commit isn't in this environment, the whole diff, marking every finding new\\.`),
+    new RegExp(`A reviewer read the diff before you and claims these\\. It was asked to review only the change since round 1, the last round reviewed, at \`${HEAD}\`, in the files this branch changes; or, when that commit isn't in this environment, the whole diff, marking every finding new\\.`),
     "the scope it was given and its fallback, never which one it ran",
   );
   assert.match(brief, /A finding marked unfixed is one of round 1's blocking findings[^\n]*; one marked missed sits on code round 1 reviewed unchanged; every other one is new, on code changed since, or anywhere when it reviewed the whole diff/);

@@ -121,23 +121,26 @@ test("an edit logs what it changed of the plan, in a fixed order, at the time gi
     { kind: "dependency-removed", on: dependency },
   ]);
   assert.deepEqual(edit({ title: "Retries, capped", rest: "backlog", dependsOn: { add: [], remove: [] } }, 3_600), [], "the same values again");
-  assert.equal(store.logOf(MANAGER, filed.id).length, 9);
+  assert.deepEqual(edit({ verifier: EXECUTION, reviewer: EXECUTION }, 3_700), [{ kind: "edited", fields: ["verifier", "reviewer"] }]);
+  assert.deepEqual(edit({ reviewer: null }, 3_800), [{ kind: "edited", fields: ["reviewer"] }]);
+  assert.equal(store.logOf(MANAGER, filed.id).length, 11);
 });
 
-test("an edit whose log fails to be written takes the edit back with it, and the same edit then applies and is logged", () => {
+test("an edit whose log fails to be written takes the edit back with it, its reviewer included, and the same edit then applies and is logged", () => {
   const { db, store } = freshStore();
   const dependency = filedIssue(store, MANAGER, newIssue(), 2_000).id;
   const filed = filedIssue(store, MANAGER, newIssue(), 2_000);
-  const edit: IssueEdit = { title: "Retries, capped", dependsOn: { add: [dependency], remove: [] } };
+  const edit: IssueEdit = { title: "Retries, capped", reviewer: EXECUTION, dependsOn: { add: [dependency], remove: [] } };
   const restore = failWrites(db, "INSERT", "issue_log");
   assert.throws(() => store.updateIssue(MANAGER, filed.id, edit, { requireUnheld: false, closes: new Map(), at: 3_000 }), /forced failure/);
-  assert.deepEqual(store.issue(MANAGER, filed.id), filed, "its title and dependencies as they were");
+  assert.deepEqual(store.issue(MANAGER, filed.id), filed, "its title, reviewer and dependencies as they were");
   assert.deepEqual(store.logOf(MANAGER, filed.id), []);
 
   restore();
-  assert.deepEqual(store.updateIssue(MANAGER, filed.id, edit, { requireUnheld: false, closes: new Map(), at: 3_100 }), { issue: { ...filed, title: "Retries, capped", dependsOn: [dependency] } });
+  assert.deepEqual(store.updateIssue(MANAGER, filed.id, edit, { requireUnheld: false, closes: new Map(), at: 3_100 }), { issue: { ...filed, title: "Retries, capped", reviewer: EXECUTION, dependsOn: [dependency] } });
+  assert.deepEqual(store.issue(MANAGER, filed.id)?.reviewer, EXECUTION, "the reviewer stored");
   assert.deepEqual(store.logOf(MANAGER, filed.id), [
-    { at: 3_100, event: { kind: "edited", fields: ["title"] } },
+    { at: 3_100, event: { kind: "edited", fields: ["title", "reviewer"] } },
     { at: 3_100, event: { kind: "dependency-added", on: dependency } },
   ]);
 });

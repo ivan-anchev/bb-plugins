@@ -40,8 +40,8 @@ const handoff: Handoff = {
   delivery: { kind: "commit", headSha: SHA, prUrl: null },
 };
 
-/** The handoff, checked with this verdict after `review`, on the issue that named `verifier` (null: none). */
-const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review: Review = { state: "none" }): Handed => ({
+/** The handoff, checked with this verdict after `review`, on the issue that named `verifier` and `reviewer` (null: none). */
+const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review: Review = { state: "none" }, reviewer: Execution | null = null): Handed => ({
   handoff,
   check: {
     id: checkIdSchema.parse("5d6c1e0a-2b3f-4a5e-8c7d-9e0f1a2b3c4d"),
@@ -50,6 +50,7 @@ const checkedWith = (verdict: Verdict, verifier: Execution | null = null, review
     at: 1_000,
     criteria: ["npm test passes"],
     verifier,
+    reviewer,
     subject: { kind: "handoff", agentId, handoffId: handoff.id, headSha: SHA, prUrl: null, branch: null },
     review,
     verdict,
@@ -158,6 +159,15 @@ test("catch-up words a round's review as the verifier's totals, anchored, downgr
     text,
   );
   assert.match(text, /Failed verification: a must-fix review finding upheld\. 1 of 1 criteria passed/, "the anchored finding alone fails it");
+});
+
+test("a review by a reviewer named on the issue says it ran as named, after the triage totals", () => {
+  const finding = { title: "No cap", file: "src/retry.ts", line: 4, severity: "should-fix", claim: "No cap.", origin: "new" } as const;
+  const review: Review = { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [finding], earlier: [], model: { providerId: "codex", model: "gpt-5.4" } };
+  const verdict: Extract<Verdict, { state: "returned" }> = { ...returned(["pass"]), triage: [{ ...finding, result: "confirmed", reason: "No cap." }] };
+  const named = handoffText(checkedWith(verdict, null, review, CODEX), agentOn(CODEX));
+  assert.match(named, /Review: a reviewer on codex gpt-5\.4 reported 1 finding; the verifier anchored 0, downgraded 0, confirmed 1 and rejected 0\. It ran as named on WEB-1\./, "on the agent's own model, as named");
+  assert.doesNotMatch(handoffText(checkedWith(verdict, null, review), agentOn(CODEX)), /named on WEB-1/, "none named, nothing said");
 });
 
 /** What catch-up looks up for WEB-1, whose record is `record`, and its follow-up WEB-2, titled as filed. */

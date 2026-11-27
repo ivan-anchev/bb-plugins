@@ -22,7 +22,7 @@ import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
  * `accept`: the issue's latest check of a done handoff, whose failed verdict the manager accepts as
  * it is (issues.ts statusEdit), written with the decision that says why.
  */
-export type IssueEdit = Partial<Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "closed" | "parentId">> & {
+export type IssueEdit = Partial<Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "reviewer" | "rest" | "closed" | "parentId">> & {
   dependsOn?: DependencyChange;
   decision?: Omit<RecordedDecision, "kind">;
   accept?: CheckId;
@@ -58,8 +58,8 @@ export function fileIssue(db: Db, coordinatorId: CoordinatorId, issue: NewIssue,
   const problem = planProblem(issuesOf(db, coordinatorId, null), filed, closes) ?? splitProblem(db, filed, null);
   if (problem !== null) return { refused: `${problem}.` };
   db()
-    .prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, brief, done_criteria, verifier, rest, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(coordinatorId, filed.id, filed.kind, filed.title, filed.description, filed.brief, JSON.stringify(filed.doneCriteria), jsonOrNull(filed.verifier), filed.rest, filed.parentId, at);
+    .prepare("INSERT INTO issues (coordinator_id, id, kind, title, description, brief, done_criteria, verifier, reviewer, rest, parent_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(coordinatorId, filed.id, filed.kind, filed.title, filed.description, filed.brief, JSON.stringify(filed.doneCriteria), jsonOrNull(filed.verifier), jsonOrNull(filed.reviewer), filed.rest, filed.parentId, at);
   writeDependencies(db, filed, closes);
   return { issue: filed };
 }
@@ -113,8 +113,8 @@ export function issuesStore(db: Db, acceptance: Acceptance) {
         const stale = accept === undefined ? null : acceptance.refusal(coordinatorId, id, accept);
         if (stale !== null) return { refused: stale };
         db()
-          .prepare("UPDATE issues SET kind = ?, title = ?, description = ?, brief = ?, done_criteria = ?, verifier = ?, rest = ?, closed_as = ?, closed_at = ?, parent_id = ? WHERE coordinator_id = ? AND id = ?")
-          .run(next.kind, next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, next.parentId, coordinatorId, id);
+          .prepare("UPDATE issues SET kind = ?, title = ?, description = ?, brief = ?, done_criteria = ?, verifier = ?, reviewer = ?, rest = ?, closed_as = ?, closed_at = ?, parent_id = ? WHERE coordinator_id = ? AND id = ?")
+          .run(next.kind, next.title, next.description, next.brief, JSON.stringify(next.doneCriteria), jsonOrNull(next.verifier), jsonOrNull(next.reviewer), next.rest, next.closed?.as ?? null, next.closed?.at ?? null, next.parentId, coordinatorId, id);
         if (dependsOn !== undefined) writeDependencies(db, next, closes);
         if (decision !== undefined) db().prepare("INSERT INTO issue_decisions (coordinator_id, issue_id, text, at) VALUES (?, ?, ?, ?)").run(coordinatorId, id, decision.text, decision.at);
         appendLog(db, coordinatorId, id, at, [...planChanges(now, next), ...(accept === undefined ? [] : [{ kind: "accepted" } as const])]);
@@ -207,7 +207,7 @@ const changedDependencies = (dependsOn: readonly IssueId[], { add, remove }: Dep
 const unique = (ids: readonly IssueId[]): IssueId[] => [...new Set(ids)];
 
 // why a subquery: an issue is read with its dependencies, in the order they were written.
-const ISSUE_COLUMNS = `coordinator_id AS coordinatorId, id, kind, title, description, brief, done_criteria AS doneCriteria, verifier, rest, parent_id AS parentId,
+const ISSUE_COLUMNS = `coordinator_id AS coordinatorId, id, kind, title, description, brief, done_criteria AS doneCriteria, verifier, reviewer, rest, parent_id AS parentId,
   closed_as AS closedAs, closed_at AS closedAt, created_at AS createdAt,
   (SELECT json_group_array(depends_on) FROM (SELECT depends_on FROM issue_relations r
      WHERE r.coordinator_id = issues.coordinator_id AND r.issue_id = issues.id ORDER BY r.rowid)) AS dependsOn`;
@@ -221,6 +221,7 @@ const issueRowSchema = z.object({
   brief: z.string().nullable(),
   doneCriteria: json(doneCriteriaSchema),
   verifier: nullableJson(executionSchema),
+  reviewer: nullableJson(executionSchema),
   rest: restSchema,
   parentId: issueIdSchema.nullable(),
   dependsOn: json(z.array(issueIdSchema)),
