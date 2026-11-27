@@ -1,6 +1,6 @@
 // A decision in an issue's feed, between its rounds: a question the regional manager put to the user
 // about the issue, with its options and the user's answer; or a decision it recorded on the issue,
-// its first sentence whole and the rest cut to two lines, opening on press. An open question is
+// as Markdown, cut to three lines and opening on press, as a comment is. An open question is
 // answered here, from its numbered rows: an option, or the user's own words. Asked from its issue's
 // row under Needs you, an open one scrolls to the middle of the tab, rings briefly, and takes focus
 // on its first row.
@@ -9,9 +9,9 @@ import { useEffect, useRef, type AnimationEvent } from "react";
 import type { AskedDecision, IssueDecision } from "../../../../../model/decision.ts";
 import { isClosed } from "../../../../../model/issue/relations.ts";
 import type { IssueStatus } from "../../../../../model/issue/status.ts";
-import { firstSentence } from "../../../../../model/one-line.ts";
 import { stillWaits } from "../../../../../model/verdict/rounds/cap.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
+import { TabMarkdown } from "../../../../ui/tab-markdown/tab-markdown.tsx";
 import { useAnswer } from "../../../use-answer.ts";
 import { ManagerName, When } from "../byline.tsx";
 import { Clamp } from "../clamp.tsx";
@@ -31,7 +31,9 @@ export function DecisionCard({ coordinatorId, decision, status, onRevealed }: De
           <p className="rmi-decision-head">
             <ManagerName coordinatorId={coordinatorId} /> decided <When at={decision.at} />
           </p>
-          <Decided text={decision.text} />
+          <Clamp lines={3} className="rmi-decision-text">
+            <TabMarkdown text={decision.text} />
+          </Clamp>
         </article>
       );
     default:
@@ -108,19 +110,4 @@ const FOCUS_SHOWN: FocusOptions & { focusVisible: boolean } = { preventScroll: t
 /** Takes the ring off once its animation ends. why its own target only: a spinner's turn in the card ends no ring. */
 function ringGone(event: AnimationEvent<HTMLElement>) {
   if (event.target === event.currentTarget) delete event.currentTarget.dataset.revealed;
-}
-
-/** A recorded decision's words: its first sentence, its headline, whole; the rest, if any, muted and cut to two lines. */
-function Decided({ text }: { text: string }) {
-  const { sentence, rest } = firstSentence(text);
-  return (
-    <div>
-      <p className="rmi-decision-text">{sentence}</p>
-      {rest !== null && (
-        <Clamp lines={2} className="rmi-decision-rest">
-          {rest}
-        </Clamp>
-      )}
-    </div>
-  );
 }

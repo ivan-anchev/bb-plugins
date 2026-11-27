@@ -1,8 +1,9 @@
 // A question that takes no answer any more, in its card: answered, its options with the one chosen
-// marked, or the user's own words once under them; lapsed, its options and why none takes an answer.
+// marked, or the user's own words, as Markdown, once under them; lapsed, its options and why none takes an answer.
 // The rows keep the open card's shape, so the choice reads as the row the user pressed.
 import type { AskedDecision } from "../../../../../model/decision.ts";
 import { STATUS_LABELS, type IssueStatus } from "../../../../../model/issue/status.ts";
+import { TabMarkdown } from "../../../../ui/tab-markdown/tab-markdown.tsx";
 import { shortTime } from "../../../../ui/time.ts";
 import { When } from "../byline.tsx";
 import { ResultGlyph } from "../round/result-glyph.tsx";
@@ -28,7 +29,9 @@ export function Answer({ decision, answer }: { decision: AskedDecision; answer: 
           <p className="rmi-decision-head">
             <span className="rmi-actor">You</span> answered <When at={answer.at} />
           </p>
-          <p className="rmi-decision-text">{answer.text}</p>
+          <div className="rmi-decision-text">
+            <TabMarkdown text={answer.text} />
+          </div>
         </div>
       )}
     </>

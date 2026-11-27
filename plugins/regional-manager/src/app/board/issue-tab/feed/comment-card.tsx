@@ -1,10 +1,11 @@
 // A comment in an issue's feed: the user's, posted from the tab and sent to the regional manager, or
 // a reply from the manager or the agent holding the issue, quoting a line of what it answers. Its
-// text is cut to three lines, opening on press.
+// text, as Markdown, is cut to three lines, opening on press.
 import { firstLine, type Comment, type CommentId } from "../../../../model/feed/comment.ts";
 import type { Entry } from "../../../../model/feed/entry.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { useManagerName } from "../../../profile/use-manager.ts";
+import { TabMarkdown } from "../../../ui/tab-markdown/tab-markdown.tsx";
 import { When, Who, type FeedAgents } from "./byline.tsx";
 import { Clamp } from "./clamp.tsx";
 
@@ -27,7 +28,7 @@ export function CommentCard({ coordinatorId, entry, answered, agents }: CommentC
       </p>
       {answered !== null && <p className="rmi-comment-quote">{firstLine(answered.text)}</p>}
       <Clamp lines={3} className="rmi-decision-text">
-        {comment.text}
+        <TabMarkdown text={comment.text} />
       </Clamp>
       {comment.author.kind === "user" && <SentTo coordinatorId={coordinatorId} />}
     </article>
@@ -41,7 +42,9 @@ export function SendingCard({ text, commentId }: { text: string; commentId: Comm
       <p className="rmi-decision-head">
         <span className="rmi-actor">You</span> commented
       </p>
-      <p className="rmi-decision-text">{text}</p>
+      <div className="rmi-decision-text">
+        <TabMarkdown text={text} />
+      </div>
       <p role="status" className="rmi-verdict-meta">
         {commentId === null ? "Sending…" : `Sent as ${commentId}`}
       </p>
