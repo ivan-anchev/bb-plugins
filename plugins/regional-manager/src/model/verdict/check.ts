@@ -45,6 +45,8 @@ export type Check = {
   criteria: DoneCriteria;
   /** The issue's verifier when it was made, copied as the criteria are (null: the plugin picks). */
   verifier: Execution | null;
+  /** The issue's reviewer when a done handoff's check was made, copied as the verifier is (null: the plugin picks; a final check, which has no review, never has one). */
+  reviewer: Execution | null;
   subject: CheckSubject;
   /** Its review (review.ts): a handoff's diff, read before its verifier starts. */
   review: Review;

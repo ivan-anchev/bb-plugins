@@ -80,7 +80,7 @@ test("what bb injects for a research agent and its manager agrees with its first
   const manager = kit.configurationFor(threadId, {}).instructions ?? assert.fail("a manager with no rules");
   assert.match(manager, /A research issue's done handoff carries its report, which nothing verifies: it makes the issue Done/);
   assert.match(manager, /A build issue's done handoff reaches you with its verdict/);
-  assert.match(manager, /verifier on every build issue they cover/);
+  assert.match(manager, /verifier and reviewer on every build issue they cover/);
   assert.doesNotMatch(manager, /\n- A done handoff reaches you with its verdict/);
 });
 
@@ -242,7 +242,7 @@ test("issue_read shows a research issue's questions, that nothing verifies it, a
   await handOff(DONE);
   const read = textOf(await call("issue_read", { id: "WEB-1" }));
   assert.ok(read.includes("### Questions\n\n1. Which one fits our PCI scope, and why?\n2. What does it cost a month at our volume?"), read);
-  assert.ok(read.includes("### Verifier\n\nNone: nothing verifies a research issue."), read);
+  assert.ok(read.includes("### Review and verification\n\nNone: nothing reviews or verifies a research issue."), read);
   assert.ok(read.includes(`#### Report\n\nSaved in your memory as reports/WEB-1.md.`) && read.includes(REPORT), read);
   assert.doesNotMatch(read, /### Done when/);
 });

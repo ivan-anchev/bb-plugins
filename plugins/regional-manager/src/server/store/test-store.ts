@@ -43,6 +43,7 @@ export const newIssue = (over: Partial<NewIssue> = {}): NewIssue => ({
   brief: "Retry failed deliveries with backoff.",
   doneCriteria: ["npm test passes"],
   verifier: null,
+  reviewer: null,
   rest: "todo",
   parentId: null,
   dependsOn: [],

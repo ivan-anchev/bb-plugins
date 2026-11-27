@@ -63,6 +63,8 @@ export type Issue = {
   doneCriteria: DoneCriteria;
   /** What checks its done handoffs, as the manager named it; null: the plugin picks. */
   verifier: Execution | null;
+  /** What reviews its done handoffs' diffs, as the manager named it, whatever model that is; null: the plugin picks one independent of its agent and verifier. */
+  reviewer: Execution | null;
   rest: Rest;
   /** The issue it is a sub-issue of, one level deep (plan.ts); null: none. A parent has no agent, and its status rolls up from its sub-issues (status.ts). */
   parentId: IssueId | null;
@@ -73,7 +75,7 @@ export type Issue = {
 };
 
 /** An issue as it is filed: what the manager gives it, or a follow-up the plugin files (rounds/follow-up.ts). */
-export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "rest" | "parentId" | "dependsOn">;
+export type NewIssue = Pick<Issue, "kind" | "title" | "description" | "brief" | "doneCriteria" | "verifier" | "reviewer" | "rest" | "parentId" | "dependsOn">;
 
 /** The brief an agent starts from, or why none can start on the issue as it is planned. */
 export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneCriteria">): { brief: string } | { refused: string } {
@@ -83,13 +85,22 @@ export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneC
   return { brief: issue.brief };
 }
 
+/** A checker of done handoffs the manager can name on an issue. */
+export type NamedChecker = "verifier" | "reviewer";
+
 /**
- * Why an issue of `kind` can't have a verifier named, or null when it can. why one rule, read on
- * the plan as it would be: filing a research issue with a verifier, naming one on a research issue,
- * and making an issue that names one research would each leave a verifier that never runs.
+ * Why an issue of `kind` can't have the checkers `named` named, or null when it can. why one rule,
+ * read on the plan as it would be: filing a research issue with a verifier or a reviewer, naming
+ * one on a research issue, and making an issue that names one research would each leave a checker
+ * that never runs.
  */
-export function verifierProblem(kind: Kind, namesVerifier: boolean): string | null {
-  if (!namesVerifier || isVerified(kind)) return null;
+export function checkerProblem(kind: Kind, named: readonly NamedChecker[]): string | null {
+  if (named.length === 0 || isVerified(kind)) return null;
   const label = PIPELINES[kind].label.toLowerCase();
-  return `a ${label} issue has no verifier: nothing verifies it`;
+  return `a ${label} issue has no ${named.join(" or ")}: nothing ${named.map((checker) => CHECKS[checker]).join(" or ")} it`;
 }
+
+const CHECKS: Record<NamedChecker, string> = { verifier: "verifies", reviewer: "reviews" };
+
+/** The checkers an issue, or a request for one, names: each of `verifier` and `reviewer` that is set. */
+export const namedCheckers = (named: Record<NamedChecker, unknown>): NamedChecker[] => (["verifier", "reviewer"] as const).filter((checker) => named[checker] !== null && named[checker] !== undefined);

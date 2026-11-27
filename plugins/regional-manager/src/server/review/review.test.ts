@@ -237,9 +237,10 @@ test("an issue_update that changes the brief and records a decision while a revi
   assert.equal(verify.decisions.filter((line) => line.endsWith("Jitter is out of scope.")).length, 1);
 });
 
-test("a reviewer runs on neither the agent's model nor the one its verifier then runs on; with no third, on the verifier's, never the agent's", async () => {
-  const { kit, agentThreadId, reviewer, verifier, handOff, reported } = await withAgent();
+test("with no reviewer named, a reviewer runs on neither the agent's model nor the one its verifier then runs on; with no third, on the verifier's, never the agent's", async () => {
+  const { kit, agentThreadId, check, reviewer, verifier, handOff, reported } = await withAgent();
   await handOff();
+  assert.equal(check().reviewer, null, "none named");
   const ranOn = (threadId: string) => `${kit.thread(threadId).providerId}/${kit.thread(threadId).execution?.model}`;
   assert.equal(ranOn(agentThreadId), "claude-code/opus");
   assert.equal(ranOn(reviewer()), "claude-code/sonnet");
@@ -253,6 +254,55 @@ test("a reviewer runs on neither the agent's model nor the one its verifier then
   assert.equal(onlyOther(alone.reviewer()), "claude-code/sonnet");
   await alone.reported([]);
   assert.equal(onlyOther(alone.verifier()), "claude-code/sonnet", "the verifier on the one model that isn't the agent's, as the reviewer is");
+});
+
+/** `providerId/model at level` of the thread `threadId` as bb runs it. */
+const ranAtOf = (kit: Awaited<ReturnType<typeof withAgent>>["kit"]) => (threadId: string) =>
+  `${kit.thread(threadId).providerId}/${kit.thread(threadId).execution?.model} at ${kit.thread(threadId).execution?.reasoningLevel}`;
+
+test("a reviewer named on the agent's own model reviews on exactly that, even when bb runs nothing else there, and the verdict says it ran as named", async () => {
+  const { kit, threadId, agentThreadId, check, reviewer, verifier, handOff, reported, returned, catchUp } = await withAgent();
+  const ranAt = ranAtOf(kit);
+  assert.match(textOf(await kit.call("issue_update", { id: "WEB-1", reviewer: { providerId: "claude-code", model: "opus" } }, threadId)), /^Updated WEB-1\. claude-code opus \(high\) now reviews/);
+  await handOff();
+  assert.deepEqual(check().reviewer, { providerId: "claude-code", model: "opus", reasoningLevel: "high" }, "the check copies the issue's reviewer");
+  assert.equal(ranAt(agentThreadId), "claude-code/opus at high");
+  assert.equal(ranAt(reviewer()), "claude-code/opus at high", "the agent's own model, as named");
+  await reported([]);
+  assert.equal(ranAt(verifier()), "codex/gpt-default at high", "the verifier is still picked independently");
+  await returned(PASSES);
+  assert.match(await catchUp(), /Review: a reviewer on claude-code opus found nothing\. It ran as named on WEB-1\./);
+
+  const alone = await withAgent();
+  await alone.kit.call("issue_update", { id: "WEB-1", reviewer: { providerId: "claude-code", model: "opus" } }, alone.threadId);
+  alone.kit.providers.list = [{ id: "claude-code", available: true, models: [{ model: "opus", isDefault: true, defaultReasoningEffort: "high", supportedReasoningEfforts: levels("low", "medium", "high", "max") }] }];
+  await alone.handOff();
+  assert.equal(alone.review().state, "running", "no review missed for lack of an independent model");
+  assert.equal(ranAtOf(alone.kit)(alone.reviewer()), "claude-code/opus at high");
+});
+
+test("a reviewer named on the verifier's model reviews on exactly that, and the verifier then runs on it too", async () => {
+  const { kit, threadId, reviewer, verifier, handOff, reported, returned, catchUp } = await withAgent();
+  const ranAt = ranAtOf(kit);
+  const codex = { providerId: "codex", model: "gpt-default", reasoningLevel: "medium" };
+  assert.match(textOf(await kit.call("issue_update", { id: "WEB-1", verifier: codex, reviewer: codex }, threadId)), /^Updated WEB-1\./);
+  await handOff();
+  assert.equal(ranAt(reviewer()), "codex/gpt-default at medium", "the verifier's model, as named, at the level named");
+  await reported([]);
+  assert.equal(ranAt(verifier()), "codex/gpt-default at medium");
+  await returned(PASSES);
+  assert.match(await catchUp(), /Review: a reviewer on codex gpt-default found nothing\. It ran as named on WEB-1\./);
+});
+
+test("a reviewer named that bb can't run where the review runs is passed over for the plugin's pick, and the verdict says why", async () => {
+  const { kit, threadId, reviewer, handOff, reported, returned, catchUp } = await withAgent();
+  await kit.call("issue_update", { id: "WEB-1", reviewer: { providerId: "codex", model: "gpt-default" } }, threadId);
+  kit.providers.list = kit.providers.list.filter(({ id }) => id === "claude-code");
+  await handOff();
+  assert.equal(ranAtOf(kit)(reviewer()), "claude-code/sonnet at high", "the plugin's pick, off the agent's model");
+  await reported([]);
+  await returned(PASSES);
+  assert.match(await catchUp(), /Review: a reviewer on claude-code sonnet found nothing\. It ran in place of the codex gpt-default named on WEB-1: bb can't run that in a1's environment\./);
 });
 
 test("the reviewer and verifier the plugin picks run at high, else at the highest level their model lists below high, never their catalog default", async () => {
@@ -304,7 +354,7 @@ test("the verifier's brief lists the review's findings, each led by its title; i
   await handOff();
   assert.equal(await reported(FINDINGS), "Review recorded: 2 findings. A verifier triages them next. Stop here; don't change anything in this environment.");
   const brief = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
-  assert.match(brief, /## The reviewer's findings\n\nAn independent reviewer read the diff before you and claims these\. They are claims, not facts[^\n]*Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes[^\n]*\n\n1\. A dead endpoint is retried forever\n   `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n2\. The retry helper's name hides its backoff\n   `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\./);
+  assert.match(brief, /## The reviewer's findings\n\nA reviewer read the diff before you and claims these\. They are claims, not facts[^\n]*Only an anchored must-fix fails the verdict, as a failed criterion does, even when every criterion passes[^\n]*\n\n1\. A dead endpoint is retried forever\n   `src\/retry\.ts:42` \(must-fix\): The backoff never caps, so a dead endpoint is retried every 2\^n ms forever\.\n2\. The retry helper's name hides its backoff\n   `src\/retry\.ts` \(nit\): The retry helper's name says nothing about backoff\./);
 
   const untriaged = await kit.call("issue_verdict", FAILS, verifier());
   assert.ok(isRefusal(untriaged));
@@ -600,7 +650,7 @@ test("issues stored before reviews, in every status, load with the same status, 
   ]);
 
   // As the release before reviews left it: no review column, no triage or time on a verdict, none of the
-  // issue feed's tables, no recommended option on a question, and every migration from the review column on still to run.
+  // issue feed's tables, no recommended option on a question, no named reviewer, and every migration from the review column on still to run.
   for (const { name } of z.array(z.object({ name: z.string() })).parse(db.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE '%issue_writes%'").all())) db.exec(`DROP TRIGGER ${name}`);
   db.exec("DROP TABLE issue_writes");
   db.exec("DROP TABLE issue_log");
@@ -611,6 +661,8 @@ test("issues stored before reviews, in every status, load with the same status, 
   db.exec("ALTER TABLE decisions DROP COLUMN recommended");
   db.exec("ALTER TABLE events DROP COLUMN doorbell");
   db.exec("ALTER TABLE checks DROP COLUMN accepted_at");
+  db.exec("ALTER TABLE checks DROP COLUMN reviewer");
+  db.exec("ALTER TABLE issues DROP COLUMN reviewer");
   db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
   db.exec("ALTER TABLE checks DROP COLUMN review");
   db.exec("UPDATE checks SET verdict = json_remove(verdict, '$.triage', '$.at')");
@@ -645,7 +697,7 @@ test("a check stores each finding's severity once, on its review; a verdict sett
 
   // As the release before this rule left a verdict that passed with the must-fix finding confirmed: settled, and its last migration still to run.
   db.exec(`UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0].result', 'confirmed'), '$.mustFixFails')`);
-  // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
+  // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell, the checks' follow-up and accept and the named reviewers dropped too: they came after this rule, and their migrations run again.
   db.exec("DROP TABLE issue_log");
   db.exec("DROP TABLE comments");
   db.exec("DROP TABLE attachment_files");
@@ -653,6 +705,8 @@ test("a check stores each finding's severity once, on its review; a verdict sett
   db.exec("ALTER TABLE decisions DROP COLUMN recommended");
   db.exec("ALTER TABLE events DROP COLUMN doorbell");
   db.exec("ALTER TABLE checks DROP COLUMN accepted_at");
+  db.exec("ALTER TABLE checks DROP COLUMN reviewer");
+  db.exec("ALTER TABLE issues DROP COLUMN reviewer");
   db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
   migrated.applied = BEFORE_MUST_FIX;
   settledBefore.kit.reload();
@@ -748,7 +802,7 @@ async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confir
   assert.equal(stored.state === "returned" && stored.settlement.kind, left, "as the release before this rule left it");
   // The release before this rule let a confirmed must-fix finding pass, and stored no mustFixFails.
   before.db.prepare("UPDATE checks SET verdict = json_remove(json_set(verdict, '$.triage[0]', json(?)), '$.mustFixFails')").run(JSON.stringify({ result: triaged, reason: "It never caps." }));
-  // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
+  // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell, the checks' follow-up and accept and the named reviewers dropped too: they came after this rule, and their migrations run again.
   before.db.exec("DROP TABLE issue_log");
   before.db.exec("DROP TABLE comments");
   before.db.exec("DROP TABLE attachment_files");
@@ -757,6 +811,8 @@ async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confir
   before.db.exec("ALTER TABLE events DROP COLUMN doorbell");
   before.db.exec("ALTER TABLE checks DROP COLUMN follow_up_id");
   before.db.exec("ALTER TABLE checks DROP COLUMN accepted_at");
+  before.db.exec("ALTER TABLE checks DROP COLUMN reviewer");
+  before.db.exec("ALTER TABLE issues DROP COLUMN reviewer");
   before.migrated.applied = BEFORE_MUST_FIX;
   agent.kit.reload();
   return agent;

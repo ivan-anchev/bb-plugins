@@ -25,7 +25,7 @@ For a done handoff:
   on the environment's machine, when the agent handed off.
 - The issue's brief, for context. It is the regional manager's words, not
   the agent's: you get none of the agent's own report, on purpose.
-- What an independent reviewer found in the diff before you, numbered: each
+- What a reviewer found in the diff before you, numbered: each
   finding's title on its own line, then its file and line, its severity
   (must-fix, should-fix or nit) and its claim. Or that it found nothing, or that no review was had, and why. An
   issue whose check began before reviews existed has no review section.

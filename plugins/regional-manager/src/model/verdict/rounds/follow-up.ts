@@ -69,6 +69,7 @@ export function followUpPlan(origin: IssueId, firstOrigin: Pick<Issue, "id" | "t
     brief: briefOf(origin, findings, own, when),
     doneCriteria: [],
     verifier: null,
+    reviewer: null,
     rest: "backlog",
     parentId: null,
     dependsOn: [origin],

@@ -26,6 +26,10 @@ const VERIFIER = requestedExecutionSchema.describe(
   "What checks this issue's done handoffs: a provider and a model bb can run, and optionally a reasoning level. Left out, the plugin picks one independent of the agent.",
 );
 
+const REVIEWER = requestedExecutionSchema.describe(
+  "What reviews this issue's done handoffs' diffs before its verifier checks them: a provider and a model bb can run, and optionally a reasoning level. Any model is taken, the agent's or the verifier's included, and runs as named wherever bb can run it. Left out, the plugin picks one independent of the agent and the verifier.",
+);
+
 /** The most issues one issue depends on, or one change adds or removes. */
 const MAX_DEPENDENCIES = 20;
 
@@ -52,7 +56,7 @@ export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, 
   bb.agents.registerTool({
     name: CREATE,
     description:
-      "File an issue: one piece of the work, done by an agent you start on it with agent_start. Its id is your project's key and its number, as BBP-1, BBP-2…, and it rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides what its agent hands off and how it is checked: build is code on a branch, verified by an independent verifier; research is a report (a probe, spike, investigation or design) that nothing verifies, Done as its agent hands it off. A brief, and a build issue's doneCriteria, may wait until you start its agent. To split work, file sub-issues under it with parent.",
+      "File an issue: one piece of the work, done by an agent you start on it with agent_start. Its id is your project's key and its number, as BBP-1, BBP-2…, and it rests in Todo, or in Backlog when you are proposing it and waiting for the user. kind decides what its agent hands off and how it is checked: build is code on a branch, reviewed by a reviewer and verified by an independent verifier, either of which you may name (reviewer, verifier); research is a report (a probe, spike, investigation or design) that nothing verifies, Done as its agent hands it off. A brief, and a build issue's doneCriteria, may wait until you start its agent. To split work, file sub-issues under it with parent.",
     presentation: { label: { pending: "Filing an issue", completed: "Filed an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       kind: kindSchema.describe(
@@ -68,6 +72,7 @@ export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, 
         ),
       status: restSchema.optional().describe("todo (the default): ready to start. backlog: not planned yet, as when you propose it and wait for the user."),
       verifier: VERIFIER.optional().describe(`${VERIFIER.description} A research issue has none.`),
+      reviewer: REVIEWER.optional().describe(`${REVIEWER.description} A research issue has none.`),
       parent: PARENT.optional(),
       dependsOn: DEPENDS_ON.optional(),
     }),
@@ -80,7 +85,7 @@ export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, 
   bb.agents.registerTool({
     name: UPDATE,
     description:
-      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged while verification is off; with it on, its final check passing makes it Done; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue); in-review, only with a decision saying why, accepts as it is a build issue whose latest verdict failed on review findings alone (every criterion passed, on a clean tree, and CI didn't fail): it reads In review, \"Accepted with follow-ups\", until its pull request merges, which makes it Done, and the findings it was accepted with, its unfixed must-fixes among them, are filed as one follow-up in Backlog. While the plugin's question at the issue's cap of failed verifications is open, the accept is refused: it is the user's call there. Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on, or a parent's from its next final check; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: BBP-3\". decision records what was decided about the issue on it, with the time: the issue's decisions are where its calls live, with the user's answers to questions naming it, and issue_read and every agent you start on it see them. An update may carry a decision alone.",
+      "Change one of your issues: its kind (only before any agent has started on it), title, description, brief, done-criteria, verifier, reviewer, parent or dependencies (dependsOn: add and remove), or where it stands. status: backlog or todo rests an issue no agent holds (and reopens a canceled one); canceled closes one no agent holds, and a parent only once its sub-issues are closed; done accepts one that is In review (a build parent is once its sub-issues are closed and merged while verification is off; with it on, its final check passing makes it Done; a research issue never is: its agent's done handoff makes it Done, and a research parent is Done with its last sub-issue); in-review, only with a decision saying why, accepts as it is a build issue whose latest verdict failed on review findings alone (every criterion passed, on a clean tree, and CI didn't fail): it reads In review, \"Accepted with follow-ups\", until its pull request merges, which makes it Done, and the findings it was accepted with, its unfixed must-fixes among them, are filed as one follow-up in Backlog. While the plugin's question at the issue's cap of failed verifications is open, the accept is refused: it is the user's call there. Every other status is the plugin's to say, from what its agents did. A build issue's verifier change applies from its next done handoff on, or a parent's from its next final check; verifier: null lets the plugin pick again, and drops the one named when the issue becomes research. A reviewer change applies from its next done handoff on, on any model bb can run, the agent's or the verifier's included; reviewer: null lets the plugin pick again, and drops the one named when the issue becomes research. A status or dependency change that makes issues ready says so: \"Now ready: BBP-3\". decision records what was decided about the issue on it, with the time: the issue's decisions are where its calls live, with the user's answers to questions naming it, and issue_read and every agent you start on it see them. An update may carry a decision alone.",
     presentation: { label: { pending: "Updating an issue", completed: "Updated an issue" }, icon: { glyph: "Workflow" } },
     parameters: z.strictObject({
       id: issueIdSchema,
@@ -91,6 +96,7 @@ export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, 
       doneCriteria: doneCriteriaSchema.optional(),
       status: managerStatusSchema.optional(),
       verifier: VERIFIER.nullable().optional(),
+      reviewer: REVIEWER.nullable().optional(),
       parent: PARENT.nullable().optional().describe(`${PARENT.description} null makes it top-level again.`),
       dependsOn: z
         .strictObject({ add: DEPENDS_ON.default([]), remove: z.array(issueIdSchema).max(MAX_DEPENDENCIES).default([]).describe("Issues it no longer depends on.") })
@@ -110,7 +116,7 @@ export function registerIssueTools(bb: ToolsBb & { pluginId: string }, { store, 
   bb.agents.registerTool({
     name: READ,
     description:
-      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, its decisions (the user's answers to questions naming it and those you recorded), the verifier named, each agent with what it runs on, every handoff with its verdict, whether a check of one is in flight (message its agent only once none is), every comment on it whole by its id, and its agent's latest answer.",
+      "Read one of your issues whole: its status and why, what blocks it, its description, brief and done-criteria, its parent and sub-issues, what it depends on and what it blocks, its decisions (the user's answers to questions naming it and those you recorded), the reviewer and verifier named, each agent with what it runs on, every handoff with its verdict, whether a check of one is in flight (message its agent only once none is), every comment on it whole by its id, and its agent's latest answer.",
     presentation: { label: { pending: "Reading an issue", completed: "Read an issue" }, icon: { glyph: "FileText" } },
     parameters: z.object({ id: issueIdSchema }),
     execute: forIssue(READ, (issue) => issues.read(issue)),

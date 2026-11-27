@@ -7,7 +7,7 @@ import { closedAsSchema, issueIdSchema, restSchema, type Issue, type IssueId } f
 import { issueStatusSchema, type IssueStatus, type IssueView } from "../issue/status.ts";
 
 /** The plan's fields an edit names, as the feed names them. */
-const editedFieldSchema = z.enum(["kind", "title", "description", "brief", "criteria", "verifier"]);
+const editedFieldSchema = z.enum(["kind", "title", "description", "brief", "criteria", "verifier", "reviewer"]);
 type EditedField = z.infer<typeof editedFieldSchema>;
 
 /** What the feed shows of a log as a line of its own: every kind but a status, which it shows on a moment (feed.ts attachStatuses). */
@@ -61,7 +61,7 @@ export function statusMoves(last: ReadonlyMap<IssueId, IssueStatus>, views: read
   return views.filter(({ issue, status }) => last.get(issue.id) !== status).map(({ issue, status }) => ({ issueId: issue.id, status }));
 }
 
-/** Each field the feed names, and whether an edit changed it. why JSON for the criteria and verifier: they are compared whole, as they are stored. */
+/** Each field the feed names, and whether an edit changed it. why JSON for the criteria, verifier and reviewer: they are compared whole, as they are stored. */
 const EDITED: readonly (readonly [EditedField, (was: Issue, now: Issue) => boolean])[] = [
   ["kind", (was, now) => was.kind !== now.kind],
   ["title", (was, now) => was.title !== now.title],
@@ -69,6 +69,7 @@ const EDITED: readonly (readonly [EditedField, (was: Issue, now: Issue) => boole
   ["brief", (was, now) => was.brief !== now.brief],
   ["criteria", (was, now) => JSON.stringify(was.doneCriteria) !== JSON.stringify(now.doneCriteria)],
   ["verifier", (was, now) => JSON.stringify(was.verifier) !== JSON.stringify(now.verifier)],
+  ["reviewer", (was, now) => JSON.stringify(was.reviewer) !== JSON.stringify(now.reviewer)],
 ];
 
 /** A close (a new one, or closed again another way or at another time), or a reopening. */

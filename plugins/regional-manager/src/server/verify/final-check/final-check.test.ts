@@ -239,7 +239,7 @@ test("4: two ticks, or a tick racing a sub-issue filed under the parent, never l
   inTurn.kit.environments.held.splice(0).forEach((release) => release());
   await settled();
   assert.ok(inTurn.kit.threadLists.held.length > 0, "the parent's turn is reading its views");
-  const filedMeanwhile = inTurn.kit.store.insertIssue(inTurn.coordinatorId, { kind: "build", title: "Keep tokens across restarts", description: ISSUE.description, brief: ISSUE.brief, doneCriteria: ISSUE.doneCriteria, verifier: null, rest: "todo", parentId: i1, dependsOn: [] }, new Map(), inTurn.kit.clock.now);
+  const filedMeanwhile = inTurn.kit.store.insertIssue(inTurn.coordinatorId, { kind: "build", title: "Keep tokens across restarts", description: ISSUE.description, brief: ISSUE.brief, doneCriteria: ISSUE.doneCriteria, verifier: null, reviewer: null, rest: "todo", parentId: i1, dependsOn: [] }, new Map(), inTurn.kit.clock.now);
   assert.ok(!("refused" in filedMeanwhile));
   inTurn.kit.threadLists.holding = false;
   while (inTurn.kit.threadLists.held.length > 0) {

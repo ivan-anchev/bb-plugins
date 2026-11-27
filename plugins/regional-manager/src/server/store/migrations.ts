@@ -295,6 +295,12 @@ export const MIGRATIONS: readonly string[] = [
   // why a BLOB and not a file: it is written in the handoff's one transaction, and goes with its manager.
   `CREATE TABLE attachment_files (id TEXT PRIMARY KEY, coordinator_id TEXT NOT NULL REFERENCES coordinators (id),
      name TEXT NOT NULL, type TEXT NOT NULL, bytes BLOB NOT NULL)`,
+
+  // The reviewer the manager named on an issue (issues.ts), and on a check of a done handoff the
+  // issue's when it was made, copied as its verifier is; null: the plugin picks (review.ts). why
+  // JSON: an execution is read and written whole, as the verifier's is.
+  `ALTER TABLE issues ADD COLUMN reviewer TEXT`,
+  `ALTER TABLE checks ADD COLUMN reviewer TEXT`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

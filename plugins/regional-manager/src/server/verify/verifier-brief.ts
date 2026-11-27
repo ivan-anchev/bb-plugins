@@ -129,8 +129,8 @@ function reviewPart(review: Review, scope: Scope): string[] {
  * the reviewer ran.
  */
 function coveredText(scope: Scope, reported: string): string {
-  if (scope.kind === "first") return `An independent reviewer read the diff before you and ${reported}.`;
-  return `An independent reviewer read the diff before you and ${reported}. It was asked to review only the change since round ${scope.round}, the last round reviewed, at \`${scope.base.subject.headSha}\`, in the files this branch changes; or, when that commit isn't in this environment, the whole diff, marking every finding new.`;
+  if (scope.kind === "first") return `A reviewer read the diff before you and ${reported}.`;
+  return `A reviewer read the diff before you and ${reported}. It was asked to review only the change since round ${scope.round}, the last round reviewed, at \`${scope.base.subject.headSha}\`, in the files this branch changes; or, when that commit isn't in this environment, the whole diff, marking every finding new.`;
 }
 
 /** After a reviewed round, what each finding's origin means; nothing on a first round, whose findings are all new. */

@@ -53,6 +53,7 @@ function handed(verdict: Verdict, subject: CheckSubject = handoffBy(A1)): { chec
       at: 3_000,
       criteria: ["npm test passes", "npm run lint passes"],
       verifier: null,
+      reviewer: null,
       subject,
       review: { state: "none" },
       verdict,

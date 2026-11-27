@@ -113,9 +113,9 @@ and no tool can turn verification on or off.
 | `crew_ask_user` | regional manager | Puts a one-line question about one of its issues, with up to five options and optionally the one it recommends, into that issue's feed and on its board: the question and its answer are then among that issue's decisions. |
 | `crew_record_answer` | regional manager | Records the answer you gave in its thread to one of its questions that names no issue, asked before every question had to name one, taking it off Needs you. It refuses a question about an issue, which you answer in that issue's feed. |
 | `crew_end_turn` | regional manager | Ends a turn that changes nothing for you, with a one-line `reason` and no reply; its result repeats the reason. It doesn't stop the thread. |
-| `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `parent` and `dependsOn`. |
-| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, parent or dependencies, or rests, cancels or accepts it with `status`; with `decision`, alone or with the rest, records what was decided about it and why. |
-| `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, its decisions, verifier, its agents and what they ran on, every handoff with its verdict, whether a check is in flight, its comments whole by id, and its agent's latest answer. |
+| `issue_create` | regional manager | Files an issue: `kind`, `title`, `description`, and optionally `brief`, `doneCriteria`, `status` (todo or backlog), `verifier`, `reviewer`, `parent` and `dependsOn`. |
+| `issue_update` | regional manager | Changes an issue's kind (until an agent has started on it), title, description, brief, done-criteria, verifier, reviewer, parent or dependencies, or rests, cancels or accepts it with `status`; with `decision`, alone or with the rest, records what was decided about it and why. |
+| `issue_read` | regional manager | Returns one issue whole: status, what blocks it, plan, its parent and sub-issues, what it depends on and blocks, its decisions, reviewer and verifier named, its agents and what they ran on, every handoff with its verdict, whether a check is in flight, its comments whole by id, and its agent's latest answer. |
 | `agent_start` | regional manager | Starts an agent on an issue, optionally naming its `execution` and `placement`; on an issue that has or had one, hands it over: continuing in the previous agent's environment, moving the work to a new one on a branch cut from its branch when a `placement` is named or that environment is gone, or starting clean with `from: "default"`. |
 | `agent_message` | regional manager | Messages one agent, marked as from the regional manager. |
 | `agent_stop` | regional manager | Stops one agent, and archives its thread with `archive: true`. |
@@ -155,7 +155,7 @@ An issue's status is derived from what its agents did, never stored:
 | Backlog | No agent holds it, and the manager rested it here: not planned yet. |
 | Todo | No agent holds it, ready to start. A new issue rests here, and returns here when its agent ends before its work reached Reviewing (on a research issue, Done). |
 | In progress | An agent holds it: working, starting, idle without a handoff, fixing its verifier's findings, blocked, gave up, or its last turn failed. |
-| Reviewing | A build issue: its agent handed off done, and an independent reviewer reviews its diff before its verifier starts (see [Review](#review)). |
+| Reviewing | A build issue: its agent handed off done, and a reviewer reviews its diff before its verifier starts (see [Review](#review)). |
 | Verifying | A build issue: its review is in, or none could be had, and the verifier checks it, or its verdict passed every other check (every criterion, no anchored must-fix finding, no blocking defect, the claimed commit on a clean tree) and waits for CI. |
 | In review | A build issue: its done handoff passed ("✓ Verified"), was made with verification off ("Unverified"), or failed on review findings alone and the manager accepted it as it is ("Accepted with follow-ups"), its unfixed findings filed as a follow-up. Its pull request merging makes it Done. |
 | Done | A build issue: its pull request merged ("Merged #41", or "Merged !41" on GitLab), or the manager accepted it; final. A research issue: its agent handed off done ("Handed off: <summary>"); a message to that agent makes it In progress again until its next handoff. |
@@ -528,12 +528,21 @@ verdict.
   high, not at its catalog default of low. The manager's own model keeps its level.
   `verifier: null` gives the choice back to the plugin. A change applies from
   the issue's next done handoff; a check already running keeps its own.
+- **A reviewer** runs on a build issue's `reviewer`, named on `issue_create`
+  or `issue_update`, exactly as named whenever bb can run it in the agent's
+  environment, whatever the agent or the verifier runs on, their models
+  included. Otherwise, or with none named, the plugin picks (see
+  [Review](#review)), and the verdict says when it passed over the one
+  named. `reviewer: null` gives the choice back to the plugin. A change
+  applies from the issue's next done handoff; a review already running
+  keeps its own.
 - **Refusals**: an unknown provider, one bb lists as unavailable there, or a
   model its catalog doesn't list is refused before anything changes, naming
   what bb can run there (providers it lists as available and can load the
   models of) and, for a known provider, its models. A verifier on
   the model of the agent holding the issue is refused, and so is an agent on
-  its issue's verifier; each refusal offers the other change.
+  its issue's verifier; each refusal offers the other change. A reviewer is
+  never refused for its model, only for one bb can't run.
 - **Your choices**: tell the regional manager once, such as "build on codex
   gpt-5.4, verify on claude-code opus". Its rules keep it in
   `RULES.md` and name both on every issue and agent it covers. The
@@ -633,7 +642,9 @@ before its verifier starts. The plugin starts a **reviewer**:
   agent's own environment, once the agent's turn that handed off has ended,
   with the issue quieted first, as for a verifier (see
   [Verification](#verification)). It never edits, commits or pushes.
-- **On what model**: never the agent's, and, while bb runs another there,
+- **On what model**: the issue's named reviewer, as named, whenever bb can
+  run it there, the agent's or the verifier's model included. With none
+  named, or one bb can't run there: never the agent's, and, while bb runs another there,
   not the one the verifier is then chosen on either, so the verifier's
   triage is independent; with no third model, the verifier's. When bb runs
   nothing there but the agent's own model, no reviewer starts: the review is

@@ -180,7 +180,7 @@ test("a verifier named on an issue is stored with its catalog default reasoning 
   const { kit, coordinatorId, call, update } = await managing();
   assert.match(textOf(await call("issue_create", { ...ISSUE, verifier: { providerId: "claude-code", model: "opus" } })), /^Filed WEB-1 \(build\) in Todo\. Its done handoffs are checked on claude-code opus \(high\)\. Link: /);
   assert.deepEqual(kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, { providerId: "claude-code", model: "opus", reasoningLevel: "high" });
-  assert.match(textOf(await call("issue_read", { id: "WEB-1" })), /### Verifier\n\nNamed: claude-code opus \(high\)\./);
+  assert.match(textOf(await call("issue_read", { id: "WEB-1" })), /### Review and verification\n\nReviewer: none named: the plugin picks one independent of its agent and its verifier\.\nVerifier: named: claude-code opus \(high\)\./);
 
   assert.deepEqual(await update({ verifier: { providerId: "codex", model: "gpt-default", reasoningLevel: "high" } }), {
     refused: false,
@@ -203,6 +203,63 @@ test("a verifier bb can't run is refused as an agent's execution is, and changes
     text: "On bb's primary machine: claude-code has no model gpt-9 there. Its models: opus (default), sonnet. bb can run: claude-code, codex.",
   });
   assert.equal(kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, null);
+});
+
+test("a reviewer named on an issue is stored at the level bb resolves it to, shown, taken on the agent's or the verifier's model, and cleared with null", async () => {
+  const { kit, coordinatorId, call, update } = await managing();
+  const reviewerOf = () => kit.store.issue(coordinatorId, ISSUE_ID)?.reviewer;
+  const read = async () => withoutLinks(textOf(await call("issue_read", { id: "WEB-1" })));
+  assert.match(textOf(await call("issue_create", { ...ISSUE, reviewer: { providerId: "codex", model: "gpt-default" } })), /^Filed WEB-1 \(build\) in Todo\. Its done handoffs are reviewed on codex gpt-default \(high\)\. Link: /);
+  assert.deepEqual(reviewerOf(), { providerId: "codex", model: "gpt-default", reasoningLevel: "high" });
+  assert.match(await read(), /### Review and verification\n\nReviewer: named: codex gpt-default \(high\)\.\nVerifier: none named: the plugin picks one independent of its agent\./);
+
+  assert.match(textOf(await call("agent_start", { issue: "WEB-1" })), /^Started a1 on WEB-1 .* on claude-code opus \(high\), your own/);
+  const own = await update({ reviewer: { providerId: "claude-code", model: "opus" } });
+  assert.deepEqual(own, {
+    refused: false,
+    text: "Updated WEB-1. claude-code opus (high) now reviews WEB-1's done handoffs from the next one on, whatever its agent and verifier run on, whenever bb lists it where the review runs; where it doesn't, the plugin picks, and the verdict says so. A review already running keeps its own.",
+  }, "the model of a1, which holds it, is taken");
+  assert.deepEqual(reviewerOf(), { providerId: "claude-code", model: "opus", reasoningLevel: "high" });
+
+  const codex = { providerId: "codex", model: "gpt-default", reasoningLevel: "high" };
+  assert.equal((await update({ verifier: codex, reviewer: codex })).refused, false, "the verifier's model is taken too");
+  assert.deepEqual([kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, reviewerOf()], [codex, codex]);
+  assert.match(await read(), /Reviewer: named: codex gpt-default \(high\)\.\nVerifier: named: codex gpt-default \(high\)\./);
+
+  assert.deepEqual(await update({ reviewer: null }), { refused: false, text: "Updated WEB-1. WEB-1's reviewer is the plugin's pick again." });
+  assert.equal(reviewerOf(), null);
+  assert.deepEqual(kit.store.issue(coordinatorId, ISSUE_ID)?.verifier, codex, "the verifier stays");
+  assert.match(await read(), /Reviewer: none named: the plugin picks one independent of its agent and its verifier\./);
+  assert.deepEqual(
+    kit.store.logOf(coordinatorId, ISSUE_ID).flatMap(({ event }) => (event.kind === "edited" ? [event.fields] : [])),
+    [["reviewer"], ["verifier", "reviewer"], ["reviewer"]],
+  );
+});
+
+test("a reviewer bb can't run is refused with what it can run, and changes nothing; a research issue takes none", async () => {
+  const { kit, coordinatorId, call, update } = await managing();
+  const unknown = await call("issue_create", { ...ISSUE, reviewer: { providerId: "gemini", model: "pro" } });
+  assert.ok(isRefusal(unknown));
+  assert.equal(textOf(unknown), "No issue filed. On bb's primary machine: bb can't run gemini there. bb can run: claude-code, codex.");
+  assert.deepEqual(kit.store.issues(coordinatorId), []);
+
+  await call("issue_create", ISSUE);
+  assert.deepEqual(await update({ reviewer: { providerId: "claude-code", model: "gpt-9" } }), {
+    refused: true,
+    text: "On bb's primary machine: claude-code has no model gpt-9 there. Its models: opus (default), sonnet. bb can run: claude-code, codex.",
+  });
+  assert.equal(kit.store.issue(coordinatorId, ISSUE_ID)?.reviewer, null);
+
+  const research = await call("issue_create", { ...ISSUE, kind: "research", reviewer: { providerId: "codex", model: "gpt-default" } });
+  assert.equal(textOf(research), "No issue filed: a research issue has no reviewer: nothing reviews it. Leave reviewer out.");
+  const both = await call("issue_create", { ...ISSUE, kind: "research", verifier: { providerId: "codex", model: "gpt-default" }, reviewer: { providerId: "codex", model: "gpt-default" } });
+  assert.equal(textOf(both), "No issue filed: a research issue has no verifier or reviewer: nothing verifies or reviews it. Leave verifier and reviewer out.");
+  await update({ reviewer: { providerId: "codex", model: "gpt-default" } });
+  assert.deepEqual(await update({ kind: "research" }), {
+    refused: true,
+    text: "WEB-1 can't be changed so: a research issue has no reviewer: nothing reviews it. Give reviewer: null with the change to drop the one named.",
+  });
+  assert.equal((await update({ kind: "research", reviewer: null })).refused, false);
 });
 
 test("agent_start and issue_update naming the same model as its verifier, run at once, don't both succeed", async () => {

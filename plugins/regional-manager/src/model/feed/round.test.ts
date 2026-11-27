@@ -67,7 +67,7 @@ const RETURNED: Verdict = {
 const RUNNING: Verdict = { state: "running", verifierThreadId: "thr_verifier", nudged: false, declined: [], checkout: null };
 
 function handed(review: Review, verdict: Verdict): Handed & { check: Check } {
-  const check: Check = { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000101"), coordinatorId: MANAGER, issueId: BBP_19, at: HANDOFF.at, criteria: ["npm test passes"], verifier: null, subject: { kind: "handoff", agentId: A1, handoffId: HANDOFF.id, headSha: SHA, prUrl: null, branch: null }, review, verdict, followUpId: null, acceptedAt: null };
+  const check: Check = { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000101"), coordinatorId: MANAGER, issueId: BBP_19, at: HANDOFF.at, criteria: ["npm test passes"], verifier: null, reviewer: null, subject: { kind: "handoff", agentId: A1, handoffId: HANDOFF.id, headSha: SHA, prUrl: null, branch: null }, review, verdict, followUpId: null, acceptedAt: null };
   return { handoff: HANDOFF, check };
 }
 
@@ -126,7 +126,7 @@ test("a missed review's spine says only that it was missed, and when; why is the
 });
 
 test("a build parent's final check reviews no diff: its round has no review", () => {
-  const final: FinalCheck = { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000201"), coordinatorId: MANAGER, issueId: BBP_19, at: 7_000, criteria: ["npm test passes"], verifier: null, subject: { kind: "final", defaultBranch: "main", merged: [] }, review: { state: "none" }, verdict: { state: "waived" }, followUpId: null, acceptedAt: null };
+  const final: FinalCheck = { id: checkIdSchema.parse("00000000-0000-4000-8000-000000000201"), coordinatorId: MANAGER, issueId: BBP_19, at: 7_000, criteria: ["npm test passes"], verifier: null, reviewer: null, subject: { kind: "final", defaultBranch: "main", merged: [] }, review: { state: "none" }, verdict: { state: "waived" }, followUpId: null, acceptedAt: null };
   assert.deepEqual(finalRoundOf(final, 1, null).review, { state: "none" });
   assert.deepEqual(bodyOf(null, final).findings, []);
 });
