@@ -9,9 +9,9 @@ import { useEffect, useRef, type AnimationEvent } from "react";
 import type { AskedDecision, IssueDecision } from "../../../../../model/decision.ts";
 import { isClosed } from "../../../../../model/issue/relations.ts";
 import type { IssueStatus } from "../../../../../model/issue/status.ts";
-import { firstSentence } from "../../../../../model/one-line.ts";
 import { stillWaits } from "../../../../../model/verdict/rounds/cap.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
+import { firstMarkdownSentence } from "../../../../ui/tab-markdown/markdown-source.ts";
 import { TabMarkdown } from "../../../../ui/tab-markdown/tab-markdown.tsx";
 import { useAnswer } from "../../../use-answer.ts";
 import { ManagerName, When } from "../byline.tsx";
@@ -111,9 +111,9 @@ function ringGone(event: AnimationEvent<HTMLElement>) {
   if (event.target === event.currentTarget) delete event.currentTarget.dataset.revealed;
 }
 
-/** A recorded decision's words, as Markdown: its first sentence, its headline, whole; the rest, if any, muted and cut to two lines. */
+/** A recorded decision's words, as Markdown: its first sentence, its headline, whole, cut where no link or code runs across; the rest, if any, muted and cut to two lines. */
 function Decided({ text }: { text: string }) {
-  const { sentence, rest } = firstSentence(text);
+  const { sentence, rest } = firstMarkdownSentence(text);
   return (
     <div>
       <div className="rmi-decision-text">

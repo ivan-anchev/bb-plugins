@@ -552,6 +552,17 @@ test("the description, the brief, comments, decisions and an answer in the user'
   assert.deepEqual(drawn, [md("Lost, see"), md("Retry, see"), md("Cap at three, see"), "Cap at three.", md("Rest, see"), md("Comment, see")]);
 });
 
+test("raw HTML in a comment reaches bb's Markdown as words, and a decision's link that holds a full stop stays whole in its headline", async () => {
+  const raw = 'Raw: <img src=x onerror="window.hit=1"> and <script>window.hit=2</script> end.';
+  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Follow [Retries. A migration guide](https://example.com/retries). Then cap at five.", at: 6_800 } };
+  const feed = { ...FEED, entries: [decided, comment(1, 6_900, { kind: "user" }, raw, null)] };
+  // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
+  const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => feed });
+  const drawn = (label: string) => within(tab().getByRole("article", { name: label })).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent);
+  assert.deepEqual(drawn("Decision"), ["Follow [Retries. A migration guide](https://example.com/retries).", "Then cap at five."]);
+  assert.deepEqual(drawn("Comment m1"), ['Raw: &lt;img src=x onerror="window.hit=1"> and &lt;script>window.hit=2&lt;/script> end.']);
+});
+
 test("an issue with no brief yet draws no Brief fold", async () => {
   const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, brief: null }) });
   assert.equal(tab().queryAllByText("Brief").length, 0);

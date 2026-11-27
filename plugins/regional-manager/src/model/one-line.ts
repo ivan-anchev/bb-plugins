@@ -27,11 +27,18 @@ export function headline(text: string, max: number): string {
  */
 export function firstSentence(text: string): { sentence: string; rest: string | null } {
   const trimmed = text.trim();
-  const end = SENTENCE_END.exec(trimmed);
-  if (end === null) return { sentence: trimmed, rest: null };
-  const cut = end.index + end[0].length;
+  const cut = sentenceEnd(trimmed, 0);
+  if (cut === null) return { sentence: trimmed, rest: null };
   const rest = trimmed.slice(cut).trim();
   return { sentence: trimmed.slice(0, cut), rest: rest === "" ? null : rest };
+}
+
+/** Where the first sentence end at or after `from` in `text` is, as firstSentence reads one: just past its mark and closing quotes; null when none is. */
+export function sentenceEnd(text: string, from: number): number | null {
+  const pattern = new RegExp(SENTENCE_END.source, "g");
+  pattern.lastIndex = from;
+  const end = pattern.exec(text);
+  return end === null ? null : end.index + end[0].length;
 }
 
 /** A sentence's last mark and the closing quotes and brackets after it, then whitespace or the end. */
