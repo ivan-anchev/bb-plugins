@@ -13,25 +13,22 @@ export function clipped(text: string, max: number): string {
 
 /**
  * A headline for text written before it had one, as a stored record's parse derives it once: its
- * first sentence (firstSentence), on one line, cut to `max` characters (clipped).
+ * first sentence (firstSentenceEnd), on one line, cut to `max` characters (clipped).
  */
 export function headline(text: string, max: number): string {
-  return clipped(firstSentence(text).sentence, max);
+  const trimmed = text.trim();
+  return clipped(trimmed.slice(0, firstSentenceEnd(trimmed)), max);
 }
 
 /**
- * Text split after its first sentence, as written: the sentence, then the rest (null: none). A
- * sentence ends at a full stop, question or exclamation mark, with any closing quotes or brackets
- * right after it (”, ’, ", ', ), ]), before whitespace or the text's end. why only those: a line
- * break mid-sentence, as in text wrapped by hand, ends no sentence.
+ * Where text's first sentence ends, as an index just past it: past its full stop, question or
+ * exclamation mark and any closing quotes or brackets right after it (”, ’, ", ', ), ]), before
+ * whitespace or the text's end; the text's length when no sentence ends in it. why only those: a
+ * line break mid-sentence, as in text wrapped by hand, ends no sentence.
  */
-export function firstSentence(text: string): { sentence: string; rest: string | null } {
-  const trimmed = text.trim();
-  const end = SENTENCE_END.exec(trimmed);
-  if (end === null) return { sentence: trimmed, rest: null };
-  const cut = end.index + end[0].length;
-  const rest = trimmed.slice(cut).trim();
-  return { sentence: trimmed.slice(0, cut), rest: rest === "" ? null : rest };
+export function firstSentenceEnd(text: string): number {
+  const end = SENTENCE_END.exec(text);
+  return end === null ? text.length : end.index + end[0].length;
 }
 
 /** A sentence's last mark and the closing quotes and brackets after it, then whitespace or the end. */
