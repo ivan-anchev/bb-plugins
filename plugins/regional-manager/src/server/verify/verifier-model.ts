@@ -14,8 +14,10 @@ export type VerifierChoice = { named: Execution | null; manager: Execution | nul
  */
 export async function verifierExecution(bb: CatalogBb, { named, manager, theirs, routing }: VerifierChoice): Promise<Execution> {
   const independent = (execution: Pick<Execution, "providerId" | "model">) => !theirs.some((their) => sameModel(their, execution));
-  const runnable = named !== null && independent(named) ? await runnableThere(bb, routing, named) : null;
-  if (runnable !== null) return runnable;
+  if (named !== null && independent(named)) {
+    const resolved = executionOf(named, await executionFacts(bb, routing, named.providerId));
+    if (!("refused" in resolved)) return resolved;
+  }
   if (manager !== null && independent(manager)) return manager;
   const providersOfTheirs = new Set(theirs.map(({ providerId }) => providerId));
   for (const provider of await bb.sdk.providers.list(routing)) {
@@ -31,12 +33,6 @@ export async function verifierExecution(bb: CatalogBb, { named, manager, theirs,
   // why throw: every check judges the work of at least one agent.
   if (own === undefined) throw new Error("A check judges nobody's work.");
   return own;
-}
-
-/** `named` as bb runs it where `routing` places the work, or null when bb lists no such provider or model there. */
-export async function runnableThere(bb: CatalogBb, routing: CatalogRouting, named: Execution): Promise<Execution | null> {
-  const resolved = executionOf(named, await executionFacts(bb, routing, named.providerId));
-  return "refused" in resolved ? null : resolved;
 }
 
 /** The provider's default model if it qualifies, else its first that does. */

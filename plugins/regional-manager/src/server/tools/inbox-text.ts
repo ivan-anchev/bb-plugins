@@ -1,7 +1,7 @@
 // What crew_catch_up and issue_read say about events, handoffs, reminders and decisions:
 // everything, whole, however long. This is where an agent's own words, a verifier's, and the user's
 // answers reach the regional manager, as a tool result, each marked as whose they are.
-import { sameModel, type Execution } from "../../model/agent/execution.ts";
+import { sameModel } from "../../model/agent/execution.ts";
 import { issueBranch, type Agent } from "../../model/agent/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
 import { firstLine, type Comment, type CommentId } from "../../model/feed/comment.ts";
@@ -534,7 +534,7 @@ type Filed = Pick<Check, "followUpId" | "acceptedAt">;
  * to the agent, then each finding in the review's order with the verifier's word on it (review.ts
  * triageText) and its reason. Nothing for a check with no review stage.
  */
-function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>, check: Pick<Check, "reviewer" | "issueId" | "subject"> & Filed): string[] {
+function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned" }>, check: Pick<Check, "reviewer" | "issueId"> & Filed): string[] {
   const all = verdict.triage;
   const held = all.filter(holds).length;
   const each = all.map((finding) => `- ${findingText(finding, "  ")}\n  ${triageText(finding)}: ${finding.reason}`).join("\n");
@@ -545,7 +545,7 @@ function reviewText(review: Review, verdict: Extract<Verdict, { state: "returned
   }
   if (review.state !== "reported") return [];
   const by = `${review.model.providerId} ${review.model.model}`;
-  const named = namedReviewerNote(review.model, check);
+  const named = namedReviewerNote(check);
   if (review.findings.length === 0) return [`Review: a reviewer on ${by} found nothing.${named}`];
   return triaged(`Review: a reviewer on ${by} reported ${all.length} finding${all.length === 1 ? "" : "s"}`, named);
 }
@@ -628,14 +628,8 @@ function verifiedOn(verdict: Extract<Verdict, { state: "returned" }>, { verifier
   return `${ran}${own}, not the ${named.providerId} ${named.model} named on ${issueId}: ${why}`;
 }
 
-/**
- * When the issue named a reviewer, a sentence on whether the one that ran (`ran`) is it, else why
- * not: bb can't run it where the review ran (review.ts reviewerExecution); "" when none was named.
- */
-function namedReviewerNote(ran: Pick<Execution, "providerId" | "model">, { reviewer: named, issueId, subject }: Pick<Check, "reviewer" | "issueId" | "subject">): string {
-  if (named === null) return "";
-  return sameModel(named, ran) ? ` It ran as named on ${issueId}.` : ` It ran in place of the ${named.providerId} ${named.model} named on ${issueId}: bb can't run that ${whereChecked(subject)}.`;
-}
+/** When the issue named a reviewer, that the one that ran is it: a named reviewer runs as named or not at all (review.ts reviewerExecution); "" when none was named. */
+const namedReviewerNote = ({ reviewer: named, issueId }: Pick<Check, "reviewer" | "issueId">): string => (named === null ? "" : ` It ran as named on ${issueId}.`);
 
 /** Where a check's verifier runs, as a place bb can or can't run a model: the agent's environment; for a final check, the regional manager's machine. */
 function whereChecked(subject: Check["subject"]): string {

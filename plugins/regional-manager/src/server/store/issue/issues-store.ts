@@ -6,7 +6,7 @@ import { agentIdSchema } from "../../../model/agent/agent.ts";
 import type { RecordedDecision } from "../../../model/decision.ts";
 import { executionSchema } from "../../../model/agent/execution.ts";
 import { issueKeySchema } from "../../../model/issue/key/issue-key.ts";
-import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchema, checkerProblem, namedCheckers, type Issue, type IssueId, type NewIssue, type Rest } from "../../../model/issue/issue.ts";
+import { closedAsSchema, doneCriteriaSchema, issueIdOf, issueIdSchema, restSchema, verifierProblem, type Issue, type IssueId, type NewIssue, type Rest } from "../../../model/issue/issue.ts";
 import { kindSchema } from "../../../model/issue/kind.ts";
 import { planProblem } from "../../../model/issue/plan.ts";
 import { knownClose, type CloseKey, type Closes, type KnownCloses } from "../../../model/issue/relations.ts";
@@ -87,7 +87,7 @@ export function issuesStore(db: Db, acceptance: Acceptance) {
      * issue. `closes`: every issue's close as the read the manager is answered from says (see
      * writeDependencies). Decided in the same transaction, so an agent starting meanwhile is seen:
      * the kind is fixed once any agent has started on the issue, the issue as it would be must stand
-     * (checkerProblem), and so must the plan, among the issues as they are now (plan.ts), and a new
+     * (verifierProblem), and so must the plan, among the issues as they are now (plan.ts), and a new
      * parent must be one no agent holds; an accept, of the check that is still the issue's latest
      * (Acceptance refusal). What it changed of the plan is logged at `at` (log-event.ts
      * planChanges), and an accept, after the edit's other writes: the store's one plan writer is
@@ -106,9 +106,8 @@ export function issuesStore(db: Db, acceptance: Acceptance) {
         }
         const { dependsOn, decision, accept, ...fields } = edit;
         const next: Issue = { ...now, ...fields, dependsOn: dependsOn === undefined ? now.dependsOn : changedDependencies(now.dependsOn, dependsOn) };
-        const named = namedCheckers(next);
-        const problem = checkerProblem(next.kind, named);
-        if (problem !== null) return { refused: `${id} can't be changed so: ${problem}. Give ${named.map((checker) => `${checker}: null`).join(" and ")} with the change to drop ${named.length === 1 ? "the one" : "the ones"} named.` };
+        const problem = verifierProblem(next.kind, next.verifier !== null);
+        if (problem !== null) return { refused: `${id} can't be changed so: ${problem}. Give verifier: null with the change to drop the one named.` };
         const plan = planProblem(issues(coordinatorId, null), next, closes) ?? splitProblem(db, next, now);
         if (plan !== null) return { refused: `${plan}.` };
         const stale = accept === undefined ? null : acceptance.refusal(coordinatorId, id, accept);

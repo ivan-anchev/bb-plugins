@@ -4,7 +4,7 @@
 // which the manager names it to the user by (model/issue/link).
 import { boardGroups, LANE_LABELS, type BoardItem } from "../../model/board/board-groups.ts";
 import { decisionsText, type IssueDecision } from "../../model/decision.ts";
-import type { Issue, IssueId, NamedChecker } from "../../model/issue/issue.ts";
+import type { Issue, IssueId } from "../../model/issue/issue.ts";
 import { isVerified, PIPELINES } from "../../model/issue/kind.ts";
 import { issueLinkMarkdown } from "../../model/issue/link/issue-link.ts";
 import { isReady, type Related, type Relations } from "../../model/issue/relations.ts";
@@ -214,7 +214,7 @@ export function stopText(agent: Agent, outcome: StopOutcome): string {
 }
 
 /** What the verifier or reviewer change an update made (`changed`) applies to, one sentence each; null when it changed neither. */
-export function checkersNote(issue: Issue, changed: Record<NamedChecker, boolean>): string | null {
+export function checkersNote(issue: Issue, changed: Record<"verifier" | "reviewer", boolean>): string | null {
   const notes = [...(changed.verifier ? [verifierText(issue)] : []), ...(changed.reviewer ? [reviewerText(issue)] : [])];
   return notes.length === 0 ? null : notes.join(" ");
 }
@@ -227,12 +227,12 @@ function verifierText(issue: Issue): string {
     : `${executionText(issue.verifier)} is now ${issue.id}'s first choice of verifier for its done handoffs, and its final check as a parent, from the next one on: each runs on it when bb lists it where the check runs and no agent whose work it checks ran on it. A check already running keeps its own.`;
 }
 
-/** What a reviewer named on an issue applies to (review.ts reviewerExecution): nothing on a kind nothing reviews. */
+/** What a reviewer named on an issue applies to (review.ts reviewerExecution): on a kind nothing reviews, nothing until it is one that is. */
 function reviewerText(issue: Issue): string {
-  if (!isVerified(issue.kind)) return `${issue.id} has no reviewer: nothing reviews a ${PIPELINES[issue.kind].label.toLowerCase()} issue.`;
-  return issue.reviewer === null
-    ? `${issue.id}'s reviewer is the plugin's pick again.`
-    : `${executionText(issue.reviewer)} now reviews ${issue.id}'s done handoffs from the next one on, whatever its agent and verifier run on, whenever bb lists it where the review runs; where it doesn't, the plugin picks, and the verdict says so. A review already running keeps its own.`;
+  if (issue.reviewer === null) return `${issue.id}'s reviewer is the plugin's pick again.`;
+  const named = executionText(issue.reviewer);
+  if (!isVerified(issue.kind)) return `${named} is now ${issue.id}'s reviewer, though nothing reviews a ${PIPELINES[issue.kind].label.toLowerCase()} issue: it reviews only once the issue is build work.`;
+  return `${named} now reviews ${issue.id}'s done handoffs from the next one on, whatever its agent and verifier run on. Where bb can't run it when a review comes, no review is had, and the verdict says why, with what bb can run there. A review already running keeps its own.`;
 }
 
 /**
@@ -299,7 +299,10 @@ function relationsText({ parent, subIssues, dependsOn, blocks }: Relations, name
 
 /** Who reviews and who verifies its done handoffs. */
 function checkersLines({ kind, verifier, reviewer }: Issue): string {
-  if (!isVerified(kind)) return `None: nothing reviews or verifies a ${PIPELINES[kind].label.toLowerCase()} issue.`;
+  if (!isVerified(kind)) {
+    const label = PIPELINES[kind].label.toLowerCase();
+    return reviewer === null ? `None: nothing reviews or verifies a ${label} issue.` : `Reviewer: named: ${executionText(reviewer)}, though nothing reviews or verifies a ${label} issue.`;
+  }
   return [
     `Reviewer: ${reviewer === null ? "none named: the plugin picks one independent of its agent and its verifier." : `named: ${executionText(reviewer)}.`}`,
     `Verifier: ${verifier === null ? "none named: the plugin picks one independent of its agent." : `named: ${executionText(verifier)}.`}`,

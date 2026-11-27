@@ -85,22 +85,14 @@ export function briefToStart(issue: Pick<Issue, "id" | "kind" | "brief" | "doneC
   return { brief: issue.brief };
 }
 
-/** A checker of done handoffs the manager can name on an issue. */
-export type NamedChecker = "verifier" | "reviewer";
-
 /**
- * Why an issue of `kind` can't have the checkers `named` named, or null when it can. why one rule,
- * read on the plan as it would be: filing a research issue with a verifier or a reviewer, naming
- * one on a research issue, and making an issue that names one research would each leave a checker
- * that never runs.
+ * Why an issue of `kind` can't have a verifier named, or null when it can. why one rule, read on
+ * the plan as it would be: filing a research issue with a verifier, naming one on a research issue,
+ * and making an issue that names one research would each leave a verifier that never runs. A
+ * reviewer has no such rule: one named on a research issue waits, unused, until it is build work.
  */
-export function checkerProblem(kind: Kind, named: readonly NamedChecker[]): string | null {
-  if (named.length === 0 || isVerified(kind)) return null;
+export function verifierProblem(kind: Kind, namesVerifier: boolean): string | null {
+  if (!namesVerifier || isVerified(kind)) return null;
   const label = PIPELINES[kind].label.toLowerCase();
-  return `a ${label} issue has no ${named.join(" or ")}: nothing ${named.map((checker) => CHECKS[checker]).join(" or ")} it`;
+  return `a ${label} issue has no verifier: nothing verifies it`;
 }
-
-const CHECKS: Record<NamedChecker, string> = { verifier: "verifies", reviewer: "reviews" };
-
-/** The checkers an issue, or a request for one, names: each of `verifier` and `reviewer` that is set. */
-export const namedCheckers = (named: Record<NamedChecker, unknown>): NamedChecker[] => (["verifier", "reviewer"] as const).filter((checker) => named[checker] !== null && named[checker] !== undefined);

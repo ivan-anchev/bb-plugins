@@ -27,7 +27,7 @@ import { createFeedReader } from "./feed/feed-reader.ts";
 import { feedHandlers } from "./feed/feed-rpc.ts";
 import { issueTagPublisher } from "./feed/issue-tags.ts";
 import { createBoard } from "./board/board.ts";
-import type { CatalogModel } from "../model/agent/execution.ts";
+import type { CatalogModel, CatalogRouting } from "../model/agent/execution.ts";
 import type { CatalogBb } from "./execution/catalog.ts";
 import { createInbox } from "./inbox/inbox.ts";
 import { PLACEHOLDER, upgradeFrom030 } from "./manager/held-managers.ts";
@@ -391,10 +391,18 @@ type Storage = Pick<PluginStorage, "database" | "migrate">;
 export function harness(spawns: SpawnBehaviour = { created: true, answer: "thread" }, stops: StopBehaviour = "idle", storage: Storage = memoryStorage().storage, turnWaitMs: number | null = null) {
   const behaviour = { ...spawns };
   /**
-   * The providers bb lists, in its order; a test may replace them. Set `holding` to keep each answer
-   * of a provider's models, as read when called, until the test calls its release in `held`.
+   * The providers bb lists, in its order; a test may replace them. `inEnvironment`: what bb lists
+   * instead in an environment it names, as a machine with other providers or models; every other
+   * place lists `list`. Set `holding` to keep each answer of a provider's models, as read when
+   * called, until the test calls its release in `held`.
    */
-  const providers: { list: FakeProvider[]; holding: boolean; held: (() => void)[] } = { list: structuredClone(PROVIDERS), holding: false, held: [] };
+  const providers: { list: FakeProvider[]; inEnvironment: Map<string, FakeProvider[]>; holding: boolean; held: (() => void)[] } = {
+    list: structuredClone(PROVIDERS),
+    inEnvironment: new Map(),
+    holding: false,
+    held: [],
+  };
+  const providersAt = ({ environmentId }: CatalogRouting): FakeProvider[] => (environmentId === undefined ? undefined : providers.inEnvironment.get(environmentId)) ?? providers.list;
   /**
    * Set `failure` to make every send to its thread reject with its error: before bb takes the
    * message, or after, when `taken`, as when the connection drops while bb answers. Set `pending`
@@ -841,10 +849,10 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   };
   // why satisfies, and an optional provider: bb's SDK takes either call without arguments, and the plugin always names the provider.
   const providersArea = {
-    list: async () => providers.list.map(({ id, available }) => ({ id, available })),
-    async models({ providerId }: { providerId?: string } = {}) {
+    list: async (routing: CatalogRouting = {}) => providersAt(routing).map(({ id, available }) => ({ id, available })),
+    async models({ providerId, ...routing }: CatalogRouting & { providerId?: string } = {}) {
       if (providerId === undefined) throw new Error("The plugin names the provider whose models it reads");
-      const models = providers.list.find((provider) => provider.id === providerId)?.models ?? null;
+      const models = providersAt(routing).find((provider) => provider.id === providerId)?.models ?? null;
       if (providers.holding) await new Promise<void>((release) => providers.held.push(release));
       return models === null ? { modelLoadError: { code: "auth_required", detail: null, providerId }, models: [] } : { modelLoadError: null, models };
     },

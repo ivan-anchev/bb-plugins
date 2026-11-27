@@ -217,7 +217,7 @@ test("a reviewer named on an issue is stored at the level bb resolves it to, sho
   const own = await update({ reviewer: { providerId: "claude-code", model: "opus" } });
   assert.deepEqual(own, {
     refused: false,
-    text: "Updated WEB-1. claude-code opus (high) now reviews WEB-1's done handoffs from the next one on, whatever its agent and verifier run on, whenever bb lists it where the review runs; where it doesn't, the plugin picks, and the verdict says so. A review already running keeps its own.",
+    text: "Updated WEB-1. claude-code opus (high) now reviews WEB-1's done handoffs from the next one on, whatever its agent and verifier run on. Where bb can't run it when a review comes, no review is had, and the verdict says why, with what bb can run there. A review already running keeps its own.",
   }, "the model of a1, which holds it, is taken");
   assert.deepEqual(reviewerOf(), { providerId: "claude-code", model: "opus", reasoningLevel: "high" });
 
@@ -236,7 +236,7 @@ test("a reviewer named on an issue is stored at the level bb resolves it to, sho
   );
 });
 
-test("a reviewer bb can't run is refused with what it can run, and changes nothing; a research issue takes none", async () => {
+test("a reviewer bb can't run is refused with what it can run, and changes nothing; a research issue takes one bb can run, unused until it is build work", async () => {
   const { kit, coordinatorId, call, update } = await managing();
   const unknown = await call("issue_create", { ...ISSUE, reviewer: { providerId: "gemini", model: "pro" } });
   assert.ok(isRefusal(unknown));
@@ -250,16 +250,19 @@ test("a reviewer bb can't run is refused with what it can run, and changes nothi
   });
   assert.equal(kit.store.issue(coordinatorId, ISSUE_ID)?.reviewer, null);
 
-  const research = await call("issue_create", { ...ISSUE, kind: "research", reviewer: { providerId: "codex", model: "gpt-default" } });
-  assert.equal(textOf(research), "No issue filed: a research issue has no reviewer: nothing reviews it. Leave reviewer out.");
-  const both = await call("issue_create", { ...ISSUE, kind: "research", verifier: { providerId: "codex", model: "gpt-default" }, reviewer: { providerId: "codex", model: "gpt-default" } });
-  assert.equal(textOf(both), "No issue filed: a research issue has no verifier or reviewer: nothing verifies or reviews it. Leave verifier and reviewer out.");
-  await update({ reviewer: { providerId: "codex", model: "gpt-default" } });
-  assert.deepEqual(await update({ kind: "research" }), {
-    refused: true,
-    text: "WEB-1 can't be changed so: a research issue has no reviewer: nothing reviews it. Give reviewer: null with the change to drop the one named.",
+  const codex = { providerId: "codex", model: "gpt-default", reasoningLevel: "high" };
+  const research = await call("issue_create", { ...ISSUE, kind: "research", title: "Pick a vault", reviewer: codex });
+  assert.match(textOf(research), /^Filed WEB-2 \(research\) in Todo\. Its done handoffs are reviewed on codex gpt-default \(high\)\./);
+  assert.deepEqual(kit.store.issue(coordinatorId, issueIdSchema.parse("WEB-2"))?.reviewer, codex);
+  assert.match(textOf(await call("issue_read", { id: "WEB-2" })), /### Review and verification\n\nReviewer: named: codex gpt-default \(high\), though nothing reviews or verifies a research issue\./);
+  const verifierToo = await call("issue_create", { ...ISSUE, kind: "research", verifier: codex, reviewer: codex });
+  assert.equal(textOf(verifierToo), "No issue filed: a research issue has no verifier: nothing verifies it. Leave verifier out.", "the verifier's rule stays");
+  await update({ reviewer: codex });
+  assert.deepEqual(await update({ kind: "research" }), { refused: false, text: "Updated WEB-1." }, "a build issue naming a reviewer can become research");
+  assert.deepEqual(await update({ reviewer: { providerId: "claude-code", model: "sonnet" } }), {
+    refused: false,
+    text: "Updated WEB-1. claude-code sonnet (high) is now WEB-1's reviewer, though nothing reviews a research issue: it reviews only once the issue is build work.",
   });
-  assert.equal((await update({ kind: "research", reviewer: null })).refused, false);
 });
 
 test("agent_start and issue_update naming the same model as its verifier, run at once, don't both succeed", async () => {

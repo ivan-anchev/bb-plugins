@@ -271,10 +271,11 @@ verifier: the kind is shown to the user on every issue.
 - **Questions.** Its `doneCriteria` are the questions the report answers, 0
   to 12. The agent gets them under "Questions your report answers"; nobody
   judges them.
-- **Nothing verifies it.** It has no verifier or reviewer: `issue_create` or
-  `issue_update` naming either on a research issue is refused, and so is making
-  an issue that names one research (give `verifier: null` or `reviewer: null`
-  with the change).
+- **Nothing verifies it.** It has no verifier: `issue_create` or
+  `issue_update` naming one on a research issue is refused, and so is making
+  an issue that names one research (give `verifier: null` with the change).
+  A reviewer may be named on it: nothing reviews it, so it waits unused until
+  the issue is build work.
   Its agent's done handoff carries the report and names no commit: nothing it
   commits or pushes is read, and the plugin never reads its pull request.
 - **Done at once.** Its done handoff makes it Done, never Verifying or In
@@ -542,10 +543,12 @@ gpt-5.4" or "verify on claude-code opus".
   back to the plugin.
 - A reviewer named on the issue may be any model bb can run, the agent's or
   the verifier's included: it is never refused for its model, only, as any
-  execution is, for one bb can't run. It reviews on exactly that whenever bb
-  can run it in the agent's environment; where bb can't, the plugin picks as
-  it does with none named (never the agent's model, nor the verifier's while
-  bb runs a third), and the verdict says so. `reviewer: null` gives the
+  execution is, for one bb can't run where the issue's agent works (on bb's
+  primary machine while no agent holds it), the refusal listing what bb can
+  run there. It reviews on exactly that. Where bb can't run it when a review
+  comes, no review is had, and the verdict says why, with what bb can run
+  there; name another. With none named, the plugin picks (never the agent's
+  model, nor the verifier's while bb runs a third). `reviewer: null` gives the
   choice back to the plugin. A change applies from the issue's next done
   handoff; a review already running keeps its own.
 

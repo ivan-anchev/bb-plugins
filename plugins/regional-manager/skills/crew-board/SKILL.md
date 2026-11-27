@@ -529,11 +529,12 @@ verdict.
   `verifier: null` gives the choice back to the plugin. A change applies from
   the issue's next done handoff; a check already running keeps its own.
 - **A reviewer** runs on a build issue's `reviewer`, named on `issue_create`
-  or `issue_update`, exactly as named whenever bb can run it in the agent's
-  environment, whatever the agent or the verifier runs on, their models
-  included. Otherwise, or with none named, the plugin picks (see
-  [Review](#review)), and the verdict says when it passed over the one
-  named. `reviewer: null` gives the choice back to the plugin. A change
+  or `issue_update`, exactly as named, whatever the agent or the verifier
+  runs on, their models included. It is resolved where the issue's agent
+  works (on bb's primary machine while none holds it), and a research issue
+  may name one, unused until it is build work. Where bb can't run it when a
+  review comes, no review is had, and the verdict says why, with what bb can
+  run there. With none named, the plugin picks (see [Review](#review)). `reviewer: null` gives the choice back to the plugin. A change
   applies from the issue's next done handoff; a review already running
   keeps its own.
 - **Refusals**: an unknown provider, one bb lists as unavailable there, or a
@@ -642,9 +643,9 @@ before its verifier starts. The plugin starts a **reviewer**:
   agent's own environment, once the agent's turn that handed off has ended,
   with the issue quieted first, as for a verifier (see
   [Verification](#verification)). It never edits, commits or pushes.
-- **On what model**: the issue's named reviewer, as named, whenever bb can
-  run it there, the agent's or the verifier's model included. With none
-  named, or one bb can't run there: never the agent's, and, while bb runs another there,
+- **On what model**: the issue's named reviewer, as named, the agent's or
+  the verifier's model included; when bb can't run it there, no reviewer
+  starts, and the review is missed with bb's refusal. With none named: never the agent's, and, while bb runs another there,
   not the one the verifier is then chosen on either, so the verifier's
   triage is independent; with no third model, the verifier's. When bb runs
   nothing there but the agent's own model, no reviewer starts: the review is

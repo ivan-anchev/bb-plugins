@@ -294,15 +294,32 @@ test("a reviewer named on the verifier's model reviews on exactly that, and the 
   assert.match(await catchUp(), /Review: a reviewer on codex gpt-default found nothing\. It ran as named on WEB-1\./);
 });
 
-test("a reviewer named that bb can't run where the review runs is passed over for the plugin's pick, and the verdict says why", async () => {
-  const { kit, threadId, reviewer, handOff, reported, returned, catchUp } = await withAgent();
-  await kit.call("issue_update", { id: "WEB-1", reviewer: { providerId: "codex", model: "gpt-default" } }, threadId);
-  kit.providers.list = kit.providers.list.filter(({ id }) => id === "claude-code");
+test("a reviewer named that bb can't run where the review runs starts no review: the review is missed with bb's refusal, listing what it can run there, and the verifier starts", async () => {
+  const { kit, threadId, agentThreadId, review, verifier, handOff, returned, catchUp } = await withAgent();
+  assert.match(textOf(await kit.call("issue_update", { id: "WEB-1", reviewer: { providerId: "codex", model: "gpt-default" } }, threadId)), /^Updated WEB-1\./);
+  // why after naming it: the agent's environment lists codex then, and stops before the review, as a machine whose Codex sign-in lapsed.
+  kit.providers.inEnvironment.set(kit.thread(agentThreadId).environmentId ?? assert.fail("no environment"), kit.providers.list.filter(({ id }) => id === "claude-code"));
+  const spawned = kit.spawned();
   await handOff();
-  assert.equal(ranAtOf(kit)(reviewer()), "claude-code/sonnet at high", "the plugin's pick, off the agent's model");
-  await reported([]);
+  const reason = "bb can't run the codex gpt-default named on WEB-1 as its reviewer in a1's environment: bb can't run codex there. bb can run: claude-code";
+  assert.deepEqual(review(), { state: "missed", at: kit.clock.now, reviewerThreadId: null, reason });
+  assert.equal(kit.spawned(), spawned + 1, "only the verifier, never a reviewer the plugin picked in its place");
+  assert.match(kit.thread(verifier()).spawnedWith.prompt ?? "", new RegExp(`No review was had: ${reason.replace(/[.()]/g, "\\$&")}\\.`));
   await returned(PASSES);
-  assert.match(await catchUp(), /Review: a reviewer on claude-code sonnet found nothing\. It ran in place of the codex gpt-default named on WEB-1: bb can't run that in a1's environment\./);
+  assert.match(await catchUp(), new RegExp(`Review: no review was had, as ${reason.replace(/[.()]/g, "\\$&")}\\.`));
+});
+
+test("a reviewer named while its agent works is resolved in the agent's environment: a model only that environment lists is taken and reviews there, one only the primary machine lists is refused with what the environment runs", async () => {
+  const { kit, threadId, agentThreadId, reviewer, handOff } = await withAgent();
+  const environmentId = kit.thread(agentThreadId).environmentId ?? assert.fail("no environment");
+  const remote = { id: "remote", available: true, models: [{ model: "remote-model", isDefault: true, defaultReasoningEffort: "medium", supportedReasoningEfforts: levels("low", "medium", "high") }] };
+  kit.providers.inEnvironment.set(environmentId, [...kit.providers.list.filter(({ id }) => id === "claude-code"), remote]);
+  const update = async (reviewerNamed: object) => textOf(await kit.call("issue_update", { id: "WEB-1", reviewer: reviewerNamed }, threadId));
+
+  assert.match(await update({ providerId: "remote", model: "remote-model" }), /^Updated WEB-1\. remote remote-model \(high\) now reviews/);
+  assert.equal(await update({ providerId: "codex", model: "gpt-default" }), "In a1's environment: bb can't run codex there. bb can run: claude-code, remote.");
+  await handOff();
+  assert.equal(ranAtOf(kit)(reviewer()), "remote/remote-model at high", "the model the agent's environment lists, as named");
 });
 
 test("the reviewer and verifier the plugin picks run at high, else at the highest level their model lists below high, never their catalog default", async () => {
