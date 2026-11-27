@@ -304,7 +304,7 @@ test("a decision and a comment are cut to three lines and a row to one; each ope
   });
 });
 
-// why no cut here: jsdom lays nothing out, so the list's cut is asserted in Chrome (chrome/chrome.test.ts).
+// why no cut here: jsdom lays nothing out, so the list's cut is proven live, in bb's own browser.
 test("a decision goes to bb's Markdown whole, as one document: a reference link with its definition paragraphs later, a five-item list, and code indented after its first paragraph", async () => {
   const decisions = [
     "See [the retry guide][guide] first. Then cap at five.\n\nMore detail.\n\n[guide]: https://example.com/retries",
