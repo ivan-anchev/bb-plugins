@@ -16,11 +16,11 @@ afterEach(cleanup);
 let reduce = true;
 Object.assign(globalThis, { matchMedia: () => ({ get matches() { return reduce; }, addEventListener() {}, removeEventListener() {} }) });
 
-/** The animation frames asked for since the last count. */
+/** The animation frames the working ring asked for since the last count. why by caller: the manager's avatar (blob-avatar) asks for frames of its own, whenever it wakes. */
 let frames = 0;
 const askFrame = window.requestAnimationFrame.bind(window);
 window.requestAnimationFrame = (callback) => {
-  frames += 1;
+  if (new Error().stack?.includes("/ui/motion/ring.ts") === true) frames += 1;
   return askFrame(callback);
 };
 
@@ -105,7 +105,7 @@ test("a parent has no Assignee row, and no agent of its sub-issues shows anywher
   assert.ok(head(unstarted()).getByText("None"));
 });
 
-test("a chip is a tab stop naming its id, provider and whether it works, and opens its thread; one whose thread is gone is no button", async () => {
+test("a chip is a tab stop naming its id, provider and whether it works, and opens its thread; one whose thread is gone is a tab stop but no button", async () => {
   const agents = [assignee("a7", "claude-code", 1_000), assignee("a8", "codex", 2_000), assignee("a9", "claude-code", null)];
   const deleted: IssueFeed["agents"][number] = { ...assignee("a7", "claude-code", 1_000), threadId: null };
   const { view, tab } = await opened("WEB-1", [issue("WEB-1", { status: "in-progress" })], { feedOf: feedWith([deleted, ...agents.slice(1)]), live: [live("thr_a9", "active"), live("thr_a8", "idle")] });
@@ -123,6 +123,9 @@ test("a chip is a tab stop naming its id, provider and whether it works, and ope
   const gone = chips(tab()).at(-1) ?? assert.fail("no chip");
   assert.deepEqual([gone.tagName, gone.getAttribute("aria-label"), gone.textContent], ["SPAN", "a7, Claude Code, not working", "a7"]);
   assert.ok(gone.closest("button") === null, "inside no button");
+  assert.ok(gone instanceof HTMLElement && gone.tabIndex === 0, "still a tab stop, so its label can be reached");
+  gone.focus();
+  assert.ok(document.activeElement === gone, "focus reaches it");
 });
 
 test("an agent bb runs a turn of has the ring and one at rest has none; an unknown status counts as at rest", async () => {

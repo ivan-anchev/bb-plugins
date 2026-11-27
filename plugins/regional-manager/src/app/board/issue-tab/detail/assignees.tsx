@@ -26,7 +26,7 @@ export function Assignees({ agents }: { agents: readonly Assignee[] }) {
   ));
 }
 
-/** One agent, a tab stop that opens its thread; a plain chip once bb no longer has the thread. */
+/** One agent, a tab stop that opens its thread; once bb no longer has the thread, a tab stop that only names it. */
 function AssigneeChip({ agent, provider, working }: { agent: Assignee; provider: Provider; working: boolean }) {
   const navigate = useBbNavigate();
   const spoken = `${agent.id}, ${provider.name ?? provider.icon.id}, ${working ? "working" : "not working"}`;
@@ -43,7 +43,7 @@ function AssigneeChip({ agent, provider, working }: { agent: Assignee; provider:
   const { threadId } = agent;
   if (threadId === null) {
     return (
-      <span {...look} role="img" aria-label={spoken}>
+      <span {...look} role="img" aria-label={spoken} tabIndex={0}>
         {face}
       </span>
     );

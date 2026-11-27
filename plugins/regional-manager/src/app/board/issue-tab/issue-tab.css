@@ -115,7 +115,7 @@ button.rmi-assignee {
     background: var(--state-hover);
   }
 }
-button.rmi-assignee:focus-visible {
+.rmi-assignee:focus-visible {
   box-shadow: 0 0 0 1.5px var(--ring);
 }
 button.rmi-assignee:active {
