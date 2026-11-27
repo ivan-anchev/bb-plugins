@@ -1,38 +1,54 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { firstMarkdownSentence, inertHtml } from "./markdown-source.ts";
+import type { Nodes } from "mdast";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown } from "mdast-util-gfm";
+import { gfm } from "micromark-extension-gfm";
+import { inertHtml } from "./markdown-source.ts";
 
-// Markdown the tab hands bb's renderer: raw HTML made text, and a decision's headline cut only where
-// no Markdown runs across the cut.
+// The Markdown the tab hands bb's renderer holds no raw HTML: read back as bb reads it, every piece
+// of HTML is words, and nothing else changes.
 
-test("raw HTML, inline or a block, is handed on as the text it is written as, so no element or script can come of it", () => {
-  assert.equal(
-    inertHtml('Raw: <img src=x onerror="window.hit=1"> and <script>window.hit=2</script> end.'),
-    'Raw: &lt;img src=x onerror="window.hit=1"> and &lt;script>window.hit=2&lt;/script> end.',
-  );
-  assert.equal(inertHtml("<div>\n*kept*\n</div>\n\nafter"), "&lt;div>\n*kept*\n&lt;/div>\n\nafter");
-  assert.equal(inertHtml("<!-- hidden -->\n\ntext"), "&lt;!-- hidden -->\n\ntext");
-  assert.equal(inertHtml("| a |\n|---|\n| <img src=y> |"), "| a |\n|---|\n| &lt;img src=y> |", "in a GFM table's cell too");
+/** `markdown` read as bb's renderer reads it: its raw HTML nodes, its words, and its code blocks' contents. */
+function readBack(markdown: string) {
+  const tree = fromMarkdown(markdown, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
+  const all = (node: Nodes): Nodes[] => [node, ...("children" in node ? node.children.flatMap(all) : [])];
+  const nodes = all(tree);
+  return {
+    html: nodes.filter((node) => node.type === "html").map((node) => node.value),
+    words: nodes.flatMap((node) => (node.type === "text" ? [node.value] : [])).join("|"),
+    code: nodes.flatMap((node) => (node.type === "code" ? [node.value] : [])),
+  };
+}
+
+test("an HTML comment that wraps a fence, then a fenced <img onerror> and <script>, hands on no HTML: the comment is words and the fence's HTML stays code", () => {
+  const read = readBack(inertHtml('<!--\n```\n-->\n```\n<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```'));
+  assert.deepEqual(read.html, []);
+  assert.equal(read.words, "<!--\n```\n-->");
+  assert.deepEqual(read.code, ['<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>']);
 });
 
-test("a < that opens no HTML, in code, an autolink or plain words, is left as written", () => {
-  const text = "Code `<b>` and\n\n```html\n<div>\n```\n\nsee <https://example.com>, <a@b.co>, and a < b > c";
-  assert.equal(inertHtml(text), text);
+test("an HTML comment that opens a fence it never closes hands on no HTML", () => {
+  const read = readBack(inertHtml('<!--\n```\n-->\n<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```\n\nafter'));
+  assert.deepEqual(read.html, []);
+  assert.match(read.words, /<img src=x onerror="window\.hit=1">\n<script>window\.hit=2<\/script>/);
 });
 
-test("a decision's headline ends at its first sentence, as written, its line breaks and closing quotes included", () => {
-  assert.deepEqual(firstMarkdownSentence("Cap retries\nat five. Each retry waits.\nThe fifth gives up."), { sentence: "Cap retries\nat five.", rest: "Each retry waits.\nThe fifth gives up." });
-  assert.deepEqual(firstMarkdownSentence("“Use the read-only default.”\nThe sandbox writes nowhere else."), { sentence: "“Use the read-only default.”", rest: "The sandbox writes nowhere else." });
-  assert.deepEqual(firstMarkdownSentence("One."), { sentence: "One.", rest: null });
+test("raw HTML inline, in a block, a list, a quote and a table's cell is handed on as the words it is written as", () => {
+  /** Each text, and its words as read back, one text node after another. */
+  const cases: [string, string][] = [
+    ['Raw: <img src=x onerror="window.hit=1"> and <script>window.hit=2</script> end.', 'Raw: <img src=x onerror="window.hit=1"> and <script>window.hit=2</script> end.'],
+    ["<div>\n# not a heading\n</div>", "<div>\n# not a heading\n</div>"],
+    ["- <b>x</b>\n- <div>y</div>\n\n> <img src=q>", "<b>x</b>|<div>y</div>|<img src=q>"],
+    ["| a |\n|---|\n| <img src=y> |", "a|<img src=y>"],
+  ];
+  for (const [text, words] of cases) {
+    const read = readBack(inertHtml(text));
+    assert.deepEqual(read.html, [], text);
+    assert.equal(read.words, words, text);
+  }
 });
 
-test("a decision's headline never ends inside a link, code or emphasis, so each part is whole Markdown", () => {
-  assert.deepEqual(firstMarkdownSentence("Follow [Retries. A migration guide](https://example.com/retries). Then more."), { sentence: "Follow [Retries. A migration guide](https://example.com/retries).", rest: "Then more." });
-  assert.deepEqual(firstMarkdownSentence("Use `x.y. z` now. Rest."), { sentence: "Use `x.y. z` now.", rest: "Rest." });
-  assert.deepEqual(firstMarkdownSentence("Use **bold. text** now. Rest."), { sentence: "Use **bold. text** now.", rest: "Rest." });
-});
-
-test("without a sentence end in its first paragraph's words, a decision's headline is its first block", () => {
-  assert.deepEqual(firstMarkdownSentence("No end here\n\nSecond paragraph."), { sentence: "No end here", rest: "Second paragraph." });
-  assert.deepEqual(firstMarkdownSentence("- a. b\n- c\n\nAfter."), { sentence: "- a. b\n- c", rest: "After." });
+test("text with no raw HTML is handed on exactly as written, a < in code, an autolink or plain words included", () => {
+  for (const text of ["Code `<b>` and\n\n```html\n<div>\n```\n\nsee <https://example.com>, <a@b.co>, and a < b > c", "See [the guide][g].\n\n[g]: https://example.com/guide", "Run this.\n\n    npm test"]) assert.equal(inertHtml(text), text);
 });

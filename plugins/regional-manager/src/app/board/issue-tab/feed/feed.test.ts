@@ -275,23 +275,21 @@ function cutText(button: HTMLElement) {
   return { open: button.getAttribute("aria-expanded"), lines: text.style.getPropertyValue("--rmi-lines"), drawnWhole: text.dataset.open !== undefined };
 }
 
-test("a decision shows its first sentence whole and the rest cut to two lines, a comment cut to three and a row to one; each opens on press and closes on another", async () => {
-  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Cap retries\nat five. Each retry waits twice as long as the one before.\nThe fifth gives up and tells on-call.", at: 6_400 } };
+test("a decision and a comment are cut to three lines and a row to one; each opens on press and closes on another", async () => {
+  const decision = "Cap retries\nat five. Each retry waits twice as long as the one before.\nThe fifth gives up and tells on-call.";
+  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: decision, at: 6_400 } };
   const said = comment(1, 6_500, { kind: "user" }, "Cap retries at five.\nAnd log each.\nAnd alert on-call.\nAnd page me.", null);
   await withLongText(async () => {
     const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, decided, said] }) });
     const { section, lines } = activity(tab());
-    const [loops, capped] = section.getAllByRole("article", { name: "Decision" }).map((card) => within(card));
-    assert.equal(loops?.queryByRole("button"), null, "a one-sentence decision has nothing more to open");
-    const headline = capped?.getAllByTestId("bb-markdown")[0] ?? assert.fail("no first sentence");
-    assert.equal(headline.textContent, "Cap retries\nat five.", "the first sentence whole, a line break in it included");
-    assert.equal(headline.closest("button"), null, "the first sentence is never cut");
-    const rest = capped?.getByRole("button", { name: /^Each retry waits twice as long as the one before\.\s+The fifth gives up and tells on-call\.$/ }) ?? assert.fail("no rest");
-    assert.deepEqual(cutText(rest), { open: "false", lines: "2", drawnWhole: false });
-    fireEvent.click(rest);
-    assert.deepEqual(cutText(rest), { open: "true", lines: "2", drawnWhole: true });
-    fireEvent.click(rest);
-    assert.deepEqual(cutText(rest), { open: "false", lines: "2", drawnWhole: false });
+    const capped = within(section.getAllByRole("article", { name: "Decision" }).at(-1) ?? assert.fail("no decision"));
+    const press = capped.getByRole("button", { name: /^Cap retries\s+at five\./ });
+    assert.deepEqual(within(press).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent), [decision], "the whole decision, one document");
+    assert.deepEqual(cutText(press), { open: "false", lines: "3", drawnWhole: false });
+    fireEvent.click(press);
+    assert.deepEqual(cutText(press), { open: "true", lines: "3", drawnWhole: true });
+    fireEvent.click(press);
+    assert.deepEqual(cutText(press), { open: "false", lines: "3", drawnWhole: false });
 
     const text = within(section.getByRole("article", { name: "Comment m1" })).getByRole("button", { name: /^Cap retries at five\./ });
     assert.deepEqual(cutText(text), { open: "false", lines: "3", drawnWhole: false });
@@ -306,19 +304,21 @@ test("a decision shows its first sentence whole and the rest cut to two lines, a
   });
 });
 
-test("a decision whose first sentence ends in a closing quote shows that sentence alone as its headline, and the rest cut behind its press", async () => {
-  const first = "“Use the read-only default.”";
-  const rest = "The sandbox writes nowhere else. Every tool that needs more asks first.\nThe manager records each exception.";
-  const quoted: Entry = { kind: "decision", decision: { kind: "recorded", text: `${first}\n${rest}`, at: 6_400 } };
+test("a decision goes to bb's Markdown whole, as one document: a reference link with its definition paragraphs later, a five-item list cut behind its press, and code indented after its first paragraph", async () => {
+  const decisions = [
+    "See [the retry guide][guide] first. Then cap at five.\n\nMore detail.\n\n[guide]: https://example.com/retries",
+    "Cap retries:\n\n- one\n- two\n- three\n- four\n- five",
+    "Run the suite before merging.\n\n    npm test\n\nThen merge.",
+  ];
+  const entries: Entry[] = decisions.map((text, n) => ({ kind: "decision", decision: { kind: "recorded", text, at: 6_400 + n } }));
   await withLongText(async () => {
-    const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, quoted] }) });
-    const card = within(activity(tab()).section.getAllByRole("article", { name: "Decision" }).at(-1) ?? assert.fail("no decision"));
-    assert.equal(card.getAllByTestId("bb-markdown")[0]?.textContent, first, "the first sentence, its closing quote included, and no more");
-    const press = card.getByRole("button", { name: /^The sandbox writes nowhere else\./ });
-    assert.equal(press.textContent, rest);
-    assert.deepEqual(cutText(press), { open: "false", lines: "2", drawnWhole: false });
-    fireEvent.click(press);
-    assert.deepEqual(cutText(press), { open: "true", lines: "2", drawnWhole: true });
+    // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
+    const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => ({ ...FEED, entries }) });
+    const cards = activity(tab()).section.getAllByRole("article", { name: "Decision" });
+    const drawn = cards.map((card) => within(card).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent));
+    assert.deepEqual(drawn, decisions.map((text) => [text]));
+    const list = within(cards[1] ?? assert.fail("no list decision")).getByRole("button", { name: /^Cap retries:/ });
+    assert.deepEqual(cutText(list), { open: "false", lines: "3", drawnWhole: false });
   });
 });
 
@@ -549,18 +549,17 @@ test("the description, the brief, comments, decisions and an answer in the user'
   // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
   const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => feed });
   const drawn = tab().getAllByTestId("bb-markdown").map((markdown) => markdown.textContent);
-  assert.deepEqual(drawn, [md("Lost, see"), md("Retry, see"), md("Cap at three, see"), "Cap at three.", md("Rest, see"), md("Comment, see")]);
+  assert.deepEqual(drawn, [md("Lost, see"), md("Retry, see"), md("Cap at three, see"), `Cap at three. ${md("Rest, see")}`, md("Comment, see")]);
 });
 
-test("raw HTML in a comment reaches bb's Markdown as words, and a decision's link that holds a full stop stays whole in its headline", async () => {
+test("raw HTML in a comment reaches bb's Markdown as escaped words, never as HTML", async () => {
   const raw = 'Raw: <img src=x onerror="window.hit=1"> and <script>window.hit=2</script> end.';
-  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: "Follow [Retries. A migration guide](https://example.com/retries). Then cap at five.", at: 6_800 } };
-  const feed = { ...FEED, entries: [decided, comment(1, 6_900, { kind: "user" }, raw, null)] };
   // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
-  const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => feed });
-  const drawn = (label: string) => within(tab().getByRole("article", { name: label })).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent);
-  assert.deepEqual(drawn("Decision"), ["Follow [Retries. A migration guide](https://example.com/retries).", "Then cap at five."]);
-  assert.deepEqual(drawn("Comment m1"), ['Raw: &lt;img src=x onerror="window.hit=1"> and &lt;script>window.hit=2&lt;/script> end.']);
+  const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => ({ ...FEED, entries: [comment(1, 6_900, { kind: "user" }, raw, null)] }) });
+  const drawn = within(tab().getByRole("article", { name: "Comment m1" })).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent);
+  assert.equal(drawn.length, 1);
+  assert.doesNotMatch(drawn[0] ?? "", /(^|[^\\])<(img|script)/, "every < that opened HTML is escaped, so bb's Markdown reads it as a word");
+  assert.match(drawn[0] ?? "", /\\<img src=x onerror=.+\\<script>.+\\<\/script> end\./, "and the words are all there");
 });
 
 test("an issue with no brief yet draws no Brief fold", async () => {

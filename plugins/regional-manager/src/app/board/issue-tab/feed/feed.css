@@ -260,8 +260,7 @@
   margin-left: auto;
 }
 @media (hover: hover) {
-  .rmi-clamp-press:hover .rmi-line-text,
-  .rmi-clamp-press:hover .rmi-decision-rest {
+  .rmi-clamp-press:hover .rmi-line-text {
     color: var(--foreground);
   }
 }
@@ -293,15 +292,6 @@
   font-size: 13px;
   line-height: 18px;
   color: var(--foreground);
-  white-space: pre-wrap;
-  text-wrap: pretty;
-}
-/* A recorded decision's words after its first sentence, muted under it. */
-.rmi-decision-rest {
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 17px;
-  color: var(--muted-foreground);
   white-space: pre-wrap;
   text-wrap: pretty;
 }
