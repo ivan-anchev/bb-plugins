@@ -86,7 +86,14 @@ const byId: NameOf = (issueId) => issueId;
 
 /** What issue_create says it filed, what blocks it as it is filed, and its link. */
 export const filedText = (issue: Issue, blockedBy: readonly Related[], pluginId: string): string =>
-  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${linksOf(pluginId, issue)(issue.parentId)}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${issue.reviewer === null ? "" : ` Its done handoffs are reviewed on ${executionText(issue.reviewer)}.`}${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
+  `Filed ${issue.id} (${issue.kind})${issue.parentId === null ? "" : ` as a sub-issue of ${linksOf(pluginId, issue)(issue.parentId)}`} in ${STATUS_LABELS[issue.rest]}${blockedText(blockedBy, ", blocked by ", linksOf(pluginId, issue))}.${reviewerFiledText(issue)}${issue.verifier === null ? "" : ` Its done handoffs are checked on ${executionText(issue.verifier)}.`} Link: ${linksOf(pluginId, issue)(issue.id)}`;
+
+/** What issue_create says of the reviewer named on what it filed: "" with none named. */
+function reviewerFiledText({ kind, reviewer }: Issue): string {
+  if (reviewer === null) return "";
+  if (!isVerified(kind)) return ` ${executionText(reviewer)} is its reviewer, though nothing reviews a ${PIPELINES[kind].label.toLowerCase()} issue: it reviews only once the issue is build work.`;
+  return ` Its done handoffs are reviewed on ${executionText(reviewer)}.`;
+}
 
 /** What issue_update says it did: anything its change implies, the issues it made ready, by their links, and its own link. */
 export function updatedText(issue: Issue, { note, nowReady, accepted }: { note: string | null; nowReady: readonly IssueId[]; accepted: Accepted | null }, pluginId: string): string {

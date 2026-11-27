@@ -309,7 +309,7 @@ test("a reviewer named that bb can't run where the review runs starts no review:
   assert.match(await catchUp(), new RegExp(`Review: no review was had, as ${reason.replace(/[.()]/g, "\\$&")}\\.`));
 });
 
-test("a reviewer named while its agent works is resolved in the agent's environment: a model only that environment lists is taken and reviews there, one only the primary machine lists is refused with what the environment runs", async () => {
+test("a reviewer named while its agent works is resolved in the agent's environment: a model only that environment lists is taken and reviews there, one only the primary machine lists is refused with what the environment runs; a verifier is still resolved on the primary machine", async () => {
   const { kit, threadId, agentThreadId, reviewer, handOff } = await withAgent();
   const environmentId = kit.thread(agentThreadId).environmentId ?? assert.fail("no environment");
   const remote = { id: "remote", available: true, models: [{ model: "remote-model", isDefault: true, defaultReasoningEffort: "medium", supportedReasoningEfforts: levels("low", "medium", "high") }] };
@@ -318,6 +318,9 @@ test("a reviewer named while its agent works is resolved in the agent's environm
 
   assert.match(await update({ providerId: "remote", model: "remote-model" }), /^Updated WEB-1\. remote remote-model \(high\) now reviews/);
   assert.equal(await update({ providerId: "codex", model: "gpt-default" }), "In a1's environment: bb can't run codex there. bb can run: claude-code, remote.");
+  const verifierNamed = async (verifier: object) => textOf(await kit.call("issue_update", { id: "WEB-1", verifier }, threadId));
+  assert.match(await verifierNamed({ providerId: "codex", model: "gpt-default" }), /^Updated WEB-1\. codex gpt-default \(high\) is now WEB-1's first choice of verifier/, "codex, which a1's environment lacks and the primary machine lists");
+  assert.equal(await verifierNamed({ providerId: "remote", model: "remote-model" }), "On bb's primary machine: bb can't run remote there. bb can run: claude-code, codex.", "remote, which only a1's environment lists");
   await handOff();
   assert.equal(ranAtOf(kit)(reviewer()), "remote/remote-model at high", "the model the agent's environment lists, as named");
 });

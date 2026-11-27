@@ -252,7 +252,7 @@ test("a reviewer bb can't run is refused with what it can run, and changes nothi
 
   const codex = { providerId: "codex", model: "gpt-default", reasoningLevel: "high" };
   const research = await call("issue_create", { ...ISSUE, kind: "research", title: "Pick a vault", reviewer: codex });
-  assert.match(textOf(research), /^Filed WEB-2 \(research\) in Todo\. Its done handoffs are reviewed on codex gpt-default \(high\)\./);
+  assert.match(textOf(research), /^Filed WEB-2 \(research\) in Todo\. codex gpt-default \(high\) is its reviewer, though nothing reviews a research issue: it reviews only once the issue is build work\. Link: /);
   assert.deepEqual(kit.store.issue(coordinatorId, issueIdSchema.parse("WEB-2"))?.reviewer, codex);
   assert.match(textOf(await call("issue_read", { id: "WEB-2" })), /### Review and verification\n\nReviewer: named: codex gpt-default \(high\), though nothing reviews or verifies a research issue\./);
   const verifierToo = await call("issue_create", { ...ISSUE, kind: "research", verifier: codex, reviewer: codex });

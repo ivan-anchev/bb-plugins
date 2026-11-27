@@ -7,12 +7,13 @@ import type { CoordinatorId } from "../../model/role.ts";
 import type { Store } from "../store/store.ts";
 import { listedThreads } from "./threads.ts";
 
-type ListedThread = { id: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
+/** A thread as bb lists it, down to where it runs and whether bb still runs it. */
+export type EnvironmentThread = { id: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
 
 /** The parts of bb the default branch is read from: the regional manager's thread, and its environment's record. */
 type DefaultBranchBb = {
   sdk: {
-    threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> };
+    threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<EnvironmentThread[]> };
     environments: { get(args: { environmentId: string }): Promise<{ defaultBranch: string | null }> };
   };
 };

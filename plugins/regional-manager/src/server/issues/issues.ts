@@ -15,6 +15,7 @@ import { prRef } from "../../model/verdict/pr.ts";
 import { capMovesText } from "../../model/verdict/rounds/cap.ts";
 import { checkedPr, ciFailedAt, failedOnReviewOnly, type PrOfBranch, failurePhrases, failureReasons, outcome, type Outcome } from "../../model/verdict/verdict.ts";
 import { executionText } from "../agents/agents.ts";
+import type { EnvironmentThread } from "../agents/environments.ts";
 import { listedThreads, type ListBb } from "../agents/threads.ts";
 import { resolvedExecution, type CatalogBb } from "../execution/catalog.ts";
 import type { DependencyChange, IssueEdit } from "../store/issue/issues-store.ts";
@@ -22,9 +23,6 @@ import type { Store } from "../store/store.ts";
 import type { CurrentViews } from "./views/current-views.ts";
 import { readIssues, type FactsBb, type FactsStore, type IssueRead } from "./views/issue-facts.ts";
 import { checkersNote, issueText } from "./issue-text.ts";
-
-/** An agent's thread as the issues read where it runs. */
-type EnvironmentThread = { id: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
 
 /** The parts of bb the issues read: their agents' threads, environments and turns, bb's catalog, and an agent's latest answer. */
 type IssuesBb = FactsBb & ListBb<EnvironmentThread> & CatalogBb & { pluginId: string; sdk: { threads: { output(args: { threadId: string }): Promise<{ output: string | null }> } } };
@@ -65,11 +63,12 @@ export type Issues = ReturnType<typeof createIssues>;
 
 export function createIssues({ bb, store, views: current, onChange }: Deps) {
   /**
-   * Where a verifier or reviewer named on `issue` now is resolved, and how a refusal names that
-   * place: the environment of the agent holding it, where its next review and check run; with no
-   * agent holding it (null: an issue being filed), or none bb lists an environment for, bb's primary
-   * machine, as where they run is not known yet. One bb can't run where a check comes is handled
-   * then (verifier-model.ts, review.ts reviewerExecution), and the verdict says so.
+   * Where a checker named now is resolved, and how a refusal names that place: for a reviewer named
+   * on `issue`, the environment of the agent holding it, where its next review runs (review.ts
+   * reviewerExecution); with no agent holding it, none bb lists an environment for, or null (a
+   * verifier, or an issue being filed), bb's primary machine. why the verifier there: a final check
+   * runs on the manager's machine, and a handoff's verifier bb can't run in the agent's environment
+   * is passed over for the plugin's pick (verifier-model.ts), which its verdict says.
    */
   async function placeOf(issue: Issue | null): Promise<{ routing: CatalogRouting; where: string }> {
     const holder = issue === null ? null : holderOf(issue);
@@ -78,7 +77,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
     return holder === null || environmentId === null ? { routing: {}, where: "On bb's primary machine" } : { routing: { environmentId }, where: `In ${holder.id}'s environment` };
   }
 
-  /** A change of verifier or reviewer resolved where `placeOf` says: undefined, unchanged; null, the plugin picks. */
+  /** A change of verifier or reviewer resolved where `placeOf(issue)` says: undefined, unchanged; null, the plugin picks. */
   async function changedChecker(issue: Issue | null, requested: RequestedExecution | null | undefined): Promise<Execution | Refused | null | undefined> {
     if (requested === undefined || requested === null) return requested;
     const { routing, where } = await placeOf(issue);
@@ -175,7 +174,7 @@ export function createIssues({ bb, store, views: current, onChange }: Deps) {
      * blocking one), and what an accept into In review did (null: none was made).
      */
     async update(issue: Issue, { verifier: requestedVerifier, reviewer: requestedReviewer, status, dependsOn, decision, ...plan }: IssueChange): Promise<{ issue: Issue; note: string | null; nowReady: IssueId[]; accepted: Accepted | null } | Refused> {
-      const verifier = await changedChecker(issue, requestedVerifier);
+      const verifier = await changedChecker(null, requestedVerifier);
       if (verifier !== undefined && verifier !== null && "refused" in verifier) return verifier;
       const reviewer = await changedChecker(issue, requestedReviewer);
       if (reviewer !== undefined && reviewer !== null && "refused" in reviewer) return reviewer;
