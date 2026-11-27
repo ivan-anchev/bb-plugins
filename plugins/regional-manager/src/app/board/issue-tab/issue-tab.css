@@ -16,11 +16,13 @@
   color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
-.rmi-detail p,
-.rmi-detail h3,
-.rmi-detail h4,
-.rmi-detail ol,
-.rmi-detail ul {
+/* why not in Markdown (ui/tab-markdown/tab-markdown.tsx): its paragraphs and lists keep bb's spacing, as in chat.
+   why in :where: it adds nothing to the selector's weight. */
+.rmi-detail p:where(:not([data-markdown-preview] *)),
+.rmi-detail h3:where(:not([data-markdown-preview] *)),
+.rmi-detail h4:where(:not([data-markdown-preview] *)),
+.rmi-detail ol:where(:not([data-markdown-preview] *)),
+.rmi-detail ul:where(:not([data-markdown-preview] *)) {
   margin: 0;
 }
 /* Its head: id and kind on one quiet line; under them its title and headline, whole and wrapping,

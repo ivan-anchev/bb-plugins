@@ -1,0 +1,17 @@
+/* Markdown in an issue's tab (tab-markdown.tsx), at the size of the text it stands in for, its
+   headings a step above it and below the issue's title (15px). why over bb's Markdown: it sizes a
+   chat message (14px, 16px headings), louder than the issue's own title. why bb's own attribute
+   with the class: bb merges the class onto its `[data-markdown-preview]` box beside its own
+   utilities, and this must outrank them. why normal white-space: the text it stands in for keeps a
+   plain text's line breaks, which in Markdown are the renderer's to draw. */
+[data-markdown-preview].rmi-markdown {
+  font-size: inherit;
+  line-height: inherit;
+  white-space: normal;
+}
+[data-markdown-preview].rmi-markdown h1,
+[data-markdown-preview].rmi-markdown h2,
+[data-markdown-preview].rmi-markdown h3 {
+  font-size: 14px;
+  line-height: 20px;
+}

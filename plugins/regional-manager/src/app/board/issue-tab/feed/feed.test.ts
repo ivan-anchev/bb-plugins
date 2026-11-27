@@ -283,7 +283,9 @@ test("a decision shows its first sentence whole and the rest cut to two lines, a
     const { section, lines } = activity(tab());
     const [loops, capped] = section.getAllByRole("article", { name: "Decision" }).map((card) => within(card));
     assert.equal(loops?.queryByRole("button"), null, "a one-sentence decision has nothing more to open");
-    assert.equal(capped?.getByText((_, element) => element?.textContent === "Cap retries\nat five.").tagName, "P", "the first sentence whole, a line break in it included");
+    const headline = capped?.getAllByTestId("bb-markdown")[0] ?? assert.fail("no first sentence");
+    assert.equal(headline.textContent, "Cap retries\nat five.", "the first sentence whole, a line break in it included");
+    assert.equal(headline.closest("button"), null, "the first sentence is never cut");
     const rest = capped?.getByRole("button", { name: /^Each retry waits twice as long as the one before\.\s+The fifth gives up and tells on-call\.$/ }) ?? assert.fail("no rest");
     assert.deepEqual(cutText(rest), { open: "false", lines: "2", drawnWhole: false });
     fireEvent.click(rest);
@@ -311,7 +313,7 @@ test("a decision whose first sentence ends in a closing quote shows that sentenc
   await withLongText(async () => {
     const { tab } = await opened("WEB-1", WEB_1, { feedOf: () => ({ ...FEED, entries: [...FEED.entries, quoted] }) });
     const card = within(activity(tab()).section.getAllByRole("article", { name: "Decision" }).at(-1) ?? assert.fail("no decision"));
-    assert.equal(card.getAllByRole("paragraph")[1]?.textContent, first, "the first sentence, its closing quote included, and no more");
+    assert.equal(card.getAllByTestId("bb-markdown")[0]?.textContent, first, "the first sentence, its closing quote included, and no more");
     const press = card.getByRole("button", { name: /^The sandbox writes nowhere else\./ });
     assert.equal(press.textContent, rest);
     assert.deepEqual(cutText(press), { open: "false", lines: "2", drawnWhole: false });
@@ -536,7 +538,18 @@ test("the brief folds under the description, closed until the reader opens it, s
   assert.equal(fold.open, false, "folded at first");
   fireEvent.click(within(fold).getByText("Brief"));
   assert.equal(fold.open, true);
-  assert.equal(fold.querySelector("p")?.textContent, brief, "the whole brief, as written");
+  assert.equal(within(fold).getByTestId("bb-markdown").textContent, brief, "the whole brief, as written, handed to bb's Markdown");
+});
+
+test("the description, the brief, comments, decisions and an answer in the user's own words go to bb's Markdown as written, which draws their links, code and lists", async () => {
+  const md = (what: string) => `${what} [PR](https://github.com/acme/webhooks/pull/219), \`retry.ts\`, and:\n\n- one\n- two`;
+  const answered: Entry = { kind: "decision", decision: { kind: "asked", id: decisionIdSchema.parse("d3"), question: "Cap at five?", options: ["Yes", "No"], recommended: null, at: 6_600, answer: { text: md("Cap at three, see"), at: 6_700 }, cap: null } };
+  const decided: Entry = { kind: "decision", decision: { kind: "recorded", text: `Cap at three. ${md("Rest, see")}`, at: 6_800 } };
+  const feed = { ...FEED, description: md("Lost, see"), brief: md("Retry, see"), entries: [answered, decided, comment(1, 6_900, { kind: "user" }, md("Comment, see"), null)] };
+  // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
+  const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => feed });
+  const drawn = tab().getAllByTestId("bb-markdown").map((markdown) => markdown.textContent);
+  assert.deepEqual(drawn, [md("Lost, see"), md("Retry, see"), md("Cap at three, see"), "Cap at three.", md("Rest, see"), md("Comment, see")]);
 });
 
 test("an issue with no brief yet draws no Brief fold", async () => {

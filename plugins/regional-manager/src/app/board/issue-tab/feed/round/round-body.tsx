@@ -5,7 +5,7 @@
 // body, read with the keyed roundBodies query only while the round is open, so a folded round costs
 // nothing. why no step captions, counts or passes: the lines are the review and the verdict, the
 // head's score says how it ended, and the Done when grid marks each criterion.
-import { experimental_useRpcKeyedQuery, Markdown } from "@get-bb/plugin-sdk/app";
+import { experimental_useRpcKeyedQuery } from "@get-bb/plugin-sdk/app";
 import { useId, type ReactNode } from "react";
 import { coordinatorContract as contract, roundBodyKey } from "../../../../../contract.ts";
 import type { HandoffBody } from "../../../../../model/agent/handoff.ts";
@@ -15,6 +15,7 @@ import type { IssueId } from "../../../../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import type { Outcome } from "../../../../../model/verdict/verdict.ts";
 import { ReadFailure } from "../../../../ui/read-failure.tsx";
+import { TabMarkdown } from "../../../../ui/tab-markdown/tab-markdown.tsx";
 import { useHoverCards } from "../../../issue/hover-card/use-hover-card.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { AgentName, MovedTo, When, type FeedAgents } from "../byline.tsx";
@@ -206,7 +207,7 @@ function ResearchReport({ report, file }: NonNullable<HandoffBody["report"]>) {
         Report <span className="rmi-report-file">{file}</span>
       </h4>
       <div tabIndex={0} role="region" aria-labelledby={headId} className="rmi-report">
-        <Markdown content={report} />
+        <TabMarkdown text={report} />
       </div>
     </section>
   );

@@ -12,6 +12,7 @@ import type { IssueStatus } from "../../../../../model/issue/status.ts";
 import { firstSentence } from "../../../../../model/one-line.ts";
 import { stillWaits } from "../../../../../model/verdict/rounds/cap.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
+import { TabMarkdown } from "../../../../ui/tab-markdown/tab-markdown.tsx";
 import { useAnswer } from "../../../use-answer.ts";
 import { ManagerName, When } from "../byline.tsx";
 import { Clamp } from "../clamp.tsx";
@@ -110,15 +111,17 @@ function ringGone(event: AnimationEvent<HTMLElement>) {
   if (event.target === event.currentTarget) delete event.currentTarget.dataset.revealed;
 }
 
-/** A recorded decision's words: its first sentence, its headline, whole; the rest, if any, muted and cut to two lines. */
+/** A recorded decision's words, as Markdown: its first sentence, its headline, whole; the rest, if any, muted and cut to two lines. */
 function Decided({ text }: { text: string }) {
   const { sentence, rest } = firstSentence(text);
   return (
     <div>
-      <p className="rmi-decision-text">{sentence}</p>
+      <div className="rmi-decision-text">
+        <TabMarkdown text={sentence} />
+      </div>
       {rest !== null && (
         <Clamp lines={2} className="rmi-decision-rest">
-          {rest}
+          <TabMarkdown text={rest} />
         </Clamp>
       )}
     </div>

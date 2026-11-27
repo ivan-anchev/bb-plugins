@@ -1,8 +1,8 @@
 // Text in an issue's feed cut to a few lines while it runs longer: a machine line to one, a decision's
 // rest to two, a comment to three. Cut, it is a button that opens it whole, and closes it again; text
-// that fits is plain text, with nothing to press. Screen readers read it whole either way: the cut is
-// only drawn.
-import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from "react";
+// that fits is plain text, with nothing to press. A press on a link in it is the link's alone. Screen
+// readers read it whole either way: the cut is only drawn.
+import { useLayoutEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 type ClampProps = { lines: 1 | 2 | 3; className: string; children: ReactNode };
 
@@ -17,7 +17,7 @@ export function Clamp({ lines, className, children }: ClampProps) {
   );
   if (!cut) return body;
   return (
-    <button type="button" className="rmi-clamp-press" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <button type="button" className="rmi-clamp-press" aria-expanded={open} onClick={(event) => onLink(event) || setOpen(!open)}>
       {body}
     </button>
   );
@@ -41,5 +41,8 @@ function useCut(text: HTMLElement | null): boolean {
   }, [text]);
   return cut;
 }
+
+/** Whether the press was on a link in the text, as in its Markdown, which follows it instead. */
+const onLink = (event: MouseEvent): boolean => event.target instanceof Element && event.target.closest("a[href]") !== null;
 
 const linesStyle = (lines: ClampProps["lines"]): CSSProperties & Record<"--rmi-lines", number> => ({ "--rmi-lines": lines });

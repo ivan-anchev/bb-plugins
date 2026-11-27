@@ -209,7 +209,8 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
 /** Mounted on `issueId`, once its feed has drawn. */
 export async function opened(issueId: string, issues: readonly IssueRow[], options: MountOptions = {}) {
   const mounted = await mount({ issueId }, issues, options);
-  await within(await mounted.view.findByRole("article", { name: issueId })).findByText((options.feedOf ?? (() => FEED))(issueId).description);
+  // why as written: a description is Markdown, whose line breaks the default matcher would fold.
+  await within(await mounted.view.findByRole("article", { name: issueId })).findByText((options.feedOf ?? (() => FEED))(issueId).description, { normalizer: (text) => text });
   return mounted;
 }
 

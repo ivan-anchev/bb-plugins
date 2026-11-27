@@ -596,17 +596,6 @@
   line-height: 18px;
   color: var(--foreground);
 }
-/* why over bb's Markdown: it sizes a chat message (14px, 16px headings), louder than the issue's own title. */
-.rmi-report [data-markdown-preview] {
-  font-size: inherit;
-  line-height: inherit;
-}
-.rmi-report [data-markdown-preview] h1,
-.rmi-report [data-markdown-preview] h2,
-.rmi-report [data-markdown-preview] h3 {
-  font-size: 14px;
-  line-height: 20px;
-}
 
 .rmi-verdict-meta {
   font-size: 11px;
