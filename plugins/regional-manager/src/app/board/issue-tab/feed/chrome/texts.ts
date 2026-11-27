@@ -24,3 +24,9 @@ export const HTML_EXAMPLE = 'See <a href="https://example.com/guide">the guide</
 
 /** A comment holding tags side by side. */
 export const ADJACENT_TAGS = "See <span><b>example</b></span>.";
+
+/** A comment quoting two HTML comments, a line each. */
+export const QUOTED_COMMENTS = "> <!-- first -->\n> <!-- second -->";
+
+/** A comment with a tag right after code. */
+export const TAG_AFTER_CODE = "Run `npm test`<br>Then review the output.";

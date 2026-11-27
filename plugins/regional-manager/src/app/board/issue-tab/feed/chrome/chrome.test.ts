@@ -32,12 +32,16 @@ for (const width of [360, 549]) {
 test("at 360px, every folded first sentence is drawn to its last letter as it is opened, wherever on its line it ends", async () => {
   const page = await chrome.open(360);
   const sweep = page.getByRole("region", { name: "Sweep" });
+  const presses = sweep.locator(".rmi-clamp-press");
+  const expanded = () => presses.evaluateAll((all) => all.map((press) => press.getAttribute("aria-expanded")));
+  assert.deepEqual(await expanded(), SWEEP.map(() => "false"), "every sweep decision is cut, and shut");
   const folded = await lastLines(sweep);
   assert.equal(folded.length, SWEEP.length);
   assert.ok(folded.some(({ room }) => room < 13), "some sentence ends within an ellipsis' width of its line's end");
   const foldedShots = await Promise.all(folded.map((line) => shot(page, line)));
-  for (const press of await sweep.locator(".rmi-clamp-press").all()) await press.click();
+  for (const press of await presses.all()) await press.click();
   await settled(page);
+  assert.deepEqual(await expanded(), SWEEP.map(() => "true"), "every sweep decision opened");
   const opened = await lastLines(sweep);
   const openedShots = await Promise.all(opened.map((line) => shot(page, line)));
   const differ = SWEEP.filter((_, n) => !foldedShots[n].equals(openedShots[n])).map((sentence) => sentence.slice(-8));
@@ -58,13 +62,17 @@ test("at 360px, a decision that opens on a list is three lines tall until opened
   assert.ok(opened.height > folded.height && opened.top + opened.height >= opened.itemFeet[4] - 0.5, `opened, ${opened.height}px: down to "five"`);
 });
 
-test("a comment holding an HTML example shows its tags as code, as written, and no link is made from inside them; tags side by side show as written too", async () => {
+test("a comment holding an HTML example shows its tags as code, as written, and no link is made from inside them; tags side by side, a quote's HTML comments and a tag after code show as written too", async () => {
   const page = await chrome.open(360);
   const markdown = page.getByRole("article", { name: "Comment m1" }).locator("[data-markdown-preview]");
   const drawn = await markdown.evaluate((box) => ({ text: box.textContent, code: [...box.querySelectorAll("code")].map((code) => code.textContent), links: box.querySelectorAll("a").length }));
   assert.deepEqual(drawn, { text: HTML_EXAMPLE, code: ['<a href="https://example.com/guide">', "</a>"], links: 0 });
   const adjacent = await page.getByRole("article", { name: "Comment m2" }).locator("[data-markdown-preview]").evaluate((box) => ({ text: box.textContent, links: box.querySelectorAll("a").length }));
   assert.deepEqual(adjacent, { text: ADJACENT_TAGS, links: 0 }, "tags side by side shown as written");
+  const quoted = await page.getByRole("article", { name: "Comment m3" }).locator("[data-markdown-preview] blockquote").evaluate((quote) => [...quote.children].map((block) => `${block.tagName}: ${block.textContent}`));
+  assert.deepEqual(quoted, ["PRE: <!-- first -->\n", "PRE: <!-- second -->\n"], "a quote's HTML comments, each as code in the quote, with no quote marker");
+  const afterCode = await page.getByRole("article", { name: "Comment m4" }).locator("[data-markdown-preview]").evaluate((box) => box.textContent);
+  assert.equal(afterCode, "Run npm test<br>Then review the output.", "the code's words and the tag, with no backtick");
   const mangled = await page.locator("a[href]").evaluateAll((links) => links.map((link) => link.getAttribute("href")).filter((href) => /%22|%3E/i.test(href ?? "")));
   assert.deepEqual(mangled, [], "no link on the page holds a quote or a > of the tag");
 });

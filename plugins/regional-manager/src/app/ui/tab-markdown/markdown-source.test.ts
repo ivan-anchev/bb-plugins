@@ -27,11 +27,12 @@ test("an HTML example's link stays code: no link is found in its tag, and the wo
   assert.deepEqual(read, { html: [], words: "See |the guide|.", code: ['<a href="https://example.com/guide">', "</a>"], links: [] });
 });
 
-test("tags side by side, and tags beside code, are one piece of code each, as written: no backticks gained and no tag handed on as HTML", () => {
+test("tags side by side, and tags beside code, read back as one piece of code holding their words, with no backtick shown and no tag handed on as HTML", () => {
   /** Each text, then its code and its words as read back, one node after another. */
   const cases: [string, string[], string][] = [
     ["See <span><b>example</b></span>.", ["<span><b>", "</b></span>"], "See |example|."],
-    ["<b>`x`</b> and `y`<i>", ["<b>`x`</b>", "`y`<i>"], " and "],
+    ["Run `npm test`<br>Then review the output.", ["npm test<br>"], "Run |Then review the output."],
+    ["<b>`x`</b> and `y`<i>", ["<b>x</b>", "y<i>"], " and "],
     ["<a title='`'>x</a><b title='``'>", ["<a title='`'>", "</a><b title='``'>"], "x"],
     ["x <b> `y`", ["<b>", "y"], "x | "],
     ["| a |\n|---|\n| <b><i>z</i></b> |", ["<b><i>", "</i></b>"], "a|z"],
@@ -53,8 +54,16 @@ test("an HTML comment that wraps a fence, then a fenced <img onerror> and <scrip
 test("an HTML comment that opens a fence it never closes hands on no HTML", () => {
   const read = readBack(inertHtml('<!--\n```\n-->\n<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```\n\nafter'));
   assert.deepEqual(read.html, []);
-  assert.deepEqual(read.code, ['<!--\n```\n-->\n<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```'], "the comment and the HTML block after it, as written");
+  assert.deepEqual(read.code, ["<!--\n```\n-->", '<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```']);
   assert.equal(read.words, "after");
+});
+
+test("HTML comments on a quote's lines are code inside the quote, with no quote marker in them", () => {
+  const tree = fromMarkdown(inertHtml("> <!-- first -->\n> <!-- second -->"), { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
+  assert.deepEqual(
+    tree.children.map((node) => (node.type === "blockquote" ? node.children.map((inside) => (inside.type === "code" ? inside.value : inside.type)) : node.type)),
+    [["<!-- first -->", "<!-- second -->"]],
+  );
 });
 
 test("raw HTML inline, in a block, a list, a quote and a table's cell is handed on as code, as written, around the same words", () => {
