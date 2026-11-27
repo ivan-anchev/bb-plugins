@@ -15,28 +15,31 @@ const OFF_MEANS = "New done handoffs skip review and verification.";
 
 export function VerifyChip({ coordinatorId, verify }: { coordinatorId: CoordinatorId; verify: boolean }) {
   const { shown, pending, failure, change } = useVerifySave(coordinatorId, verify);
+  const [open, setOpen] = useState(false);
   return (
-    <div className="rmi-verify-bar">
-      <Root>
-        <Trigger
-          className="rmi-verify-chip"
-          aria-label={shown ? `Verification on. ${ON_MEANS}` : `Verification off. ${OFF_MEANS}`}
-          aria-disabled={pending}
-          data-off={!shown || undefined}
-        >
-          {shown ? <ShieldCheck /> : <Icon name="AlertTriangle" aria-hidden className="text-warning-text" />}
-          {shown ? "Verification on" : "Verification off"}
-          <Icon name="ChevronDown" aria-hidden className="rmi-verify-chevron" />
-        </Trigger>
-        <Content className="rmi-verify-menu" aria-label="Verification" align="end" sideOffset={4} collisionPadding={8}>
-          <Switch checked={shown} onChange={change} pending={pending} label="Verify done handoffs" hint={shown ? ON_MEANS : OFF_MEANS} />
-          {failure !== null && (
-            <p role="alert" className="rmi-verify-error">
-              {failure}
-            </p>
-          )}
-        </Content>
-      </Root>
+    <div className="rmi-verify">
+      <div className="rmi-verify-bar">
+        <Root open={open} onOpenChange={setOpen}>
+          <Trigger
+            className="rmi-verify-chip"
+            aria-label={shown ? `Verification on. ${ON_MEANS}` : `Verification off. ${OFF_MEANS}`}
+            aria-disabled={pending}
+            data-off={!shown || undefined}
+            // why: while a change saves the chip is disabled, so a press neither opens nor closes the menu; Escape still closes it.
+            onClick={(event) => pending && event.preventDefault()}
+          >
+            {shown ? <ShieldCheck /> : <Icon name="AlertTriangle" aria-hidden className="text-warning-text" />}
+            {shown ? "Verification on" : "Verification off"}
+            <Icon name="ChevronDown" aria-hidden className="rmi-verify-chevron" />
+          </Trigger>
+          <Content className="rmi-verify-menu" aria-label="Verification" align="end" sideOffset={4} collisionPadding={8}>
+            <Switch checked={shown} onChange={change} pending={pending} label="Verify done handoffs" hint={shown ? ON_MEANS : OFF_MEANS} />
+            {failure !== null && <Failure place="menu">{failure}</Failure>}
+          </Content>
+        </Root>
+      </div>
+      {/* why below the chip too: a save that fails after the menu closed would otherwise only revert the chip. */}
+      {failure !== null && !open && <Failure place="board">{failure}</Failure>}
     </div>
   );
 }
@@ -65,6 +68,19 @@ function useVerifySave(coordinatorId: CoordinatorId, verify: boolean) {
     failure: save.error === null ? null : `Couldn't turn verification ${verify ? "off" : "on"}: ${save.error.message}`,
     change,
   };
+}
+
+/** Why a change didn't save: in the menu while it is open, under the chip while it is closed. */
+function Failure({ place, children }: { place: "menu" | "board"; children: string }) {
+  return (
+    <p role="alert" className="rmi-verify-error" data-place={place}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden className="rmi-verify-error-glyph">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M12 8v4M12 16h.01" />
+      </svg>
+      <span>{children}</span>
+    </p>
+  );
 }
 
 /** The on state's glyph, a shield with a check, in the stroke of bb's icons. */

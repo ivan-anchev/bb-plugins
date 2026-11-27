@@ -34,7 +34,7 @@ type Server = {
   save?(verify: boolean, store: () => Promise<void>): Promise<void>;
 };
 
-/** The Board reading `verify`, each setVerify call's input in `saves`, and the chip once drawn. */
+/** The Board reading `verify`, each setVerify call's input in `saves`, what the server holds in `stored`, and the chip once drawn. */
 async function mount(verify: boolean, server: Server = {}) {
   let stored = verify;
   const saves: { coordinatorId: string; verify: boolean }[] = [];
@@ -64,7 +64,7 @@ async function mount(verify: boolean, server: Server = {}) {
   };
   const menu = () => within(view.getByRole("dialog", { name: "Verification" }));
   const toggle = () => menu().getByRole("switch", { name: "Verify done handoffs" });
-  return { view, chip, menu, toggle, saves };
+  return { view, chip, menu, toggle, saves, stored: () => stored };
 }
 
 /** The text an element's aria-describedby points at. */
@@ -116,7 +116,7 @@ test("pressing the chip opens its menu: the switch and what the state means; the
 
 test("a failed save puts the chip and the switch back to the stored value and says why in the menu, as an alert; pressing again retries, and it saves", async () => {
   let fails = true;
-  const { chip, menu, toggle, saves } = await mount(true, {
+  const { chip, menu, toggle, saves, stored } = await mount(true, {
     save: (_next, store) => (fails ? Promise.reject(new Error("bb is restarting")) : store()),
   });
   fireEvent.click(chip());
@@ -125,21 +125,50 @@ test("a failed save puts the chip and the switch back to the stored value and sa
   assert.match(alert.textContent ?? "", /^Couldn't turn verification off: .*bb is restarting/);
   assert.equal(chip().textContent, "Verification on", "the chip reverts");
   assert.equal(toggle().getAttribute("aria-checked"), "true", "and so does the switch");
+  assert.equal(stored(), true);
 
   fails = false;
   fireEvent.click(toggle());
-  await waitFor(() => assert.equal(chip().textContent, "Verification off"));
+  // why wait for the switch: it takes input again only once the save has settled.
+  await waitFor(() => assert.equal(toggle().getAttribute("aria-disabled"), "false"));
+  assert.equal(stored(), false, "the retry saved");
+  assert.equal(chip().textContent, "Verification off");
   assert.equal(menu().queryByRole("alert"), null, "the failure goes once a save lands");
   assert.deepEqual(
     saves.map((save) => save.verify),
     [false, false],
   );
+
+  cleanup();
+  const again = await mount(stored());
+  assert.equal(again.chip().textContent, "Verification off", "a fresh read of the Board shows what the retry saved");
+});
+
+test("a save that fails after the menu closed says why under the chip, and in the menu once it opens again", async () => {
+  let fail = () => {};
+  const { view, chip, menu, toggle } = await mount(true, {
+    save: () => new Promise<void>((_resolve, reject) => (fail = () => reject(new Error("bb is restarting")))),
+  });
+  fireEvent.click(chip());
+  fireEvent.click(toggle());
+  fireEvent.keyDown(toggle(), { key: "Escape" });
+  await waitFor(() => assert.equal(chip().getAttribute("aria-expanded"), "false"));
+
+  await act(async () => fail());
+  const below = await view.findByRole("alert");
+  assert.match(below.textContent ?? "", /^Couldn't turn verification off: .*bb is restarting/);
+  assert.equal(view.queryByRole("dialog"), null, "under the chip, with the menu closed");
+  assert.equal(chip().textContent, "Verification on");
+
+  fireEvent.click(chip());
+  assert.match(menu().getByRole("alert").textContent ?? "", /^Couldn't turn verification off/);
+  assert.equal(view.getAllByRole("alert").length, 1, "in the menu instead, not twice");
 });
 
 test("while a save is pending, the chip and the switch show the asked value, dimmed with aria-disabled, and the switch ignores presses", async () => {
-  let land = () => {};
+  let land = async () => {};
   const { chip, toggle, saves } = await mount(true, {
-    save: (_next, store) => new Promise<void>((resolve) => (land = () => void store().then(resolve))),
+    save: (_next, store) => new Promise<void>((resolve) => (land = () => store().then(resolve))),
   });
   fireEvent.click(chip());
   fireEvent.click(toggle());
@@ -150,9 +179,25 @@ test("while a save is pending, the chip and the switch show the asked value, dim
 
   fireEvent.click(toggle());
   assert.equal(saves.length, 1, "a press while it saves does nothing");
+  fireEvent.click(chip());
+  assert.equal(chip().getAttribute("aria-expanded"), "true", "a press on the disabled chip leaves the menu open");
 
-  await act(async () => land());
+  await land();
   await waitFor(() => assert.equal(toggle().getAttribute("aria-disabled"), "false"));
   assert.equal(toggle().getAttribute("aria-checked"), "false");
   assert.equal(saves.length, 1);
+  fireEvent.click(chip());
+  assert.equal(chip().getAttribute("aria-expanded"), "false", "once saved, the chip closes it again");
+});
+
+test("while a save is pending, Escape still closes the menu, and the disabled chip doesn't open it", async () => {
+  const { view, chip, toggle } = await mount(true, { save: () => new Promise<void>(() => {}) });
+  fireEvent.click(chip());
+  fireEvent.click(toggle());
+  await waitFor(() => assert.equal(chip().getAttribute("aria-disabled"), "true"));
+  fireEvent.keyDown(toggle(), { key: "Escape" });
+  await waitFor(() => assert.equal(chip().getAttribute("aria-expanded"), "false"));
+  fireEvent.click(chip());
+  assert.equal(chip().getAttribute("aria-expanded"), "false");
+  assert.equal(view.queryByRole("dialog"), null);
 });

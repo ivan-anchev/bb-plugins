@@ -1114,7 +1114,8 @@ and ends with its [memory](#read-and-edit-memory):
 
 - **Verification on** or **⚠ Verification off**: a chip at the top right whose
   menu holds the **Verify done handoffs** switch for this regional manager and
-  what the state means; a failed change shows why there.
+  what the state means; a failed change says why in the menu, or under the chip
+  while the menu is closed.
 - **Files changed in its own environment**: a warning with how many, and
   when its turn ended, while the latest read of its working tree found
   changed files (see [Edits it makes itself](#edits-it-makes-itself)).

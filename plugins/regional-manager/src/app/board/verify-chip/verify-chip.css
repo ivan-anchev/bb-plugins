@@ -3,6 +3,10 @@
    off, it takes the board's pills' warning tone on a 10% wash of it. The menu is Activity's .as-menu,
    bb's popover surface, opening from the chip's corner. Every colour is a bb theme token, and every
    class carries the `rmi-` prefix, since bb does not scope a plugin's stylesheet. */
+.rmi-verify {
+  display: flex;
+  flex-direction: column;
+}
 .rmi-verify-bar {
   display: flex;
   justify-content: flex-end;
@@ -106,13 +110,26 @@
     transform: scale(0.97);
   }
 }
+/* Why a change didn't save: the board's warning line (board.tsx OwnEdits) in the destructive text token. */
 .rmi-verify-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   margin: 0;
   padding: 0 8px 6px;
   font-size: 12px;
   line-height: 16px;
   color: var(--destructive-text);
   text-wrap: pretty;
+}
+.rmi-verify-error[data-place="board"] {
+  padding: 6px 8px 0;
+}
+.rmi-verify-error-glyph {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {
