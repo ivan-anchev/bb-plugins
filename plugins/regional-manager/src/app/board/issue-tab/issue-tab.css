@@ -23,8 +23,8 @@
 .rmi-detail ul {
   margin: 0;
 }
-/* Its head: status, id and kind on one quiet line, its pull request and agent at its end; under them
-   its title and headline, whole and wrapping, which its row on the board fades at its edge. */
+/* Its head: id and kind on one quiet line; under them its title and headline, whole and wrapping,
+   which its row on the board fades at its edge; then its properties (detail/properties.tsx). */
 .rmi-issue-head {
   display: flex;
   flex-direction: column;
@@ -37,15 +37,6 @@
   min-width: 0;
   font-size: 11px;
   line-height: 14px;
-}
-.rmi-issue-status {
-  color: var(--muted-foreground);
-}
-.rmi-issue-links {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
 }
 .rmi-detail .rmi-issue-title {
   text-wrap: pretty;
@@ -60,6 +51,103 @@
 .rmi-issue-headline[data-strong] {
   color: var(--foreground);
   font-weight: 500;
+}
+/* Its properties: a label column and a value per row, each row a chip's height. */
+.rmi-properties {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  row-gap: 2px;
+  column-gap: 8px;
+  align-items: start;
+  margin: 6px 0 0;
+}
+.rmi-properties dt {
+  font-size: 11px;
+  line-height: 24px;
+  color: var(--subtle-foreground);
+}
+.rmi-properties dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 24px;
+  margin: 0;
+  color: var(--muted-foreground);
+}
+.rmi-properties-status {
+  margin-left: 2px;
+  color: var(--foreground);
+}
+.rmi-assignee-none {
+  color: var(--subtle-foreground);
+}
+/* An assignee: its working ring, its provider's mark and its id on a muted chip; an earlier one
+   outlined, in subtle ink. */
+.rmi-assignee {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px 0 6px;
+  border-radius: 6px;
+  background: var(--muted);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+}
+.rmi-assignee[data-earlier] {
+  background: transparent;
+  box-shadow: inset 0 0 0 0.5px var(--border);
+}
+button.rmi-assignee {
+  cursor: pointer;
+}
+@media (hover: hover) {
+  button.rmi-assignee:hover .rmi-assignee-id {
+    color: var(--foreground);
+  }
+  button.rmi-assignee[data-earlier]:hover {
+    background: var(--state-hover);
+  }
+}
+/* why an outline, not a shadow: forced colors (a contrast theme) drop shadows, and `all: unset` cleared the outline. */
+.rmi-assignee:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: 0;
+}
+button.rmi-assignee:active {
+  transform: scale(0.97);
+}
+.rmi-assignee-ring {
+  display: block;
+  flex: none;
+  color: var(--muted-foreground);
+}
+.rmi-assignee-mark {
+  display: flex;
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+.rmi-assignee-mark > * {
+  width: 12px;
+  height: 12px;
+}
+.rmi-assignee[data-earlier] .rmi-assignee-mark {
+  opacity: 0.6;
+}
+.rmi-assignee-id {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+.rmi-assignee[data-earlier] .rmi-assignee-id {
+  color: var(--subtle-foreground);
 }
 .rmi-description {
   font-size: 13px;

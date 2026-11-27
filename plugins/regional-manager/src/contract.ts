@@ -56,9 +56,16 @@ const shownAgentSchema = z.object({ id: agentIdSchema, threadId: z.string().null
 export const issueTag = (coordinatorId: CoordinatorId, issueId: IssueId): string => `issue:${coordinatorId}/${issueId}`;
 
 /**
+ * An agent that held an issue, as its tab names it: its thread while bb still has it (null: none to
+ * open), the provider it runs on, and when it ended (null: it holds the issue), which orders the tab's
+ * Assignee field.
+ */
+const assigneeSchema = shownAgentSchema.extend({ providerId: executionSchema.shape.providerId, ended: z.object({ at: z.number() }).nullable() });
+
+/**
  * An issue in its tab, beyond its board row (which the tab reads with the board): what it is about,
- * its agent's brief, its done-criteria, what it depends on and what depends on it, every agent that held it with its
- * thread while bb still has it (null: none to open), and its feed, oldest first (entry.ts).
+ * its agent's brief, its done-criteria, what it depends on and what depends on it, every agent that
+ * held it, and its feed, oldest first (entry.ts).
  */
 const issueFeedSchema = z.object({
   description: descriptionSchema,
@@ -67,7 +74,7 @@ const issueFeedSchema = z.object({
   doneCriteria: doneCriteriaSchema,
   dependsOn: z.array(issueIdSchema),
   blocks: z.array(issueIdSchema),
-  agents: z.array(shownAgentSchema),
+  agents: z.array(assigneeSchema),
   entries: z.array(entrySchema),
 });
 export type IssueFeed = z.infer<typeof issueFeedSchema>;

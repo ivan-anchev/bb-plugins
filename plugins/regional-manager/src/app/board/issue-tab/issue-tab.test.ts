@@ -19,7 +19,7 @@ const issueTabCall = (raw: string, title: string) => ({ method: "openTab", optio
 
 const related = (relations: Record<string, Pick<IssueFeed, "dependsOn" | "blocks">>) => (issueId: string) => ({ ...FEED, ...relations[issueId] });
 
-test("the tab shows the issue's head, its title and headline whole with its status, id, kind, pull request and agent, then its own feed: its description, Done when and Activity", async () => {
+test("the tab shows the issue's head, its title and headline whole with its id and kind, its status, pull request and agents, then its own feed: its description, Done when and Activity", async () => {
   const title = "Retry failed webhook deliveries with exponential backoff, capped at five attempts, and record each one";
   const pr: PrSnapshot = { forge: "github", number: 41, url: "https://github.com/acme/notes/pull/41", state: "open", draft: false, review: "none", ci: "pass", headSha: SHA, failedChecks: [] };
   const { view, feedReads, tab } = await opened("WEB-1", [issue("WEB-1", { title, status: "in-review", headline: "✓ Verified: Retries land", agent: agent("a1"), pr }), issue("WEB-2", {})]);
@@ -30,8 +30,9 @@ test("the tab shows the issue's head, its title and headline whole with its stat
   assert.ok(head.getByRole("img", { name: "In review" }));
   assert.ok(head.getByText("✓ Verified: Retries land"));
   assert.equal(head.getByRole("link", { name: "Pull request 41, open, CI passing" }).getAttribute("href"), pr.url);
-  fireEvent.click(head.getByRole("button", { name: "Open a1's thread" }));
-  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_a1" }]);
+  fireEvent.click(head.getByRole("button", { name: "a2, Claude Code, not working. Open its thread" }));
+  assert.deepEqual(view.navigateCalls, [{ method: "toThread", threadId: "thr_a2" }]);
+  assert.equal(tab().getByRole("banner").querySelectorAll(".rmi-thread-link").length, 0, "no link to the latest agent: its chip opens it");
 
   assert.ok(tab().getByText(FEED.description));
   assert.deepEqual(headings(tab()), ["Done when", "Activity"], "no relations, no section for them");

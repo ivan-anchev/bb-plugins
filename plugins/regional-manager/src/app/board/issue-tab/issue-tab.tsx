@@ -13,7 +13,6 @@ import { ReadFailure } from "../../ui/read-failure.tsx";
 import { TabPage } from "../../ui/tab-page.tsx";
 import { useBoardIssue } from "../use-board-issue.ts";
 import { IssueDetail } from "./detail/issue-detail.tsx";
-import { IssueHeader } from "./issue-header.tsx";
 import { ISSUE_TAB, issueTabParamsSchema } from "./open-issue.ts";
 
 export const issueTab = {
@@ -48,7 +47,6 @@ function IssuePage({ coordinatorId, issueId }: { coordinatorId: CoordinatorId; i
       {issues !== undefined && issue === undefined && <Note>This regional manager has no issue {issueId}.</Note>}
       {issues !== undefined && issue !== undefined && (
         <article aria-label={issue.id} className="rmi-detail">
-          <IssueHeader issue={issue} />
           <IssueDetail coordinatorId={coordinatorId} issue={issue} issues={issues} />
         </article>
       )}

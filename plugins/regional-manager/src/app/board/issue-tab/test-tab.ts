@@ -5,7 +5,7 @@
 // BBP-19-shaped feed to mount it with.
 import "../../test-browser.ts";
 import assert from "node:assert/strict";
-import type { JsonValue } from "@get-bb/plugin-sdk/app";
+import type { JsonValue, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, within } from "@testing-library/react";
 import { coordinatorContract, issueTag, parseRoundBodyKey, type IssueFeed, type IssueRow } from "../../../contract.ts";
@@ -17,7 +17,7 @@ import { roundKeySchema, type Round, type RoundBody } from "../../../model/feed/
 import { issueIdSchema } from "../../../model/issue/issue.ts";
 import { coordinatorIdSchema } from "../../../model/role.ts";
 import type { CriterionResult, ShownVerdict } from "../../../model/verdict/verdict.ts";
-import { PROJECT, sidebarThread } from "../../test-sidebar.ts";
+import { PROJECT, PROVIDERS, sidebarThread } from "../../test-sidebar.ts";
 
 // why: jsdom has none of these; the working ring asks for Reduce motion and a canvas.
 Object.assign(globalThis, {
@@ -37,6 +37,8 @@ export const MANAGER_NAME = "Webhook retries";
 export const SHA = "4b1d9e0c2a7f3e5d6c8b9a0f1e2d3c4b5a697881";
 export const id = (raw: string) => issueIdSchema.parse(raw);
 export const agent = (raw: string) => ({ id: agentIdSchema.parse(raw), threadId: `thr_${raw}` });
+/** An agent as an issue's feed lists it: on `providerId`, ended at `endedAt` (null: it holds the issue). */
+export const assignee = (raw: string, providerId: string, endedAt: number | null): IssueFeed["agents"][number] => ({ ...agent(raw), providerId, ended: endedAt === null ? null : { at: endedAt } });
 
 export const issue = (raw: string, fields: Partial<IssueRow>): IssueRow => ({
   id: id(raw),
@@ -83,7 +85,7 @@ export const FEED: IssueFeed = {
   doneCriteria: CRITERIA,
   dependsOn: [],
   blocks: [],
-  agents: [agent("a1"), agent("a2")],
+  agents: [assignee("a1", "claude-code", 4_800), assignee("a2", "claude-code", null)],
   entries: [
     { kind: "created", at: 1_000, followUpOf: null },
     { kind: "agent-started", at: 2_000, agentId: A1 },
@@ -139,11 +141,11 @@ function bodyOfKey(key: string): RoundBody | null {
 
 /** How the plugin answers a comment posted from the tab: its output, a promise of it, or a throw. */
 type CommentAnswer = (input: unknown) => unknown;
-/** `managerListed`: whether bb lists the regional manager's thread, which names it (false: archived). */
-type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: CommentAnswer; managerListed?: boolean };
+/** `managerListed`: whether bb lists the regional manager's thread, which names it (false: archived); `live`, the other threads bb's sidebar lists, as its agents'. */
+type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: CommentAnswer; managerListed?: boolean; live?: readonly PluginSidebarThread[] };
 
 /** The tab mounted with `params`, on a board of `issues`; the reads and writes it made, and ways to make the plugin answer anew. */
-export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }), managerListed = true }: MountOptions = {}) {
+export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }), managerListed = true, live = [] }: MountOptions = {}) {
   const feedReads: unknown[] = [];
   const bodyReads: string[][] = [];
   const answers: unknown[] = [];
@@ -156,7 +158,8 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
     {
       experimental_rpcContract: coordinatorContract,
       experimental_panel: { openTab: () => true },
-      sidebarThreads: { status: "ready", threads: managerListed ? [sidebarThread(COORDINATOR.threadId, MANAGER_NAME)] : [], projects: [PROJECT] },
+      sidebarThreads: { status: "ready", threads: [...(managerListed ? [sidebarThread(COORDINATOR.threadId, MANAGER_NAME)] : []), ...live], projects: [PROJECT] },
+      providers: { status: "ready", providers: PROVIDERS },
       rpc: {
         coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }),
         board: () => ({ verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues: currentIssues }),
