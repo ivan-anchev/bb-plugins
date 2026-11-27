@@ -107,6 +107,7 @@ export const FEED: IssueFeed = {
 function verdictOf(n: number, results: readonly CriterionResult[]): ShownVerdict {
   return {
     state: "returned",
+    attachments: [],
     verifierThreadId: `thr_verifier_${n}`,
     headSha: SHA,
     checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 },

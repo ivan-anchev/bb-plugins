@@ -4,6 +4,7 @@
 // is never stored: `judge` derives it, so the board, the catch-up and the doorbell can't disagree.
 import { z } from "zod";
 import { modelRefSchema } from "../agent/execution.ts";
+import { attachmentsSchema, storedAttachmentsSchema } from "../attachment.ts";
 import { headline } from "../one-line.ts";
 import type { Check, CheckSubject } from "./check.ts";
 import { blockingDefectSchema, holds, severitySchema, MAX_FINDING_TITLE, triaged, triageSchema, type ReviewFinding, type Triaged } from "./review.ts";
@@ -123,6 +124,8 @@ const returnedSchema = z.object({
   model: modelRefSchema,
   sameModel: z.boolean(),
   settlement: settlementSchema.default({ kind: "checked", refused: null, ci: { kind: "none" } }),
+  /** The files the verifier attached as evidence (model/attachment.ts). */
+  attachments: storedAttachmentsSchema,
 });
 
 // Each state up to a returned verdict keeps `checkout`, the agent's environment as bb's git plugin
@@ -177,8 +180,8 @@ const shownSettlementSchema = z.discriminatedUnion("kind", [
   supersededSettlementSchema,
 ]);
 
-/** A returned verdict as it is shown (see shownVerdictSchema). */
-const shownReturnedSchema = returnedSchema.omit({ model: true, triage: true, mustFixFails: true, settlement: true, at: true }).extend({ settlement: shownSettlementSchema });
+/** A returned verdict as it is shown (see shownVerdictSchema). why attachments without the stored default: the board always gets them, [] for none. */
+const shownReturnedSchema = returnedSchema.omit({ model: true, triage: true, mustFixFails: true, settlement: true, at: true }).extend({ settlement: shownSettlementSchema, attachments: attachmentsSchema });
 
 /**
  * A verdict as the user is shown it: only what the board reads, the board's RPC payload. why

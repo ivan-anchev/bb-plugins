@@ -1,6 +1,6 @@
 // Attachment bytes: one row each in attachment_files, written in the transaction that stores the
-// handoff they belong to, and deleted only with their regional manager (removeCoordinator). Their
-// records live in that handoff's JSON (model/attachment.ts).
+// handoff or verdict they belong to, and deleted only with their regional manager (removeCoordinator).
+// Their records live in that handoff's or verdict's JSON (model/attachment.ts).
 import { z } from "zod";
 import { attachmentTypeSchema, type Attachment, type AttachmentId, type CopiedAttachment } from "../../model/attachment.ts";
 import type { CoordinatorId } from "../../model/role.ts";

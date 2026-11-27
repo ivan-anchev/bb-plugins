@@ -1,10 +1,11 @@
-// A handoff's attachments in its open round (round-body.tsx), as one quiet strip under its headline:
-// images first as small cropped thumbnails, then every other file as a chip with only its name. What
-// each shows, and a file's size, are on its card on hover and focus (the round's one card intent),
-// and in its accessible name, so touch and screen-reader users have them without hover. A thumbnail
-// opens bb's own lightbox, which pages through the strip's images; a Markdown chip opens its file
-// rendered in bb's side panel, as bb opens any file; any other chip downloads its file. Read with the
-// round's body, so a folded round loads none of them.
+// A handoff's or a verdict's attachments in its open round (round-body.tsx), as one quiet strip, the
+// agent's under the headline and the verifier's under the verdict's lines: images first as small
+// cropped thumbnails, then every other file as a chip with only its name. What each shows, and a
+// file's size, are on its card on hover and focus (the round's one card intent), and in its
+// accessible name, so touch and screen-reader users have them without hover. A thumbnail opens bb's
+// own lightbox, which pages through the strip's images; a Markdown chip opens its file rendered in
+// bb's side panel, as bb opens any file; any other chip downloads its file. Read with the round's
+// body, so a folded round loads none of them.
 import {
   experimental_ImageLightbox as ImageLightbox,
   experimental_PluginRpcCallError as RpcCallError,
@@ -25,13 +26,15 @@ import type { HoverCards } from "../../../issue/hover-card/use-hover-card.ts";
 type Props = {
   coordinatorId: CoordinatorId;
   attachments: readonly Attachment[];
-  /** Whose they are, for a screen reader: the strip has no visible label. */
-  label: string;
+  /** Whose they are: the handoff's agent's or the verdict's verifier's. The strip and each item say so in their accessible names, as nothing visible does. */
+  whose: Whose;
   /** The open round's one card intent, so one card shows at a time across the round. */
   cards: HoverCards;
 };
 
-export function Attachments({ coordinatorId, attachments, label, cards }: Props) {
+type Whose = "agent" | "verifier";
+
+export function Attachments({ coordinatorId, attachments, whose, cards }: Props) {
   const images = attachments.filter(isImage);
   const files = attachments.filter((attachment) => !isImage(attachment));
   const lightbox = useLightbox(images);
@@ -46,15 +49,15 @@ export function Attachments({ coordinatorId, attachments, label, cards }: Props)
   });
   return (
     <div className="rmi-attachments">
-      <ul className="rmi-strip" aria-label={label}>
+      <ul className="rmi-strip" aria-label={`${OWNER[whose]} attachments`}>
         {images.map((attachment, i) => (
           <li key={attachment.id} {...item(attachment)}>
-            <Thumb attachment={attachment} src={url(attachment)} onOpen={() => lightbox.open(i)} thumbRef={lightbox.thumbRef(attachment.id)} />
+            <Thumb attachment={attachment} owner={OWNER[whose]} src={url(attachment)} onOpen={() => lightbox.open(i)} thumbRef={lightbox.thumbRef(attachment.id)} />
           </li>
         ))}
         {files.map((attachment) => (
           <li key={attachment.id} {...item(attachment)}>
-            <Chip attachment={attachment} href={url(attachment)} onPress={() => (opensInPanel(attachment) ? void panel.open(attachment) : void saveFile({ fileName: attachment.name, url: url(attachment) }))} />
+            <Chip attachment={attachment} owner={OWNER[whose]} href={url(attachment)} onPress={() => (opensInPanel(attachment) ? void panel.open(attachment) : void saveFile({ fileName: attachment.name, url: url(attachment) }))} />
           </li>
         ))}
       </ul>
@@ -85,10 +88,13 @@ export function Attachments({ coordinatorId, attachments, label, cards }: Props)
 
 const cardKey = (attachment: Attachment): string => `attachment-${attachment.id}`;
 
+/** Whose they are, as their accessible names open. */
+const OWNER: Record<Whose, string> = { agent: "The agent's", verifier: "The verifier's" };
+
 /** An image, small and cropped to its top, the part of a capture that says what it is; pressing it opens it larger. */
-function Thumb({ attachment, src, onOpen, thumbRef }: { attachment: Attachment; src: string; onOpen: () => void; thumbRef: (element: HTMLButtonElement | null) => void }) {
+function Thumb({ attachment, owner, src, onOpen, thumbRef }: { attachment: Attachment; owner: string; src: string; onOpen: () => void; thumbRef: (element: HTMLButtonElement | null) => void }) {
   return (
-    <button ref={thumbRef} type="button" className="rmi-thumb" aria-label={`${attachment.name}: ${attachment.about}`} onClick={onOpen}>
+    <button ref={thumbRef} type="button" className="rmi-thumb" aria-label={`${owner} ${attachment.name}: ${attachment.about}`} onClick={onOpen}>
       {/* why no alt: the button's name says what it shows. */}
       <img src={src} alt="" width={48} height={32} loading="lazy" />
     </button>
@@ -100,12 +106,12 @@ function Thumb({ attachment, src, onOpen, thumbRef }: { attachment: Attachment; 
  * the file's URL: it stays a link to copy, while bb's desktop shell, the browser and the iOS app each
  * take a download their own way (saveFile).
  */
-function Chip({ attachment, href, onPress }: { attachment: Attachment; href: string; onPress: () => void }) {
+function Chip({ attachment, owner, href, onPress }: { attachment: Attachment; owner: string; href: string; onPress: () => void }) {
   return (
     <a
       href={href}
       className="rmi-chip"
-      aria-label={`${attachment.name}, ${sizeText(attachment.size)}: ${attachment.about}`}
+      aria-label={`${owner} ${attachment.name}, ${sizeText(attachment.size)}: ${attachment.about}`}
       onClick={(event) => {
         event.preventDefault();
         onPress();

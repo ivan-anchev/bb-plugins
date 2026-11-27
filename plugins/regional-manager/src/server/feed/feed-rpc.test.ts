@@ -33,8 +33,13 @@ const attached = (): CopiedAttachment[] => [
   { id: attachmentIdSchema.parse(randomUUID()), name: "e2e.log", about: "Full e2e run", type: "text/plain; charset=utf-8", size: 3, bytes: Buffer.from("ok\n") },
 ];
 
-/** A done handoff of the issue's agent, reviewed with one finding, verified as failing and sent back, as the plugin's own steps store them. */
-function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, ticket: string): Copied<Handoff> {
+/** What a verifier attached: a screenshot, as copy-in.ts copies it in. */
+const verified = (): CopiedAttachment[] => [
+  { id: attachmentIdSchema.parse(randomUUID()), name: "round.png", about: "Criterion 1: the round open", type: "image/png", size: 4, bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]) },
+];
+
+/** A done handoff of the issue's agent, reviewed with one finding, verified as failing with the verifier's `shots` attached, and sent back, as the plugin's own steps store them. */
+function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, ticket: string, shots: CopiedAttachment[]): Copied<Handoff> {
   const agentId = startAgent(store, issueId, ticket, coordinatorId);
   const handoff: Copied<Handoff> = {
     id: handoffIdSchema.parse(randomUUID()),
@@ -63,7 +68,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
   checker("verifier");
   const triage = TRIAGE;
   const criteria = [{ criterion: "npm test passes", result: "fail", shows: "Ran it.", evidence: "# fail 1" }] as const;
-  store.receiveVerdict(check.id, { state: "returned", verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], blocking: [], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
+  store.receiveVerdict(check.id, { state: "returned", attachments: shots, verifierThreadId: `thr_verifier_${ticket}`, headSha: SHA, checkout: CHECKOUT, criteria: [...criteria], blocking: [], findings: [], model: MODEL, sameModel: false, triage: [...triage] }, 3_500);
   store.claimFixRound(check.id, { kind: "none" });
   store.settleReturned(check.id, { kind: "sent-back" }, 3_600, null);
   return handoff;
@@ -87,7 +92,8 @@ function seeded() {
   const dependency = filedIssue(store, MANAGER, newIssue(), 1_000).id;
   const issueId = filedIssue(store, MANAGER, newIssue({ dependsOn: [dependency] }), 1_000).id;
   filedIssue(store, MANAGER, newIssue({ dependsOn: [issueId] }), 1_000);
-  const handoff = sentBack(store, MANAGER, issueId, "agent-1");
+  const shots = verified();
+  const handoff = sentBack(store, MANAGER, issueId, "agent-1", shots);
   const agentId = handoff.agentId;
   // why here: the move its verdict's going back made, observed after its outcome, as the watch logs it.
   store.observeStatuses(MANAGER, [{ issue: store.issue(MANAGER, issueId) ?? assert.fail("no issue"), status: "in-progress" }], 3_650);
@@ -105,11 +111,11 @@ function seeded() {
   store.observeStatuses(MANAGER, [{ issue, status: "todo" }], 4_400);
   store.observeStatuses(MANAGER, [{ issue, status: "backlog" }], 4_500);
 
-  const elsewhere = sentBack(store, OTHER_MANAGER, filedIssue(store, OTHER_MANAGER, newIssue(), 1_000).id, "agent-2");
+  const elsewhere = sentBack(store, OTHER_MANAGER, filedIssue(store, OTHER_MANAGER, newIssue(), 1_000).id, "agent-2", verified());
   store.removeCoordinator(OTHER_MANAGER);
   // why no inbox: these tests post nothing; posting is the harness's, below.
   const handlers = feedHandlers({ store, reader: createFeedReader(bb, store), inbox: { commentIssue: () => assert.fail("posted") } });
-  return { handlers, issueId, handoff, elsewhere };
+  return { handlers, issueId, handoff, shots, elsewhere };
 }
 
 const keysOf = (value: object) => Object.keys(value).sort();
@@ -218,7 +224,7 @@ test("through the feed RPC, each issue's agents are exactly their id, their thre
 });
 
 test("an opened round's body sends its handoff, its verdict and the findings with their title, origin and triage, and what each does to the work, never the reviewer's earlier answers; a key of a removed manager, or none of a round, reads null beside it", async () => {
-  const { handlers, issueId, handoff, elsewhere } = seeded();
+  const { handlers, issueId, handoff, shots, elsewhere } = seeded();
   const key = roundBodyKey(MANAGER, issueId, roundKeySchema.parse(`h-${handoff.id}`));
   const gone = roundBodyKey(OTHER_MANAGER, elsewhere.issueId, roundKeySchema.parse(`h-${elsewhere.id}`));
   const otherIssue = roundBodyKey(MANAGER, elsewhere.issueId, roundKeySchema.parse(`h-${handoff.id}`));
@@ -237,7 +243,13 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
     handed.attachments,
     handoff.attachments.map(({ bytes: _bytes, ...record }) => record),
   );
-  assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["blocking", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  const verdict = body.verdict?.state === "returned" ? body.verdict : assert.fail("no returned verdict");
+  assert.deepStrictEqual(keysOf(verdict), ["attachments", "blocking", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
+  assert.deepStrictEqual(verdict.attachments.map(keysOf), [["about", "id", "name", "size", "type"]], "the verifier's attachment's record, never its bytes");
+  assert.deepStrictEqual(
+    verdict.attachments,
+    shots.map(({ bytes: _bytes, ...record }) => record),
+  );
   assert.deepStrictEqual(body.findings.map(keysOf), [
     ["claim", "file", "line", "origin", "severity", "title", "triage"],
     ["claim", "file", "line", "origin", "severity", "title", "triage"],

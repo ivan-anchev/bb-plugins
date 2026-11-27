@@ -11,7 +11,8 @@ import { issueIdSchema } from "../../model/issue/issue.ts";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
-import { ANCHOR_RULE_TEXT, bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, failsVerification, levels, settled, startedAgent, textOf, threadIn, toCap, withoutLinks, type SendFailure } from "../test-harness.ts";
+import { memoryStorage } from "../memory-storage.ts";
+import { ANCHOR_RULE_TEXT, bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, failsVerification, levels, LOCAL_HOST, settled, startedAgent, textOf, threadIn, toCap, withoutLinks, type SendFailure } from "../test-harness.ts";
 import { takeUnread } from "../store/test-store.ts";
 
 const a1 = agentIdSchema.parse("a1");
@@ -497,6 +498,7 @@ test("an issue opened on the board sends of each verdict only what the board sho
     findings: [],
     blocking: [],
     sameModel: false,
+    attachments: [],
     settlement,
   });
   assert.deepEqual(await shown(), failed({ kind: "sending-back" }));
@@ -572,6 +574,7 @@ test("a commit bb reads other than the claimed one fails the verdict with bb's e
       findings: [],
       blocking: [],
       sameModel: false,
+      attachments: [],
       settlement: { kind: "checked", ci: { kind: "none" } },
     },
     "the board has bb's read to show",
@@ -1158,6 +1161,7 @@ test("issue_verdict's instructions stay within 3,600 characters, and the verifie
   const instructions = kit.tools().find(({ name }) => name === "issue_verdict")?.instructions ?? assert.fail("no instructions");
   assert.ok(instructions.length <= 3_600, `${instructions.length} characters`);
   assert.match(instructions, /result, shows, evidence[\s\S]*title, claim, anchor, steps[\s\S]*severity, title, detail/, "the instructions name the fields only");
+  assert.match(instructions, /- attachments: screenshots or recordings proving a visible criterion, saved in \$BB_THREAD_STORAGE; each about opens "Criterion N:"\./, "what to attach, where, and how its about line opens");
   const skill = readFileSync(join(import.meta.dirname, "..", "..", "..", "skills", "verifying", "SKILL.md"), "utf8").replace(/\s+/g, " ");
   const rules = (kit.configurationFor(verifier(), {}).instructions ?? assert.fail("no rules")).replace(/\s+/g, " ");
   for (const [place, text] of Object.entries({ rules, skill })) {
@@ -1522,4 +1526,38 @@ test("after a failed round, a round whose review was missed gives its verifier t
   const round = (await opened()).rounds.at(-1) ?? assert.fail("no round");
   assert.deepEqual(round.round.review.state, "missed");
   assert.deepEqual(round.body.findings.map(({ origin, triage }) => [origin, triage?.result]), [["unfixed", "anchored"]], "its tab shows the unfixed finding under the missed review");
+});
+
+test("issue_verdict keeps each attachment it could copy in as the verdict's record, names each it couldn't under Not attached with why, and records the verdict either way", async () => {
+  const { db, storage } = memoryStorage();
+  const { kit, coordinatorId, handOff, verifier, verdict } = await withAgent({ storage });
+  await handOff();
+  const verifierThreadId = verifier();
+  const evidence = `/storage/${verifierThreadId}/qa`;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+  kit.hostFiles.set(`${LOCAL_HOST}:${evidence}/round.png`, png);
+  kit.hostFiles.set(`${LOCAL_HOST}:${evidence}/run.mp4`, Buffer.alloc(10 * 1024 * 1024 + 1));
+
+  const attachments = [
+    { path: `${evidence}/round.png`, about: "Criterion 1: the round open at 549px" },
+    { path: `${evidence}/run.mp4`, about: "Criterion 2: the whole run" },
+  ];
+  const result = textOf(await kit.call("issue_verdict", { ...PASSES, attachments }, verifierThreadId));
+
+  const stored = verdict();
+  const kept = stored.state === "returned" ? stored.attachments : assert.fail(`the verdict is ${stored.state}`);
+  assert.deepEqual(
+    kept.map((attachment) => Object.keys(attachment).sort()),
+    [["about", "id", "name", "size", "type"]],
+  );
+  assert.deepEqual(kept, [{ id: kept[0]?.id, name: "round.png", about: "Criterion 1: the round open at 549px", type: "image/png", size: 4 }], "only the file it could take, as its record");
+  assert.deepEqual(kit.store.attachmentFile(coordinatorId, kept[0]?.id ?? assert.fail()), { name: "round.png", type: "image/png", bytes: png });
+  assert.match(result, /^Verdict recorded: 2 of 2 criteria passed\./);
+  assert.ok(result.endsWith(`Not attached, and recorded without it:\n- ${evidence}/run.mp4: it is over the 10 MB cap for one file; trim or compress it.`), result);
+
+  // As a release before verdicts kept attachments stored it: none in its JSON at all.
+  db.prepare("UPDATE checks SET verdict = json_remove(verdict, '$.attachments')").run();
+  assert.doesNotMatch(z.object({ verdict: z.string() }).parse(db.prepare("SELECT verdict FROM checks").get()).verdict, /attachments/);
+  const old = verdict();
+  assert.deepEqual(old.state === "returned" ? old.attachments : assert.fail(`the verdict is ${old.state}`), []);
 });

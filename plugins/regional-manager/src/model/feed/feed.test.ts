@@ -37,6 +37,7 @@ function handoff(n: number, agentId: AgentId, at: number, status: Handoff["statu
 function returned(results: readonly CriterionResult[], at: number, settlement: Extract<Verdict, { state: "returned" }>["settlement"], triage: Triaged[] = []): Verdict {
   return {
     state: "returned",
+    attachments: [],
     at,
     verifierThreadId: "thr_verifier",
     headSha: SHA,

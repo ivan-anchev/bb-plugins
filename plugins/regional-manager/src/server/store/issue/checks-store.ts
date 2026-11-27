@@ -44,8 +44,11 @@ type Returned = Extract<Verdict, { state: "returned" }>;
 /** Why no verdict will come of a check given up on: its verifier's thread, if it had one, and the reason. */
 export type GivenUp = Omit<Extract<Verdict, { state: "could-not-run" }>, "state" | "at">;
 
-/** A verifier's verdict as the store takes it: its triage only the verifier's result and reason for each finding, in the review's order, stored as it is. */
-export type ReceivedVerdict = Omit<Extract<StoredVerdict, { state: "returned" }>, "settlement" | "mustFixFails" | "at">;
+/**
+ * A verifier's verdict as the store takes it: its triage only the verifier's result and reason for
+ * each finding, in the review's order, stored as it is; its attachments still carrying their bytes.
+ */
+export type ReceivedVerdict = Copied<Omit<Extract<StoredVerdict, { state: "returned" }>, "settlement" | "mustFixFails" | "at">>;
 
 /** A check as it is made, with its first verdict (verdict.ts firstVerdict), which is stored as it is, no follow-up yet, and not accepted. */
 type NewCheck<C extends Check> = C & { verdict: FirstVerdict; followUpId: null; acceptedAt: null };
@@ -487,14 +490,16 @@ export function checksStore(db: Db) {
 
     /**
      * Stores a verifier's verdict, returned at `at` and not yet settled, if its verifier is still the
-     * check's running one; says whether it was. Nobody is told until it is settled. why mustFixFails
-     * is set here: every verdict returned now is judged by the must-fix rule; only the migration wrote false.
+     * check's running one; says whether it was. Its attachments' bytes are stored with it
+     * (insertAttachments), and none from a verifier no longer running. Nobody is told until it is
+     * settled. why mustFixFails is set here: every verdict returned now is judged by the must-fix rule; only the migration wrote false.
      */
     receiveVerdict(checkId: CheckId, verdict: ReceivedVerdict, at: number): boolean {
       return db().transaction(() => {
         const running = verdictOf(db, checkId);
         if (running?.state !== "running" || running.verifierThreadId !== verdict.verifierThreadId) return false;
-        writeVerdict(db, checkId, { ...verdict, at, mustFixFails: true, settlement: { kind: "pending" } });
+        const attachments = insertAttachments(db, ownerOf(checkId).coordinatorId, verdict.attachments);
+        writeVerdict(db, checkId, { ...verdict, attachments, at, mustFixFails: true, settlement: { kind: "pending" } });
         return true;
       })();
     },

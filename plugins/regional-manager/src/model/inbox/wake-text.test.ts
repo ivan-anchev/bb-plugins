@@ -47,7 +47,7 @@ function checkedWith(verdict: Verdict, asked: CapQuestion | null = null): Parame
 }
 
 const returned = (results: ("pass" | "fail" | "unverifiable")[]): Verdict => ({
-  state: "returned", at: 5_000,
+  state: "returned", attachments: [], at: 5_000,
   verifierThreadId: "thr_v",
   headSha: "0123456789abcdef0123456789abcdef01234567",
   checkout: { headSha: "0123456789abcdef0123456789abcdef01234567", changedFiles: [], changedFileCount: 0 },

@@ -990,7 +990,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerHandoffTool(bb, { store, verify, prs: prWatch, copyIn: attachmentCopier(bb) });
     registerCommentTool(bb, { store, inbox, turns });
     registerReviewTool(bb, { store, review });
-    registerVerdictTool(bb, { store, verify });
+    registerVerdictTool(bb, { store, verify, copyIn: attachmentCopier(bb) });
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });

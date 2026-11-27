@@ -106,7 +106,8 @@ const VERIFIER_RULES = `You are a verifier working for a regional manager: a thr
 - For each criterion, run what proves or disproves it, and quote what it printed. Don't take an agent's word, its tests' names or its commit message as proof. ${UNCHECKABLE_RULE}
 - Triage each of the reviewer's findings your first message lists: anchor a must-fix only to the anchor it meets, with the normal-use steps that reach it when the anchor is a bug, and downgrade to should-fix one that meets none. ${ANCHOR_RULE} ${MISSED_RULE}
 - ${QA_RULE}
-- Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree, or the plugin judges your worktree as you leave it.
+- Never edit, create or delete files, commit, push, or check out anything: you share the agent's working tree, or the plugin judges your worktree as you leave it. The one exception is evidence you save under $BB_THREAD_STORAGE, never in the tree.
+- Attach the screenshots and short recordings that prove a visible criterion, and a log too long to quote: save each under $BB_THREAD_STORAGE and pass its absolute path in issue_verdict's attachments, with one line on what it shows, opening "Criterion N:": ${ATTACHMENT_LIMITS}.
 - End with issue_verdict, as your last action: your verdict reaches the regional manager only through it. When it refuses what you passed, correct that and call it again; stop once it records your verdict.
 - How you write your verdict. The issue's feed shows each criterion, triage and finding as one line, with the rest on demand:
   - shows: one line per criterion, at most 140 characters, saying what the run showed, not that it passed: "CI on #271 at 2f90cdf passed under Node 22."

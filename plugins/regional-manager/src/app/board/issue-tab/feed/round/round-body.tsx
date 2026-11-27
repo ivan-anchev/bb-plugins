@@ -1,6 +1,6 @@
 // An open round as a short list: what was handed off, in full, with its attachments as a strip
-// (attachments.tsx); a line per finding (lines/finding-lines.tsx); a line per thing that failed it (lines/verdict-lines.tsx); what became of it;
-// and its report, folded. Each line opens on press to its detail, and a finding's shows its card on
+// (attachments.tsx); a line per finding (lines/finding-lines.tsx); a line per thing that failed it (lines/verdict-lines.tsx),
+// with the verifier's attachments as a strip of their own; what became of it; and its report, folded. Each line opens on press to its detail, and a finding's shows its card on
 // hover and focus. The summary and the outcome come from the feed's read; the rest is the round's
 // body, read with the keyed roundBodies query only while the round is open, so a folded round costs
 // nothing. why no step captions, counts or passes: the lines are the review and the verdict, the
@@ -22,7 +22,7 @@ import { AgentName, MovedTo, When, type FeedAgents } from "../byline.tsx";
 import { Attachments } from "./attachments.tsx";
 import { FindingLines } from "./lines/finding-lines.tsx";
 import { NoteLine } from "./lines/fold-line.tsx";
-import { VerdictLines } from "./lines/verdict-lines.tsx";
+import { verdictLines } from "./lines/verdict-lines.tsx";
 
 type Where = { coordinatorId: CoordinatorId; issueId: IssueId };
 
@@ -44,6 +44,9 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
   const cards = useHoverCards();
   const loaded = body ?? null;
   const loading = body === undefined && error === null;
+  const lines = loaded?.verdict == null ? null : verdictLines(loaded.verdict, round.by, cards);
+  // why the key: a refresh can move the strip across the outcome row (CI passing drops its last line), and the key keeps it, its open lightbox included, mounted through the move.
+  const verifierStrip = loaded?.verdict?.state === "returned" && <Attachments key="verifier-strip" coordinatorId={coordinatorId} attachments={loaded.verdict.attachments} whose="verifier" cards={cards} />;
   return (
     <div className="rmi-round-body" {...cards.board}>
       {error !== null && (
@@ -53,16 +56,19 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
       )}
       {body === null && <p className="rmi-round-note">This round is no longer on record.</p>}
       <p className="rmi-round-said">{headlineOf(round)}</p>
-      {loaded?.handoff != null && <Attachments coordinatorId={coordinatorId} attachments={loaded.handoff.attachments} label="The agent's attachments" cards={cards} />}
+      {loaded?.handoff != null && <Attachments coordinatorId={coordinatorId} attachments={loaded.handoff.attachments} whose="agent" cards={cards} />}
       {round.review.state === "missed" && <ReviewMissed why={loaded?.reviewMissed ?? null} />}
       {loaded !== null && <FindingLines findings={loaded.findings} own={ownFindingsOf(loaded)} cards={cards} />}
-      {loaded?.verdict != null && <VerdictLines verdict={loaded.verdict} by={round.by} cards={cards} />}
+      {lines}
+      {/* why under the outcome row when there are no lines: right under the findings, they would read as the agent's. */}
+      {lines !== null && verifierStrip}
       {loading && (
         <p role="status" className="rmi-round-note">
           Loading round {round.number}…
         </p>
       )}
       <Outcome round={round} agents={agents} />
+      {lines === null && verifierStrip}
       {loaded?.handoff != null && <Report handoff={loaded.handoff} />}
     </div>
   );

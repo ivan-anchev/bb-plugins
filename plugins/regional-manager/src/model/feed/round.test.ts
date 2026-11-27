@@ -50,6 +50,7 @@ const REPORTED: Review = { state: "reported", at: REVIEWED_AT, reviewerThreadId:
 
 const RETURNED: Verdict = {
   state: "returned",
+  attachments: [],
   at: 3_500,
   verifierThreadId: "thr_verifier",
   headSha: SHA,
