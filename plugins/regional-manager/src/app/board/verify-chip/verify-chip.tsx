@@ -34,7 +34,8 @@ export function VerifyChip({ coordinatorId, verify }: { coordinatorId: Coordinat
           </Trigger>
           <Content className="rmi-verify-menu" aria-label="Verification" align="end" sideOffset={4} collisionPadding={8}>
             <Switch checked={shown} onChange={change} pending={pending} label="Verify done handoffs" hint={shown ? ON_MEANS : OFF_MEANS} />
-            {failure !== null && <Failure place="menu">{failure}</Failure>}
+            {/* why `open` too: the menu stays mounted while it animates out, and the line under the chip takes over as it starts. */}
+            {failure !== null && open && <Failure place="menu">{failure}</Failure>}
           </Content>
         </Root>
       </div>

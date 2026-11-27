@@ -165,6 +165,27 @@ test("a save that fails after the menu closed says why under the chip, and in th
   assert.equal(view.getAllByRole("alert").length, 1, "in the menu instead, not twice");
 });
 
+test("a save that fails with the menu open, then Escape: one alert while the menu animates out, under the chip", async () => {
+  // why a stylesheet: the menu stays mounted while its close animation runs, as in bb; jsdom runs no
+  // animation, so the menu stays in its closing state for the rest of the test.
+  const closing = document.head.appendChild(document.createElement("style"));
+  closing.textContent = '.rmi-verify-menu[data-state="closed"] { animation-name: rmi-verify-menu-out; }';
+  try {
+    const { view, chip, menu, toggle } = await mount(true, { save: () => Promise.reject(new Error("bb is restarting")) });
+    fireEvent.click(chip());
+    fireEvent.click(toggle());
+    await menu().findByRole("alert");
+    fireEvent.keyDown(toggle(), { key: "Escape" });
+    await waitFor(() => assert.equal(chip().getAttribute("aria-expanded"), "false"));
+    assert.ok(document.querySelector('.rmi-verify-menu[data-state="closed"]'), "the menu is still animating out");
+    const alerts = view.getAllByRole("alert");
+    assert.equal(alerts.length, 1, "one alert");
+    assert.equal(alerts[0]?.closest(".rmi-verify-menu"), null, "under the chip, not in the closing menu");
+  } finally {
+    closing.remove();
+  }
+});
+
 test("while a save is pending, the chip and the switch show the asked value, dimmed with aria-disabled, and the switch ignores presses", async () => {
   let land = async () => {};
   const { chip, toggle, saves } = await mount(true, {
