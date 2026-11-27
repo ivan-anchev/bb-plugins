@@ -16,11 +16,11 @@ afterEach(cleanup);
 let reduce = true;
 Object.assign(globalThis, { matchMedia: () => ({ get matches() { return reduce; }, addEventListener() {}, removeEventListener() {} }) });
 
-/** The animation frames the working ring asked for since the last count. why by caller: the manager's avatar (blob-avatar) asks for frames of its own, whenever it wakes. */
+/** The animation frames the page asked for since the last count. */
 let frames = 0;
 const askFrame = window.requestAnimationFrame.bind(window);
 window.requestAnimationFrame = (callback) => {
-  if (new Error().stack?.includes("/ui/motion/ring.ts") === true) frames += 1;
+  frames += 1;
   return askFrame(callback);
 };
 
@@ -53,6 +53,8 @@ const BBP_76 = issue("BBP-76", { title: "Rounds 01: cap an issue at three failed
 const BBP_76_AGENTS = [assignee("a68", "claude-code", at("20:09")), assignee("a71", "claude-code", at("21:04"))];
 
 const feedWith = (agents: IssueFeed["agents"]) => () => ({ ...FEED, agents });
+/** A feed of `agents` with no entries. why: the ring tests count the page's animation frames, and the manager's avatar in a byline animates on frames of its own. */
+const quietFeedWith = (agents: IssueFeed["agents"]) => () => ({ ...FEED, agents, entries: [] });
 const live = (threadId: string, status: PluginSidebarThread["status"]): PluginSidebarThread => ({ ...sidebarThread(threadId, threadId), status });
 
 const head = (tab: ReturnType<typeof within>) => within(tab.getByRole("banner"));
@@ -134,7 +136,7 @@ test("an agent bb runs a turn of has the ring and one at rest has none; an unkno
   // why off-type: a status newer than this SDK, as bb may send one.
   const newer = { ...live("thr_a3", "idle"), status: "compacting" } as unknown as PluginSidebarThread;
   const agents = [assignee("a1", "claude-code", 1_000), assignee("a2", "claude-code", 2_000), assignee("a3", "claude-code", 3_000), assignee("a4", "claude-code", null)];
-  const { tab } = await opened("WEB-1", [issue("WEB-1", { status: "in-progress" })], { feedOf: feedWith(agents), live: [live("thr_a4", "starting"), live("thr_a2", "idle"), live("thr_a1", "stopping"), newer] });
+  const { tab } = await opened("WEB-1", [issue("WEB-1", { status: "in-progress" })], { feedOf: quietFeedWith(agents), live: [live("thr_a4", "starting"), live("thr_a2", "idle"), live("thr_a1", "stopping"), newer] });
   const ringed = chips(tab()).map((chip) => [chip.textContent, chip.querySelector("canvas.rmi-assignee-ring") !== null]);
   assert.deepEqual(ringed, [["a4", true], ["a3", false], ["a2", false], ["a1", true]]);
   await new Promise((resolve) => setTimeout(resolve, 100));
@@ -145,7 +147,7 @@ test("with Reduce motion the ring asks for no animation frame and rests on eight
   reduce = true;
   frames = 0;
   arcs.length = 0;
-  const { tab } = await opened("WEB-1", [issue("WEB-1", { status: "in-progress" })], { feedOf: feedWith([assignee("a1", "claude-code", null)]), live: [live("thr_a1", "active")] });
+  const { tab } = await opened("WEB-1", [issue("WEB-1", { status: "in-progress" })], { feedOf: quietFeedWith([assignee("a1", "claude-code", null)]), live: [live("thr_a1", "active")] });
   assert.ok(chips(tab())[0]?.querySelector("canvas.rmi-assignee-ring"), "it still shows the agent at work");
   await new Promise((resolve) => setTimeout(resolve, 100));
   assert.equal(frames, 0);

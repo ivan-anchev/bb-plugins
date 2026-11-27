@@ -115,8 +115,10 @@ button.rmi-assignee {
     background: var(--state-hover);
   }
 }
+/* why an outline, not a shadow: forced colors (a contrast theme) drop shadows, and `all: unset` cleared the outline. */
 .rmi-assignee:focus-visible {
-  box-shadow: 0 0 0 1.5px var(--ring);
+  outline: 1.5px solid var(--ring);
+  outline-offset: 0;
 }
 button.rmi-assignee:active {
   transform: scale(0.97);
