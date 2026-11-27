@@ -27,6 +27,23 @@ test("an HTML example's link stays code: no link is found in its tag, and the wo
   assert.deepEqual(read, { html: [], words: "See |the guide|.", code: ['<a href="https://example.com/guide">', "</a>"], links: [] });
 });
 
+test("tags side by side, and tags beside code, are one piece of code each, as written: no backticks gained and no tag handed on as HTML", () => {
+  /** Each text, then its code and its words as read back, one node after another. */
+  const cases: [string, string[], string][] = [
+    ["See <span><b>example</b></span>.", ["<span><b>", "</b></span>"], "See |example|."],
+    ["<b>`x`</b> and `y`<i>", ["<b>`x`</b>", "`y`<i>"], " and "],
+    ["<a title='`'>x</a><b title='``'>", ["<a title='`'>", "</a><b title='``'>"], "x"],
+    ["x <b> `y`", ["<b>", "y"], "x | "],
+    ["| a |\n|---|\n| <b><i>z</i></b> |", ["<b><i>", "</i></b>"], "a|z"],
+  ];
+  for (const [text, code, words] of cases) {
+    const read = readBack(inertHtml(text));
+    assert.deepEqual(read.html, [], text);
+    assert.deepEqual(read.code, code, text);
+    assert.equal(read.words, words, text);
+  }
+});
+
 test("an HTML comment that wraps a fence, then a fenced <img onerror> and <script>, hands on no HTML: the comment is code, and the fence's HTML stays code", () => {
   const read = readBack(inertHtml('<!--\n```\n-->\n```\n<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```'));
   assert.deepEqual(read.html, []);
@@ -36,7 +53,7 @@ test("an HTML comment that wraps a fence, then a fenced <img onerror> and <scrip
 test("an HTML comment that opens a fence it never closes hands on no HTML", () => {
   const read = readBack(inertHtml('<!--\n```\n-->\n<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```\n\nafter'));
   assert.deepEqual(read.html, []);
-  assert.deepEqual(read.code, ["<!--\n```\n-->", '<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```']);
+  assert.deepEqual(read.code, ['<!--\n```\n-->\n<img src=x onerror="window.hit=1">\n<script>window.hit=2</script>\n```'], "the comment and the HTML block after it, as written");
   assert.equal(read.words, "after");
 });
 

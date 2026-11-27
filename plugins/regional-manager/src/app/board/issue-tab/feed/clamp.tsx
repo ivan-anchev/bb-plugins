@@ -1,8 +1,8 @@
 // Text in an issue's feed cut to a few lines while it runs longer: a machine line to one, a decision
-// or a comment to three, a decision's whole first sentence however long. Cut, it is a button that
-// opens it whole, and closes it again; text that fits is plain text, with nothing to press. A press
-// on a link in it is the link's alone, and a link focused in it opens it, so focus never rests on a
-// link the cut hides. Screen readers read it whole either way: the cut is only drawn.
+// or a comment to three, a decision's whole first sentence however long, and a line past it. Cut, it
+// is a button that opens it whole, and closes it again; text that fits is plain text, with nothing to
+// press. A press on a link in it is the link's alone, and a link focused in it opens it, so focus
+// never rests on a link the cut hides. Screen readers read it whole either way: the cut is only drawn.
 import { useLayoutEffect, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 /** `whole`: the part of the drawn text the cut never hides, as a decision's first sentence (null: none yet); none given, the cut is `lines` alone. */
@@ -26,7 +26,7 @@ export function Clamp({ lines, whole, className, children }: ClampProps) {
 }
 
 /**
- * The lines the shut text shows, `lines` or as many as its `whole` part runs over, and whether the
+ * The lines the shut text shows, `lines` or enough for its `whole` part (foldLines), and whether the
  * text runs past them, measured whenever its box resizes. why only while shut: open, it fits, and it
  * must stay pressable to close. why an effect, and the lines set on the box before the cut is read:
  * both are the browser's layout, and the cut depends on the lines.
@@ -51,10 +51,14 @@ function useCut(text: HTMLElement | null, lines: ClampProps["lines"], whole: Cla
   return { cut, shown };
 }
 
-/** The lines the shut text shows: `lines`, or as many as its `whole` part runs over. */
+/**
+ * The lines the shut text shows: `lines`, or as many as its `whole` part runs over and one more. why
+ * one more: the cut's ellipsis is drawn over the end of the last line shown, taking the characters it
+ * needs from there, so it must fall on a line past the part it never hides.
+ */
 function foldLines(text: HTMLElement, lines: ClampProps["lines"], whole: ClampProps["whole"]): number {
   const kept = whole === undefined ? null : whole(text);
-  return kept === null ? lines : Math.max(lines, linesOf(kept));
+  return kept === null ? lines : Math.max(lines, linesOf(kept) + 1);
 }
 
 /**

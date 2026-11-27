@@ -1,10 +1,9 @@
 // A decision in an issue's feed, between its rounds: a question the regional manager put to the user
 // about the issue, with its options and the user's answer; or a decision it recorded on the issue,
-// as Markdown, cut to three lines or its whole first sentence, if longer, and opening on press, as a
-// comment is. An open question is
-// answered here, from its numbered rows: an option, or the user's own words. Asked from its issue's
-// row under Needs you, an open one scrolls to the middle of the tab, rings briefly, and takes focus
-// on its first row.
+// as Markdown, cut to three lines or, if longer, its whole first sentence and a line past it, and
+// opening on press, as a comment is. An open question is answered here, from its numbered rows: an
+// option, or the user's own words. Asked from its issue's row under Needs you, an open one scrolls to
+// the middle of the tab, rings briefly, and takes focus on its first row.
 import "./decision.css";
 import { useEffect, useRef, type AnimationEvent } from "react";
 import type { AskedDecision, IssueDecision } from "../../../../../model/decision.ts";
