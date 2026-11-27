@@ -7,7 +7,7 @@ import { memoryStorage } from "../memory-storage.ts";
 import { askedOnNoIssue } from "../store/test-store.ts";
 import { coordinating, HEAD, ISSUE, settled, startedAgent, textOf, toCap } from "../test-harness.ts";
 
-const REPORT = { summary: "Done", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const REPORT = { summary: "Done", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 
 /**
  * A manager with an issue in each place the open work reads, and in places it leaves out: working,

@@ -8,7 +8,7 @@ import { takeUnread } from "../store/test-store.ts";
 const a1 = agentIdSchema.parse("a1");
 const a2 = agentIdSchema.parse("a2");
 const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
-const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
+const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], attachments: [] };
 const DONE = { ...REPORT, status: "done", headSha: HEAD };
 const BLOCKED = { ...REPORT, status: "blocked", summary: "Needs the staging key", did: ["Wrote the retry loop, uncommitted"] };
 const FAILS = {

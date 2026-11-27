@@ -9,7 +9,8 @@ import { coordinatorIdSchema } from "../../model/role.ts";
 import { checkIdSchema } from "../../model/verdict/check.ts";
 import type { Review } from "../../model/verdict/review.ts";
 import { outcome, type CriterionResult, type Verdict } from "../../model/verdict/verdict.ts";
-import { handoffText, updatesText, type Lookups } from "./inbox-text.ts";
+import { handoffFieldsText, handoffText, updatesText, type Lookups } from "./inbox-text.ts";
+import { attachmentIdSchema } from "../../model/attachment.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import type { Check } from "../../model/verdict/check.ts";
 import type { PrSnapshot } from "../../model/verdict/pr.ts";
@@ -35,6 +36,7 @@ const handoff: Handoff = {
   concerns: [],
   deviations: [],
   findings: [],
+  attachments: [],
   delivery: { kind: "commit", headSha: SHA, prUrl: null },
 };
 
@@ -234,4 +236,23 @@ test("a build parent's final check that passed names the follow-up its settling 
   const event: StoredEvent = { id: 3, at: 7_000, event: { kind: "checked", issueId, checkId: final.id, asked: null } };
   const lookups = { ...lookupsOf([]), check: () => final };
   assert.match(updatesText([event], lookups), /It passed, so the plugin filed every finding its rounds held without blocking it, its reviewers' and its verifiers' own, as WEB-2 "Follow-ups from WEB-1: Add retries"/);
+});
+
+test("a handoff's text names each attachment by name, kind, size and what it shows, never its path or bytes; one with none has no Attachments section", () => {
+  const attached: Handoff = {
+    ...handoff,
+    attachments: [
+      { id: attachmentIdSchema.parse("1c4e6a2b-3d5f-4a7b-8c9d-0e1f2a3b4c5d"), name: "sheet.png", about: "Criterion 2: the sheet open on WEB-1", type: "image/png", size: 186_368 },
+      { id: attachmentIdSchema.parse("2d5f7b3c-4e6a-4b8c-9d0e-1f2a3b4c5d6e"), name: "e2e.log", about: "Full e2e run, 38 specs green", type: "text/plain; charset=utf-8", size: 2_621_440 },
+    ],
+  };
+  const text = handoffFieldsText(attached);
+  assert.ok(
+    text.endsWith(
+      "#### Attachments\n\nFiles the user sees in the issue's feed; you get their names, not their contents.\n\n- sheet.png (image, 182 KB): Criterion 2: the sheet open on WEB-1\n- e2e.log (text, 2.5 MB): Full e2e run, 38 specs green",
+    ),
+    text,
+  );
+  assert.doesNotMatch(text, /thread-storage|\/storage\/|1c4e6a2b|\u0089PNG/, "no source path, id or bytes");
+  assert.doesNotMatch(handoffFieldsText(handoff), /Attachments/);
 });

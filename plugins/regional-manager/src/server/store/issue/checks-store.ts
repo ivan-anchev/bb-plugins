@@ -6,6 +6,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { agentIdSchema, type AgentId } from "../../../model/agent/agent.ts";
 import { executionSchema } from "../../../model/agent/execution.ts";
+import type { Copied } from "../../../model/attachment.ts";
 import { handoffIdSchema, handoffReportSchema, type HandoffId, type Handoff } from "../../../model/agent/handoff.ts";
 import { doneCriteriaSchema, issueIdSchema, type Issue, type IssueId } from "../../../model/issue/issue.ts";
 import { isVerified, kindSchema } from "../../../model/issue/kind.ts";
@@ -23,6 +24,7 @@ import { capAsks, capQuestionsOf, capQuestionText, countedFailures } from "../..
 import { readInOrder } from "../../../model/verdict/rounds/delta.ts";
 import { filedWhen, followUpPlan, leftoversOf, ownFindingsOf, type FiledWhen, type FollowUpOrigin } from "../../../model/verdict/rounds/follow-up.ts";
 import { numberedRounds } from "../../../model/feed/feed.ts";
+import { insertAttachments } from "../attachments-store.ts";
 import { decisionsOf, insertDecision, insertEvent } from "../inbox/inbox-store.ts";
 import { json, jsonOrNull, nullableJson, type Db } from "../rows.ts";
 import { countFixRound } from "./agents-store.ts";
@@ -317,13 +319,14 @@ export function checksStore(db: Db) {
      * for a verifier and announced with its verdict later, or else announced at once. A done handoff
      * supersedes every earlier check of its issue still waiting. A blocked or gave-up one, and a done
      * one nothing verifies, is announced at once. The check keeps `branch`, the one its work was on
-     * as it was handed off (check.ts).
+     * as it was handed off (check.ts). Its attachments' bytes are stored with it (insertAttachments),
+     * so a handoff never names a file that isn't stored, and no file is stored for a handoff that isn't.
      * Returns its check (null: not done).
      */
-    insertHandoff(handoff: Handoff, checkout: CheckoutRead, branch: string | null): Check | null {
-      const { id, coordinatorId, issueId, agentId, at, turnSeq, ...report } = handoff;
+    insertHandoff(handoff: Copied<Handoff>, checkout: CheckoutRead, branch: string | null): Check | null {
+      const { id, coordinatorId, issueId, agentId, at, turnSeq, attachments: copied, ...report } = handoff;
       return db().transaction(() => {
-        const stored = handoffReportSchema.parse(report);
+        const stored = handoffReportSchema.parse({ ...report, attachments: insertAttachments(db, coordinatorId, copied) });
         db().prepare("INSERT INTO handoffs (id, coordinator_id, issue_id, agent_id, report, turn_seq, at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, coordinatorId, issueId, agentId, JSON.stringify(stored), turnSeq, at);
         if (stored.status !== "done") {
           insertEvent(db, coordinatorId, { kind: "handoff", issueId, agentId, handoffId: id, status: stored.status }, at);

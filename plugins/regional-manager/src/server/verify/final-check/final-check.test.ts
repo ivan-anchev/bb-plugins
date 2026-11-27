@@ -303,7 +303,7 @@ test("6: with verification off no verifier starts, the parent waits In review un
   await kit.call("issue_create", research, threadId);
   await kit.call("issue_create", { ...research, title: "Vault", parent: "WEB-1" }, threadId);
   const researcher = threadIn(textOf(await kit.call("agent_start", { issue: "WEB-2" }, threadId)));
-  await kit.call("agent_handoff", { status: "done", summary: "Vault", did: [], evidence: [], concerns: [], deviations: [], findings: [], report: "Vault." }, researcher);
+  await kit.call("agent_handoff", { status: "done", summary: "Vault", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], report: "Vault." }, researcher);
   await kit.idle(researcher, "Handed off.");
   kit.clock.now += 10 * 60_000;
   await kit.tick();

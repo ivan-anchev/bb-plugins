@@ -6,6 +6,7 @@ import { issueBranch, type Agent } from "../../model/agent/agent.ts";
 import type { Decision, DecisionId } from "../../model/decision.ts";
 import { firstLine, type Comment, type CommentId } from "../../model/feed/comment.ts";
 import type { Handoff, HandoffId } from "../../model/agent/handoff.ts";
+import { attachmentsText } from "../../model/attachment.ts";
 import type { StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { filesText } from "../../model/inbox/own-tree.ts";
 import { askedOf, checkedOf, failedVerification, issueName, titled } from "../../model/inbox/wake-text.ts";
@@ -420,7 +421,7 @@ function finalNextStep({ id, issueId, verdict }: FinalCheck, view: IssueView | n
   }
 }
 
-/** A handoff's own fields: its status, summary, and commit and pull request, then every item of every list under its `####` heading. */
+/** A handoff's own fields: its status, summary, and commit and pull request, then every item of every list under its `####` heading, and its attachments by name when it has any. */
 export function handoffFieldsText(handoff: Handoff): string {
   const head = [`Status: ${handoff.status}`, `Summary: ${handoff.summary}`];
   const delivery = handoff.status === "done" ? handoff.delivery : null;
@@ -434,7 +435,8 @@ export function handoffFieldsText(handoff: Handoff): string {
       ["Findings", handoff.findings],
     ] as const
   ).map(([name, items]) => `#### ${name}\n\n${items.length === 0 ? "None." : items.map((item) => `- ${item.replaceAll("\n", "\n  ")}`).join("\n")}`);
-  return [head.join("\n"), ...lists].join("\n\n");
+  const attachments = attachmentsText(handoff.attachments);
+  return [head.join("\n"), ...lists, ...(attachments === "" ? [] : [attachments])].join("\n\n");
 }
 
 /** Where a report was saved, and that handing it on is the regional manager's. */

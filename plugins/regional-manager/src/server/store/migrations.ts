@@ -290,6 +290,11 @@ export const MIGRATIONS: readonly string[] = [
   // The option the regional manager recommended when it asked (decision.ts); null: none, as for
   // every question asked before, and the plugin's own at a cap.
   `ALTER TABLE decisions ADD COLUMN recommended TEXT`,
+
+  // Attachment bytes (attachments-store.ts): a handoff's files, their records kept in its JSON.
+  // why a BLOB and not a file: it is written in the handoff's one transaction, and goes with its manager.
+  `CREATE TABLE attachment_files (id TEXT PRIMARY KEY, coordinator_id TEXT NOT NULL REFERENCES coordinators (id),
+     type TEXT NOT NULL, bytes BLOB NOT NULL)`,
 ];
 
 /** The trigger `name`: after each row `on` names, one more write of the issue `issue` of the regional manager `manager`. */

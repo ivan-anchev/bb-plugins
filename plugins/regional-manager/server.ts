@@ -36,6 +36,9 @@ import { toldWrites } from "./src/server/store/told-writes.ts";
 import { registerCommentTool } from "./src/server/feed/comment-tool.ts";
 import { registerCrewTools } from "./src/server/tools/crew-tools.ts";
 import { registerHandoffTool } from "./src/server/tools/handoff-tool.ts";
+import { attachmentCopier } from "./src/server/attachments/copy-in.ts";
+import { attachmentRoute } from "./src/server/attachments/attachment-route.ts";
+import { ATTACHMENT_ROUTE } from "./src/model/attachment.ts";
 import { createFinalChecks } from "./src/server/verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./src/server/verify/verdict-tool.ts";
 import { createVerify } from "./src/server/verify/verify.ts";
@@ -96,7 +99,7 @@ export default function plugin(host: BbPluginApi): void {
   registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshBoard });
   registerIssueTools(bb, { store, issues });
   registerAgentTools(bb, { store, agents });
-  registerHandoffTool(bb, { store, verify, prs: prWatch });
+  registerHandoffTool(bb, { store, verify, prs: prWatch, copyIn: attachmentCopier(bb) });
   registerCommentTool(bb, { store, inbox, turns });
   registerReviewTool(bb, { store, review });
   registerVerdictTool(bb, { store, verify });
@@ -122,6 +125,8 @@ export default function plugin(host: BbPluginApi): void {
     for (const { id } of store.coordinators()) issueTags.publish(id);
     await inbox.tick(Date.now());
   });
+
+  bb.http.route("GET", ATTACHMENT_ROUTE, attachmentRoute(store));
 
   bb.rpc.register(
     publishedContract,

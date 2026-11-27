@@ -5,7 +5,7 @@ import { wakes } from "../../model/inbox/inbox-event.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, issueIn, settled, startedAgent, textOf, newSubmission } from "../test-harness.ts";
 
-const DONE = { status: "done", summary: "Retries land", did: ["Added retries"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
+const DONE = { status: "done", summary: "Retries land", did: ["Added retries"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD };
 
 /** A regional manager, idle, with an agent at work on an issue, and the user's question on it, read in a catch-up. */
 async function asked() {

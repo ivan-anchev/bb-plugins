@@ -14,7 +14,7 @@ const a1 = agentIdSchema.parse("a1");
 const a2 = agentIdSchema.parse("a2");
 const COMMITTED = "1111111111111111111111111111111111111111";
 const LATER = "2222222222222222222222222222222222222222";
-const BLOCKED = { status: "blocked", summary: "Needs the staging key", did: ["Wrote the retry loop"], evidence: [], concerns: [], deviations: [], findings: [], headSha: COMMITTED };
+const BLOCKED = { status: "blocked", summary: "Needs the staging key", did: ["Wrote the retry loop"], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: COMMITTED };
 const WORKTREE = { kind: "worktree" };
 const SANDBOX = { kind: "provider", environmentProviderId: "boat-sandbox", machineInputs: { preset: "small" } };
 // why: whether an agent opens a pull request is its brief's call, so a handover's own words never tell it to.

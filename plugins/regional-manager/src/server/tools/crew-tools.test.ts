@@ -187,7 +187,7 @@ test("crew_end_turn repeats the manager's reason and says its turn is over, and 
 test("crew_end_turn is the regional manager's alone: an agent and a verifier are refused it", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();
   const { agentThreadId } = await startedAgent(kit, threadId);
-  await kit.call("agent_handoff", { status: "done", summary: "Did it", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await kit.call("agent_handoff", { status: "done", summary: "Did it", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
   const verifierThreadId = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");
@@ -220,7 +220,7 @@ async function commentCaughtUp(kit: Awaited<ReturnType<typeof coordinating>>["ki
 const RELAY_WAIT =
   "Never relay while a check of its agent's handoff is in flight (Reviewing or Verifying, or a done handoff its agent made while its turn still runs): a message drops that check or cuts across it. Read the agent's issue with issue_read just before you relay: it says when a check is in flight, and gives every comment on it whole, by its id. To relay later, set a reminder with crew_remind naming the issue and the comment's id, and relay once issue_read shows no check in flight.";
 const IN_FLIGHT = "A check on its record is in flight: its verdict is still to come or to settle, or it waits for CI (see Its record). Message its agent only once it has settled: a message drops it or cuts across it.";
-const DONE_HANDOFF = { status: "done", summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD };
+const DONE_HANDOFF = { status: "done", summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD };
 
 test("the user's comment on an issue an agent holds offers a relay to that agent, naming the comment, and says to read the issue's check first", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();

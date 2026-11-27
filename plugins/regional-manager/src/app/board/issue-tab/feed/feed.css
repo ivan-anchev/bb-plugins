@@ -465,6 +465,109 @@
   text-wrap: pretty;
   overflow-wrap: anywhere;
 }
+/* The handoff's attachments (round/attachments.tsx): one wrapping strip under its headline, 48×32
+   thumbnails cropped to their top, then chips holding only a file's name. No label, size or glyph:
+   what each shows is on its card and in its accessible name. A hairline gives a dark capture an
+   edge on the dark card; washes only where a pointer hovers; a 44px target on touch. */
+.rmi-attachments {
+  position: relative;
+}
+.rmi-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 2px 0 6px;
+  list-style: none;
+}
+.rmi-thumb {
+  all: unset;
+  box-sizing: border-box;
+  position: relative;
+  display: block;
+  border-radius: 4px;
+  cursor: zoom-in;
+}
+.rmi-thumb > img {
+  display: block;
+  width: 48px;
+  height: 32px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 4px;
+  background: var(--muted);
+  box-shadow: 0 0 0 0.5px var(--border);
+}
+.rmi-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 168px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--muted);
+  font-size: 12px;
+  color: var(--muted-foreground);
+  text-decoration: none;
+  cursor: pointer;
+}
+.rmi-chip > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rmi-thumb:focus-visible,
+.rmi-chip:focus-visible {
+  outline: 1.5px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .rmi-thumb:hover > img {
+    box-shadow: 0 0 0 1px var(--subtle-foreground);
+  }
+  .rmi-chip:hover {
+    background: var(--state-hover);
+    color: var(--foreground);
+  }
+}
+@media (pointer: coarse) {
+  .rmi-thumb::before,
+  .rmi-chip::before {
+    content: "";
+    position: absolute;
+    inset: -6px -3px;
+  }
+  .rmi-chip::before {
+    inset: -10px -3px;
+  }
+}
+/* Its card: the hover card's surface, as wide as what it says up to the strip's width. Nothing on it
+   to press, so the pointer passes through to the strip. */
+.rmi-attachment-card {
+  left: 0;
+  width: max-content;
+  max-width: min(284px, 100%);
+  pointer-events: none;
+}
+.rmi-attachment-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+}
+.rmi-attachment-about {
+  margin: 0;
+  color: var(--popover-foreground);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.rmi-attachment-size {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
 .rmi-round-note {
   padding: 5px 0;
   font-size: 12px;

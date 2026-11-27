@@ -8,8 +8,8 @@ import { assertQuotedHostileName, coordinating, doorbellOf, failsVerification, H
 const a1 = agentIdSchema.parse("a1");
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const PR_URL = "https://github.com/acme/webhooks/pull/41";
-const BLOCKED = { status: "blocked", summary: "Needs the retry budget", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
-const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
+const BLOCKED = { status: "blocked", summary: "Needs the retry budget", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
+const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD };
 const PASSES = {
   headSha: HEAD,
   criteria: [

@@ -9,7 +9,7 @@ import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, text
 
 const a1 = agentIdSchema.parse("a1");
 const i1 = issueIdSchema.parse("WEB-1");
-const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD };
+const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD };
 const FAILS = { criteria: [{ criterion: 1, result: "fail", shows: "Ran it.", evidence: "$ npm test\nnot ok 13" }], findings: [] };
 const PASSES = { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\nok" }], findings: [] };
 

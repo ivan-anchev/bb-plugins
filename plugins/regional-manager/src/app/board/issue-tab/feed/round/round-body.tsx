@@ -1,5 +1,5 @@
-// An open round as a short list: what was handed off, in full; a line per finding (lines/
-// finding-lines.tsx); a line per thing that failed it (lines/verdict-lines.tsx); what became of it;
+// An open round as a short list: what was handed off, in full, with its attachments as a strip
+// (attachments.tsx); a line per finding (lines/finding-lines.tsx); a line per thing that failed it (lines/verdict-lines.tsx); what became of it;
 // and its report, folded. Each line opens on press to its detail, and a finding's shows its card on
 // hover and focus. The summary and the outcome come from the feed's read; the rest is the round's
 // body, read with the keyed roundBodies query only while the round is open, so a folded round costs
@@ -19,6 +19,7 @@ import { TabMarkdown } from "../../../../ui/tab-markdown/tab-markdown.tsx";
 import { useHoverCards } from "../../../issue/hover-card/use-hover-card.ts";
 import { DiscloseGlyph } from "../../detail/disclose-glyph.tsx";
 import { AgentName, MovedTo, When, type FeedAgents } from "../byline.tsx";
+import { Attachments } from "./attachments.tsx";
 import { FindingLines } from "./lines/finding-lines.tsx";
 import { NoteLine } from "./lines/fold-line.tsx";
 import { VerdictLines } from "./lines/verdict-lines.tsx";
@@ -52,6 +53,7 @@ export function RoundBody({ coordinatorId, issueId, round, agents }: RoundBodyPr
       )}
       {body === null && <p className="rmi-round-note">This round is no longer on record.</p>}
       <p className="rmi-round-said">{headlineOf(round)}</p>
+      {loaded?.handoff != null && <Attachments coordinatorId={coordinatorId} attachments={loaded.handoff.attachments} label="The agent's attachments" cards={cards} />}
       {round.review.state === "missed" && <ReviewMissed why={loaded?.reviewMissed ?? null} />}
       {loaded !== null && <FindingLines findings={loaded.findings} own={ownFindingsOf(loaded)} cards={cards} />}
       {loaded?.verdict != null && <VerdictLines verdict={loaded.verdict} by={round.by} cards={cards} />}

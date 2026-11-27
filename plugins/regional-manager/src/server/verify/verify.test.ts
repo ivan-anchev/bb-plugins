@@ -25,6 +25,7 @@ const DONE = {
   concerns: [],
   deviations: [],
   findings: [],
+  attachments: [],
   headSha: HEAD,
 };
 const PASSES = {

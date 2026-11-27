@@ -5,9 +5,12 @@
 import { randomUUID } from "node:crypto";
 import type { Agent, AgentCheckout, EndedHow } from "../../model/agent/agent.ts";
 import { handoffFieldsSchema, handoffIdSchema, reportOf, type GivenReport } from "../../model/agent/handoff.ts";
-import type { IssueId } from "../../model/issue/issue.ts";
+import { ATTACHMENT_LIMITS, type GivenAttachment, type Unattached } from "../../model/attachment.ts";
+import type { Issue, IssueId } from "../../model/issue/issue.ts";
+import type { Check } from "../../model/verdict/check.ts";
 import { PIPELINES, shipsCode } from "../../model/issue/kind.ts";
 import type { CheckoutRead } from "../../model/verdict/checkout.ts";
+import { refusedText, type CopyIn } from "../attachments/copy-in.ts";
 import { latestTurnSeq, listedThreads, type TurnsBb } from "../agents/threads.ts";
 import { threadExecution, type ThreadExecutionBb } from "../execution/thread-execution.ts";
 import { checkoutReadOf, gitStatusOf, type GitStatus, type GitStatusBb } from "../git-status.ts";
@@ -23,9 +26,15 @@ type ListedThread = { id: string; providerId: string; environmentId: string | nu
 /** The parts of bb the handoff uses: registering it, the thread's turns, what it runs on, its environment and bb's git plugin's read of it. */
 type HandoffBb = ToolsBb & TurnsBb & GitStatusBb & ThreadExecutionBb & { sdk: { threads: { list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]> } } };
 
-type Deps = { store: Pick<Store, "roleOfThread" | "agent" | "issue">; verify: Pick<Verify, "handoff">; prs: Pick<PrWatch, "headBranchOf"> };
+type Deps = {
+  store: Pick<Store, "roleOfThread" | "agent" | "issue">;
+  verify: Pick<Verify, "handoff">;
+  prs: Pick<PrWatch, "headBranchOf">;
+  /** Copies in the files a thread attaches (copy-in.ts attachmentCopier). */
+  copyIn: (threadId: string, given: readonly GivenAttachment[]) => Promise<CopyIn>;
+};
 
-export function registerHandoffTool(bb: HandoffBb, { store, verify, prs }: Deps): void {
+export function registerHandoffTool(bb: HandoffBb, { store, verify, prs, copyIn }: Deps): void {
   /** The agent's environment, the branch bb made it on, and bb's git plugin's read of it, once, now, while the agent is awake to hand off; null when its thread has none. */
   async function readEnvironment(threadId: string): Promise<EnvironmentRead | null> {
     const thread = (await listedThreads(bb, [threadId])).get(threadId);
@@ -38,7 +47,7 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify, prs }: Deps)
    * names no branch, as on a detached HEAD (null: not read, or GitHub couldn't say). why: the pull
    * request it delivers is then the one thing that names where its work was published.
    */
-  async function publishedBranch(agent: Agent, environment: EnvironmentRead | null, report: GivenReport): Promise<string | null> {
+  async function publishedBranch(agent: Agent, environment: EnvironmentRead | null, report: Unattached<GivenReport>): Promise<string | null> {
     if (environment?.status.kind !== "read" || environment.status.branch !== null) return null;
     if (report.status !== "done" || report.delivery.kind !== "commit" || report.delivery.prUrl === null) return null;
     return prs.headBranchOf(agent.coordinatorId, report.delivery.prUrl);
@@ -51,7 +60,7 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify, prs }: Deps)
     instructions: HANDOFF_INSTRUCTIONS,
     presentation: { label: { pending: "Handing off", completed: "Handed off" }, icon: { glyph: "Check" } },
     parameters: handoffFieldsSchema,
-    execute: async (input, { threadId }) => {
+    execute: async ({ attachments: given, ...fields }, { threadId }) => {
       const role = store.roleOfThread(threadId);
       if (role?.kind !== "agent") return failed(`${HANDOFF} is refused: only an agent thread of a regional manager hands off, and this thread is not one. Carry on without it.`);
       const caller = agentOf(store, role);
@@ -65,22 +74,29 @@ export function registerHandoffTool(bb: HandoffBb, { store, verify, prs }: Deps)
       const [turnSeq, environment, execution] = await Promise.all([latestTurnSeq(bb, threadId), reading, threadExecution(bb, threadId)]);
       // why throw: this call runs inside a turn, so bb has its turn/started event.
       if (turnSeq === null) throw new Error("bb lists no turn for this thread, so the handoff can't be tied to one. Try again.");
-      const report = reportOf(input, issue.kind);
+      const report = reportOf(fields, issue.kind);
       if ("refused" in report) return failed(`${HANDOFF} is refused and nothing was saved: ${report.refused}`);
+      // why here, after every refusal that saves nothing and before the issue's turn: a refused handoff reads no file, and a slow read holds no lock.
+      const { copied, refused } = await copyIn(threadId, given);
       const checkout = reading === null ? NOT_READ : checkoutRead(environment);
       const published = await publishedBranch(caller, environment, report);
-      const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: caller.coordinatorId, issueId: issue.id, agentId: caller.id, at: Date.now(), turnSeq, ...report };
+      const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: caller.coordinatorId, issueId: issue.id, agentId: caller.id, at: Date.now(), turnSeq, ...report, attachments: copied };
       const outcome = await verify.handoff({ handoff, checkout, seen: environment === null ? null : checkoutSeen(caller, environment, published), environmentBranchName: environment?.environmentBranchName ?? null, execution });
       if ("busy" in outcome) return refusedBusy(HANDOFF, outcome);
       if ("ended" in outcome) return endedText(issue.id, outcome.ended);
-      const verdict = outcome.check?.verdict ?? null;
-      if (verdict === null && report.status === "done") return `Handed off. Your regional manager has your report, and ${issue.id} is Done: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue. Stop here.`;
-      if (verdict === null) return "Handed off. Your regional manager has your report. Stop here.";
-      if (verdict.state === "waived") return "Handed off. Your regional manager has your report, marked unverified: verification is off. Stop here.";
-      if (verdict.state === "could-not-run") return `Handed off. Your regional manager has your report, marked couldn't verify: ${verdict.reason}. Stop here.`;
-      return "Handed off. Once this turn of yours ends, a verifier checks your commit against the done-criteria in this environment, and your regional manager gets your report with its verdict. If it fails, its findings may come back to you here, as a message from the verifier. Stop here, and change nothing in this environment until you hear back from the verifier or your regional manager.";
+      // why appended to each result: the handoff recorded, and the agent learns what it left out.
+      return `${handedOffText(issue, report, outcome.check?.verdict ?? null)}${refusedText(refused)}`;
     },
   });
+}
+
+/** What the agent is told once its handoff recorded, by what checks it next (`verdict`, its check's first; null: no check). */
+function handedOffText(issue: Pick<Issue, "id" | "kind">, report: Unattached<GivenReport>, verdict: Check["verdict"] | null): string {
+  if (verdict === null && report.status === "done") return `Handed off. Your regional manager has your report, and ${issue.id} is Done: nothing verifies a ${PIPELINES[issue.kind].label.toLowerCase()} issue. Stop here.`;
+  if (verdict === null) return "Handed off. Your regional manager has your report. Stop here.";
+  if (verdict.state === "waived") return "Handed off. Your regional manager has your report, marked unverified: verification is off. Stop here.";
+  if (verdict.state === "could-not-run") return `Handed off. Your regional manager has your report, marked couldn't verify: ${verdict.reason}. Stop here.`;
+  return "Handed off. Once this turn of yours ends, a verifier checks your commit against the done-criteria in this environment, and your regional manager gets your report with its verdict. If it fails, its findings may come back to you here, as a message from the verifier. Stop here, and change nothing in this environment until you hear back from the verifier or your regional manager.";
 }
 
 /** The checkout of an agent whose issue ships no code: never read, and never checked. */
@@ -110,4 +126,5 @@ const HANDOFF_INSTRUCTIONS = `Ending your work: call agent_handoff once, as your
 - did, concerns, deviations, findings: up to 10 items each, each one fact of up to 300 characters. evidence: up to 10 items of up to 1,000 characters; on a build issue, one per done-criterion, the command you ran and the lines that decide it; with more than 10 criteria, group neighbouring ones in an item, as "Criteria 10–11: …". Use [] for none.
 - A build issue's done handoff: headSha (required), the output of \`git rev-parse HEAD\` after your last commit; prUrl, the pull request (merge request on GitLab), if you opened one.
 - A research issue's done handoff: report (required), your whole report in markdown, up to 20,000 characters. It names no commit: nothing you commit or push is read.
+- attachments: files a person should see beside your claim, such as a screenshot or short recording of a visible change, or a log too long to quote: ${ATTACHMENT_LIMITS}. Each is {path, about}: its absolute path, saved under $BB_THREAD_STORAGE, never in your worktree (an untracked file there fails the clean-tree check), and what it shows in one line, opening "Criterion N:" when it proves one. A file the plugin can't take is left out with its reason, and your handoff still records. [] for none.
 A turn that ends without agent_handoff tells your regional manager you stopped without reporting.`;

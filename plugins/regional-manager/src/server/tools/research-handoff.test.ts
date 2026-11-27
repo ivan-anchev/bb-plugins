@@ -18,7 +18,7 @@ const RESEARCH = {
   brief: "Compare HashiCorp Vault and AWS KMS for storing saved cards.",
   doneCriteria: ["Which one fits our PCI scope, and why?", "What does it cost a month at our volume?"],
 };
-const FIELDS = { summary: "Vault fits our PCI scope", did: ["Read both vendors' PCI guides"], evidence: [], concerns: [], deviations: [], findings: [] };
+const FIELDS = { summary: "Vault fits our PCI scope", did: ["Read both vendors' PCI guides"], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.\n\n## Cost\n\nAbout $400 a month.";
 const DONE = { status: "done", ...FIELDS, report: REPORT };
 const I1 = issueIdSchema.parse("WEB-1");
@@ -257,7 +257,7 @@ test("an issue opened on the board sends its questions and, in its rounds, a res
   assert.deepEqual(feed.doneCriteria, RESEARCH.doneCriteria);
   const [blocked, done] = rounds;
   assert.deepEqual([done?.round.verdict, done?.round.review], [null, { state: "none" }], "nothing checks a research handoff");
-  assert.deepEqual(Object.keys(done?.body.handoff ?? assert.fail("no done handoff")).sort(), ["concerns", "deviations", "did", "evidence", "findings", "report"]);
+  assert.deepEqual(Object.keys(done?.body.handoff ?? assert.fail("no done handoff")).sort(), ["attachments", "concerns", "deviations", "did", "evidence", "findings", "report"]);
   assert.deepEqual([done?.body.handoff?.report, done?.body.verdict], [{ report: REPORT, file: I1_REPORT }, null]);
   assert.deepEqual([blocked?.round.by, blocked?.body.handoff?.report], [{ kind: "agent", agentId: "a1", status: "blocked", summary: "Needs the PCI auditor's scope" }, null]);
 });

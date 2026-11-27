@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { handoffFieldsSchema, reportOf } from "./handoff.ts";
 
-const fields = { summary: "Retries land", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
+const fields = { summary: "Retries land", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], attachments: [] };
 
 test("a build issue's done handoff delivers the commit it names, and drops a report given anyway", () => {
   const input = handoffFieldsSchema.parse({ ...fields, status: "done", headSha: "a".repeat(40), report: "## Unasked" });

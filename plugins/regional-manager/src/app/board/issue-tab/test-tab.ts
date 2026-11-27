@@ -122,7 +122,7 @@ function verdictOf(n: number, results: readonly CriterionResult[]): ShownVerdict
 export function bodyOf(n: number): RoundBody {
   const results = FEED.entries.flatMap((entry) => (entry.kind === "round" && entry.round.number === n ? (entry.round.verdict?.results ?? []) : []));
   return {
-    handoff: { did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], report: null },
+    handoff: { did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], attachments: [], report: null },
     verdict: verdictOf(n, results),
     findings: [
       { title: "Retries back off without a cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound.", effect: "blocks" } },

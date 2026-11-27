@@ -30,7 +30,7 @@ const SHA = "a".repeat(40);
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
 function handoff(n: number, agentId: AgentId, at: number, status: Handoff["status"] = "done"): Handoff {
-  const made = { id: handoffIdSchema.parse(uuid(n)), coordinatorId: MANAGER, issueId: BBP_19, agentId, at, turnSeq: n, summary: `Round ${n}`, did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+  const made = { id: handoffIdSchema.parse(uuid(n)), coordinatorId: MANAGER, issueId: BBP_19, agentId, at, turnSeq: n, summary: `Round ${n}`, did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
   return status === "done" ? { ...made, status, delivery: { kind: "commit", headSha: SHA, prUrl: null } } : { ...made, status };
 }
 

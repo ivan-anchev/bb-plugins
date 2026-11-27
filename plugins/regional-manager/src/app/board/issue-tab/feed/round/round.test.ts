@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, test } from "node:test";
 import { act, cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import type { experimental_ImageLightbox } from "@get-bb/plugin-sdk/app";
+import { installTestPluginRuntime } from "@get-bb/plugin-sdk/testing/app";
+import { createElement, useEffect, useRef, type ComponentProps, type KeyboardEvent } from "react";
+import { attachmentIdSchema, attachmentUrl, type Attachment } from "../../../../../model/attachment.ts";
 import { roundBodyKey } from "../../../../../contract.ts";
 import { decisionIdSchema } from "../../../../../model/decision.ts";
 import type { Entry } from "../../../../../model/feed/entry.ts";
@@ -460,4 +464,128 @@ test("a cell of a round no longer on record says so, not that it judged nothing 
   fireEvent.click(within(grid.getByRole("group", { name: "Criterion 2 by round" })).getAllByRole("button")[0] ?? assert.fail("no cell"));
   assert.ok(await grid.findByText("Round 1 is no longer on record."));
   assert.equal(grid.queryByText(/judged no criterion here/), null);
+});
+
+// ------------------------------------------------------------------ attachments
+
+const SHEET = { id: attachmentIdSchema.parse("1c4e6a2b-3d5f-4a7b-8c9d-0e1f2a3b4c5d"), name: "sheet.png", about: "Criterion 2: the sheet open on WEB-1", type: "image/png", size: 186_368 } as const;
+const NARROW = { id: attachmentIdSchema.parse("3e6a8c4d-5f7b-4c9d-8e0f-2a3b4c5d6e7f"), name: "sheet-360.png", about: "The sheet at 360px", type: "image/png", size: 90_112 } as const;
+const LOG = { id: attachmentIdSchema.parse("2d5f7b3c-4e6a-4b8c-9d0e-1f2a3b4c5d6e"), name: "e2e-run-with-a-long-name.log", about: "Full e2e run, 38 specs green", type: "text/plain; charset=utf-8", size: 86_016 } as const;
+
+/** Round 3's body with the agent's attachments. */
+function attached(attachments: Attachment[]) {
+  const body = bodyOf(3);
+  const handoff = body.handoff ?? assert.fail("round 3 has a handoff");
+  return () => ({ ...body, handoff: { ...handoff, attachments } });
+}
+
+/**
+ * bb's lightbox and download as strict as the host where it matters: the lightbox is a modal that
+ * takes focus as it opens and calls onClose on Escape, leaving focus wherever it was (the test
+ * proves the strip hands it back), and saveFile records each request.
+ */
+function hostDoubles() {
+  installTestPluginRuntime();
+  const saves: unknown[] = [];
+  function Lightbox({ isOpen, imageSrc, imageAlt, title, navigationStatus, onClose, onNext }: ComponentProps<typeof experimental_ImageLightbox>) {
+    const dialog = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      if (isOpen) dialog.current?.focus();
+    }, [isOpen]);
+    if (isOpen !== true || imageSrc === null) return null;
+    return createElement(
+      "div",
+      { ref: dialog, role: "dialog", "aria-label": title, tabIndex: -1, onKeyDown: (event: KeyboardEvent) => (event.key === "Escape" ? onClose() : event.key === "ArrowRight" ? onNext?.() : undefined) },
+      createElement("img", { src: imageSrc, alt: imageAlt }),
+      createElement("p", null, navigationStatus),
+    );
+  }
+  const runtime = (globalThis as unknown as { __bbPluginRuntime: { pluginSdkApp: Record<string, unknown> } }).__bbPluginRuntime;
+  Object.assign(runtime.pluginSdkApp, {
+    experimental_ImageLightbox: Lightbox,
+    experimental_saveFile: async (request: unknown) => {
+      saves.push(request);
+      return "started";
+    },
+  });
+  return { saves };
+}
+
+test("an open round with a screenshot and a log shows one strip under its headline: a 48×32 thumbnail on the route's URL, then a chip with only the log's name, and no about line or size", async () => {
+  hostDoubles();
+  await withFeedCss(async () => {
+    const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG]) });
+    const three = rounds(tab()).card(3);
+    const strip = await three.findByRole("list", { name: "The agent's attachments" });
+    assert.equal(strip.closest(".rmi-attachments")?.previousElementSibling?.className, "rmi-round-said", "right under the headline");
+
+    const images = strip.querySelectorAll("img");
+    assert.equal(images.length, 1);
+    const img = images[0] ?? assert.fail("no img");
+    assert.deepEqual([img.getAttribute("src"), img.getAttribute("width"), img.getAttribute("height")], [attachmentUrl(COORDINATOR.id, SHEET.id), "48", "32"]);
+    const chip = within(strip).getByRole("link");
+    assert.equal(chip.textContent, LOG.name, "the chip holds the name alone");
+    assert.equal(chip.getAttribute("href"), attachmentUrl(COORDINATOR.id, LOG.id));
+    assert.equal(strip.textContent, LOG.name, "no about line, size or label shows in the strip");
+    assert.equal(three.queryByText(/Criterion 2: the sheet|Full e2e run|KB/), null, "nothing else says them in the round");
+  });
+});
+
+test("each thumbnail and chip is named by its name and what it shows; focus shows its card at once, with a file's size, and Escape puts it away", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG]) });
+  const strip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
+  const thumb = strip.getByRole("button", { name: `${SHEET.name}: ${SHEET.about}` });
+  const chip = strip.getByRole("link", { name: `${LOG.name}, 84 KB: ${LOG.about}` });
+  const card = () => document.querySelector(".rmi-attachment-card");
+
+  act(() => thumb.focus());
+  assert.equal(card()?.textContent, SHEET.about, "an image's card says what it shows");
+  act(() => chip.focus());
+  assert.deepEqual([...(card()?.querySelectorAll("p") ?? [])].map((line) => line.textContent), [LOG.about, "84 KB"], "a file's adds its size");
+  fireEvent.keyDown(chip, { key: "Escape" });
+  assert.equal(card(), null);
+});
+
+test("pressing a thumbnail opens bb's lightbox on it, titled with what it shows and paging through the round's images; Escape hands focus back to the thumbnail it closed on", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG, NARROW]) });
+  const strip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
+  assert.deepEqual(
+    strip.getAllByRole("button").map((thumb) => thumb.getAttribute("aria-label")),
+    [`${SHEET.name}: ${SHEET.about}`, `${NARROW.name}: ${NARROW.about}`],
+    "images first, in order, then the file",
+  );
+  const [first, second] = strip.getAllByRole("button");
+  const screen = within(document.body);
+
+  fireEvent.click(first ?? assert.fail("no thumbnail"));
+  const lightbox = await screen.findByRole("dialog", { name: SHEET.about });
+  assert.equal(within(lightbox).getByRole("img", { name: SHEET.about }).getAttribute("src"), attachmentUrl(COORDINATOR.id, SHEET.id));
+  assert.equal(within(lightbox).getByText("1 of 2").textContent, "1 of 2");
+  assert.equal(document.activeElement, lightbox, "the modal holds focus while open");
+
+  fireEvent.keyDown(lightbox, { key: "ArrowRight" });
+  await screen.findByRole("dialog", { name: NARROW.about });
+  fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+  await waitFor(() => assert.equal(screen.queryByRole("dialog"), null));
+  assert.equal(document.activeElement, second, "back on the thumbnail of the image it closed on");
+});
+
+test("pressing a chip downloads its file through bb, by its name and the route's URL", async () => {
+  const { saves } = hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG]) });
+  const strip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
+  const pressed = fireEvent.click(strip.getByRole("link"));
+  assert.equal(pressed, false, "the link's own navigation is stopped");
+  assert.deepEqual(saves, [{ fileName: LOG.name, url: attachmentUrl(COORDINATOR.id, LOG.id) }]);
+});
+
+test("a round whose handoff attached nothing renders no strip", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1);
+  const three = rounds(tab()).card(3);
+  await three.findByText("Report");
+  assert.equal(three.queryByRole("list", { name: "The agent's attachments" }), null);
+  assert.equal(tab().getByRole("article", { name: "Round 3" }).querySelector(".rmi-attachments, img"), null);
 });

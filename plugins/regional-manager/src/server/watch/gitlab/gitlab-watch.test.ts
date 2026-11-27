@@ -9,7 +9,7 @@ const STATION_WS = "ssh://git@gitlab.corp.test:8022/frontend/station-ws.git";
 const HOST = "gitlab.corp.test";
 const MR_URL = `https://${HOST}/frontend/station-ws/-/merge_requests/41`;
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
-const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], headSha: HEAD, prUrl: MR_URL };
+const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD, prUrl: MR_URL };
 const PASSES = {
   headSha: HEAD,
   criteria: [

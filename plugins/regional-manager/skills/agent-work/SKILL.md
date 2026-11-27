@@ -148,6 +148,21 @@ then stop:
   markdown, up to 20,000 characters, answering each question you were given.
   It names no commit: anything you commit or push is not read, and a
   `headSha` or `prUrl` you pass is dropped.
+- **attachments** (any handoff, optional): files a person should see beside
+  your claim, each `{ path, about }`: a screenshot or short recording of a
+  visible change, or a log too long to quote. Up to 5 files of at most 10 MB
+  each, of type .png, .jpg, .jpeg, .gif, .webp, .mp4, .webm, .mov, .txt,
+  .log or .json. Save each under `$BB_THREAD_STORAGE`, never in your
+  worktree (an untracked file there fails the clean-tree check), pass its
+  absolute path, and give it one line on what it shows, opening
+  "Criterion N:" when it proves one. The plugin copies each file in as it
+  records your handoff, so it still shows after your environment is gone. A
+  file it can't take (another type, too large, empty, missing, outside your
+  workspace and thread storage, or past the fifth) is left out, and the
+  tool's result names it under "Not attached" with its reason; your handoff
+  still records. The issue's feed shows images as thumbnails and other files
+  as names that download; your regional manager and the next agent get each
+  one's name and about line, never its contents.
 
 On a research issue, nothing verifies your report: your done handoff makes
 the issue Done, and your regional manager reads the report whole. The plugin

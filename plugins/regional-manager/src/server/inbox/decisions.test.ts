@@ -88,7 +88,7 @@ test("while a decision waits for the user, an agent's handoff still wakes the re
   const agentThreadId = (await startedAgent(kit, threadId, { title: "Add retries", brief: "Do it." })).agentThreadId;
   kit.thread(threadId).status = "idle";
 
-  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, agentThreadId);
+  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] }, agentThreadId);
   await settled();
 
   assert.deepEqual(doorbells(), [doorbellOf(`WEB-1 "Add retries" (a1) handed off: blocked`)]);
@@ -117,7 +117,7 @@ test("the badge counts the issues each board shows under Needs you, blocked, wai
   const agents = [];
   for (const title of ["Blocked", "Asking", "Failing", "Running", "Stopped"]) agents.push((await startedAgent(kit, threadId, { title, brief: "Do it." })).agentThreadId);
   const [blocked = "", asking = "", failing = ""] = agents;
-  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, blocked);
+  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] }, blocked);
   kit.thread(blocked).status = "idle";
   kit.thread(asking).hasPendingInteraction = true;
   kit.thread(failing).status = "error";
@@ -267,7 +267,7 @@ test("a cap question asked while the board's host read is held arrives with its 
   await failsVerification(kit, coordinatorId, agentThreadId);
   await failsVerification(kit, coordinatorId, agentThreadId);
   const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
-  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, fresh);
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD }, fresh);
   await kit.idle(fresh, "Handed off.");
   await settled();
   const a2 = kit.store.agents(coordinatorId).find(({ threadId: agentThread }) => agentThread === fresh) ?? assert.fail("no a2");
@@ -295,7 +295,7 @@ test("a failure that asks at the cap while crew_catch_up's host read is held wai
   await failsVerification(kit, coordinatorId, agentThreadId);
   await failsVerification(kit, coordinatorId, agentThreadId);
   const fresh = threadIn(textOf(await kit.call("agent_start", { issue }, threadId)));
-  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, fresh);
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD }, fresh);
   await kit.idle(fresh, "Handed off.");
   await settled();
   const a2 = kit.store.agents(coordinatorId).find(({ threadId: agentThread }) => agentThread === fresh) ?? assert.fail("no a2");
@@ -425,7 +425,7 @@ test("a question on an issue whose pull request merges before the user answers k
 test("an issue whose agent is blocked and that a question waits on gives the question as its Needs you line and published reason, the block as its headline", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
   const { agentThreadId } = await startedAgent(kit, threadId, { title: "Add retries" });
-  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [] }, agentThreadId);
+  await kit.call("agent_handoff", { status: "blocked", summary: "Needs a staging key", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] }, agentThreadId);
   kit.thread(agentThreadId).status = "idle";
   await settled();
   assert.match(textOf(await kit.call("crew_ask_user", { question: QUESTION, options: ["main", "release/2"], issue: "WEB-1" }, threadId)), /^Asked the user d1/);

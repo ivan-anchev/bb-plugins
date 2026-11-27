@@ -28,7 +28,7 @@ const INSTRUCTIONS_CAP = 32_768;
 test("only a regional manager's rules say how it writes to the user, every direction of it, within bb's instructions cap", async () => {
   const { kit, threadId, coordinatorId } = await coordinating();
   const { agentThreadId } = await startedAgent(kit, threadId);
-  await kit.call("agent_handoff", { status: "done", summary: "Did it", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await kit.call("agent_handoff", { status: "done", summary: "Did it", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
   const verifierThreadId = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");
@@ -189,7 +189,7 @@ test("a verifier reads in its rules, both kinds of first message, issue_verdict'
   const { kit, threadId, coordinatorId } = await coordinating();
   const criterion = "A recovery agent finds marker.txt at the pushed head";
   const { agentThreadId } = await startedAgent(kit, threadId, { doneCriteria: [criterion] });
-  await kit.call("agent_handoff", { status: "done", summary: "Pushed the marker", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await kit.call("agent_handoff", { status: "done", summary: "Pushed the marker", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   const verdict = kit.store.latestHandoff(coordinatorId, agentIdSchema.parse("a1"))?.check?.verdict;
   const verifier = verdict?.state === "running" ? verdict.verifierThreadId : assert.fail("no verifier running");

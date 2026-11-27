@@ -18,7 +18,7 @@ import { ANCHOR_RULE_TEXT, coordinating, HEAD, isRefusal, levels, settled, start
 
 const a1 = agentIdSchema.parse("a1");
 const CRITERIA = ["npm test passes", "npm run lint prints no errors"];
-const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing, trust me"], concerns: [], deviations: [], findings: [], headSha: HEAD };
+const DONE = { status: "done", summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing, trust me"], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD };
 const PASSES = {
   criteria: [
     { criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\n# pass 13" },
@@ -580,7 +580,7 @@ test("issues stored before reviews, in every status, load with the same status, 
   await settled();
   await kit.call("issue_create", { kind: "research", title: "Pick a vault", description: "Which vault?", brief: "Compare two.", doneCriteria: [] }, threadId); // WEB-6
   const researcher = await started("WEB-6");
-  await kit.call("agent_handoff", { status: "done", summary: "Vault picked", did: [], evidence: [], concerns: [], deviations: [], findings: [], report: "# Vault\n\nPick A." }, researcher);
+  await kit.call("agent_handoff", { status: "done", summary: "Vault picked", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], report: "# Vault\n\nPick A." }, researcher);
   await kit.idle(researcher, "Reported.");
   await call("issue_update", { id: await filed({}), status: "canceled" }); // WEB-7
   const queued = await started(await filed({})); // WEB-8, In progress: its check queued while its agent's turn still runs
@@ -605,6 +605,7 @@ test("issues stored before reviews, in every status, load with the same status, 
   db.exec("DROP TABLE issue_writes");
   db.exec("DROP TABLE issue_log");
   db.exec("DROP TABLE comments");
+  db.exec("DROP TABLE attachment_files");
   db.exec("DROP INDEX events_of_issue");
   db.exec("ALTER TABLE decisions DROP COLUMN cap");
   db.exec("ALTER TABLE decisions DROP COLUMN recommended");
@@ -647,6 +648,7 @@ test("a check stores each finding's severity once, on its review; a verdict sett
   // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
   db.exec("DROP TABLE issue_log");
   db.exec("DROP TABLE comments");
+  db.exec("DROP TABLE attachment_files");
   db.exec("ALTER TABLE decisions DROP COLUMN cap");
   db.exec("ALTER TABLE decisions DROP COLUMN recommended");
   db.exec("ALTER TABLE events DROP COLUMN doorbell");
@@ -749,6 +751,7 @@ async function releasedWith(left: "waiting-for-ci" | "pending", triaged: "confir
   // why the issue log, comments, the decisions' cap and recommended option, the events' doorbell and the checks' follow-up and accept dropped too: they came after this rule, and their migrations run again.
   before.db.exec("DROP TABLE issue_log");
   before.db.exec("DROP TABLE comments");
+  before.db.exec("DROP TABLE attachment_files");
   before.db.exec("ALTER TABLE decisions DROP COLUMN cap");
   before.db.exec("ALTER TABLE decisions DROP COLUMN recommended");
   before.db.exec("ALTER TABLE events DROP COLUMN doorbell");

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { memoryFileSchema } from "../../model/memory-file.ts";
 import { coordinating, doorbellOf, harness, holdingThreadLists, settled, startedAgent, textOf } from "../test-harness.ts";
 
-const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
+const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [], attachments: [] };
 const DONE = { status: "done", ...REPORT, headSha: "0123456789abcdef0123456789abcdef01234567" };
 const NOTES = memoryFileSchema.parse("NOTES.md");
 

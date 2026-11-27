@@ -3,6 +3,7 @@
 // bb threads carry no last-activity time.
 import { z } from "zod";
 import type { AgentId } from "./agent.ts";
+import { attachmentsSchema, givenAttachmentsSchema, storedAttachmentsSchema, type Copied, type Unattached } from "../attachment.ts";
 import type { IssueId } from "../issue/issue.ts";
 import { PIPELINES, type Kind } from "../issue/kind.ts";
 import { memoryFileSchema } from "../memory-file.ts";
@@ -31,7 +32,11 @@ const summarySchema = z
  */
 const storedItemsSchema = z.array(z.string().trim().min(1).max(2_000)).max(50);
 
-const storedLists = { did: storedItemsSchema, evidence: storedItemsSchema, concerns: storedItemsSchema, deviations: storedItemsSchema, findings: storedItemsSchema };
+/**
+ * What every handoff stores beside its summary: its lists and its attachments. why attachments on
+ * every status: a blocked handoff can show the error it hit, at no extra cost.
+ */
+const stored = { did: storedItemsSchema, evidence: storedItemsSchema, concerns: storedItemsSchema, deviations: storedItemsSchema, findings: storedItemsSchema, attachments: storedAttachmentsSchema };
 
 /**
  * A list as agent_handoff takes it: at most 10 items of at most `max` characters each. why short:
@@ -64,6 +69,7 @@ export const handoffFieldsSchema = z.object({
   headSha: commitSchema.optional().describe("done on a build issue only, and required then: the 40-character output of `git rev-parse HEAD` after your last commit."),
   prUrl: prUrlSchema.optional().describe("done on a build issue only: the pull request (merge request on GitLab) you opened, if any."),
   report: reportSchema.optional().describe("done on a research issue only, and required then: your report, in markdown, up to 20,000 characters. It is your result: your regional manager reads it whole."),
+  attachments: givenAttachmentsSchema,
 });
 
 /** A handoff is current while its thread has started no later turn. `latestTurnSeq` is null when bb lists no turn. */
@@ -81,20 +87,22 @@ const reportDeliverySchema = givenReportSchema.extend({ file: memoryFileSchema }
 const deliverySchema = z.discriminatedUnion("kind", [commitDeliverySchema, reportDeliverySchema]);
 
 /**
- * What an open round shows of its handoff: the agent's account of it, and the report it delivered
- * with its file (null: none, as a build or a blocked handoff delivers none). why not its id, time,
- * status or summary: the folded round carries those; nor a commit: the verdict names the one checked.
+ * What an open round shows of its handoff: the agent's account of it, its attachments, and the
+ * report it delivered with its file (null: none, as a build or a blocked handoff delivers none). why
+ * not its id, time, status or summary: the folded round carries those; nor a commit: the verdict
+ * names the one checked.
  */
 export const handoffBodySchema = z.object({
-  ...storedLists,
+  ...stored,
+  attachments: attachmentsSchema,
   report: reportDeliverySchema.omit({ kind: true }).nullable(),
 });
 export type HandoffBody = z.infer<typeof handoffBodySchema>;
 
 /** What an open round shows of the handoff. */
 export const handoffBody = (handoff: Handoff): HandoffBody => {
-  const { did, evidence, concerns, deviations, findings } = handoff;
-  return { did, evidence, concerns, deviations, findings, report: reportIn(handoff) };
+  const { did, evidence, concerns, deviations, findings, attachments } = handoff;
+  return { did, evidence, concerns, deviations, findings, attachments, report: reportIn(handoff) };
 };
 
 /** The report a done handoff delivered, and the file it was saved to; null for any other handoff. */
@@ -113,18 +121,20 @@ function reportIn(handoff: HandoffReport): HandoffBody["report"] {
 
 /** A handoff as an agent wrote it, stored whole. */
 export const handoffReportSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("done"), summary: summarySchema, ...storedLists, delivery: deliverySchema }),
-  z.object({ status: z.enum(["blocked", "gave-up"]), summary: summarySchema, ...storedLists }),
+  z.object({ status: z.literal("done"), summary: summarySchema, ...stored, delivery: deliverySchema }),
+  z.object({ status: z.enum(["blocked", "gave-up"]), summary: summarySchema, ...stored }),
 ]);
 export type HandoffReport = z.infer<typeof handoffReportSchema>;
 
 /**
  * A handoff as its agent gave it, before it is stored: a report has no file yet, since the plugin
- * picks where it goes as it stores the handoff (report-file.ts).
+ * picks where it goes as it stores the handoff (report-file.ts), and its attachments still carry
+ * their bytes, which the store moves into attachment_files as it stores the handoff.
  */
-export type GivenReport =
+export type GivenReport = Copied<
   | Exclude<HandoffReport, { status: "done" }>
-  | (Omit<Extract<HandoffReport, { status: "done" }>, "delivery"> & { delivery: z.infer<typeof commitDeliverySchema> | z.infer<typeof givenReportSchema> });
+  | (Omit<Extract<HandoffReport, { status: "done" }>, "delivery"> & { delivery: z.infer<typeof commitDeliverySchema> | z.infer<typeof givenReportSchema> })
+>;
 
 /** Who made a handoff, when, and in which turn: `turnSeq` is the sequence of the `turn/started` event of the turn it was made in. */
 type Made = { id: HandoffId; coordinatorId: CoordinatorId; issueId: IssueId; agentId: AgentId; at: number; turnSeq: number };
@@ -138,9 +148,9 @@ export type GivenHandoff = Made & GivenReport;
 /**
  * The handoff an agent of an issue of `kind` gave, as its report, or why it isn't one: a done
  * handoff names what its kind delivers, and whatever else it names is dropped, not refused (a
- * research agent's commit is not its result).
+ * research agent's commit is not its result). Its attachments are the tool's to copy in (copy-in.ts).
  */
-export function reportOf({ status, headSha, prUrl, report, ...fields }: z.infer<typeof handoffFieldsSchema>, kind: Kind): GivenReport | { refused: string } {
+export function reportOf({ status, headSha, prUrl, report, ...fields }: Omit<z.infer<typeof handoffFieldsSchema>, "attachments">, kind: Kind): Unattached<GivenReport> | { refused: string } {
   if (status !== "done") return { status, ...fields };
   const { delivers, label } = PIPELINES[kind];
   switch (delivers) {

@@ -41,7 +41,7 @@ const ANCHORED = { finding: 1, result: "anchored", anchor: "brief", reason: "The
 async function failsOnMustFix(kit: Kit, coordinatorId: CoordinatorId, agentThreadId: string, review: object, triage: readonly object[]): Promise<void> {
   const check = () => kit.store.latestHandoff(coordinatorId, a2)?.check ?? assert.fail("no check");
   kit.reviewers.reportAtOnce = false;
-  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD }, agentThreadId);
+  await kit.call("agent_handoff", { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD }, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");
   await settled();
   const reviewing = check().review;

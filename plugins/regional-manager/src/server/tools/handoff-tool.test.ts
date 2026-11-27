@@ -9,7 +9,8 @@ import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { handoffIdSchema } from "../../model/agent/handoff.ts";
 import { issueIdSchema, MAX_CRITERIA } from "../../model/issue/issue.ts";
-import { coordinating, isRefusal, ISSUE, settled, startedAgent, textOf } from "../test-harness.ts";
+import { memoryStorage } from "../memory-storage.ts";
+import { coordinating, isRefusal, ISSUE, LOCAL_HOST, settled, startedAgent, textOf } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff." };
 const REPORT = { summary: "Retries land with backoff", did: ["Added exponential backoff"], evidence: ["npm test: 12 passing"], concerns: [], deviations: [], findings: [] };
@@ -18,8 +19,8 @@ const DONE = { status: "done", ...REPORT, headSha: HEAD };
 const a1 = agentIdSchema.parse("a1");
 const ISSUE_ID = issueIdSchema.parse("WEB-1");
 
-async function withAgent({ verify = true } = {}) {
-  const { kit, threadId, coordinatorId } = await coordinating({ verify });
+async function withAgent({ verify = true, storage = memoryStorage().storage } = {}) {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify, storage });
   const agentThreadId = (await startedAgent(kit, threadId, RETRIES)).agentThreadId;
   return { kit, threadId, coordinatorId, agentThreadId };
 }
@@ -50,10 +51,57 @@ test("a handoff is stored whole, trimmed, with its turn and a waived verdict, an
     agentId: a1,
     turnSeq: kit.thread(agentThreadId).turns.at(-1),
     ...report,
+    attachments: [],
     delivery: { kind: "commit", headSha: HEAD, prUrl: "https://github.com/acme/webhooks/pull/7" },
   });
   assert.deepEqual(check?.verdict, { state: "waived" });
   assert.deepEqual(kit.store.handoff(id), kit.store.latestHandoff(coordinatorId, a1));
+});
+
+test("a handoff keeps each file it could copy in as its record, and its result names each file it couldn't under Not attached with why; it records either way", async () => {
+  const { kit, coordinatorId, agentThreadId } = await withAgent({ verify: false });
+  const storage = `/storage/${agentThreadId}`;
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  kit.hostFiles.set(`${LOCAL_HOST}:${storage}/qa/sheet.png`, png);
+  kit.hostFiles.set(`${LOCAL_HOST}:${storage}/qa/bundle.zip`, png);
+
+  const result = textOf(
+    await kit.call(
+      "agent_handoff",
+      {
+        ...DONE,
+        attachments: [
+          { path: `${storage}/qa/sheet.png`, about: "Criterion 1: the retries, logged" },
+          { path: `${storage}/qa/bundle.zip`, about: "Everything, zipped" },
+        ],
+      },
+      agentThreadId,
+    ),
+  );
+
+  const { handoff } = kit.store.latestHandoff(coordinatorId, a1) ?? assert.fail("no handoff stored");
+  assert.deepEqual(
+    handoff.attachments.map((attachment) => Object.keys(attachment).sort()),
+    [["about", "id", "name", "size", "type"]],
+  );
+  const [shot] = handoff.attachments;
+  assert.deepEqual(shot, { id: shot?.id, name: "sheet.png", about: "Criterion 1: the retries, logged", type: "image/png", size: png.byteLength });
+  assert.deepEqual(kit.store.attachmentFile(coordinatorId, shot?.id ?? assert.fail()), { type: "image/png", bytes: png });
+  assert.match(result, /^Handed off\. Your regional manager has your report, marked unverified: verification is off\. Stop here\.\n\nNot attached, and recorded without it:\n/);
+  assert.ok(result.endsWith(`\n- ${storage}/qa/bundle.zip: its type isn't one the plugin keeps (up to 5 files of at most 10 MB each, of type .png, .jpg, .jpeg, .gif, .webp, .mp4, .webm, .mov, .txt, .log, .json); convert it, as a screenshot to .png or a recording to .mp4.`), result);
+});
+
+test("a handoff given no attachments stores none, and one stored before attachments existed reads back with none", async () => {
+  const { db, storage } = memoryStorage();
+  const { kit, coordinatorId, agentThreadId } = await withAgent({ verify: false, storage });
+  const result = textOf(await kit.call("agent_handoff", DONE, agentThreadId));
+  assert.doesNotMatch(result, /Not attached/);
+  assert.deepEqual(kit.store.latestHandoff(coordinatorId, a1)?.handoff.attachments, []);
+
+  // As a release before attachments stored it: no attachments in its JSON at all.
+  db.prepare("UPDATE handoffs SET report = json_remove(report, '$.attachments')").run();
+  assert.doesNotMatch(z.object({ report: z.string() }).parse(db.prepare("SELECT report FROM handoffs").get()).report, /attachments/);
+  assert.deepEqual(kit.store.latestHandoff(coordinatorId, a1)?.handoff.attachments, []);
 });
 
 test("a handoff records where the agent's work is and what its thread runs on now, so neither is read from it again", async () => {
@@ -164,7 +212,7 @@ test("a handoff stored under the old caps, 50 items of 2,000 characters in each 
   // why the store: agent_handoff takes no such handoff now; one it took before its caps tightened is stored like this.
   const turnSeq = kit.thread(agentThreadId).turns.at(-1) ?? assert.fail("no turn");
   const at = Date.now();
-  kit.store.insertHandoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId: ISSUE_ID, agentId: a1, at, turnSeq, ...REPORT, ...lists, status: "done", delivery: { kind: "commit", headSha: HEAD, prUrl: null } }, { kind: "unread", reason: "stored before the caps" }, null);
+  kit.store.insertHandoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId, issueId: ISSUE_ID, agentId: a1, at, turnSeq, ...REPORT, ...lists, attachments: [], status: "done", delivery: { kind: "commit", headSha: HEAD, prUrl: null } }, { kind: "unread", reason: "stored before the caps" }, null);
 
   for (const text of [textOf(await kit.call("crew_catch_up", {}, threadId)), textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId))]) {
     for (const item of Object.values(lists).flat()) assert.ok(text.includes(`- ${item}`), `item ${item.slice(0, 3)} is missing or cut`);
@@ -172,7 +220,7 @@ test("a handoff stored under the old caps, 50 items of 2,000 characters in each 
   }
   const { rounds } = await kit.opened(coordinatorId, ISSUE_ID);
   const body = coordinatorContract.roundBodies.output.parse({ round: rounds[0]?.body ?? assert.fail("no round") }).round;
-  assert.deepEqual(body?.handoff, { ...lists, report: null });
+  assert.deepEqual(body?.handoff, { ...lists, attachments: [], report: null });
 });
 
 test("issue_read places the issue by its agent's thread once it has had a turn since its handoff, and keeps the handoff on record", async () => {

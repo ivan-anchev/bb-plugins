@@ -13,7 +13,7 @@ import { watchViews } from "./view-watch.ts";
 
 const WEB_1 = issueIdSchema.parse("WEB-1");
 const A1 = agentIdSchema.parse("a1");
-const DONE = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD };
+const DONE = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD };
 const PASSES = { criteria: [{ criterion: 1, result: "pass", shows: "Ran it.", evidence: "$ npm test\n# pass 13" }], findings: [] };
 
 /** A regional manager with one agent on WEB-1, and the statuses WEB-1's log holds, in order. */

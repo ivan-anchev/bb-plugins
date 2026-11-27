@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { coordinatorContract, roundBodyKey } from "../../contract.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { handoffIdSchema, type Handoff } from "../../model/agent/handoff.ts";
+import { attachmentIdSchema, type Copied, type CopiedAttachment } from "../../model/attachment.ts";
 import { roundKeySchema } from "../../model/feed/round.ts";
 import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import type { CoordinatorId } from "../../model/role.ts";
@@ -26,10 +27,16 @@ const bb: ListBb<{ id: string; deletedAt: number | null }> = {
   sdk: { threads: { list: async ({ threadIds }) => threadIds.map((id) => ({ id, deletedAt: null })) } },
 };
 
+/** What an agent attached: a screenshot and a log, as copy-in.ts copies them in, bytes and all, each with an id of its own. */
+const attached = (): CopiedAttachment[] => [
+  { id: attachmentIdSchema.parse(randomUUID()), name: "sheet.png", about: "Criterion 1: the sheet open", type: "image/png", size: 4, bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]) },
+  { id: attachmentIdSchema.parse(randomUUID()), name: "e2e.log", about: "Full e2e run", type: "text/plain; charset=utf-8", size: 3, bytes: Buffer.from("ok\n") },
+];
+
 /** A done handoff of the issue's agent, reviewed with one finding, verified as failing and sent back, as the plugin's own steps store them. */
-function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, ticket: string): Handoff {
+function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, ticket: string): Copied<Handoff> {
   const agentId = startAgent(store, issueId, ticket, coordinatorId);
-  const handoff: Handoff = {
+  const handoff: Copied<Handoff> = {
     id: handoffIdSchema.parse(randomUUID()),
     coordinatorId,
     issueId,
@@ -42,6 +49,7 @@ function sentBack(store: Store, coordinatorId: CoordinatorId, issueId: IssueId, 
     concerns: [],
     deviations: [],
     findings: [],
+    attachments: attached(),
     status: "done",
     delivery: { kind: "commit", headSha: SHA, prUrl: null },
   };
@@ -178,7 +186,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
 
 test("through the feed RPC, each issue's agents are exactly their id, their thread while bb has it, their provider and when they ended: a holder at work, an idle holder, a replaced one and its successor, one whose thread bb deleted, and none", async () => {
   const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
-  const REPORT = { summary: "Needs the staging key", did: ["Wrote the retry loop"], evidence: [], concerns: [], deviations: [], findings: [], status: "blocked" };
+  const REPORT = { summary: "Needs the staging key", did: ["Wrote the retry loop"], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], status: "blocked" };
   const handOff = async (agentThreadId: string) => {
     await kit.call("agent_handoff", REPORT, agentThreadId);
     await kit.idle(agentThreadId, "Handed off.");
@@ -222,7 +230,13 @@ test("an opened round's body sends its handoff, its verdict and the findings wit
   const body = bodies[key] ?? assert.fail("no body");
   assert.deepStrictEqual(keysOf(body), ["findings", "handoff", "reviewMissed", "verdict"], "no earlier key: the tab shows no earlier answers, though the review stored one");
   assert.equal(body.reviewMissed, null, "a review was had");
-  assert.deepStrictEqual(keysOf(body.handoff ?? assert.fail()), ["concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
+  const handed = body.handoff ?? assert.fail("no handoff");
+  assert.deepStrictEqual(keysOf(handed), ["attachments", "concerns", "deviations", "did", "evidence", "findings", "report"], "no id, time, status or summary: the folded round has them");
+  assert.deepStrictEqual(handed.attachments.map(keysOf), [["about", "id", "name", "size", "type"], ["about", "id", "name", "size", "type"]], "each attachment's record, never its bytes");
+  assert.deepStrictEqual(
+    handed.attachments,
+    handoff.attachments.map(({ bytes: _bytes, ...record }) => record),
+  );
   assert.deepStrictEqual(keysOf(body.verdict ?? assert.fail()), ["blocking", "checkout", "criteria", "findings", "headSha", "sameModel", "settlement", "state", "verifierThreadId"]);
   assert.deepStrictEqual(body.findings.map(keysOf), [
     ["claim", "file", "line", "origin", "severity", "title", "triage"],
