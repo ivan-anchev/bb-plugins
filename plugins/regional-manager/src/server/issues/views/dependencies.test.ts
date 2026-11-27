@@ -8,7 +8,7 @@ import { coordinating, failsVerification, HEAD, isRefusal, ISSUE, settled, textO
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
 const REPORT = "## Recommendation\n\nVault: it keeps card data inside our PCI scope.";
-const FIELDS = { summary: "Vault fits our PCI scope", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const FIELDS = { summary: "Vault fits our PCI scope", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 const RESEARCH_DONE = { status: "done", ...FIELDS, report: REPORT };
 
 async function managing() {

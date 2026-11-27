@@ -21,7 +21,7 @@ test("a write to BBP-19 invalidates BBP-19's tag alone, once; a pass with nothin
   tags.publish(MANAGER);
   invalidated.length = 0;
 
-  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
   store.insertHandoff({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: bbp19, agentId, at: 3_000, turnSeq: 1, ...report, status: "blocked" }, { kind: "unread", reason: "unused" }, null);
   tags.publish(MANAGER);
   assert.deepEqual(invalidated, [[`issue:${MANAGER}/BBP-19`]]);

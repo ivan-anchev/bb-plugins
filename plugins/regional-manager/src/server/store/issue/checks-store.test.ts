@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
+import { z } from "zod";
 import type { AgentId } from "../../../model/agent/agent.ts";
 import { handoffIdSchema, type Handoff } from "../../../model/agent/handoff.ts";
+import { attachmentIdSchema, type Copied } from "../../../model/attachment.ts";
 import { issueIdSchema, type IssueId } from "../../../model/issue/issue.ts";
 import type { Check } from "../../../model/verdict/check.ts";
 import type { CheckoutRead } from "../../../model/verdict/checkout.ts";
@@ -15,9 +17,9 @@ import { EXECUTION, failWrites, filedIssue, freshStore, MANAGER, newIssue, start
 
 const SHA = "a".repeat(40);
 const CLEAN: CheckoutRead = { kind: "read", branch: "bb/thr_1", checkout: { headSha: SHA, changedFiles: [], changedFileCount: 0 } };
-const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 
-function handoff(issueId: IssueId, agentId: AgentId, status: "done" | "blocked", at = 3_000): Handoff {
+function handoff(issueId: IssueId, agentId: AgentId, status: "done" | "blocked", at = 3_000): Copied<Handoff> {
   const made = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId, agentId, at, turnSeq: 1 };
   return status === "done" ? { ...made, ...report, status, delivery: { kind: "commit", headSha: SHA, prUrl: null } } : { ...made, ...report, status };
 }
@@ -233,6 +235,36 @@ test("a done handoff that fails partway leaves no handoff, no check, the checks 
   assert.equal(store.handoff(failing.id), null);
   assert.deepEqual(store.record(MANAGER, issue.id).map(({ check }) => check?.verdict.state), ["queued"]);
   assert.deepEqual(events(store), [{ kind: "verification-toggled", verify: false }]);
+});
+
+test("a handoff whose second attachment fails to store leaves no handoff, check, event or file; the same call then stores them all, and each file's bytes read back", () => {
+  const { db, store, issue, agentId } = withAgent();
+  store.setVerify(MANAGER, false, 2_500);
+  const shot = { id: attachmentIdSchema.parse(randomUUID()), name: "sheet.png", about: "Criterion 1: the sheet", type: "image/png", size: 4, bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]) } as const;
+  const log = { id: attachmentIdSchema.parse(randomUUID()), name: "e2e.log", about: "The run", type: "text/plain; charset=utf-8", size: 3, bytes: Buffer.from("ok\n") } as const;
+  const attached: Copied<Handoff> = { ...handoff(issue.id, agentId, "done", 3_000), attachments: [shot, log] };
+  const files = () => z.object({ n: z.number() }).parse(db.prepare("SELECT count(*) AS n FROM attachment_files").get()).n;
+  const restore = failWrites(db, "INSERT", "attachment_files", `NEW.id = '${log.id}'`);
+
+  assert.throws(() => store.insertHandoff(attached, CLEAN, null), /forced failure/);
+  assert.equal(store.handoff(attached.id), null, "no handoff");
+  assert.deepEqual(store.record(MANAGER, issue.id), [], "no check");
+  assert.deepEqual(events(store), [{ kind: "verification-toggled", verify: false }], "no event");
+  assert.equal(files(), 0, "not even the first file");
+  assert.equal(store.attachmentFile(MANAGER, shot.id), null);
+
+  restore();
+  const check = checkOf(store.insertHandoff(attached, CLEAN, null));
+  assert.deepEqual(
+    store.handoff(attached.id)?.handoff.attachments,
+    [shot, log].map(({ bytes: _bytes, ...record }) => record),
+    "the handoff keeps each record, not its bytes",
+  );
+  assert.equal(check.verdict.state, "waived");
+  assert.deepEqual(events(store), [{ kind: "verification-toggled", verify: false }, { kind: "checked", issueId: issue.id, checkId: check.id, asked: null }]);
+  assert.equal(files(), 2);
+  assert.deepEqual(store.attachmentFile(MANAGER, shot.id), { name: "sheet.png", type: "image/png", bytes: shot.bytes });
+  assert.deepEqual(store.attachmentFile(MANAGER, log.id), { name: "e2e.log", type: "text/plain; charset=utf-8", bytes: log.bytes });
 });
 
 test("a done handoff that fails partway keeps the checks waiting for CI whole and waiting, and a retry supersedes the one that passed all but CI once, leaving one the must-fix rule fails to settle", () => {

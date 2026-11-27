@@ -42,7 +42,7 @@ const agent: Agent = {
 };
 const SHA = "a".repeat(40);
 const CLEAN = { headSha: SHA, changedFiles: [], changedFileCount: 0 };
-const report = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const report = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 const made = { id: handoffIdSchema.parse("0b0e8f3e-8b2a-4c5f-9d0e-2f6a1c3b4d5e"), coordinatorId, issueId: issue.id, agentId: agent.id, at: 5_000, turnSeq: 7 };
 const done: Handoff = { ...made, ...report, status: "done", delivery: { kind: "commit", headSha: SHA, prUrl: null } };
 const blocked: Handoff = { ...made, ...report, status: "blocked", summary: "Needs a staging key" };

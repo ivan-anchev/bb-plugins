@@ -7,6 +7,7 @@ import type { Agent, AgentId, EndedHow } from "../../model/agent/agent.ts";
 import type { DecisionId } from "../../model/decision.ts";
 import type { CommentId } from "../../model/feed/comment.ts";
 import type { GivenHandoff, Handoff, HandoffId } from "../../model/agent/handoff.ts";
+import type { Copied } from "../../model/attachment.ts";
 import { wakes, type InboxEvent, type StoredEvent } from "../../model/inbox/inbox-event.ts";
 import { doorbellText } from "../../model/inbox/wake-text.ts";
 import type { IssueId } from "../../model/issue/issue.ts";
@@ -217,7 +218,7 @@ export function createInbox({ bb, store, memory, onChange }: Deps) {
   }
 
   /** Stores the handoff with `insert`, with the file its report is saved to when it delivers one. */
-  function stored<T>(given: GivenHandoff, insert: (handoff: Handoff) => T): T {
+  function stored<T>(given: GivenHandoff, insert: (handoff: Copied<Handoff>) => T): T {
     if (given.status !== "done") return insert(given);
     const { delivery } = given;
     if (delivery.kind === "commit") return insert({ ...given, delivery });

@@ -7,8 +7,8 @@ import { useCardIntent, type CardPresence } from "./card-intent.ts";
 export type HoverCards = {
   /** The key of the row whose card shows; null: none. */
   shown: string | null;
-  /** On a row's box: the pointer and focus events that open and close its card. */
-  trigger(key: string): HTMLAttributes<HTMLDivElement>;
+  /** On a row's box, or any element that holds its trigger: the pointer and focus events that open and close its card. */
+  trigger(key: string): HTMLAttributes<HTMLElement>;
   /** On the board: a press puts the card away. */
   board: HTMLAttributes<HTMLDivElement>;
   /** The card of a row's line to the intent (hover-card.tsx). */
@@ -26,10 +26,10 @@ export function useHoverCards(): HoverCards {
       },
       onPointerLeave: () => intent.leave(key),
       // why: focus moving between the row and its pull request stays on the row, and doesn't bring back a card Escape closed.
-      onFocus: (event: FocusEvent<HTMLDivElement>) => {
+      onFocus: (event: FocusEvent<HTMLElement>) => {
         if (!event.currentTarget.contains(event.relatedTarget)) intent.focus(key);
       },
-      onBlur: (event: FocusEvent<HTMLDivElement>) => {
+      onBlur: (event: FocusEvent<HTMLElement>) => {
         if (!event.currentTarget.contains(event.relatedTarget)) intent.blur(key);
       },
     }),

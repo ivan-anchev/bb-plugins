@@ -4,6 +4,7 @@ import { defineRpcContract } from "@get-bb/plugin-sdk";
 import type { NewThreadRequest } from "@get-bb/plugin-sdk/app";
 import { z } from "zod";
 import { agentIdSchema } from "./model/agent/agent.ts";
+import { attachmentIdSchema } from "./model/attachment.ts";
 import { needsYouSchema } from "./model/board/board-groups.ts";
 import { openIssuesSchema } from "./model/board/open-issues.ts";
 import { answerSchema, decisionIdSchema, decisionSchema } from "./model/decision.ts";
@@ -293,6 +294,14 @@ export const privateContract = defineRpcContract({
   memoryWrite: {
     input: z.object({ coordinatorId: coordinatorIdSchema, file: memoryFileSchema, content: memoryContentSchema, baseVersion: memoryVersionSchema }),
     output: writeOutcomeSchema,
+  },
+  /**
+   * Writes a Markdown attachment into its manager's thread storage, where bb's side panel can open it,
+   * and names it there: the manager's thread and the path in its storage (open-attachment.ts).
+   */
+  openAttachment: {
+    input: z.object({ coordinatorId: coordinatorIdSchema, id: attachmentIdSchema }),
+    output: z.object({ threadId: z.string(), path: z.string() }),
   },
 });
 

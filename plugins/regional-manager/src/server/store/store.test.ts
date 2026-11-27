@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { z } from "zod";
 import { handoffIdSchema, type Handoff } from "../../model/agent/handoff.ts";
+import type { Copied } from "../../model/attachment.ts";
 import { issueKeyOf, issueKeySchema } from "../../model/issue/key/issue-key.ts";
 import { checkIdSchema } from "../../model/verdict/check.ts";
 import { issueViews } from "../../model/issue/status.ts";
@@ -24,7 +25,7 @@ test("a fresh database holds the design's tables and indexes, and nothing else",
       .prepare("SELECT name FROM sqlite_master WHERE type = ? AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all(type)
       .map((row) => z.object({ name: z.string() }).parse(row).name);
-  assert.deepEqual(names("table"), ["agents", "checks", "comments", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_log", "issue_relations", "issue_writes", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
+  assert.deepEqual(names("table"), ["agents", "attachment_files", "checks", "comments", "coordinators", "decisions", "doorbells", "events", "fact_writes", "handoffs", "issue_decisions", "issue_log", "issue_relations", "issue_writes", "issues", "memory_revisions", "pr_snapshots", "reminders", "roles"]);
   const facts = ["agents", "checks", "decisions", "handoffs", "issue_relations", "issues", "pr_snapshots"];
   const feeds = ["agents_issue_id", "checks_issue_id", "comments_issue_id", "handoffs_issue_id", "issue_decisions_issue_id", "issue_log_issue_id", "issue_relations_depends_on", "issue_relations_issue_id", "issues_id"];
   const writes = (tables: string[]) => tables.flatMap((table) => ["deleted", "inserted", "updated"].map((write) => `${table}_${write}`));
@@ -270,7 +271,7 @@ test("removing a regional manager removes everything it owns, and nothing of ano
     const { id } = filedIssue(store, manager, newIssue(), 2_000);
     const agentId = startAgent(store, id, `agent-of-${manager}`, manager);
     store.insertHandoff(
-      { id: handoffIdSchema.parse(randomUUID()), coordinatorId: manager, issueId: id, agentId, at: 3_000, turnSeq: 1, status: "blocked", summary: "Stuck", did: [], evidence: [], concerns: [], deviations: [], findings: [] },
+      { id: handoffIdSchema.parse(randomUUID()), coordinatorId: manager, issueId: id, agentId, at: 3_000, turnSeq: 1, status: "blocked", summary: "Stuck", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] },
       { kind: "unread", reason: "unused" },
       null,
     );
@@ -371,8 +372,8 @@ test("every write to what an issue's view is read from counts for its regional m
   const next: NewAgent = { coordinatorId: MANAGER, issueId: i1, ticket: "agent-1", placement: { kind: "worktree" }, base: { kind: "default" }, checkout: { environmentId: null, branch: null, head: null }, execution: EXECUTION, at: 2_000 };
   const agentId = counted("an agent started", () => store.insertAgent(next)) ?? assert.fail("no agent");
   counted("its thread bound", () => store.bindTicket("agent-1", "thr_agent-1"));
-  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
-  const done: Handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: i1, agentId, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
+  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
+  const done: Copied<Handoff> = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: i1, agentId, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
   counted("a done handoff", () => store.insertHandoff(done, { kind: "unread", reason: "unused" }, null));
   counted("a pull request read", () => store.savePrRead(MANAGER, "bb/retries", { issueId: i1, agentId }, null, null, 3_000));
   const decision = counted("a decision asked", () => store.insertDecision(MANAGER, { question: "Which queue?", options: [], recommended: null, issueId: i1 }, 3_000));
@@ -393,8 +394,8 @@ function handingOver() {
   const { id: issueId } = filedIssue(store, MANAGER, newIssue(), 2_000);
   const holder = { coordinatorId: MANAGER, id: startAgent(store, issueId, "agent-1"), issueId };
   const handoffId = handoffIdSchema.parse(randomUUID());
-  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
-  const done: Handoff = { id: handoffId, coordinatorId: MANAGER, issueId, agentId: holder.id, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
+  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
+  const done: Copied<Handoff> = { id: handoffId, coordinatorId: MANAGER, issueId, agentId: holder.id, at: 3_000, turnSeq: 1, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } };
   const check = store.insertHandoff(done, { kind: "read", branch: null, checkout: { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 } }, null) ?? assert.fail("no check");
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId, checkId: check.id }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier");
@@ -483,8 +484,8 @@ test("every write to what an issue's feed reads counts for that issue as it comm
     return [...store.issueWrites(MANAGER)].filter(([id, writes]) => before.get(id) !== writes).map(([id]) => id);
   };
   const agentId = startAgent(store, bbp19, "agent-1");
-  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
-  const done = (at: number): Handoff => ({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: bbp19, agentId, at, turnSeq: at, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } });
+  const report = { summary: "Retries land", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
+  const done = (at: number): Copied<Handoff> => ({ id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: bbp19, agentId, at, turnSeq: at, ...report, status: "done", delivery: { kind: "commit", headSha: "a".repeat(40), prUrl: null } });
   const unheld = { requireUnheld: false, closes: new Map(), at: 3_000 };
 
   assert.deepEqual(moved(() => store.insertHandoff(done(3_000), { kind: "unread", reason: "unused" }, null)), [bbp19], "a handoff");

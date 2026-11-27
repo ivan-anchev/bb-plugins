@@ -8,7 +8,7 @@ import { issueIdSchema } from "../../model/issue/issue.ts";
 import { coordinating, HEAD, isRefusal, ISSUE, settled, textOf, threadIn, withoutLinks } from "../test-harness.ts";
 
 const RESEARCH = { kind: "research", title: "Pick a card vault", description: "Which vault fits our PCI scope.", brief: "Compare Vault and KMS.", doneCriteria: [] };
-const FIELDS = { summary: "Vault fits our PCI scope", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const FIELDS = { summary: "Vault fits our PCI scope", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 const RESEARCH_DONE = { status: "done", ...FIELDS, report: "## Recommendation\n\nVault." };
 const BUILD_DONE = { status: "done", ...FIELDS, summary: "Retries land", headSha: HEAD };
 

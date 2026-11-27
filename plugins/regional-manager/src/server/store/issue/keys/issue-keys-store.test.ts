@@ -27,7 +27,7 @@ function storedBy050() {
   const sub = filedIssue(store, MANAGER, newIssue({ parentId: parent.id }), 2_000);
   const dependent = filedIssue(store, MANAGER, newIssue({ dependsOn: [sub.id] }), 2_000);
   const agentId = startAgent(store, sub.id, "agent-1");
-  const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: sub.id, agentId, at: 3_000, turnSeq: 1, summary: `Retries land on ${parent.id}`, did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+  const handoff = { id: handoffIdSchema.parse(randomUUID()), coordinatorId: MANAGER, issueId: sub.id, agentId, at: 3_000, turnSeq: 1, summary: `Retries land on ${parent.id}`, did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
   const check = store.insertHandoff({ ...handoff, status: "done", delivery: { kind: "commit", headSha: SHA, prUrl: null } }, CLEAN, null) ?? assert.fail("no check made");
   store.insertCheckerTicket("verifier-1", { kind: "verifier", coordinatorId: MANAGER, issueId: sub.id, checkId: check.id }, 3_000);
   store.bindTicket("verifier-1", "thr_verifier_1");

@@ -9,7 +9,7 @@ import { memoryFileSchema } from "../../model/memory-file.ts";
 import { bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, ISSUE, newSubmission, settled, startedAgent, textOf, threadIn, toCap } from "../test-harness.ts";
 
 const RETRIES = { ...ISSUE, brief: "Retry failed webhook deliveries with backoff.", doneCriteria: ["npm test passes", "a failed delivery is retried 3 times"] };
-const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 
 /** A regional manager with RETRIES filed as WEB-1, its thread idle so a doorbell starts a turn. */
 async function filed(options: Parameters<typeof coordinating>[0] = {}) {

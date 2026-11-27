@@ -5,7 +5,7 @@
 // BBP-19-shaped feed to mount it with.
 import "../../test-browser.ts";
 import assert from "node:assert/strict";
-import type { JsonValue, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
+import type { ExperimentalFilePreviewOptions, JsonValue, PluginSidebarThread } from "@get-bb/plugin-sdk/app";
 import { renderSlot } from "@get-bb/plugin-sdk/testing/app";
 import { act, within } from "@testing-library/react";
 import { coordinatorContract, issueTag, parseRoundBodyKey, type IssueFeed, type IssueRow } from "../../../contract.ts";
@@ -122,7 +122,7 @@ function verdictOf(n: number, results: readonly CriterionResult[]): ShownVerdict
 export function bodyOf(n: number): RoundBody {
   const results = FEED.entries.flatMap((entry) => (entry.kind === "round" && entry.round.number === n ? (entry.round.verdict?.results ?? []) : []));
   return {
-    handoff: { did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], report: null },
+    handoff: { did: ["Added exponential backoff"], evidence: ["$ npm test"], concerns: [], deviations: [], findings: [], attachments: [], report: null },
     verdict: verdictOf(n, results),
     findings: [
       { title: "Retries back off without a cap", file: "src/retry.ts", line: 4, severity: "must-fix", claim: "The backoff has no cap.", origin: "new", triage: { result: "anchored", anchor: "criterion", steps: null, reason: "Seen: it grows without bound.", effect: "blocks" } },
@@ -141,12 +141,29 @@ function bodyOfKey(key: string): RoundBody | null {
 
 /** How the plugin answers a comment posted from the tab: its output, a promise of it, or a throw. */
 type CommentAnswer = (input: unknown) => unknown;
-/** `managerListed`: whether bb lists the regional manager's thread, which names it (false: archived); `live`, the other threads bb's sidebar lists, as its agents'. */
-type MountOptions = { feedOf?: (issueId: string) => IssueFeed; bodies?: (key: string) => RoundBody | null; comment?: CommentAnswer; managerListed?: boolean; live?: readonly PluginSidebarThread[] };
+/**
+ * `managerListed`: whether bb lists the regional manager's thread, which names it (false: archived); `live`, the other threads bb's sidebar lists, as its agents';
+ * `openAttachment`, how the plugin answers an attachment's open (default: it names the manager's thread and a path); `preview`, whether bb's panel takes a file to open (default: it does).
+ */
+type MountOptions = {
+  feedOf?: (issueId: string) => IssueFeed;
+  bodies?: (key: string) => RoundBody | null;
+  comment?: CommentAnswer;
+  managerListed?: boolean;
+  live?: readonly PluginSidebarThread[];
+  openAttachment?: (input: unknown) => unknown;
+  preview?: boolean;
+};
 
 /** The tab mounted with `params`, on a board of `issues`; the reads and writes it made, and ways to make the plugin answer anew. */
-export async function mount(params: JsonValue | null, issues: readonly IssueRow[], { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }), managerListed = true, live = [] }: MountOptions = {}) {
+export async function mount(
+  params: JsonValue | null,
+  issues: readonly IssueRow[],
+  { feedOf = () => FEED, bodies = bodyOfKey, comment = () => ({ commentId: "m9" }), managerListed = true, live = [], openAttachment = opensInManagerStorage, preview = true }: MountOptions = {},
+) {
   const feedReads: unknown[] = [];
+  const opens: unknown[] = [];
+  const previews: ExperimentalFilePreviewOptions[] = [];
   const bodyReads: string[][] = [];
   const answers: unknown[] = [];
   const comments: unknown[] = [];
@@ -160,6 +177,10 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
       experimental_panel: { openTab: () => true },
       sidebarThreads: { status: "ready", threads: [...(managerListed ? [sidebarThread(COORDINATOR.threadId, MANAGER_NAME)] : []), ...live], projects: [PROJECT] },
       providers: { status: "ready", providers: PROVIDERS },
+      openFilePreview: (options) => {
+        previews.push(options);
+        return preview;
+      },
       rpc: {
         coordinators: () => ({ coordinators: [COORDINATOR], notStarted: [] }),
         board: () => ({ verify: true, ownEdits: null, prUnavailable: null, decisions: [], issues: currentIssues }),
@@ -180,6 +201,10 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
           comments.push(input);
           return comment(input);
         },
+        openAttachment: (input: unknown) => {
+          opens.push(input);
+          return openAttachment(input);
+        },
       },
     },
   );
@@ -189,6 +214,9 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
     bodyReads,
     answers,
     comments,
+    /** Each attachment the tab asked the plugin to open, and each file it then asked bb's panel to preview. */
+    opens,
+    previews,
     /** The issue's own article; its rounds and decisions are articles inside it. */
     tab: () => within(view.container.querySelector<HTMLElement>("article.rmi-detail") ?? assert.fail("no issue drawn")),
     /** The board reads again, with `next` as its rows. */
@@ -204,6 +232,12 @@ export async function mount(params: JsonValue | null, issues: readonly IssueRow[
       await act(async () => {});
     },
   };
+}
+
+/** The plugin's answer to an attachment's open: written into the manager's thread storage, under attachments/<id>/. */
+function opensInManagerStorage(input: unknown) {
+  const { id } = coordinatorContract.openAttachment.input.parse(input);
+  return { threadId: COORDINATOR.threadId, path: `attachments/${id}/findings.md` };
 }
 
 /** Mounted on `issueId`, once its feed has drawn. */

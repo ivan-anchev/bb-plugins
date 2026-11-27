@@ -34,6 +34,7 @@ const HANDOFF: Handoff = {
   concerns: [],
   deviations: [],
   findings: [],
+  attachments: [],
   status: "done",
   delivery: { kind: "commit", headSha: SHA, prUrl: null },
 };

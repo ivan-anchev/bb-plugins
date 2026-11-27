@@ -53,6 +53,8 @@ import { toldWrites } from "./store/told-writes.ts";
 import { registerCommentTool } from "./feed/comment-tool.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import { registerHandoffTool } from "./tools/handoff-tool.ts";
+import { attachmentCopier } from "./attachments/copy-in.ts";
+import { attachmentHandlers } from "./attachments/open-attachment.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
 import { createFinalChecks } from "./verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
@@ -62,6 +64,9 @@ import type { Cli } from "./watch/host-command.ts";
 import { submissionIdSchema, type SubmissionId } from "../model/feed/comment.ts";
 
 const PLUGIN_ID = "regional-manager";
+
+/** The machine bb runs on, where the fake keeps every environment and thread storage. */
+export const LOCAL_HOST = "host_local";
 
 // As bb lists them (schemas shortened): boat-sandbox composes project-checkout with a machine of its own.
 const ENVIRONMENT_PROVIDERS: EnvironmentProvider[] = [
@@ -823,7 +828,9 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (thread.deletedAt !== null) throw bbHttpError(404, "thread_not_found", "Thread not found");
       if (title !== undefined) thread.title = title;
     },
-  } satisfies SpawnBb["sdk"]["threads"] & ManagerBb["sdk"]["threads"] & HeldBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
+    // As bb does, every thread has its storage folder on the machine bb runs on.
+    storageLocation: async ({ threadId }: { threadId: string }) => ({ hostId: LOCAL_HOST, storageRootPath: `/storage/${threadId}` }),
+  } satisfies Parameters<typeof attachmentCopier>[0]["sdk"]["threads"] & SpawnBb["sdk"]["threads"] & ManagerBb["sdk"]["threads"] & HeldBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
       tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId, signal) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal }) });
@@ -856,7 +863,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
   const environments = {
     listProviders: async () => ENVIRONMENT_PROVIDERS,
     async get({ environmentId }: { environmentId: string }) {
-      const answer = { status: environmentRecords.destroyed.has(environmentId) ? "destroyed" : "ready", defaultBranch: environmentRecords.defaultBranch };
+      const answer = { status: environmentRecords.destroyed.has(environmentId) ? "destroyed" : "ready", defaultBranch: environmentRecords.defaultBranch, hostId: LOCAL_HOST, path: `/work/${environmentId}` };
       if (environmentRecords.holding) await new Promise<void>((release) => environmentRecords.held.push(release));
       return answer;
     },
@@ -902,9 +909,26 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     await github.pending;
     return answer;
   }
+  /** The files on bb's hosts, by host and absolute path; a test saves an agent's evidence here. */
+  const hostFiles = new Map<string, Buffer>();
+  const files = {
+    // As bb does: a path outside its root, or no file there, is refused; a file comes back as base64.
+    async read({ hostId, rootPath, path }: { hostId?: string; rootPath?: string; path: string }) {
+      const bytes = hostFiles.get(`${hostId}:${path}`);
+      if (rootPath === undefined || !path.startsWith(`${rootPath}/`)) throw bbHttpError(400, "path_outside_root", "Path is outside the root");
+      if (bytes === undefined) throw bbHttpError(404, "file_not_found", `No such file: ${path}`);
+      return { content: bytes.toString("base64"), contentEncoding: "base64" as const };
+    },
+    // As bb does: a path outside its root is refused.
+    async write({ hostId, rootPath, path, content, contentEncoding }: { hostId?: string; rootPath?: string; path: string; content: string; contentEncoding?: "base64" | "utf8" }) {
+      if (rootPath === undefined || !path.startsWith(`${rootPath}/`)) throw bbHttpError(400, "path_outside_root", "Path is outside the root");
+      hostFiles.set(`${hostId}:${path}`, Buffer.from(content, contentEncoding ?? "utf8"));
+      return {};
+    },
+  } satisfies Parameters<typeof attachmentCopier>[0]["sdk"]["files"] & Parameters<typeof attachmentHandlers>[0]["sdk"]["files"];
   const fakeBb = {
     pluginId: PLUGIN_ID,
-    sdk: { threads, providers: providersArea, projects, plugins, environments },
+    sdk: { threads, providers: providersArea, projects, plugins, environments, files },
     log: { warn: (message: string) => void warnings.push(message) },
     onDispose: (hook: () => void) => void disposers.push(hook),
     events: {
@@ -963,14 +987,14 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshIssues });
     registerIssueTools(bb, { store, issues });
     registerAgentTools(bb, { store, agents });
-    registerHandoffTool(bb, { store, verify, prs: prWatch });
+    registerHandoffTool(bb, { store, verify, prs: prWatch, copyIn: attachmentCopier(bb) });
     registerCommentTool(bb, { store, inbox, turns });
     registerReviewTool(bb, { store, review });
     registerVerdictTool(bb, { store, verify });
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox, views }), ...openIssuesHandler({ store, board }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox, views }), ...openIssuesHandler({ store, board }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }), ...attachmentHandlers(bb, store) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   /** `turns`, whose every operation waits, once it holds its issue's turn, while turnsTaken says to hold it. */
   function heldWhileTaken(turns: IssueTurns): IssueTurns {
@@ -1071,6 +1095,8 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     gitlab,
     /** bb's git plugin as the PR watch and the own-tree watch reach it; a test may change it between reads. */
     git,
+    /** Files on bb's hosts, keyed `<hostId>:<absolute path>`: an agent's thread storage is /storage/<thread id> and its workspace /work/<environment id>, both on LOCAL_HOST. */
+    hostFiles,
     /** bb's environments as the plugin reads them; a test destroys one to remove its sandbox, changes the default branch, or holds the reads. */
     environments: environmentRecords,
     /** The project's repository, locally and on origin; a test deletes a local branch, as a person can. */
@@ -1430,7 +1456,7 @@ export const MUST_FIX = { title: "The backoff never caps", file: "src/retry.ts",
  * criterion and anchors that finding to the brief, a failure on review findings alone.
  */
 export async function failsVerification(kit: ReturnType<typeof harness>, coordinatorId: CoordinatorId, agentThreadId: string, on: "criterion" | "review" = "criterion", prUrl: string | null = null): Promise<void> {
-  const done = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], headSha: HEAD, ...(prUrl === null ? {} : { prUrl }) };
+  const done = { status: "done", summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [], headSha: HEAD, ...(prUrl === null ? {} : { prUrl }) };
   kit.reviewers.reportAtOnce = on === "criterion";
   await kit.call("agent_handoff", done, agentThreadId);
   await kit.idle(agentThreadId, "Handed off.");

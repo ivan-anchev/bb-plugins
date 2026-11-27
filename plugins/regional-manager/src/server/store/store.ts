@@ -14,6 +14,7 @@ import type { HandoffId } from "../../model/agent/handoff.ts";
 import { issueDecisions, type IssueDecision } from "../../model/decision.ts";
 import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
 import type { IssueKey } from "../../model/issue/key/issue-key.ts";
+import { attachmentsStore } from "./attachments-store.ts";
 import { agentsStore, bindRole, endAgent, insertAgent, insertTicket, type NewAgent } from "./issue/agents-store.ts";
 import { checksStore, startCheck, startReview, supersedeChecks } from "./issue/checks-store.ts";
 import { issueKeysStore } from "./issue/keys/issue-keys-store.ts";
@@ -57,6 +58,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
     ...issueKeysStore(db),
     ...logStore(db),
     ...commentsStore(db),
+    ...attachmentsStore(db),
 
     /** The issue's decisions, its one list, oldest first: the questions put to the user naming it, answered or not, and the decisions recorded on it. */
     issueDecisions: (coordinatorId: CoordinatorId, id: IssueId): IssueDecision[] => issueDecisions(id, inbox.decisions(coordinatorId), issues.recordedDecisions(coordinatorId, id)),
@@ -208,7 +210,7 @@ export function openStore(storage: Pick<PluginStorage, "database" | "migrate">) 
      */
     removeCoordinator(id: CoordinatorId): void {
       db().transaction(() => {
-        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issue_decisions", "issue_log", "comments", "issues", "memory_revisions", "fact_writes", "issue_writes"]) {
+        for (const table of ["events", "doorbells", "reminders", "decisions", "pr_snapshots", "checks", "handoffs", "agents", "issue_relations", "issue_decisions", "issue_log", "comments", "issues", "memory_revisions", "fact_writes", "issue_writes", "attachment_files"]) {
           db().prepare(`DELETE FROM ${table} WHERE coordinator_id = ?`).run(id);
         }
         db().prepare("DELETE FROM coordinators WHERE id = ?").run(id);

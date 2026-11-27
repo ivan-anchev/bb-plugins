@@ -9,7 +9,7 @@ import type { CoordinatorId } from "../../model/role.ts";
 import { coordinating, failsVerification, HEAD, type FakePr, holdingThreadLists, isRefusal, ISSUE, settled, startedAgent, textOf, threadIn, toCap, withoutLinks } from "../test-harness.ts";
 
 const ISSUE_ID = issueIdSchema.parse("WEB-1");
-const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [] };
+const REPORT = { summary: "Retries land with backoff", did: [], evidence: [], concerns: [], deviations: [], findings: [], attachments: [] };
 
 async function managing(options: Parameters<typeof coordinating>[0] = {}) {
   const { kit, threadId, coordinatorId } = await coordinating(options);
