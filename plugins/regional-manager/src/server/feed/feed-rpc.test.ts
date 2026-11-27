@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 import { coordinatorContract, roundBodyKey } from "../../contract.ts";
+import { agentIdSchema } from "../../model/agent/agent.ts";
 import { handoffIdSchema, type Handoff } from "../../model/agent/handoff.ts";
 import { roundKeySchema } from "../../model/feed/round.ts";
 import { issueIdSchema, type IssueId } from "../../model/issue/issue.ts";
@@ -12,7 +13,7 @@ import type { Store } from "../store/store.ts";
 import { failOnMustFix, filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, passWithShouldFix, startAgent } from "../store/test-store.ts";
 import type { ListBb } from "../agents/threads.ts";
 import { createFeedReader } from "./feed-reader.ts";
-import { coordinating, doorbellOf, ISSUE, issueIn, settled, startedAgent, textOf, newSubmission, toCap } from "../test-harness.ts";
+import { coordinating, doorbellOf, ISSUE, issueIn, settled, startedAgent, textOf, threadIn, newSubmission, toCap } from "../test-harness.ts";
 import { feedHandlers } from "./feed-rpc.ts";
 
 const SHA = "a".repeat(40);
@@ -129,7 +130,7 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   const { handlers, issueId } = seeded();
   const feed = await handlers.issueFeed({ coordinatorId: MANAGER, issueId });
   assert.deepStrictEqual(keysOf(feed), ["agents", "blocks", "brief", "dependsOn", "description", "doneCriteria", "entries"]);
-  assert.deepStrictEqual([feed.dependsOn, feed.blocks, feed.agents], [["WEB-1"], ["WEB-3"], [{ id: "a1", threadId: "thr_agent-1" }]]);
+  assert.deepStrictEqual([feed.dependsOn, feed.blocks, feed.agents], [["WEB-1"], ["WEB-3"], [{ id: "a1", threadId: "thr_agent-1", providerId: "codex", ended: { at: 4_200 } }]]);
   assert.deepStrictEqual(
     feed.entries.map(({ kind }) => kind),
     ["created", "agent-started", "round", "decision", "decision", "pr", "thread", "unblocked", "agent-ended", "logged", "comment", "comment", "moved", "moved"],
@@ -173,6 +174,39 @@ test("an issue's feed sends exactly what its tab reads: its plan's text and rela
   assert.deepStrictEqual(entries.get("pr"), { kind: "pr", at: 3_900, pr: { forge: "github", number: 7, url: "https://github.com/acme/webhooks/pull/7", state: "open", draft: false, ci: "pending", failedChecks: [] }, changes: ["opened"] }, "the pull request as its badge shows it, as the read that saw it opened found it");
   const thread = entries.get("thread");
   assert.deepStrictEqual(thread?.kind === "thread" && thread.event, { kind: "reported-back", lastAnswer: "Still on it." });
+});
+
+test("through the feed RPC, each issue's agents are exactly their id, their thread while bb has it, their provider and when they ended: a holder at work, an idle holder, a replaced one and its successor, one whose thread bb deleted, and none", async () => {
+  const { kit, threadId, coordinatorId } = await coordinating({ verify: false });
+  const REPORT = { summary: "Needs the staging key", did: ["Wrote the retry loop"], evidence: [], concerns: [], deviations: [], findings: [], status: "blocked" };
+  const handOff = async (agentThreadId: string) => {
+    await kit.call("agent_handoff", REPORT, agentThreadId);
+    await kit.idle(agentThreadId, "Handed off.");
+    await settled();
+  };
+  const working = await startedAgent(kit, threadId);
+  const idle = await startedAgent(kit, threadId, {}, { execution: { providerId: "codex", model: "gpt-default" } });
+  await handOff(idle.agentThreadId);
+  const replaced = await startedAgent(kit, threadId);
+  await handOff(replaced.agentThreadId);
+  kit.thread(threadId).status = "idle";
+  const successor = threadIn(textOf(await kit.call("agent_start", { issue: replaced.issue }, threadId)));
+  const deleted = await startedAgent(kit, threadId);
+  kit.thread(deleted.agentThreadId).deletedAt = 9_000;
+  const unstarted = issueIn(textOf(await kit.call("issue_create", ISSUE, threadId)));
+
+  // why the RPC's own answer, unparsed: a parse would drop a key the payload must not carry.
+  const agentsOf = async (issue: string) => (await kit.rpc.issueFeed({ coordinatorId, issueId: issueIdSchema.parse(issue) })).agents;
+  const ended = kit.store.agent(coordinatorId, agentIdSchema.parse("a3"))?.ended ?? assert.fail("a3 never ended");
+  assert.equal(ended.how, "replaced");
+  assert.deepStrictEqual(await agentsOf(working.issue), [{ id: "a1", threadId: working.agentThreadId, providerId: "claude-code", ended: null }], "at work: it holds the issue");
+  assert.deepStrictEqual(await agentsOf(idle.issue), [{ id: "a2", threadId: idle.agentThreadId, providerId: "codex", ended: null }], "idle after its handoff, it still holds it, on the provider it was started on");
+  assert.deepStrictEqual(await agentsOf(replaced.issue), [
+    { id: "a3", threadId: replaced.agentThreadId, providerId: "claude-code", ended: { at: ended.at } },
+    { id: "a4", threadId: successor, providerId: "claude-code", ended: null },
+  ]);
+  assert.deepStrictEqual(await agentsOf(deleted.issue), [{ id: "a5", threadId: null, providerId: "claude-code", ended: null }], "bb deleted its thread: none to open");
+  assert.deepStrictEqual(await agentsOf(unstarted), []);
 });
 
 test("an opened round's body sends its handoff, its verdict and the findings with their title, origin and triage, and what each does to the work, never the reviewer's earlier answers; a key of a removed manager, or none of a round, reads null beside it", async () => {

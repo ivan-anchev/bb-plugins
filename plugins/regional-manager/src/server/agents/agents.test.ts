@@ -439,9 +439,10 @@ test("an issue opened on the board links each ended agent's thread while bb has 
   await settled();
   const feed = () => kit.rpc.issueFeed({ coordinatorId, issueId: issueIdSchema.parse("WEB-1") });
   const ended = async () => (await feed()).entries.flatMap((entry) => (entry.kind === "agent-ended" ? [[entry.agentId, entry.how]] : []));
+  const endedAt = (id: string) => ({ at: kit.store.agent(coordinatorId, agentIdSchema.parse(id))?.ended?.at ?? assert.fail(`${id} never ended`) });
   assert.deepEqual((await feed()).agents, [
-    { id: "a1", threadId: stopped },
-    { id: "a2", threadId: archived },
+    { id: "a1", threadId: stopped, providerId: "claude-code", ended: endedAt("a1") },
+    { id: "a2", threadId: archived, providerId: "claude-code", ended: endedAt("a2") },
   ]);
   assert.deepEqual(await ended(), [
     ["a1", "stopped"],
@@ -450,8 +451,8 @@ test("an issue opened on the board links each ended agent's thread while bb has 
 
   for (const id of [stopped, archived]) kit.thread(id).deletedAt = Date.now();
   assert.deepEqual((await feed()).agents, [
-    { id: "a1", threadId: null },
-    { id: "a2", threadId: null },
+    { id: "a1", threadId: null, providerId: "claude-code", ended: endedAt("a1") },
+    { id: "a2", threadId: null, providerId: "claude-code", ended: endedAt("a2") },
   ]);
 });
 

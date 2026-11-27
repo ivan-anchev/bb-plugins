@@ -435,7 +435,7 @@ test("an issue opened on the board reads what it is about, its brief, its criter
   await settled();
 
   const { feed, rounds } = await opened();
-  assert.deepEqual([feed.description, feed.brief, feed.doneCriteria, feed.agents], ["Failed webhook deliveries are lost.", "Retry failed deliveries with backoff.", CRITERIA, [{ id: "a1", threadId: agentThreadId }]]);
+  assert.deepEqual([feed.description, feed.brief, feed.doneCriteria, feed.agents], ["Failed webhook deliveries are lost.", "Retry failed deliveries with backoff.", CRITERIA, [{ id: "a1", threadId: agentThreadId, providerId: "claude-code", ended: null }]]);
   assert.deepEqual(
     rounds.map(({ round, body }) => [round.number, round.by, round.verdict?.results, body.handoff?.did, body.verdict?.state === "returned" && body.verdict.criteria.map((check) => check.result)]),
     [

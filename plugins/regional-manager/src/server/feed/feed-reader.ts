@@ -58,7 +58,7 @@ export function createFeedReader(bb: ListBb<{ id: string; deletedAt: number | nu
         doneCriteria: issue.doneCriteria,
         dependsOn: issue.dependsOn,
         blocks,
-        agents: agents.map(({ id, threadId }) => ({ id, threadId: openable(threadId) })),
+        agents: agents.map(({ id, threadId, execution, ended }) => ({ id, threadId: openable(threadId), providerId: execution.providerId, ended: ended === null ? null : { at: ended.at } })),
         entries,
       };
     },

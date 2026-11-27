@@ -1,10 +1,11 @@
-// An issue's detail, read when its tab opens, under its head: its description, its brief folded, its relations, and its
-// feed (feed/feed.tsx), the grid of its criteria by round and its Activity. It reads its own issue
-// alone, again only when that issue changes.
+// An issue's head and its detail, read when its tab opens: its head with every agent that held it,
+// then its description, its brief folded, its relations, and its feed (feed/feed.tsx), the grid of its
+// criteria by round and its Activity. It reads its own issue alone, again only when that issue changes.
 import { experimental_useRpcQuery } from "@get-bb/plugin-sdk/app";
 import { coordinatorContract as contract, type IssueRow } from "../../../../contract.ts";
 import type { CoordinatorId } from "../../../../model/role.ts";
 import { ReadFailure } from "../../../ui/read-failure.tsx";
+import { IssueHeader } from "../issue-header.tsx";
 import { DiscloseGlyph } from "./disclose-glyph.tsx";
 import { Feed } from "../feed/feed.tsx";
 import { IssueRelations } from "./issue-relations.tsx";
@@ -21,6 +22,7 @@ export function IssueDetail({ coordinatorId, issue, issues }: IssueDetailProps) 
   const feed = read.data;
   return (
     <>
+      <IssueHeader issue={issue} agents={feed?.agents ?? null} />
       {read.error !== null && <ReadFailure onRetry={() => void read.refetch()}>Could not read {issue.id}: {read.error.message}</ReadFailure>}
       {feed === undefined && read.error === null && <p className="rmi-description">Loading…</p>}
       {feed !== undefined && (
