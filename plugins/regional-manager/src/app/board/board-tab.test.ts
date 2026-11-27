@@ -39,7 +39,7 @@ function mount() {
 
 test("the tab shows the board, then Memory below it, which shows each file as a card previewing its text", async () => {
   const view = mount();
-  const board = await view.findByText("Verify done handoffs");
+  const board = await view.findByRole("button", { name: /^Verification on\./ });
   const memory = await view.findByRole("region", { name: /^Memory/ });
   assert.ok(board.compareDocumentPosition(memory) & Node.DOCUMENT_POSITION_FOLLOWING, "Memory comes after the board");
   const card = await within(memory).findByRole("button", { name: /^NOTES\.md/ });

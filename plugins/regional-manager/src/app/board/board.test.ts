@@ -81,7 +81,7 @@ async function mount(data: Read) {
     },
     sidebarThreads: { status: "ready", threads: [sidebarThread(MANAGER.threadId, "Webhook retries")], projects: [PROJECT] },
   });
-  await view.findByText("Verify done handoffs");
+  await view.findByRole("button", { name: /^Verification on\./ });
   const lanes = () =>
     view.queryAllByRole("region").flatMap((section) => {
       const heading = within(section).queryByRole("heading", { level: 2 })?.textContent ?? "";

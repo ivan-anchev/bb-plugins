@@ -18,6 +18,11 @@ for (const name of Object.getOwnPropertyNames(window)) {
   if (name in globalThis) continue;
   Object.defineProperty(globalThis, name, { configurable: true, get: () => window[name as keyof typeof window] });
 }
+// why: node has its own Event and CustomEvent, which jsdom's dispatchEvent refuses; the Board's
+// verification menu (Radix) makes its events with the global ones.
+for (const name of ["Event", "CustomEvent"] as const) {
+  Object.defineProperty(globalThis, name, { configurable: true, get: () => window[name] });
+}
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 // why: jsdom lays nothing out, so it has no scrolling, and a range of text has no boxes; a test that
 // asserts a scroll records its own, and layout is proven live, in bb's own browser.

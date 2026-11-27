@@ -10,7 +10,8 @@ manager**: it holds a goal, keeps its memory in files, and plans the work as
 **issues**. It starts an **agent**, a child thread, on each issue to do the
 work; all of one manager's agents are its **crew**. It has no CLI commands
 and no plugin settings. Its one setting belongs to each regional manager: the
-**Verify done handoffs** switch (see [Verification](#verification)).
+**Verify done handoffs** switch, in the menu of the chip at the top right of
+its board (see [Verification](#verification)).
 
 ## Start one
 
@@ -817,8 +818,10 @@ a **verifier** for each one:
   already returned is kept: it goes to the manager, with no fix round, and
   one waiting for CI waits on.
 
-Turn verification off or on with the switch at the top of the board. It is on
-when a regional manager is created. It applies to handoffs made after it: turning it
+Turn verification off or on from the chip at the top right of the board: it
+reads "Verification on", or an amber "⚠ Verification off", and pressing it
+opens a menu with the **Verify done handoffs** switch and a line on what the
+state means. It is on when a regional manager is created. It applies to handoffs made after it: turning it
 back on doesn't check earlier ones. Each change tells the regional manager.
 With it off, a done handoff goes to In review as "Unverified: <summary>".
 
@@ -1080,7 +1083,7 @@ take a provider's file tools away), so the plugin **detects** it instead:
   reads its own environment's working tree through bb's git plugin
   (`bb--git` `status`). Agents' and verifiers' turns aren't read.
 - **Changed files** (any modified, added, deleted or untracked file) put a
-  warning at the top of its board, under the switch: how many files changed
+  warning at the top of its board, under the verification chip: how many files changed
   in its own environment, when its turn ended, and that it was told to hand
   the change to an agent. The thread is woken with `- Your own environment
   has 2 files changed after your turn: hand the change to an agent`, and its
@@ -1109,7 +1112,10 @@ take a provider's file tools away), so the plugin **detects** it instead:
 The **Board** tab in a regional manager's side panel shows its board, live,
 and ends with its [memory](#read-and-edit-memory):
 
-- **Verify done handoffs**: the switch for this regional manager.
+- **Verification on** or **⚠ Verification off**: a chip at the top right whose
+  menu holds the **Verify done handoffs** switch for this regional manager and
+  what the state means; a failed change says why in the menu, or under the chip
+  while the menu is closed.
 - **Files changed in its own environment**: a warning with how many, and
   when its turn ended, while the latest read of its working tree found
   changed files (see [Edits it makes itself](#edits-it-makes-itself)).
