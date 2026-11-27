@@ -53,8 +53,8 @@ import { toldWrites } from "./store/told-writes.ts";
 import { registerCommentTool } from "./feed/comment-tool.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import { registerHandoffTool } from "./tools/handoff-tool.ts";
-import { attachmentCopier, type CopyInBb } from "./attachments/copy-in.ts";
-import { attachmentHandlers, type OpenAttachmentBb } from "./attachments/open-attachment.ts";
+import { attachmentCopier } from "./attachments/copy-in.ts";
+import { attachmentHandlers } from "./attachments/open-attachment.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
 import { createFinalChecks } from "./verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
@@ -830,7 +830,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     },
     // As bb does, every thread has its storage folder on the machine bb runs on.
     storageLocation: async ({ threadId }: { threadId: string }) => ({ hostId: LOCAL_HOST, storageRootPath: `/storage/${threadId}` }),
-  } satisfies CopyInBb["sdk"]["threads"] & SpawnBb["sdk"]["threads"] & ManagerBb["sdk"]["threads"] & HeldBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
+  } satisfies Parameters<typeof attachmentCopier>[0]["sdk"]["threads"] & SpawnBb["sdk"]["threads"] & ManagerBb["sdk"]["threads"] & HeldBb["sdk"]["threads"] & AgentsBb["sdk"]["threads"] & IssuesBb["sdk"]["threads"] & InboxBb["sdk"]["threads"] & TurnsBb["sdk"]["threads"] & VerifyBb["sdk"]["threads"] & PrWatchBb["sdk"]["threads"];
   const agents: ToolsBb["agents"] & Parameters<typeof registerRoles>[0]["agents"] = {
     registerTool(tool) {
       tools.set(tool.name, { parameters: tool.parameters, instructions: tool.instructions ?? null, run: async (input, threadId, signal) => tool.execute(tool.parameters.parse(input), { threadId, projectId: "prj_1", signal }) });
@@ -925,7 +925,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       hostFiles.set(`${hostId}:${path}`, Buffer.from(content, contentEncoding ?? "utf8"));
       return {};
     },
-  } satisfies CopyInBb["sdk"]["files"] & OpenAttachmentBb["sdk"]["files"];
+  } satisfies Parameters<typeof attachmentCopier>[0]["sdk"]["files"] & Parameters<typeof attachmentHandlers>[0]["sdk"]["files"];
   const fakeBb = {
     pluginId: PLUGIN_ID,
     sdk: { threads, providers: providersArea, projects, plugins, environments, files },

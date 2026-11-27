@@ -70,7 +70,7 @@ export function Attachments({ coordinatorId, attachments, label, cards }: Props)
         imageAlt={lightbox.shown?.about ?? ""}
         title={lightbox.shown?.about ?? ""}
         hasMultipleImages={images.length > 1}
-        navigationStatus={lightbox.at === null ? undefined : `${lightbox.at + 1} of ${images.length}`}
+        navigationStatus={lightbox.at === null || images.length === 1 ? undefined : `${lightbox.at + 1} of ${images.length}`}
         previousDisabled={lightbox.at === 0}
         nextDisabled={lightbox.at === images.length - 1}
         onPrevious={lightbox.previous}

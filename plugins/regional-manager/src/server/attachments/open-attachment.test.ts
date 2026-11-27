@@ -4,7 +4,9 @@ import { test } from "node:test";
 import { handoffIdSchema } from "../../model/agent/handoff.ts";
 import { attachmentIdSchema, type CopiedAttachment } from "../../model/attachment.ts";
 import { filedIssue, freshStore, MANAGER, newIssue, OTHER_MANAGER, startAgent } from "../store/test-store.ts";
-import { attachmentHandlers, type OpenAttachmentBb } from "./open-attachment.ts";
+import { attachmentHandlers } from "./open-attachment.ts";
+
+type OpenAttachmentBb = Parameters<typeof attachmentHandlers>[0];
 
 // A Markdown attachment opens in bb's side panel: the plugin writes it into its manager's thread
 // storage, where bb's preview can open it, and names it there.

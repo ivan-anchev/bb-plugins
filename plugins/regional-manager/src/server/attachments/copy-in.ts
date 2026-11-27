@@ -16,7 +16,7 @@ export type CopyIn = { copied: CopiedAttachment[]; refused: Refusal[] };
 type ListedThread = { id: string; environmentId: string | null; archivedAt: number | null; deletedAt: number | null };
 
 /** The parts of bb the copy uses, down to the fields it reads. */
-export type CopyInBb = {
+type CopyInBb = {
   sdk: {
     threads: {
       list(args: { threadIds: string[]; includeHidden: true; limit: number }): Promise<ListedThread[]>;

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { attachmentCopier, refusedText, type CopyInBb } from "./copy-in.ts";
+import { attachmentCopier, refusedText } from "./copy-in.ts";
+
+type CopyInBb = Parameters<typeof attachmentCopier>[0];
 
 // Copy-in reads each attached file once, through bb, from where the calling thread's files are: its
 // thread storage, on the machine bb keeps it on, and its environment's workspace, on the

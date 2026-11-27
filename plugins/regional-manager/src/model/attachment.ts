@@ -18,7 +18,7 @@ export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 /** The types the plugin serves attachments as. */
 export const attachmentTypeSchema = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "text/plain; charset=utf-8", "text/markdown; charset=utf-8", "application/json"]);
-export type AttachmentType = z.infer<typeof attachmentTypeSchema>;
+type AttachmentType = z.infer<typeof attachmentTypeSchema>;
 
 /**
  * The extensions the plugin keeps, each with the type it is served as. why this list and no other:
@@ -111,9 +111,6 @@ export const isImage = (attachment: Pick<Attachment, "type">): boolean => attach
 
 /** Whether pressing it opens it in bb's side panel, rendered, rather than downloading it: Markdown. */
 export const opensInPanel = (attachment: Pick<Attachment, "type">): boolean => attachment.type.startsWith("text/markdown");
-
-/** Where an attachment that opens in the panel is written in its manager's thread storage, relative to it (open-attachment.ts). */
-export const panelFilePath = (attachment: Pick<Attachment, "id" | "name">): string => `attachments/${attachment.id}/${attachment.name}`;
 
 /**
  * A handoff's attachments as text, for catch-up and the next agent's first message: each by name,

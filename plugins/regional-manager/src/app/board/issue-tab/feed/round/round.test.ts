@@ -531,6 +531,14 @@ test("an open round with a screenshot and a log shows one strip under its headli
   });
 });
 
+test("a lone image's lightbox shows no paging status", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET]) });
+  fireEvent.click(within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" })).getByRole("button"));
+  const lightbox = await within(document.body).findByRole("dialog", { name: SHEET.about });
+  assert.equal(lightbox.querySelector("p")?.textContent, "");
+});
+
 test("each thumbnail and chip is named by its name and what it shows; focus shows its card at once, with a file's size, and Escape puts it away", async () => {
   hostDoubles();
   const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG]) });
