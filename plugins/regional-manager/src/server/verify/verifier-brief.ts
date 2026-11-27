@@ -1,17 +1,20 @@
 // A verifier thread's first message: what to check and where, the checkout as the plugin read it
 // or will read it, each done-criterion, a handoff's findings to triage, each numbered as
-// issue_verdict takes them, with what its review covered and each finding's origin, and the
-// issue's decisions. Only the regional
-// manager's words, commit ids and bb's read are in it, never an agent's report, so the verifier
-// checks the work rather than an agent's account of it.
+// issue_verdict takes them, with what its review covered and each finding's origin, the issue's
+// decisions, and CREW.md whole, as agents and reviewers get it. Only the regional manager's words,
+// commit ids and bb's read are in it, never an agent's report, so the verifier checks the work
+// rather than an agent's account of it. CREW.md doesn't break that: it is the manager's words, the
+// same for every agent, not any agent's account of its work.
 import type { AgentId } from "../../model/agent/agent.ts";
 import type { IssueDecision } from "../../model/decision.ts";
 import type { Issue } from "../../model/issue/issue.ts";
+import type { MemoryText } from "../../model/memory-file.ts";
 import type { FinalCheck, HandoffCheck } from "../../model/verdict/check.ts";
 import { checkoutProblems, checkoutText, type Checkout } from "../../model/verdict/checkout.ts";
 import { ANCHOR_RULE, defectText, findingText, MISSED_RULE, numberedText, RECHECK_RULE, TRIAGE_RULE, type BlockingDefect, type Review } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
+import { crewSection } from "../agents/brief.ts";
 import { decisionsPart, type Scope } from "../review/checker-brief.ts";
 
 /**
@@ -24,8 +27,8 @@ export const ALONE_RULE =
 
 /**
  * A handoff's verifier's: the commit the agent claims, in the agent's own environment, with what its
- * review covered (`scope`), the blocking defects an earlier verifier found (`earlier`), and the
- * issue's decisions as they stand as it starts.
+ * review covered (`scope`), the blocking defects an earlier verifier found (`earlier`), the
+ * issue's decisions as they stand as it starts, and the regional manager's CREW.md (null: none).
  */
 export function verifierBrief(
   issue: Pick<Issue, "id" | "title"> & { brief: string; decisions: readonly IssueDecision[] },
@@ -33,6 +36,7 @@ export function verifierBrief(
   checkout: Checkout,
   scope: Scope,
   earlier: readonly BlockingDefect[],
+  crewRules: MemoryText | null,
 ): string {
   const { agentId, headSha } = check.subject;
   return [
@@ -46,6 +50,7 @@ export function verifierBrief(
     ...decisionsPart(issue.id, issue.decisions),
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: you share ${agentId}'s working tree.`,
     `## What blocks\n\nThe anchor rule: ${ANCHOR_RULE}\n\n${QA_RULE}`,
+    crewSection(crewRules),
   ].join("\n\n");
 }
 
@@ -61,14 +66,16 @@ export const QA_RULE =
 /**
  * A final check's verifier's: the parent's own criteria, on the default branch as origin has it,
  * in a fresh worktree of its own, with the blocking defects an earlier final check's verifier
- * found (`earlier`), and the parent's brief, if it has one, and its decisions as they stand as it
- * starts, against which a carried requirement is rechecked. No commit is named: the plugin reads
+ * found (`earlier`), the parent's brief, if it has one, and its decisions as they stand as it
+ * starts, against which a carried requirement is rechecked, and the regional manager's CREW.md
+ * (null: none). No commit is named: the plugin reads
  * the worktree as the verifier returns, and judges the commit it holds then.
  */
 export function finalCheckBrief(
   issue: Pick<Issue, "id" | "title" | "description" | "brief"> & { decisions: readonly IssueDecision[] },
   check: Pick<FinalCheck, "criteria" | "subject">,
   earlier: readonly BlockingDefect[],
+  crewRules: MemoryText | null,
 ): string {
   const { defaultBranch, merged } = check.subject;
   return [
@@ -81,6 +88,7 @@ export function finalCheckBrief(
     ...(issue.brief === null ? [] : [`## ${issue.id}'s brief, for context\n\n${issue.brief.trim()}`]),
     ...decisionsPart(issue.id, issue.decisions),
     `## Rules\n\nRun whatever proves or disproves each criterion, and quote what it printed. ${UNCHECKABLE_RULE} ${ALONE_RULE} Never edit, commit, push or check out anything: judge the worktree as it is.`,
+    crewSection(crewRules),
   ].join("\n\n");
 }
 
@@ -107,7 +115,7 @@ function reviewPart(review: Review, scope: Scope): string[] {
     case "reported":
       if (list.length === 0) return [`## The review\n\n${coveredText(scope, "found nothing")} There is nothing to triage: pass triage as [].${fixedPart(review, scope)}`];
       return [
-        `## The reviewer's findings\n\n${coveredText(scope, "claims these")} They are claims, not facts: check each one yourself here, and triage every one in issue_verdict by its number. It reviewed as the regional manager's CREW.md instructs reviewers: read CREW.md with crew_memory_read when a finding cites it. ${TRIAGE_RULE}${originsText(scope)}\n\n${numberedText(list)}${fixedPart(review, scope)}`,
+        `## The reviewer's findings\n\n${coveredText(scope, "claims these")} They are claims, not facts: check each one yourself here, and triage every one in issue_verdict by its number. It reviewed as the regional manager's CREW.md instructs reviewers. ${TRIAGE_RULE}${originsText(scope)}\n\n${numberedText(list)}${fixedPart(review, scope)}`,
       ];
     default:
       return review satisfies never;

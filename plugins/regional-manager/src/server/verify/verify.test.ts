@@ -8,6 +8,7 @@ import { handoffIdSchema } from "../../model/agent/handoff.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
 import { decisionIdSchema } from "../../model/decision.ts";
 import { issueIdSchema } from "../../model/issue/issue.ts";
+import { memoryFileSchema } from "../../model/memory-file.ts";
 import type { Verdict } from "../../model/verdict/verdict.ts";
 import type { InteractionPayload } from "../../model/interaction.ts";
 import { ANCHOR_RULE_TEXT, bbHttpError, coordinating, doorbellOf, HEAD, isRefusal, failsVerification, levels, settled, startedAgent, textOf, threadIn, toCap, withoutLinks, type SendFailure } from "../test-harness.ts";
@@ -40,6 +41,22 @@ const FAILS = {
     { criterion: 2, result: "pass", shows: "Ran it.", evidence: "$ npm run lint\n0 problems" },
   ],
 };
+
+/** The regional manager's CREW.md in these tests: a crew rule and a section for verifiers, the line a live check looks for among them. */
+const CREW = "# Crew rules\n\n- Never touch gitlab.example.com: run nothing against it.\n\n## Verifiers\n\n- Report a creed-qa defect at its Reviewers severity.\n";
+
+/** CREW.md as an agent's, a reviewer's and a verifier's first message carry it: under its own section, its first heading nested below it. */
+const CREW_SECTION = `## CREW.md: the rules every agent follows\n\n${CREW.replace("# Crew rules", "### Crew rules").trimEnd()}`;
+
+/** Writes CREW into the regional manager's memory. */
+function writeCrew(kit: Awaited<ReturnType<typeof coordinating>>["kit"], coordinatorId: Awaited<ReturnType<typeof coordinating>>["coordinatorId"]): void {
+  const files = kit.memory.of(coordinatorId);
+  const crewFile = memoryFileSchema.parse("CREW.md");
+  assert.equal(files.write(crewFile, CREW, files.read(crewFile).text?.version ?? null).outcome, "saved");
+}
+
+/** A first message from its CREW.md section on, to its end. why not its last `##` section: CREW.md's own `##` headings stay as written. */
+const crewPartOf = (prompt: string): string => prompt.slice(prompt.indexOf("## CREW.md: "));
 
 /** A regional manager with one agent, both idle, so a doorbell starts the regional manager's turn. */
 async function withAgent(options: Parameters<typeof coordinating>[0] = {}) {
@@ -1332,6 +1349,26 @@ test("a verifier's first message and its role's rules state the four blocking an
   assert.match(places["issue_verdict's instructions"], /name it as its anchor: bug, safety or regression for a bug hit in normal use, with steps, the normal-use steps that reach it; criterion, brief or decision/);
 });
 
+test("a handoff's verifier's first message ends with CREW.md whole, as its reviewer's does, holds none of the agent's report, and doesn't send it to crew_memory_read for CREW.md", async () => {
+  const { kit, coordinatorId, check, verifier, handOff } = await withAgent();
+  writeCrew(kit, coordinatorId);
+  kit.reviewers.reportAtOnce = false;
+  await handOff();
+  const review = check().review;
+  const reviewer = review.state === "running" ? review.reviewerThreadId : assert.fail(`the review is ${review.state}`);
+  await kit.call("issue_review", { findings: [CAP_FINDING] }, reviewer);
+  await kit.idle(reviewer, "Reviewed.");
+  await settled();
+
+  const prompt = kit.thread(verifier()).spawnedWith.prompt ?? assert.fail("no prompt");
+  const reviewerPrompt = kit.thread(reviewer).spawnedWith.prompt ?? assert.fail("no reviewer prompt");
+  assert.equal(crewPartOf(prompt), CREW_SECTION, "CREW.md, verbatim, under the heading agents get");
+  assert.equal(crewPartOf(prompt), crewPartOf(reviewerPrompt), "the same section the reviewer got");
+  assert.match(prompt, /## The reviewer's findings\n\n[^\n]* It reviewed as the regional manager's CREW\.md instructs reviewers\. [^\n]*\n\n1\. The backoff never caps/);
+  assert.doesNotMatch(prompt, /crew_memory_read/, "CREW.md is in the message: nothing sends the verifier to read it");
+  assert.doesNotMatch(prompt, /Retries land with backoff|Added exponential backoff|trust me/, "none of the handoff's summary, did or evidence");
+});
+
 test("a verifier's first message holds the issue's decisions under a Decisions heading, a recorded one and an answered question, never the plugin's own answered question at the cap; one with no decisions has no such heading", async () => {
   const plain = await withAgent();
   await plain.handOff();
@@ -1362,10 +1399,11 @@ test("a verifier's first message holds the issue's decisions under a Decisions h
   assert.doesNotMatch(decisions, /d1|One more round|failed verification/, "the question at the cap is no decision about the work");
 });
 
-test("a final check's first message gives its parent's brief and decisions, under a Decisions heading only when it has one", async () => {
+test("a final check's first message gives its parent's brief and decisions, under a Decisions heading only when it has one, and ends with CREW.md whole", async () => {
   /** The first message of WEB-1's final check, its decision `decision` recorded on it first (null: none). */
   async function finalCheckPrompt(decision: string | null): Promise<string> {
     const { kit, threadId, coordinatorId } = await coordinating();
+    writeCrew(kit, coordinatorId);
     const text = async (tool: string, input: object) => textOf(await kit.call(tool, input, threadId));
     await text("issue_create", { title: "Card vault", description: "Cards live in a vault.", brief: "Split into sub-issues.", doneCriteria: ["npm run vault-suite passes"], kind: "build" });
     await text("issue_create", { title: "Vault client", description: "A client.", brief: "Write it.", doneCriteria: ["npm test passes"], kind: "build", parent: "WEB-1" });
@@ -1380,11 +1418,15 @@ test("a final check's first message gives its parent's brief and decisions, unde
   }
 
   const decided = await finalCheckPrompt("Use the hosted vault: the user's call.");
-  assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Decisions on WEB-1", "## Rules"]);
+  assert.deepEqual(headingsOf(decided), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Decisions on WEB-1", "## Rules", ...CREW_HEADINGS]);
+  assert.equal(crewPartOf(decided), CREW_SECTION, "CREW.md, verbatim, under the heading agents and reviewers get");
+  assert.doesNotMatch(decided, /crew_memory_read/);
   assert.match(decided, /## WEB-1's brief, for context\n\nSplit into sub-issues\.\n\n/);
   assert.match(decided, /\n- [^\n]+: Use the hosted vault: the user's call\.\n/);
-  assert.deepEqual(headingsOf(await finalCheckPrompt(null)), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Rules"], "no decisions, no heading");
+  assert.deepEqual(headingsOf(await finalCheckPrompt(null)), ["# Final check of WEB-1: Card vault", "## The commit and the tree", "## Done-criteria", "## WEB-1, for context", "## WEB-1's brief, for context", "## Rules", ...CREW_HEADINGS], "no decisions, no heading");
 });
+
+const CREW_HEADINGS = ["## CREW.md: the rules every agent follows", "### Crew rules", "## Verifiers"];
 
 const CAP_FINDING = { title: "The backoff never caps", file: "src/retry.ts", line: 42, severity: "must-fix", claim: "The backoff never caps." } as const;
 
