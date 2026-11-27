@@ -19,8 +19,10 @@ for (const name of Object.getOwnPropertyNames(window)) {
   Object.defineProperty(globalThis, name, { configurable: true, get: () => window[name as keyof typeof window] });
 }
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-// why: jsdom lays nothing out, so it has no scrolling; a test that asserts a scroll records its own.
+// why: jsdom lays nothing out, so it has no scrolling, and a range of text has no boxes; a test that
+// asserts a scroll records its own, and layout is asserted in Chrome (test-chrome.ts).
 window.Element.prototype.scrollIntoView = () => {};
+window.Range.prototype.getClientRects = () => ({ length: 0, item: () => null, [Symbol.iterator]: [][Symbol.iterator] });
 
 registerHooks({
   load(url, context, nextLoad) {

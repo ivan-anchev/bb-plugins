@@ -304,22 +304,19 @@ test("a decision and a comment are cut to three lines and a row to one; each ope
   });
 });
 
-test("a decision goes to bb's Markdown whole, as one document: a reference link with its definition paragraphs later, a five-item list cut behind its press, and code indented after its first paragraph", async () => {
+// why no cut here: jsdom lays nothing out, so the list's cut is asserted in Chrome (chrome/chrome.test.ts).
+test("a decision goes to bb's Markdown whole, as one document: a reference link with its definition paragraphs later, a five-item list, and code indented after its first paragraph", async () => {
   const decisions = [
     "See [the retry guide][guide] first. Then cap at five.\n\nMore detail.\n\n[guide]: https://example.com/retries",
     "Cap retries:\n\n- one\n- two\n- three\n- four\n- five",
     "Run the suite before merging.\n\n    npm test\n\nThen merge.",
   ];
   const entries: Entry[] = decisions.map((text, n) => ({ kind: "decision", decision: { kind: "recorded", text, at: 6_400 + n } }));
-  await withLongText(async () => {
-    // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
-    const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => ({ ...FEED, entries }) });
-    const cards = activity(tab()).section.getAllByRole("article", { name: "Decision" });
-    const drawn = cards.map((card) => within(card).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent));
-    assert.deepEqual(drawn, decisions.map((text) => [text]));
-    const list = within(cards[1] ?? assert.fail("no list decision")).getByRole("button", { name: /^Cap retries:/ });
-    assert.deepEqual(cutText(list), { open: "false", lines: "3", drawnWhole: false });
-  });
+  // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
+  const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => ({ ...FEED, entries }) });
+  const cards = activity(tab()).section.getAllByRole("article", { name: "Decision" });
+  const drawn = cards.map((card) => within(card).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent));
+  assert.deepEqual(drawn, decisions.map((text) => [text]));
 });
 
 test("text that fits its lines is plain text, with nothing to press", async () => {
@@ -552,14 +549,13 @@ test("the description, the brief, comments, decisions and an answer in the user'
   assert.deepEqual(drawn, [md("Lost, see"), md("Retry, see"), md("Cap at three, see"), `Cap at three. ${md("Rest, see")}`, md("Comment, see")]);
 });
 
-test("raw HTML in a comment reaches bb's Markdown as escaped words, never as HTML", async () => {
+test("raw HTML in a comment reaches bb's Markdown as code, never as HTML", async () => {
   const raw = 'Raw: <img src=x onerror="window.hit=1"> and <script>window.hit=2</script> end.';
   // why WEB-4: a comment sent on WEB-1 by an earlier test stays on its way, which its card shows.
   const { tab } = await opened("WEB-4", [issue("WEB-4", {})], { feedOf: () => ({ ...FEED, entries: [comment(1, 6_900, { kind: "user" }, raw, null)] }) });
   const drawn = within(tab().getByRole("article", { name: "Comment m1" })).getAllByTestId("bb-markdown").map((markdown) => markdown.textContent);
-  assert.equal(drawn.length, 1);
-  assert.doesNotMatch(drawn[0] ?? "", /(^|[^\\])<(img|script)/, "every < that opened HTML is escaped, so bb's Markdown reads it as a word");
-  assert.match(drawn[0] ?? "", /\\<img src=x onerror=.+\\<script>.+\\<\/script> end\./, "and the words are all there");
+  // why `window\.hit`: the writer escapes a dot after a w, which GFM could read as a www. link's start; it reads back as written.
+  assert.deepEqual(drawn, ['Raw: `<img src=x onerror="window.hit=1">` and `<script>`window\\.hit=2`</script>` end.\n'], "each tag as code, the words around them as written");
 });
 
 test("an issue with no brief yet draws no Brief fold", async () => {
