@@ -86,9 +86,9 @@ test("a handoff keeps each file it could copy in as its record, and its result n
   );
   const [shot] = handoff.attachments;
   assert.deepEqual(shot, { id: shot?.id, name: "sheet.png", about: "Criterion 1: the retries, logged", type: "image/png", size: png.byteLength });
-  assert.deepEqual(kit.store.attachmentFile(coordinatorId, shot?.id ?? assert.fail()), { type: "image/png", bytes: png });
+  assert.deepEqual(kit.store.attachmentFile(coordinatorId, shot?.id ?? assert.fail()), { name: "sheet.png", type: "image/png", bytes: png });
   assert.match(result, /^Handed off\. Your regional manager has your report, marked unverified: verification is off\. Stop here\.\n\nNot attached, and recorded without it:\n/);
-  assert.ok(result.endsWith(`\n- ${storage}/qa/bundle.zip: its type isn't one the plugin keeps (up to 5 files of at most 10 MB each, of type .png, .jpg, .jpeg, .gif, .webp, .mp4, .webm, .mov, .txt, .log, .json); convert it, as a screenshot to .png or a recording to .mp4.`), result);
+  assert.ok(result.endsWith(`\n- ${storage}/qa/bundle.zip: its type isn't one the plugin keeps (up to 5 files of at most 10 MB each, of type .png, .jpg, .jpeg, .gif, .webp, .mp4, .webm, .mov, .txt, .log, .md, .json); convert it, as a screenshot to .png or a recording to .mp4.`), result);
 });
 
 test("a handoff given no attachments stores none, and one stored before attachments existed reads back with none", async () => {

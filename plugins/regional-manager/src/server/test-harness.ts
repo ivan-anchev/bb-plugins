@@ -54,6 +54,7 @@ import { registerCommentTool } from "./feed/comment-tool.ts";
 import { registerCrewTools } from "./tools/crew-tools.ts";
 import { registerHandoffTool } from "./tools/handoff-tool.ts";
 import { attachmentCopier, type CopyInBb } from "./attachments/copy-in.ts";
+import { attachmentHandlers, type OpenAttachmentBb } from "./attachments/open-attachment.ts";
 import type { ToolsBb } from "./tools/tool-kit.ts";
 import { createFinalChecks } from "./verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./verify/verdict-tool.ts";
@@ -918,7 +919,13 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
       if (bytes === undefined) throw bbHttpError(404, "file_not_found", `No such file: ${path}`);
       return { content: bytes.toString("base64"), contentEncoding: "base64" as const };
     },
-  } satisfies CopyInBb["sdk"]["files"];
+    // As bb does: a path outside its root is refused.
+    async write({ hostId, rootPath, path, content, contentEncoding }: { hostId?: string; rootPath?: string; path: string; content: string; contentEncoding?: "base64" | "utf8" }) {
+      if (rootPath === undefined || !path.startsWith(`${rootPath}/`)) throw bbHttpError(400, "path_outside_root", "Path is outside the root");
+      hostFiles.set(`${hostId}:${path}`, Buffer.from(content, contentEncoding ?? "utf8"));
+      return {};
+    },
+  } satisfies CopyInBb["sdk"]["files"] & OpenAttachmentBb["sdk"]["files"];
   const fakeBb = {
     pluginId: PLUGIN_ID,
     sdk: { threads, providers: providersArea, projects, plugins, environments, files },
@@ -987,7 +994,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const threadEvents = forwardThreadEvents(bb, { store, agents, verify, onChange, refreshBoard: refreshIssues, refreshIssue: (id, issueId) => invalidated.push(issueTag(id, issueId)) });
     watchAgentThreads({ bb, store, inbox });
     watchOwnTree({ bb, store, inbox });
-    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox, views }), ...openIssuesHandler({ store, board }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
+    return { spawner, inbox, verify, agents, prWatch, finalChecks, viewWatch, issueTags, rpc: { ...memoryHandlers(store, memory, inbox), ...boardHandlers({ store, board, inbox, views }), ...openIssuesHandler({ store, board }), ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }), ...managerHandlers({ bb, store, spawner, onChange: refreshCoordinators }), ...attachmentHandlers(bb, store) }, upgrade030: upgradeFrom030(bb, { store, memory, onChange: refreshCoordinators }) };
   }
   /** `turns`, whose every operation waits, once it holds its issue's turn, while turnsTaken says to hold it. */
   function heldWhileTaken(turns: IssueTurns): IssueTurns {

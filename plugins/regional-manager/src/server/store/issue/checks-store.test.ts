@@ -263,8 +263,8 @@ test("a handoff whose second attachment fails to store leaves no handoff, check,
   assert.equal(check.verdict.state, "waived");
   assert.deepEqual(events(store), [{ kind: "verification-toggled", verify: false }, { kind: "checked", issueId: issue.id, checkId: check.id, asked: null }]);
   assert.equal(files(), 2);
-  assert.deepEqual(store.attachmentFile(MANAGER, shot.id), { type: "image/png", bytes: shot.bytes });
-  assert.deepEqual(store.attachmentFile(MANAGER, log.id), { type: "text/plain; charset=utf-8", bytes: log.bytes });
+  assert.deepEqual(store.attachmentFile(MANAGER, shot.id), { name: "sheet.png", type: "image/png", bytes: shot.bytes });
+  assert.deepEqual(store.attachmentFile(MANAGER, log.id), { name: "e2e.log", type: "text/plain; charset=utf-8", bytes: log.bytes });
 });
 
 test("a done handoff that fails partway keeps the checks waiting for CI whole and waiting, and a retry supersedes the one that passed all but CI once, leaving one the must-fix rule fails to settle", () => {

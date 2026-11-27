@@ -2,11 +2,19 @@
 // images first as small cropped thumbnails, then every other file as a chip with only its name. What
 // each shows, and a file's size, are on its card on hover and focus (the round's one card intent),
 // and in its accessible name, so touch and screen-reader users have them without hover. A thumbnail
-// opens bb's own lightbox, which pages through the strip's images; a chip downloads its file. Read
-// with the round's body, so a folded round loads none of them.
-import { experimental_ImageLightbox as ImageLightbox, experimental_saveFile as saveFile } from "@get-bb/plugin-sdk/app";
+// opens bb's own lightbox, which pages through the strip's images; a Markdown chip opens its file
+// rendered in bb's side panel, as bb opens any file; any other chip downloads its file. Read with the
+// round's body, so a folded round loads none of them.
+import {
+  experimental_ImageLightbox as ImageLightbox,
+  experimental_PluginRpcCallError as RpcCallError,
+  experimental_saveFile as saveFile,
+  experimental_useRpcMutation,
+  useBbNavigate,
+} from "@get-bb/plugin-sdk/app";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { attachmentUrl, isImage, sizeText, type Attachment, type AttachmentId } from "../../../../../model/attachment.ts";
+import { coordinatorContract as contract } from "../../../../../contract.ts";
+import { attachmentUrl, isImage, opensInPanel, sizeText, type Attachment, type AttachmentId } from "../../../../../model/attachment.ts";
 import type { CoordinatorId } from "../../../../../model/role.ts";
 import { useEscapeToClose } from "../../../../ui/hold-escape.ts";
 import type { CardPresence } from "../../../issue/hover-card/card-intent.ts";
@@ -27,6 +35,7 @@ export function Attachments({ coordinatorId, attachments, label, cards }: Props)
   const images = attachments.filter(isImage);
   const files = attachments.filter((attachment) => !isImage(attachment));
   const lightbox = useLightbox(images);
+  const panel = usePanelOpener(coordinatorId);
   const items = useRef(new Map<AttachmentId, HTMLLIElement>());
   if (attachments.length === 0) return null;
   const url = (attachment: Attachment) => attachmentUrl(coordinatorId, attachment.id);
@@ -45,10 +54,15 @@ export function Attachments({ coordinatorId, attachments, label, cards }: Props)
         ))}
         {files.map((attachment) => (
           <li key={attachment.id} {...item(attachment)}>
-            <Chip attachment={attachment} href={url(attachment)} />
+            <Chip attachment={attachment} href={url(attachment)} onPress={() => (opensInPanel(attachment) ? void panel.open(attachment) : void saveFile({ fileName: attachment.name, url: url(attachment) }))} />
           </li>
         ))}
       </ul>
+      {panel.failure !== null && (
+        <p role="alert" className="rmi-round-note">
+          {panel.failure}
+        </p>
+      )}
       {carded !== null && <AttachmentCard key={carded.id} attachment={carded} presence={cards.presence(cardKey(carded))} anchor={() => items.current.get(carded.id)} />}
       <ImageLightbox
         isOpen={lightbox.shown !== null}
@@ -82,11 +96,11 @@ function Thumb({ attachment, src, onOpen, thumbRef }: { attachment: Attachment; 
 }
 
 /**
- * Any other file, by its name alone; pressing it downloads it. why saveFile on press: bb's desktop
- * shell, the browser and the iOS app each take a download their own way; the href keeps it a link
- * to copy.
+ * Any other file, by its name alone; pressing it opens or downloads it (`onPress`). why a link with
+ * the file's URL: it stays a link to copy, while bb's desktop shell, the browser and the iOS app each
+ * take a download their own way (saveFile).
  */
-function Chip({ attachment, href }: { attachment: Attachment; href: string }) {
+function Chip({ attachment, href, onPress }: { attachment: Attachment; href: string; onPress: () => void }) {
   return (
     <a
       href={href}
@@ -94,12 +108,35 @@ function Chip({ attachment, href }: { attachment: Attachment; href: string }) {
       aria-label={`${attachment.name}, ${sizeText(attachment.size)}: ${attachment.about}`}
       onClick={(event) => {
         event.preventDefault();
-        void saveFile({ fileName: attachment.name, url: href });
+        onPress();
       }}
     >
       <span>{attachment.name}</span>
     </a>
   );
+}
+
+/**
+ * Opens a Markdown attachment in bb's side panel: the server writes it into its manager's thread
+ * storage first (open-attachment.ts), since bb's preview opens only a live file, never a URL. Why the
+ * last open failed, until the next.
+ */
+function usePanelOpener(coordinatorId: CoordinatorId) {
+  const write = experimental_useRpcMutation({ contract, method: "openAttachment" });
+  const navigate = useBbNavigate();
+  const [failure, setFailure] = useState<string | null>(null);
+  return {
+    failure,
+    async open(attachment: Attachment) {
+      setFailure(null);
+      try {
+        const target = await write.mutate({ coordinatorId, id: attachment.id });
+        if (!navigate.experimental_openFilePreview({ target: { kind: "thread-storage", ...target }, location: null })) setFailure(`bb couldn't open ${attachment.name} in its panel here.`);
+      } catch (error) {
+        setFailure(`Could not open ${attachment.name}: ${RpcCallError.from(error).message}`);
+      }
+    },
+  };
 }
 
 /**

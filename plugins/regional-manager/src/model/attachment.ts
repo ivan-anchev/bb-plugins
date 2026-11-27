@@ -17,13 +17,13 @@ export const MAX_ATTACHMENTS = 5;
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 /** The types the plugin serves attachments as. */
-export const attachmentTypeSchema = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "text/plain; charset=utf-8", "application/json"]);
+export const attachmentTypeSchema = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm", "video/quicktime", "text/plain; charset=utf-8", "text/markdown; charset=utf-8", "application/json"]);
 export type AttachmentType = z.infer<typeof attachmentTypeSchema>;
 
 /**
  * The extensions the plugin keeps, each with the type it is served as. why this list and no other:
  * nothing on it runs in bb's origin (no SVG, HTML or PDF), and it covers what proves work: a
- * screenshot, a short recording, a log. One table, so a type added here is added everywhere.
+ * screenshot, a short recording, a log, a written note. One table, so a type added here is added everywhere.
  */
 const TYPES: Readonly<Record<string, AttachmentType>> = {
   png: "image/png",
@@ -36,6 +36,7 @@ const TYPES: Readonly<Record<string, AttachmentType>> = {
   mov: "video/quicktime",
   txt: "text/plain; charset=utf-8",
   log: "text/plain; charset=utf-8",
+  md: "text/markdown; charset=utf-8",
   json: "application/json",
 };
 
@@ -107,6 +108,12 @@ export type Copied<T> = T extends unknown ? Omit<T, "attachments"> & { attachmen
 
 /** Whether the feed shows it as a picture. */
 export const isImage = (attachment: Pick<Attachment, "type">): boolean => attachment.type.startsWith("image/");
+
+/** Whether pressing it opens it in bb's side panel, rendered, rather than downloading it: Markdown. */
+export const opensInPanel = (attachment: Pick<Attachment, "type">): boolean => attachment.type.startsWith("text/markdown");
+
+/** Where an attachment that opens in the panel is written in its manager's thread storage, relative to it (open-attachment.ts). */
+export const panelFilePath = (attachment: Pick<Attachment, "id" | "name">): string => `attachments/${attachment.id}/${attachment.name}`;
 
 /**
  * A handoff's attachments as text, for catch-up and the next agent's first message: each by name,

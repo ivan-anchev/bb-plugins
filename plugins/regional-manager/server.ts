@@ -38,6 +38,7 @@ import { registerCrewTools } from "./src/server/tools/crew-tools.ts";
 import { registerHandoffTool } from "./src/server/tools/handoff-tool.ts";
 import { attachmentCopier } from "./src/server/attachments/copy-in.ts";
 import { attachmentRoute } from "./src/server/attachments/attachment-route.ts";
+import { attachmentHandlers } from "./src/server/attachments/open-attachment.ts";
 import { ATTACHMENT_ROUTE } from "./src/model/attachment.ts";
 import { createFinalChecks } from "./src/server/verify/final-check/final-checks.ts";
 import { registerVerdictTool } from "./src/server/verify/verdict-tool.ts";
@@ -139,6 +140,7 @@ export default function plugin(host: BbPluginApi): void {
     ...boardHandlers({ store, board, inbox, views }),
     ...feedHandlers({ store, reader: createFeedReader(bb, store), inbox }),
     ...memoryHandlers(store, memory, inbox),
+    ...attachmentHandlers(bb, store),
   });
 }
 

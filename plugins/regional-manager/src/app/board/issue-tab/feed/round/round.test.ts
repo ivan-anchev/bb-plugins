@@ -589,3 +589,39 @@ test("a round whose handoff attached nothing renders no strip", async () => {
   assert.equal(three.queryByRole("list", { name: "The agent's attachments" }), null);
   assert.equal(tab().getByRole("article", { name: "Round 3" }).querySelector(".rmi-attachments, img"), null);
 });
+
+const FINDINGS_MD = { id: attachmentIdSchema.parse("4f7b9d5e-6a8c-4dae-9f1a-3b4c5d6e7f80"), name: "findings.md", about: "What the run found, written up", type: "text/markdown; charset=utf-8", size: 2_048 } as const;
+
+test("pressing a Markdown chip opens its file in bb's side panel, from the manager's thread storage where the plugin wrote it, and downloads nothing", async () => {
+  const { saves } = hostDoubles();
+  const { tab, opens, previews } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, FINDINGS_MD]) });
+  const strip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
+  const chip = strip.getByRole("link", { name: `${FINDINGS_MD.name}, 2 KB: ${FINDINGS_MD.about}` });
+  assert.equal(chip.textContent, FINDINGS_MD.name, "a name-only chip like any other file");
+
+  fireEvent.click(chip);
+  await waitFor(() => assert.equal(previews.length, 1));
+  assert.deepEqual(opens, [{ coordinatorId: COORDINATOR.id, id: FINDINGS_MD.id }]);
+  assert.deepEqual(previews, [{ target: { kind: "thread-storage", threadId: COORDINATOR.threadId, path: `attachments/${FINDINGS_MD.id}/findings.md` }, location: null }]);
+  assert.deepEqual(saves, [], "nothing downloads");
+});
+
+test("a Markdown chip that can't open says why beside the strip, whether the plugin or bb's panel refused it", async () => {
+  hostDoubles();
+  const refused = await opened("WEB-1", WEB_1, {
+    bodies: attached([FINDINGS_MD]),
+    openAttachment: () => {
+      throw new Error("bb is restarting");
+    },
+  });
+  const strip = within(await rounds(refused.tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
+  fireEvent.click(strip.getByRole("link"));
+  assert.match((await rounds(refused.tab()).card(3).findByRole("alert")).textContent ?? "", /^Could not open findings\.md: .*bb is restarting/);
+  assert.deepEqual(refused.previews, []);
+  cleanup();
+
+  hostDoubles();
+  const unopened = await opened("WEB-1", WEB_1, { bodies: attached([FINDINGS_MD]), preview: false });
+  fireEvent.click(within(await rounds(unopened.tab()).card(3).findByRole("list", { name: "The agent's attachments" })).getByRole("link"));
+  assert.equal((await rounds(unopened.tab()).card(3).findByRole("alert")).textContent, "bb couldn't open findings.md in its panel here.");
+});
