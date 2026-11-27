@@ -43,6 +43,7 @@ import type { Review } from "../review/review.ts";
 import type { Spawner, CheckerRequest } from "../spawn.ts";
 import type { ReceivedVerdict, Settlement } from "../store/issue/checks-store.ts";
 import type { Store } from "../store/store.ts";
+import { CREW_FILE, type MemoryRoot } from "../memory/memory-files.ts";
 import { finalCheckerRequest, judgedTree, type FinalVerifierBb } from "./final-check/final-verifier.ts";
 import { findingsMessage } from "./findings.ts";
 import { refusalOf } from "./send-refusal.ts";
@@ -107,6 +108,7 @@ type Deps = {
   >;
   spawner: Pick<Spawner, "checker">;
   review: Pick<Review, "start" | "follow">;
+  memory: MemoryRoot;
   inbox: Pick<Inbox, "handoff" | "giveUpCheck" | "settleCheck">;
   turns: IssueTurns;
   now(): number;
@@ -152,7 +154,10 @@ const NUDGE =
 
 export type Verify = ReturnType<typeof createVerify>;
 
-export function createVerify({ bb, store, spawner, review, inbox, turns, now }: Deps) {
+export function createVerify({ bb, store, spawner, review, memory, inbox, turns, now }: Deps) {
+  /** The regional manager's CREW.md as it is now, for a verifier's first message, as a reviewer's carries it (null: none). */
+  const crewRulesOf = (coordinatorId: CoordinatorId) => memory.of(coordinatorId).read(CREW_FILE).text;
+
   /** The agent whose done handoff the check judges (see handingAgent). */
   const agentOf = (check: HandoffCheck): Agent & { threadId: string } => handingAgent(store, check);
 
@@ -191,7 +196,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
           const current = store.issue(check.coordinatorId, check.issueId);
           // why throw: checks are kept while their issue is.
           if (current === null) throw new Error(`The issue ${check.issueId} of ${check.coordinatorId} is missing.`);
-          return finalCheckBrief({ ...current, decisions: store.issueDecisions(check.coordinatorId, check.issueId) }, final, earlierDefectsOf(store, check));
+          return finalCheckBrief({ ...current, decisions: store.issueDecisions(check.coordinatorId, check.issueId) }, final, earlierDefectsOf(store, check), crewRulesOf(check.coordinatorId));
         };
         return finalCheckerRequest(bb, { check: final, coordinator, issue, theirs, prompt });
       }
@@ -228,7 +233,7 @@ export function createVerify({ bb, store, spawner, review, inbox, turns, now }: 
       title: `Verify ${issue.id}: ${issue.title}`,
       environment: { type: "reuse", environmentId: thread.environmentId },
       execution,
-      prompt: verifierBrief(issue, check, checkout, scopeOf(store, check), earlierDefectsOf(store, check)),
+      prompt: verifierBrief(issue, check, checkout, scopeOf(store, check), earlierDefectsOf(store, check), crewRulesOf(coordinator.id)),
     };
   }
 

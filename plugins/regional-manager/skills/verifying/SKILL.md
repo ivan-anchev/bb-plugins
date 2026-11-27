@@ -45,6 +45,9 @@ For a done handoff:
   failed verifications is left out: its answer allows a round, and decides
   nothing about the work. A question not answered yet is listed, and decides
   nothing either.
+- The regional manager's CREW.md whole, the rules every agent follows, as
+  agents and reviewers get it. It is the manager's words, the same for every
+  agent, not an agent's account of its work.
 
 For a final check:
 
@@ -53,6 +56,7 @@ For a final check:
 - No commit: the plugin reads your worktree when you call `issue_verdict`,
   and judges the commit it holds then.
 - The parent's description, for context.
+- The regional manager's CREW.md whole, as for a done handoff.
 
 ## Check
 

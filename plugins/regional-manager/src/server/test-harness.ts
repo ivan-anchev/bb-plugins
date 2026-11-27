@@ -957,7 +957,7 @@ export function harness(spawns: SpawnBehaviour = { created: true, answer: "threa
     const agents = createAgents({ bb, store, spawner, inbox, memory, turns, prs: prWatch, placementFacts: placementFactsReader(bb, store), onChange, onRemoved });
     const issues = createIssues({ bb, store, views, onChange });
     const review = createReview({ bb, store, spawner, memory, turns, now: () => clock.now });
-    const verify = createVerify({ bb, store, spawner, review, inbox, turns, now: () => clock.now });
+    const verify = createVerify({ bb, store, spawner, review, memory, inbox, turns, now: () => clock.now });
     const finalChecks = createFinalChecks({ bb, store, views, turns, verify, defaultBranch: defaultBranchReader(bb, store), now: () => clock.now });
     registerRoles(bb, store);
     registerCrewTools(bb, { store, inbox, memory, board, onChange: refreshIssues });
