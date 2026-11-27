@@ -41,6 +41,7 @@ function stored(n: number, review: Review, verdict: StoredVerdict): StoredCheck 
 /** A verdict on commit `n` that passed its criterion, with `triage`, settled. */
 const returned = (n: number, triage: Triage[]): StoredVerdict => ({
   state: "returned",
+  attachments: [],
   at: 5_000 + n,
   verifierThreadId: `thr_v${n}`,
   headSha: sha(n),

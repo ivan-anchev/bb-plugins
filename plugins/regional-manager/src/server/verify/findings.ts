@@ -5,6 +5,7 @@
 // was had. It reaches the agent as the verifier's message when a failed verdict goes back for its
 // fix round. And what an earlier agent's
 // verdict found, whole and in the past tense, for the agent that takes its issue over.
+import { attachmentsText } from "../../model/attachment.ts";
 import { checkoutText } from "../../model/verdict/checkout.ts";
 import { checkNamesText, FORGE, prRef, type CiVerdict } from "../../model/verdict/pr.ts";
 import type { Check } from "../../model/verdict/check.ts";
@@ -71,7 +72,7 @@ export function earlierVerdictText({ review, verdict }: Check): string {
   }
 }
 
-/** A returned verdict as it stood: its result, the checkout and CI when they failed it or CI never came, each criterion, the findings, then its review as the verifier triaged it. */
+/** A returned verdict as it stood: its result, the checkout and CI when they failed it or CI never came, each criterion, the findings, its review as the verifier triaged it, then the files it attached. */
 function returnedText(review: Review, verdict: Returned): string {
   const ci = ciVerdictOf(verdict);
   const reasons = failureReasons(verdict);
@@ -86,7 +87,8 @@ function returnedText(review: Review, verdict: Returned): string {
   const criteria = verdict.criteria.map(({ criterion, result, shows, evidence }, i) => `${i + 1}. ${criterion}: ${PAST[result]}. What the run showed, then the verifier's evidence:\n\n${fenced(`${shows}\n\n${evidence}`)}`);
   const blocking = verdict.blocking.length === 0 ? [] : [`The defects it found itself that blocked, in its words:\n\n${fenced(verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n"))}`];
   const findings = verdict.findings.length === 0 ? "It found nothing else." : `Its other findings, in its words:\n\n${fenced(verdict.findings.map((finding) => `- ${verifierFindingText(finding, "  ")}`).join("\n"))}`;
-  return [result, ...criteria, ...blocking, findings, ...reviewedPart(review, verdict)].join("\n\n");
+  const attachments = attachmentsText(verdict.attachments, "The verifier's attachments");
+  return [result, ...criteria, ...blocking, findings, ...reviewedPart(review, verdict), ...(attachments === "" ? [] : [fenced(attachments)])].join("\n\n");
 }
 
 /**

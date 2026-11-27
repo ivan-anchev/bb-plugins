@@ -543,8 +543,8 @@ test("each thumbnail and chip is named by its name and what it shows; focus show
   hostDoubles();
   const { tab } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, LOG]) });
   const strip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
-  const thumb = strip.getByRole("button", { name: `${SHEET.name}: ${SHEET.about}` });
-  const chip = strip.getByRole("link", { name: `${LOG.name}, 84 KB: ${LOG.about}` });
+  const thumb = strip.getByRole("button", { name: `The agent's ${SHEET.name}: ${SHEET.about}` });
+  const chip = strip.getByRole("link", { name: `The agent's ${LOG.name}, 84 KB: ${LOG.about}` });
   const card = () => document.querySelector(".rmi-attachment-card");
 
   act(() => thumb.focus());
@@ -582,7 +582,7 @@ test("pressing a thumbnail opens bb's lightbox on it, titled with what it shows 
   const strip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
   assert.deepEqual(
     strip.getAllByRole("button").map((thumb) => thumb.getAttribute("aria-label")),
-    [`${SHEET.name}: ${SHEET.about}`, `${NARROW.name}: ${NARROW.about}`],
+    [`The agent's ${SHEET.name}: ${SHEET.about}`, `The agent's ${NARROW.name}: ${NARROW.about}`],
     "images first, in order, then the file",
   );
   const [first, second] = strip.getAllByRole("button");
@@ -625,7 +625,7 @@ test("pressing a Markdown chip opens its file in bb's side panel, from the manag
   const { saves } = hostDoubles();
   const { tab, opens, previews } = await opened("WEB-1", WEB_1, { bodies: attached([SHEET, FINDINGS_MD]) });
   const strip = within(await rounds(tab()).card(3).findByRole("list", { name: "The agent's attachments" }));
-  const chip = strip.getByRole("link", { name: `${FINDINGS_MD.name}, 2 KB: ${FINDINGS_MD.about}` });
+  const chip = strip.getByRole("link", { name: `The agent's ${FINDINGS_MD.name}, 2 KB: ${FINDINGS_MD.about}` });
   assert.equal(chip.textContent, FINDINGS_MD.name, "a name-only chip like any other file");
 
   fireEvent.click(chip);
@@ -653,4 +653,81 @@ test("a Markdown chip that can't open says why beside the strip, whether the plu
   const unopened = await opened("WEB-1", WEB_1, { bodies: attached([FINDINGS_MD]), preview: false });
   fireEvent.click(within(await rounds(unopened.tab()).card(3).findByRole("list", { name: "The agent's attachments" })).getByRole("link"));
   assert.equal((await rounds(unopened.tab()).card(3).findByRole("alert")).textContent, "bb couldn't open findings.md in its panel here.");
+});
+
+// ------------------------------------------------------------------ the verifier's attachments
+
+const VERDICT_549 = { id: attachmentIdSchema.parse("5a8c0e6f-7b9d-4ebf-8a2b-4c5d6e7f8091"), name: "round-549.png", about: "Criterion 1: the round open at 549px", type: "image/png", size: 120_832 } as const;
+const VERDICT_360 = { id: attachmentIdSchema.parse("6b9d1f7a-8c0e-4fc1-9b3c-5d6e7f8091a2"), name: "round-360.png", about: "Criterion 1: the round open at 360px", type: "image/png", size: 64_512 } as const;
+
+/** Round `n`'s body with the agent's attachments `handed` and its verifier's `verified`. */
+function attachedBoth(n: number, handed: Attachment[], verified: Attachment[]) {
+  const body = bodyOf(n);
+  const handoff = body.handoff ?? assert.fail(`round ${n} has a handoff`);
+  const verdict = body.verdict?.state === "returned" ? body.verdict : assert.fail(`round ${n} has a returned verdict`);
+  return () => ({ ...body, handoff: { ...handoff, attachments: handed }, verdict: { ...verdict, attachments: verified } });
+}
+
+/** The strip a list of attachments sits in, and the rows right before and after it. */
+const placeOf = (list: HTMLElement) => {
+  const strip = list.closest(".rmi-attachments") ?? assert.fail("no strip");
+  return { before: strip.previousElementSibling, after: strip.nextElementSibling };
+};
+
+test("an open round whose agent and verifier each attached an image shows two strips, the agent's under the headline and the verifier's under the verdict lines, each named whose", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attachedBoth(1, [SHEET], [VERDICT_549]) });
+  const { card, head } = rounds(tab());
+  fireEvent.click(head(1));
+  const one = card(1);
+  const agents = await one.findByRole("list", { name: "The agent's attachments" });
+  const verifiers = one.getByRole("list", { name: "The verifier's attachments" });
+
+  assert.equal(placeOf(agents).before?.className, "rmi-round-said", "the agent's right under the headline");
+  assert.equal(placeOf(verifiers).before, one.getByRole("list", { name: "What failed" }), "the verifier's right under the verdict lines");
+  assert.equal(placeOf(verifiers).after?.className, "rmi-outcome", "and above what became of it");
+  assert.deepEqual(
+    within(agents).getAllByRole("button").map((thumb) => thumb.getAttribute("aria-label")),
+    [`The agent's ${SHEET.name}: ${SHEET.about}`],
+  );
+  assert.deepEqual(
+    within(verifiers).getAllByRole("button").map((thumb) => thumb.getAttribute("aria-label")),
+    [`The verifier's ${VERDICT_549.name}: ${VERDICT_549.about}`],
+  );
+  assert.equal(verifiers.querySelector("img")?.getAttribute("src"), attachmentUrl(COORDINATOR.id, VERDICT_549.id));
+});
+
+test("a passed round with no verdict lines puts the verifier's strip under its outcome row, so it never sits under the agent's findings", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attachedBoth(3, [SHEET], [VERDICT_549]) });
+  const three = rounds(tab()).card(3);
+  const verifiers = await three.findByRole("list", { name: "The verifier's attachments" });
+  assert.equal(three.queryByRole("list", { name: "What failed" }), null, "a pass has no verdict lines");
+  assert.equal(placeOf(verifiers).before?.className, "rmi-outcome");
+  assert.match(placeOf(verifiers).before?.textContent ?? "", /^Passed/);
+  assert.equal(placeOf(three.getByRole("list", { name: "The agent's attachments" })).before?.className, "rmi-round-said");
+});
+
+test("the verifier's lightbox pages through the verifier's images only, titled with what each shows", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attachedBoth(3, [SHEET, NARROW], [VERDICT_549, VERDICT_360]) });
+  const verifiers = within(await rounds(tab()).card(3).findByRole("list", { name: "The verifier's attachments" }));
+  const screen = within(document.body);
+  fireEvent.click(verifiers.getAllByRole("button")[0] ?? assert.fail("no thumbnail"));
+  const lightbox = await screen.findByRole("dialog", { name: VERDICT_549.about });
+  assert.equal(within(lightbox).getByText("1 of 2").textContent, "1 of 2", "two images: the verifier's, not the agent's four with them");
+  fireEvent.keyDown(lightbox, { key: "ArrowRight" });
+  const next = await screen.findByRole("dialog", { name: VERDICT_360.about });
+  assert.equal(within(next).getByRole("img").getAttribute("src"), attachmentUrl(COORDINATOR.id, VERDICT_360.id));
+  fireEvent.keyDown(next, { key: "ArrowRight" });
+  assert.equal(screen.getByRole("dialog").getAttribute("aria-label"), VERDICT_360.about, "the last of the verifier's: no page onto the agent's");
+});
+
+test("a verdict that attached nothing renders no second strip", async () => {
+  hostDoubles();
+  const { tab } = await opened("WEB-1", WEB_1, { bodies: attachedBoth(3, [SHEET], []) });
+  const three = rounds(tab()).card(3);
+  await three.findByRole("list", { name: "The agent's attachments" });
+  assert.equal(three.queryByRole("list", { name: "The verifier's attachments" }), null);
+  assert.equal(tab().getByRole("article", { name: "Round 3" }).querySelectorAll(".rmi-attachments").length, 1);
 });

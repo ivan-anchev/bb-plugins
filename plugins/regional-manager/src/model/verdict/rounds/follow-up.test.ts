@@ -92,6 +92,7 @@ test("a check's leftovers are what it held without failing it: an anchored must-
   const rejected: Triaged = { title: "Use a queue", ...PLACE, severity: "should-fix", claim: "Use a queue.", result: "rejected", reason: "Out of scope." };
   const verdict: Verdict = {
     state: "returned",
+    attachments: [],
     at: 5_000,
     verifierThreadId: "thr_v",
     headSha: SHA,
@@ -112,6 +113,7 @@ test("a check's leftovers are what it held without failing it: an anchored must-
 /** A returned verdict on one criterion, `result`, triaging `triage`, settled as checked. */
 const verdictOf = (result: "pass" | "fail", triage: Triaged[]): Extract<Verdict, { state: "returned" }> => ({
   state: "returned",
+  attachments: [],
   at: 5_000,
   verifierThreadId: "thr_v",
   headSha: SHA,

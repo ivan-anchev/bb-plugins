@@ -22,6 +22,7 @@ const CHECKED: Settlement = { kind: "checked", refused: null, ci: { kind: "none"
 /** A verdict its verifier returned, settled as `settlement`, failing one of two criteria or passing both. */
 const returned = (passed: boolean, settlement: Settlement = CHECKED): Verdict => ({
   state: "returned",
+  attachments: [],
   at: 5_000,
   verifierThreadId: "thr_v",
   headSha: SHA,

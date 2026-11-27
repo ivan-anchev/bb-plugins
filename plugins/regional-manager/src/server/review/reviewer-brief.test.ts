@@ -73,6 +73,7 @@ function roundOne(sha: string): StoredCheck {
     review: { state: "reported", at: 4_000, reviewerThreadId: "thr_r", findings: [], earlier: [], model: { providerId: "claude-code", model: "sonnet" } },
     verdict: {
       state: "returned",
+      attachments: [],
       at: 5_000,
       verifierThreadId: "thr_v",
       headSha: sha,

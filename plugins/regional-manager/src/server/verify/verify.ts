@@ -114,8 +114,8 @@ type Deps = {
   now(): number;
 };
 
-/** A verifier's report: each criterion named by its text, its findings, and its triage of the review's findings, in their order. */
-export type VerifierReport = Pick<ReceivedVerdict, "criteria" | "findings" | "blocking" | "triage">;
+/** A verifier's report: each criterion named by its text, its findings, its triage of the review's findings, in their order, and the files it attached, copied in. */
+export type VerifierReport = Pick<ReceivedVerdict, "criteria" | "findings" | "blocking" | "triage" | "attachments">;
 
 /** What became of a verifier's report: stored; refused, as its check no longer waits for it; or, for a final check, why its worktree couldn't be read, which ended the check as could-not-run. */
 type Received = "recorded" | "not-running" | { unread: string };

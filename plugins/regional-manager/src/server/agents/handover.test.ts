@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { laneOf } from "../../model/board/board-groups.ts";
 import { agentIdSchema } from "../../model/agent/agent.ts";
-import { bbHttpError, coordinating, HEAD, isRefusal, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
+import { bbHttpError, coordinating, HEAD, isRefusal, LOCAL_HOST, settled, startedAgent, textOf, threadIn } from "../test-harness.ts";
 import { takeUnread } from "../store/test-store.ts";
 
 const a1 = agentIdSchema.parse("a1");
@@ -528,6 +528,30 @@ test("an earlier verdict that passed, with a finding, reaches the new agent whol
   );
   const read = textOf(await kit.call("issue_read", { id: "WEB-1" }, threadId));
   assert.match(read, /2 of 2 criteria passed[\s\S]*# pass 13[\s\S]*- The retry log line repeats the payload \(nit\): Log it once\./);
+});
+
+test("a verdict's attachments reach the manager's catch-up and the next agent's first message by name, kind, size and about line, never their path or bytes", async () => {
+  const { kit, threadId, coordinatorId, agentThreadId, handover, firstMessage, handOff } = await handedTo();
+  await handOff(agentThreadId);
+  const verifierThreadId = verifierOf(kit, coordinatorId);
+  const evidence = `/storage/${verifierThreadId}/qa`;
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(186_364)]);
+  kit.hostFiles.set(`${LOCAL_HOST}:${evidence}/round.png`, png);
+  kit.hostFiles.set(`${LOCAL_HOST}:${evidence}/run.log`, Buffer.from("# pass 13\n".repeat(300)));
+  const attachments = [
+    { path: `${evidence}/round.png`, about: "Criterion 1: the round open at 549px" },
+    { path: `${evidence}/run.log`, about: "Criterion 1: the whole run" },
+  ];
+  assert.match(textOf(await kit.call("issue_verdict", { ...PASSES, attachments }, verifierThreadId)), /^Verdict recorded: 2 of 2 criteria passed\. Stop here; don't change anything in this environment\.$/);
+  await settled();
+  const listed = "#### The verifier's attachments\n\nFiles the user sees in the issue's feed; you get their names, not their contents.\n\n- round.png (image, 182 KB): Criterion 1: the round open at 549px\n- run.log (text, 3 KB): Criterion 1: the whole run";
+
+  const catchUp = textOf(await kit.call("crew_catch_up", {}, threadId));
+  assert.ok(catchUp.includes("#### Verdict\n\nVerified: 2 of 2 criteria passed"), catchUp);
+  assert.ok(catchUp.includes(listed), catchUp);
+  const message = firstMessage(threadIn(textOf(await handover())));
+  assert.ok(message.includes(`\`\`\`\n${listed}\n\`\`\``), message);
+  for (const text of [catchUp, message]) assert.doesNotMatch(text, /\/storage\/|\/qa\/|\u0089PNG|# pass 13\n# pass 13/, "no source path or bytes");
 });
 
 test("the first message of an agent taking the issue over words an earlier anchored finding with what it breaks and a downgraded one with its new severity, neither as Confirmed or Rejected", async () => {

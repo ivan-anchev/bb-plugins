@@ -17,12 +17,17 @@ import { FoldLine, NoteLine } from "./fold-line.tsx";
 /** What a verdict judged: an agent's done handoff, or a build parent's final check on its default branch. */
 type Judged = { kind: "handoff" } | { kind: "final"; defaultBranch: string };
 
-export function VerdictLines({ verdict, by, cards }: { verdict: ShownVerdict; by: Round["by"]; cards: HoverCards }) {
+/**
+ * The verdict's lines, or null when it has none to show. why a function, not a component: the round
+ * places the verifier's attachments by whether there are lines (round-body.tsx), so it needs to know
+ * before it renders.
+ */
+export function verdictLines(verdict: ShownVerdict, by: Round["by"], cards: HoverCards): ReactElement | null {
   const judged = judgedOf(by);
   if (judged === null) return null;
   switch (verdict.state) {
     case "returned":
-      return <Returned verdict={verdict} judged={judged} cards={cards} />;
+      return returnedLines(verdict, judged, cards);
     case "could-not-run":
       return (
         <ul className="rmi-lines" aria-label="What failed">
@@ -64,7 +69,7 @@ function judgedOf(by: Round["by"]): Judged | null {
 
 type ReturnedVerdict = Extract<ShownVerdict, { state: "returned" }>;
 
-function Returned({ verdict, judged, cards }: { verdict: ReturnedVerdict; judged: Judged; cards: HoverCards }) {
+function returnedLines(verdict: ReturnedVerdict, judged: Judged, cards: HoverCards): ReactElement | null {
   const failing = verdict.criteria.flatMap((check, i) => (check.result === "pass" ? [] : [{ ...check, number: i + 1 }]));
   const checkout = checkoutLine(verdict, judged);
   const ci = ciLine(verdict);

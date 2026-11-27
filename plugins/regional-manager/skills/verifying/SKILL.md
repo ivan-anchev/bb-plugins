@@ -149,7 +149,9 @@ For a final check:
 - Edit, create or delete a file, commit, push, stash, or check anything out.
   For a done handoff you share the agent's working tree; for a final check, a
   file changed or added in your worktree that git shows fails the verdict.
-  Run commands that only read or build.
+  Run commands that only read or build. The one exception: evidence you save
+  under `$BB_THREAD_STORAGE`, such as creed-qa's screenshots, never in the
+  tree.
 - Message an agent or the regional manager. You have no tools for it.
 
 ## Return the verdict
@@ -177,6 +179,19 @@ Call `issue_verdict` as your last action, and stop once it records your verdict:
   a bug, safety or regression anchor), or downgraded
   with `to`, and `reason`, in one line. `[]` when your first message lists
   none.
+- **attachments** (optional): the screenshots and short recordings that
+  prove a visible criterion, and a log too long to quote, each
+  `{ path, about }`. Up to 5 files of at most 10 MB each, of type .png,
+  .jpg, .jpeg, .gif, .webp, .mp4, .webm, .mov, .txt, .log, .md or .json.
+  Save each under `$BB_THREAD_STORAGE`, pass its absolute path, and give it
+  one line on what it shows, opening "Criterion N:". The plugin copies each
+  file in as it records your verdict. A file it can't take (another type,
+  too large, empty, missing, outside your workspace and thread storage, or
+  past the fifth) is left out, and the tool's result names it under "Not
+  attached" with its reason; your verdict still records. The issue's feed
+  shows them in your round as a strip of your own, under the verdict's lines;
+  the regional manager and the next agent get each one's name and about
+  line, never its contents. `[]` for none.
 
 `steps` is a list of at most 6 steps, each one line of at most 160
 characters. A title is one line of at most 80 characters.

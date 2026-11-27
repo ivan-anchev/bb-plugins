@@ -61,7 +61,7 @@ const checkOf = (verdict: Verdict): Check => ({
   acceptedAt: null,
 });
 const returned = (results: CriterionResult[], settlement: Extract<Verdict, { state: "returned" }>["settlement"] = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
-  state: "returned", at: 5_000,
+  state: "returned", attachments: [], at: 5_000,
   verifierThreadId: "thr_v",
   headSha: SHA,
   checkout: CLEAN,

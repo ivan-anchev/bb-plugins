@@ -38,6 +38,7 @@ type Received = Parameters<Store["receiveVerdict"]>[1];
 
 const returned = (verifierThreadId: string, result: "pass" | "fail"): Received => ({
   state: "returned",
+  attachments: [],
   verifierThreadId,
   headSha: SHA,
   checkout: CLEAN.checkout,
@@ -172,6 +173,7 @@ test("a fix round claimed before its findings are sent survives a reload, and se
   store.bindTicket("verifier-1", "thr_verifier");
   const failed: Received = {
     state: "returned",
+    attachments: [],
     verifierThreadId: "thr_verifier",
     headSha: SHA,
     checkout: CLEAN.checkout,
@@ -265,6 +267,43 @@ test("a handoff whose second attachment fails to store leaves no handoff, check,
   assert.equal(files(), 2);
   assert.deepEqual(store.attachmentFile(MANAGER, shot.id), { name: "sheet.png", type: "image/png", bytes: shot.bytes });
   assert.deepEqual(store.attachmentFile(MANAGER, log.id), { name: "e2e.log", type: "text/plain; charset=utf-8", bytes: log.bytes });
+});
+
+/** A verifier's screenshot, as copy-in.ts copies it in. */
+const verdictShot = () => ({ id: attachmentIdSchema.parse(randomUUID()), name: "round.png", about: "Criterion 1: the round open", type: "image/png", size: 4, bytes: Buffer.from([0x89, 0x50, 0x4e, 0x47]) }) as const;
+
+test("a verdict whose attachment fails to store throws and leaves its check running with no file; the same call then stores the verdict and its file", () => {
+  const { db, store, issue, agentId } = withAgent();
+  const check = runningCheck(store, issue.id, agentId, 1);
+  const shot = verdictShot();
+  const verdict: Received = { ...returned("thr_verifier_1", "pass"), attachments: [shot] };
+  const files = () => z.object({ n: z.number() }).parse(db.prepare("SELECT count(*) AS n FROM attachment_files").get()).n;
+  const restore = failWrites(db, "INSERT", "attachment_files");
+
+  assert.throws(() => store.receiveVerdict(check.id, verdict, 4_000), /forced failure/);
+  assert.equal(store.check(check.id)?.verdict.state, "running", "the verdict still waits");
+  assert.equal(files(), 0);
+
+  restore();
+  assert.equal(store.receiveVerdict(check.id, verdict, 4_000), true);
+  const stored = store.check(check.id)?.verdict;
+  assert.equal(stored?.state, "returned");
+  assert.deepEqual(stored?.state === "returned" ? stored.attachments : null, [{ id: shot.id, name: "round.png", about: "Criterion 1: the round open", type: "image/png", size: 4 }], "the verdict keeps the record, not its bytes");
+  assert.equal(files(), 1);
+  assert.deepEqual(store.attachmentFile(MANAGER, shot.id), { name: "round.png", type: "image/png", bytes: shot.bytes });
+});
+
+test("a verdict from a verifier that is no longer the check's running one returns false and stores no file", () => {
+  const { db, store, issue, agentId } = withAgent();
+  const replaced = runningCheck(store, issue.id, agentId, 1);
+  runningCheck(store, issue.id, agentId, 2);
+  const late = verdictShot();
+  const files = () => z.object({ n: z.number() }).parse(db.prepare("SELECT count(*) AS n FROM attachment_files").get()).n;
+
+  assert.equal(store.check(replaced.id)?.verdict.state, "superseded", "a newer handoff replaced it");
+  assert.equal(store.receiveVerdict(replaced.id, { ...returned("thr_verifier_1", "pass"), attachments: [late] }, 4_000), false);
+  assert.equal(files(), 0);
+  assert.equal(store.attachmentFile(MANAGER, late.id), null);
 });
 
 test("a done handoff that fails partway keeps the checks waiting for CI whole and waiting, and a retry supersedes the one that passed all but CI once, leaving one the must-fix rule fails to settle", () => {

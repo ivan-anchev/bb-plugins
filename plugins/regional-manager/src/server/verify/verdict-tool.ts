@@ -1,14 +1,17 @@
 // A verifier's own tool: issue_verdict, its judgement of each done-criterion with the evidence it
-// ran, and its triage of each finding its first message lists. Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
+// ran, its triage of each finding its first message lists, and the files it attaches as evidence,
+// copied in as the verdict records (copy-in.ts). Its overall outcome is never reported: the plugin derives it (model/verdict.ts), on the
 // commit and tree the check judges (verify.ts returned). The caller's role comes from the plugin's
 // database by its thread id.
 import { z } from "zod";
+import { ATTACHMENT_LIMITS, givenAttachmentsSchema, type GivenAttachment, type Unattached } from "../../model/attachment.ts";
 import { MAX_CRITERIA } from "../../model/issue/issue.ts";
 import type { Check } from "../../model/verdict/check.ts";
 import { ONE_LINE } from "../../model/one-line.ts";
 import { ANCHOR_RULE, anchorProblem, anchorSchema, numberedText, placeText, RECHECK_RULE, severitySchema, MAX_FINDING_TITLE, TRIAGE_RULE, triageProblem, triageVariants, type BlockingDefect, type ReviewFinding } from "../../model/verdict/review.ts";
 import { triageList } from "../../model/verdict/rounds/delta.ts";
 import { criterionResultSchema, SHOWS_CHARS, UNCHECKABLE_RULE } from "../../model/verdict/verdict.ts";
+import { refusedText, type CopyIn } from "../attachments/copy-in.ts";
 import type { Store } from "../store/store.ts";
 import { earlierDefectsOf, scopeOf } from "../review/checker-brief.ts";
 import { failed, numbersRefusal, refusedBusy, type ToolsBb } from "../tools/tool-kit.ts";
@@ -91,19 +94,25 @@ const verdictInputSchema = z.object({
     )
     .default([])
     .describe(`One entry for every finding of the reviewer's in your first message, none skipped, by its number. ${TRIAGE_RULE} ${ANCHOR_RULE} [] when it lists none.`),
+  attachments: givenAttachmentsSchema,
 });
 type VerdictInput = z.infer<typeof verdictInputSchema>;
 
-type Deps = { store: Pick<Store, "roleOfThread" | "check" | "record" | "finalChecks">; verify: Pick<Verify, "returned"> };
+type Deps = {
+  store: Pick<Store, "roleOfThread" | "check" | "record" | "finalChecks">;
+  verify: Pick<Verify, "returned">;
+  /** Copies in the files a thread attaches (copy-in.ts attachmentCopier). */
+  copyIn: (threadId: string, given: readonly GivenAttachment[]) => Promise<CopyIn>;
+};
 
-export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void {
+export function registerVerdictTool(bb: ToolsBb, { store, verify, copyIn }: Deps): void {
   bb.agents.registerTool({
     name: VERDICT,
-    description: "Your verdict on what your first message asks you to check: one result per done-criterion, with the evidence you ran. Call it once, last, then stop.",
+    description: `Your verdict on what your first message asks you to check: one result per done-criterion, with the evidence you ran, and the files that show it (${ATTACHMENT_LIMITS}). Call it once, last, then stop.`,
     instructions: VERDICT_INSTRUCTIONS,
     presentation: { label: { pending: "Returning the verdict", completed: "Returned the verdict" }, icon: { glyph: "Check" } },
     parameters: verdictInputSchema,
-    execute: async (input, { threadId }) => {
+    execute: async ({ attachments: given, ...input }, { threadId }) => {
       const role = store.roleOfThread(threadId);
       if (role?.kind !== "verifier") return failed(`${VERDICT} is refused: only a verifier thread the plugin started returns a verdict, and this thread is not one. Carry on without it.`);
       const check = store.check(role.checkId);
@@ -112,11 +121,13 @@ export function registerVerdictTool(bb: ToolsBb, { store, verify }: Deps): void 
       if (check.verdict.state !== "running" || check.verdict.verifierThreadId !== threadId) return failed(NOT_RUNNING);
       const report = reportOf(input, check.criteria, triagedOf(store, check), earlierDefectsOf(store, check));
       if (typeof report === "string") return failed(`${VERDICT} is refused and nothing was saved: ${report}`);
-      const received = await verify.returned(check.id, threadId, report);
+      // why here, after every refusal that saves nothing and before the issue's turn: a refused verdict reads no file, and a slow read holds no lock.
+      const { copied, refused } = await copyIn(threadId, given);
+      const received = await verify.returned(check.id, threadId, { ...report, attachments: copied });
       if (received === "not-running") return failed(NOT_RUNNING);
       if (received === "recorded") {
         const passed = report.criteria.filter((check) => check.result === "pass").length;
-        return `Verdict recorded: ${passed} of ${report.criteria.length} criteria passed. Stop here; don't change anything in this environment.`;
+        return `Verdict recorded: ${passed} of ${report.criteria.length} criteria passed. Stop here; don't change anything in this environment.${refusedText(refused)}`;
       }
       if ("unread" in received) return failed(`${VERDICT} is refused and nothing was saved: bb's git plugin couldn't read your worktree (${received.unread}), so the plugin couldn't judge its commit, and this final check ends without a verdict. Stop here.`);
       return refusedBusy(VERDICT, received);
@@ -145,7 +156,7 @@ function triagedOf(store: Pick<Store, "record" | "finalChecks">, check: Check): 
  * (`findings`), in the check's order, and its blocking defects: each earlier one (`earlier`) it
  * answered not fixed, then its own; or why it can't be taken.
  */
-function reportOf(input: VerdictInput, criteria: Check["criteria"], findings: readonly ReviewFinding[], earlier: readonly BlockingDefect[]): VerifierReport | string {
+function reportOf(input: Omit<VerdictInput, "attachments">, criteria: Check["criteria"], findings: readonly ReviewFinding[], earlier: readonly BlockingDefect[]): Unattached<VerifierReport> | string {
   const refused =
     numbersRefusal(
       input.criteria.map(({ criterion }) => criterion),
@@ -226,4 +237,5 @@ const VERDICT_INSTRUCTIONS = `Call issue_verdict once, last. A refusal saves not
 - blocking: up to 20 defects outside the criteria you found yourself, as with creed-qa, that meet an anchor: title, claim, anchor, steps as it takes. Each fails the verdict.
 - earlierDefects: one answer per earlier blocking defect, by number. ${RECHECK_RULE} One not fixed fails it.
 - findings: up to 20 other problems no criterion covers: severity, title, detail; never failing it.
-- triage: one per reviewer's finding, by number, with its reason. ${TRIAGE_RULE} ${ANCHOR_RULE}`;
+- triage: one per reviewer's finding, by number, with its reason. ${TRIAGE_RULE} ${ANCHOR_RULE}
+- attachments: files proving a visible criterion, saved under $BB_THREAD_STORAGE.`;

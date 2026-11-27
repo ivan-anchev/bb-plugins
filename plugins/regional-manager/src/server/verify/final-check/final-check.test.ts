@@ -401,6 +401,7 @@ test("an opened parent sends its final checks as rounds, each with only what its
       findings: FAILS.findings,
       blocking: [],
       sameModel: false,
+      attachments: [],
       settlement: { kind: "checked", ci: { kind: "none" } },
     },
     "no model and no triage: a final check has no review",

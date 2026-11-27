@@ -435,7 +435,7 @@ export function handoffFieldsText(handoff: Handoff): string {
       ["Findings", handoff.findings],
     ] as const
   ).map(([name, items]) => `#### ${name}\n\n${items.length === 0 ? "None." : items.map((item) => `- ${item.replaceAll("\n", "\n  ")}`).join("\n")}`);
-  const attachments = attachmentsText(handoff.attachments);
+  const attachments = attachmentsText(handoff.attachments, "Attachments");
   return [head.join("\n"), ...lists, ...(attachments === "" ? [] : [attachments])].join("\n\n");
 }
 
@@ -511,7 +511,8 @@ function verdictText(check: Check, lookups: Pick<Lookups, "agents">): string {
       const checks = verdict.criteria.map((check, i) => `${i + 1}. ${check.result.toUpperCase()}: ${check.criterion}\n   Shows: ${check.shows}\n   ${check.evidence.replaceAll("\n", "\n   ")}`);
       const blocking = verdict.blocking.length === 0 ? [] : [`Blocking defects it found, each failing the verdict:\n${verdict.blocking.map((defect) => `- ${defectText(defect, "  ")}`).join("\n")}`];
       const findings = verdict.findings.length === 0 ? "Findings: none." : `Findings:\n${verdict.findings.map((finding) => `- ${verifierFindingText(finding, "  ")}`).join("\n")}`;
-      return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict, check)].join("\n\n");
+      const attachments = attachmentsText(verdict.attachments, "The verifier's attachments");
+      return [head, ...checks, ...blocking, findings, ...reviewText(check.review, verdict, check), ...(attachments === "" ? [] : [attachments])].join("\n\n");
     }
     case "could-not-run":
       return `Couldn't verify: ${verdict.reason}. Nobody has checked it against the done-criteria.`;

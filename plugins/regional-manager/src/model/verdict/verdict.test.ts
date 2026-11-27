@@ -12,6 +12,7 @@ const CLEAN = { headSha: "a".repeat(40), changedFiles: [], changedFileCount: 0 }
 /** A returned verdict as the plugin holds it, with no review findings. */
 const returned = (results: CriterionResult[], settlement: Settlement = { kind: "checked", refused: null, ci: { kind: "none" } }): Extract<Verdict, { state: "returned" }> => ({
   state: "returned",
+  attachments: [],
   at: 5_000,
   verifierThreadId: "thr_v",
   headSha: "a".repeat(40),
